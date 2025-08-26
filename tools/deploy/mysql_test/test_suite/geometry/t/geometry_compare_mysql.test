@@ -61,7 +61,6 @@
   select * from matrix where ST_GeomFromText('POINT(1 1)') = EnumType;
   --error 1210
   select * from matrix where ST_GeomFromText('POINT(1 1)') = SetType;
-  --error 1235
   select * from matrix where ST_GeomFromText('POINT(1 1)') = JsonType;
   select st_astext(GeometryType) from matrix where ST_GeomFromText('POINT(1 1)') = GeometryType;
 

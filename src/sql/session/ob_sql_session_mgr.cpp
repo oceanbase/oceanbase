@@ -30,15 +30,15 @@ using namespace oceanbase::observer;
 ObTenantSQLSessionMgr::SessionPool::SessionPool()
   : session_pool_()
 {
-  MEMSET(session_array_, 0, POOL_CAPACIPY * sizeof(ObSQLSessionInfo *));
+  MEMSET(session_array_, 0, MAX_POOL_CAPACIPY * sizeof(ObSQLSessionInfo *));
 }
 
 int ObTenantSQLSessionMgr::SessionPool::init(const int64_t capacity)
 {
   int ret = OB_SUCCESS;
   int64_t real_cap = capacity;
-  if (real_cap > POOL_CAPACIPY) {
-    real_cap = POOL_CAPACIPY;
+  if (real_cap > MAX_POOL_CAPACIPY) {
+    real_cap = MAX_POOL_CAPACIPY;
   }
   char *session_buf = reinterpret_cast<char *>(session_array_);
   OZ (session_pool_.init(real_cap, session_buf));
@@ -98,8 +98,14 @@ ObTenantSQLSessionMgr::~ObTenantSQLSessionMgr()
 int ObTenantSQLSessionMgr::init()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(session_pool_.init(SessionPool::POOL_CAPACIPY))) {
-    LOG_WARN("fail to init session pool", K(tenant_id_), K(ret));
+  int64_t pool_cap = 0;
+  if (MTL_MEM_SIZE() <= (4ULL << 30)) { // 4G
+    pool_cap = SessionPool::MIN_POOL_CAPACIPY;
+  } else {
+    pool_cap = MIN(SessionPool::MAX_POOL_CAPACIPY, (MTL_MEM_SIZE() / (4ULL << 30)) * 2 * SessionPool::MIN_POOL_CAPACIPY);
+  }
+  if (OB_FAIL(session_pool_.init(pool_cap))) {
+    LOG_WARN("fail to init session pool", K(tenant_id_), K(pool_cap), K(ret));
   }
   return ret;
 }
@@ -137,7 +143,7 @@ void ObTenantSQLSessionMgr::mtl_wait(ObTenantSQLSessionMgr *&t_session_mgr)
     while (t_session_mgr->count() != 0) {
       LOG_WARN_RET(OB_NEED_RETRY, "tenant session mgr should be empty",
                    K(t_session_mgr->count()));
-      usleep(1000 * 1000);
+      ob_usleep(1000 * 1000);
     }
   }
   LOG_INFO("success to wait tenant session mgr");

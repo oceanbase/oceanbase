@@ -13,7 +13,7 @@
 #include "lib/restore/ob_storage.h"
 #include "ob_storage_hdfs_jni_base.h"
 #include "ob_storage_hdfs_cache.h"
-#include "sql/engine/connector/ob_java_helper.h"
+#include "lib/jni_env/ob_java_helper.h"
 
 #include "lib/utility/ob_print_utils.h"
 #include "lib/utility/ob_tracepoint.h"
@@ -211,9 +211,11 @@ int ObStorageHdfsBase::get_hdfs_file_meta(const ObString &uri, ObStorageObjectMe
       if (file_info->mKind == kObjectKindDirectory) {
         meta.type_ = ObStorageObjectMetaType::OB_FS_DIR;
         meta.length_ = 0;
+        meta.mtime_s_ = file_info->mLastMod;
       } else if (file_info->mKind == kObjectKindFile) {
         meta.type_ = ObStorageObjectMetaType::OB_FS_FILE;
         meta.length_ = file_info->mSize;
+        meta.mtime_s_ = file_info->mLastMod;
       }
       OB_LOG(TRACE, "get file info", K(ret), K(uri), K_(path_buf),
              K(meta.length_), K(meta.is_exist_), K(meta.type_));
@@ -329,6 +331,7 @@ int ObStorageHdfsJniUtil::head_object_meta(const common::ObString &uri,
     obj_meta.type_ = meta.type_;
     if (obj_meta.is_exist_) {
       obj_meta.length_ = meta.length_;
+      obj_meta.mtime_s_ = meta.mtime_s_;
     }
   }
   return ret;

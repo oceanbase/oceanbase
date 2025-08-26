@@ -367,6 +367,8 @@ bool ObSqlParameterization::is_tree_not_param(const ParseNode *tree)
     ret_bool = true;
   } else if (T_WIN_NAMED_WINDOWS == tree->type_) {//name window无法参数化，因为无法保证其参数化顺序
     ret_bool = true;
+  } else if (T_VEC_INDEX_PARAMS == tree->type_) {
+    ret_bool = true;
   } else {
     // do nothing
   }
@@ -2168,28 +2170,14 @@ int ObSqlParameterization::mark_tree(ParseNode *tree ,SqlInfo &sql_info)
         }
       } else if ((0 == func_name.case_compare("json_member_of"))) {
         sql_info.ps_need_parameterized_ = false;
-        if (2 == tree->num_child_) {
-          const int64_t ARGS_NUMBER_TWO = 2;
-          bool mark_arr[ARGS_NUMBER_TWO] = {0, 1}; //0表示参数化, 1 表示不参数化
-          if (OB_FAIL(mark_args(tree, mark_arr, ARGS_NUMBER_TWO, sql_info))) {
-            SQL_PC_LOG(WARN, "fail to mark substr arg", K(ret));
-          }
-        }
       } else if ((0 == func_name.case_compare("json_contains"))) {
         sql_info.ps_need_parameterized_ = false;
-        for (int64_t i = 0; OB_SUCC(ret) && i < tree->num_child_; i++) {
-          if (OB_ISNULL(tree->children_[i])) {
-            ret = OB_INVALID_ARGUMENT;
-            SQL_PC_LOG(WARN, "invalid argument", K(ret), K(tree->children_[i]));
-          } else if (1 != 1) {
-            tree->children_[i]->is_tree_not_param_ = true;
+        if (3 == node[1]->num_child_) {
+          const int64_t ARGS_NUMBER_THREE = 3;
+          bool mark_arr[ARGS_NUMBER_THREE] = {0, 0, 1}; // 第3个参数为path, 不能参数化
+          if (OB_FAIL(mark_args(node[1], mark_arr, ARGS_NUMBER_THREE, sql_info))) {
+            SQL_PC_LOG(WARN, "fail to mark arg", K(ret));
           }
-        }
-      } else if ((0 == func_name.case_compare("json_overlaps"))) {
-        const int64_t ARGS_NUMBER_TWO = 2;
-        bool mark_arr[ARGS_NUMBER_TWO] = {1, 1};
-        if (OB_FAIL(mark_args(node[1], mark_arr, ARGS_NUMBER_TWO, sql_info))) {
-          SQL_PC_LOG(WARN, "fail to mark arg", K(ret));
         }
       } else if ((0 == func_name.case_compare("json_schema_valid"))
                 || (0 == func_name.case_compare("json_schema_validation_report"))) {

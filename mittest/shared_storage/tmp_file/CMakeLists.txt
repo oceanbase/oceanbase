@@ -1,4 +1,5 @@
 if(OB_BUILD_CLOSE_MODULES)
   mit_shared_storage_unittest(test_ss_tmp_file)
   mit_shared_storage_unittest(test_ss_tmp_file_sub_module)
+  mit_shared_storage_unittest(test_ss_tmp_file_write_buffer_pool_index_cache)
 endif()

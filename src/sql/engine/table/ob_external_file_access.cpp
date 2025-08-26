@@ -151,7 +151,7 @@ int ObExternalFileAccess::open(
   if (is_opened()) {
     ret = OB_INIT_TWICE;
     LOG_WARN("file has opened in this Access, call close before open another one", K(ret), K(lbt()));
-  } else if (OB_FAIL(get_storage_type_from_path(info.location_, storage_type_))) {
+  } else if (OB_FAIL(get_storage_type_from_path_for_external_table(info.location_, storage_type_))) {
     LOG_WARN("fail to resove storage type", K(ret));
   } else {
     // see ObExternalDataAccessDriver::init

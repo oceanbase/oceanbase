@@ -23,7 +23,6 @@
 #include "storage/meta_store/ob_server_storage_meta_service.h"
 #include "share/ash/ob_active_sess_hist_list.h"
 #ifdef OB_BUILD_SHARED_STORAGE
-#include "storage/compaction/ob_tenant_ls_merge_scheduler.h"
 #include "share/compaction/ob_shared_storage_compaction_util.h"
 #include "storage/shared_storage/ob_disk_space_manager.h"
 #endif
@@ -132,9 +131,9 @@ int ObServerReloadConfig::operator()()
   {
 #ifdef OB_BUILD_SHARED_STORAGE
     if (GCTX.is_shared_storage_mode()) {
-      OB_SERVER_DISK_SPACE_MGR.reload_config(GCONF);
-      // OB_SERVER_DISK_SPACE_MGR.reload_ss_cache_max_percentage_config(GCONF);
-      // OB_SERVER_DISK_SPACE_MGR.reload_ss_cache_maxsize_percpu_config(GCONF);
+      OB_SERVER_DISK_SPACE_MGR.reload_hidden_sys_data_disk_config(GCONF);
+      OB_SERVER_DISK_SPACE_MGR.reload_ss_cache_max_percentage_config(GCONF);
+      OB_SERVER_DISK_SPACE_MGR.reload_ss_cache_maxsize_percpu_config(GCONF);
     }
 #endif
     enable_malloc_v2(GCONF._enable_malloc_v2);
@@ -238,6 +237,7 @@ int ObServerReloadConfig::operator()()
     if (0 != STRNCMP(last_storage_check_mod, GCONF._storage_leak_check_mod.str(), sizeof(last_storage_check_mod))) {
       ObKVGlobalCache::get_instance().set_storage_leak_check_mod(GCONF._storage_leak_check_mod.str());
       STRNCPY(last_storage_check_mod, GCONF._storage_leak_check_mod.str(), sizeof(last_storage_check_mod));
+      last_storage_check_mod[sizeof(last_storage_check_mod) - 1] = '\0';
     }
   }
 #ifndef ENABLE_SANITY
@@ -340,12 +340,6 @@ void ObServerReloadConfig::reload_tenant_scheduler_config_()
     auto f = [] () {
       (void) MTL(ObTenantDagScheduler *)->reload_config();
       (void) MTL(compaction::ObTenantTabletScheduler *)->reload_tenant_config();
-#ifdef OB_BUILD_SHARED_STORAGE
-    if (GCTX.is_shared_storage_mode()) {
-      (void) MTL(compaction::ObTenantLSMergeScheduler *)->reload_tenant_config();
-    }
-#endif
-
       return OB_SUCCESS;
     };
     omt->operate_in_each_tenant(f);

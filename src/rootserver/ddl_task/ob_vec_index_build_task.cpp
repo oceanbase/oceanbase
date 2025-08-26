@@ -1819,8 +1819,12 @@ int ObVecIndexBuildTask::submit_drop_vec_index_task()
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, object_id_, data_table_schema))) {
     LOG_WARN("fail to get table schema", K(ret), K(object_id_));
   } else if (OB_ISNULL(data_table_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("data_table_schema is null", K(ret), KP(data_table_schema));
+    if (is_offline_rebuild_) {
+      LOG_INFO("hidden data_table maybe removed when offline ddl is failed, skip submit drop", K(ret), K(object_id_));
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("data_table_schema is null", K(ret), KP(data_table_schema));
+    }
   } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id_, data_table_schema->get_database_id(), database_schema))) {
     LOG_WARN("get database schema failed", KR(ret), K(data_table_schema->get_database_id()));
   } else if (OB_ISNULL(database_schema)) {

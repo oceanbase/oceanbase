@@ -653,7 +653,6 @@ int ObTransformMVRewrite::check_join_compatibility(MvRewriteHelper &helper,
                                           *ctx_->expr_factory_,
                                           ctx_->session_info_,
                                           NULL,  /* onetime_copier */
-                                          true,  /* should_deduce_conds */
                                           false, /* should_pushdown_const_filters */
                                           fake_depend_info,
                                           fake_push_subq_exprs,
@@ -1943,6 +1942,8 @@ int ObTransformMVRewrite::check_compensation_preds_validity(MvRewriteHelper &hel
   } else if (helper.mv_compensation_preds_.empty()
              || !mv_stmt->has_group_by()) {
     // do nothing
+  } else if (mv_stmt->is_scala_group_by()) {
+    is_valid = false;
   } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(helper.mv_compensation_preds_, comp_col_exprs))) {
     LOG_WARN("failed to extract column exprs", K(ret));
   } else {
@@ -2368,11 +2369,15 @@ int ObTransformMVRewrite::inner_compute_expr_map(MvRewriteHelper &helper,
   } else if (query_expr->get_relation_ids().is_subset(helper.query_delta_table_)) {
     // column only appear in query, does not need to compute
     is_valid = true;
-  } else if (OB_FAIL(find_mv_select_expr(helper, query_expr, context, mv_select_expr))) {
+  } else if (!(helper.need_group_by_roll_up_ && query_expr->has_flag(CNT_AGG))
+             && OB_FAIL(find_mv_select_expr(helper, query_expr, context, mv_select_expr))) {
+    // for the query expr that contains aggregate functions and needs group
+    // by roll up rewrite, can NOT replace the entire expr directly, because
+    // we need to wrap the roll up aggregate for each aggregate function
     LOG_WARN("failed to find mv select expr", K(ret));
   } else if (NULL != mv_select_expr) {
     if (OB_FAIL(helper.query_expr_replacer_.add_replace_expr(query_expr, mv_select_expr))) {
-      LOG_WARN("failed to add replaceed expr", K(ret), KPC(query_expr), KPC(mv_select_expr));
+      LOG_WARN("failed to add replaced expr", K(ret), KPC(query_expr), KPC(mv_select_expr));
     } else {
       is_valid = true;
     }
@@ -2431,7 +2436,7 @@ int ObTransformMVRewrite::compute_agg_expr_map(MvRewriteHelper &helper,
   } else if (helper.need_group_by_roll_up_ && OB_FAIL(wrap_agg_roll_up_expr(query_expr, mv_select_expr))) {
     LOG_WARN("failed to wrap agg roll up expr", K(ret));
   } else if (OB_FAIL(helper.query_expr_replacer_.add_replace_expr(query_expr, mv_select_expr))) {
-    LOG_WARN("failed to add replaceed expr", K(ret), KPC(query_expr), KPC(mv_select_expr));
+    LOG_WARN("failed to add replaced expr", K(ret), KPC(query_expr), KPC(mv_select_expr));
   }
   return ret;
 }

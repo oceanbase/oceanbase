@@ -557,6 +557,7 @@ int ObVectorIndexRefresher::do_rebuild() {
   int64_t domain_table_row_cnt = 0;
   int64_t index_id_table_row_cnt = 0;
   bool triggered = true;
+  bool rebuild_index_online = false;
   // refresh_ctx_->delta_rate_threshold_ = 0; // yjl, for test
   if (OB_ISNULL(refresh_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -612,7 +613,7 @@ int ObVectorIndexRefresher::do_rebuild() {
     if (!refresh_ctx_->idx_parameters_.empty() && OB_FAIL(ob_write_string(allocator, refresh_ctx_->idx_parameters_, idx_parameters))) {
       LOG_WARN("fail to write string", K(ret), K(refresh_ctx_->idx_parameters_));
     } else if (!idx_parameters.empty()
-        && OB_FAIL(ObVectorIndexUtil::construct_rebuild_index_param(domain_table_schema->get_index_params(), idx_parameters, &allocator))) {
+        && OB_FAIL(ObVectorIndexUtil::construct_rebuild_index_param(*base_table_schema, domain_table_schema->get_index_params(), idx_parameters, &allocator))) {
       LOG_WARN("fail to construct rebuild index params", K(ret), K(refresh_ctx_->idx_parameters_));
     } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, refresh_ctx_->index_id_tb_id_, index_id_tb_schema))) {
       LOG_WARN("fail to get index id table schema", KR(ret), K(tenant_id), K(refresh_ctx_->index_id_tb_id_));
@@ -626,6 +627,9 @@ int ObVectorIndexRefresher::do_rebuild() {
         LOG_WARN("index id table is not available now", K(ret), K(index_id_tb_schema->get_index_status()));
       }
     }
+  } else if (domain_table_schema->is_vec_ivf_index() && !idx_parameters.empty()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not support rebuild ivf index with params", K(ret), K(idx_parameters));
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id,
@@ -670,6 +674,19 @@ int ObVectorIndexRefresher::do_rebuild() {
     LOG_WARN("no need to start rebuild", K(base_table_row_cnt));
   }
 
+  if (OB_FAIL(ret)) {
+  } else if (domain_table_schema->is_vec_hnsw_index() &&
+             !idx_parameters.empty() &&
+             !domain_table_schema->get_index_params().empty() &&
+             OB_FAIL(ObVectorIndexUtil::check_only_change_search_params(domain_table_schema->get_index_params(),
+                                                                        idx_parameters,
+                                                                        *domain_table_schema,
+                                                                        rebuild_index_online))) {
+    LOG_WARN("fail to check the rebuild index different", K(ret), K(idx_parameters));
+  } else if (!triggered && rebuild_index_online) {
+    triggered = true;
+  }
+
   if (OB_SUCC(ret) && triggered) {
     LOG_INFO("start to rebuild vec index");
     const int64_t ddl_rpc_timeout = GCONF._ob_ddl_timeout;
@@ -689,6 +706,7 @@ int ObVectorIndexRefresher::do_rebuild() {
     rebuild_index_arg.index_action_type_ = obrpc::ObIndexArg::ADD_INDEX;
     rebuild_index_arg.parallelism_ = refresh_ctx_->idx_parallel_creation_;
     rebuild_index_arg.vidx_refresh_info_.index_params_ = idx_parameters;
+    rebuild_index_arg.rebuild_index_online_ = rebuild_index_online;
     if (OB_ISNULL(GCTX.rs_mgr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("GCTX.rs_mgr is null", K(ret));
@@ -703,12 +721,14 @@ int ObVectorIndexRefresher::do_rebuild() {
       LOG_INFO("succ to send rebuild vector index rpc", K(rs_addr), K(refresh_ctx_));
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(ObDDLExecutorUtil::wait_ddl_finish(rebuild_index_arg.tenant_id_,
-                                                     rebuild_index_res.task_id_,
-                                                     false/*do not retry at executor*/,
-                                                     session_info,
-                                                     common_rpc_proxy,
-                                                     is_support_cancel))) {
+      if (rebuild_index_online) {
+        LOG_INFO("succ to change vec index params", K(ret));
+      } else if (OB_FAIL(ObDDLExecutorUtil::wait_ddl_finish(rebuild_index_arg.tenant_id_,
+                                                            rebuild_index_res.task_id_,
+                                                            false/*do not retry at executor*/,
+                                                            session_info,
+                                                            common_rpc_proxy,
+                                                            is_support_cancel))) {
         LOG_WARN("fail wait rebuild vec index finish", K(ret));
       } else {
         LOG_INFO("succ to wait rebuild vec index", K(ret), K(rebuild_index_res.task_id_), K(rebuild_index_arg));

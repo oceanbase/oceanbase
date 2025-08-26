@@ -300,7 +300,7 @@ int ObLSRestoreDagNet::start_running_for_ls_restore_()
   } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
-  } else if (OB_FAIL(scheduler->alloc_dag(initial_ls_restore_dag))) {
+  } else if (OB_FAIL(scheduler->alloc_dag(initial_ls_restore_dag, true/*is_ha_dag*/))) {
     LOG_WARN("failed to alloc initial ls restore dag ", K(ret));
   } else if (OB_FAIL(initial_ls_restore_dag->init(this))) {
     LOG_WARN("failed to initial ls restore dag", K(ret));
@@ -348,9 +348,9 @@ bool ObLSRestoreDagNet::operator == (const ObIDagNet &other) const
   return is_same;
 }
 
-int64_t ObLSRestoreDagNet::hash() const
+uint64_t ObLSRestoreDagNet::hash() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   if (OB_ISNULL(ctx_)) {
     LOG_ERROR_RET(OB_INVALID_ARGUMENT, "ls restore ctx is NULL", KPC(ctx_));
   } else {
@@ -497,9 +497,9 @@ bool ObLSRestoreDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObLSRestoreDag::hash() const
+uint64_t ObLSRestoreDag::hash() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   ObLSRestoreCtx *ctx = get_ctx();
 
   if (OB_ISNULL(ctx)) {
@@ -693,9 +693,9 @@ int ObInitialLSRestoreTask::generate_ls_restore_dags_()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("initial ls restore dag should not be NULL", K(ret), KP(initial_ls_restore_dag));
   } else {
-    if (OB_FAIL(scheduler->alloc_dag(start_ls_restore_dag))) {
+    if (OB_FAIL(scheduler->alloc_dag(start_ls_restore_dag, true/*is_ha_dag*/))) {
       LOG_WARN("failed to alloc start ls restore dag ", K(ret));
-    } else if (OB_FAIL(scheduler->alloc_dag(finish_ls_restore_dag))) {
+    } else if (OB_FAIL(scheduler->alloc_dag(finish_ls_restore_dag, true/*is_ha_dag*/))) {
       LOG_WARN("failed to alloc finish ls restore dag", K(ret));
     } else if (OB_FAIL(start_ls_restore_dag->init(dag_net_))) {
       LOG_WARN("failed to init start ls restore dag", K(ret));
@@ -1011,14 +1011,13 @@ int ObStartLSRestoreTask::create_tablet_(
 {
   int ret = OB_SUCCESS;
   ObTablesHandleArray remote_table;
-  ObBatchUpdateTableStoreParam param;
 
   if (!tablet_meta.is_valid() || OB_ISNULL(ls)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("create tablet get invalid argument", K(ret), K(tablet_meta), KP(ls));
   } else if (OB_FAIL(ObTabletCreateMdsHelper::check_create_new_tablets(1LL, ObTabletCreateThrottlingLevel::SOFT))) {
     LOG_WARN("failed to check create new tablet", K(ret), K(tablet_meta));
-  } else if (OB_FAIL(ls->rebuild_create_tablet(tablet_meta, false /*keep old*/))) {
+  } else if (OB_FAIL(ls->rebuild_create_tablet(tablet_meta))) {
     LOG_WARN("failed to create tablet", K(ret), K(tablet_meta));
   } else {
     LOG_INFO("succeed to create tablet and table store", KPC(ls), K(tablet_meta), K(remote_table));
@@ -1166,7 +1165,7 @@ int ObStartLSRestoreTask::generate_tablets_restore_dag_()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
   } else {
-    if (OB_FAIL(scheduler->alloc_dag(sys_tablets_restore_dag))) {
+    if (OB_FAIL(scheduler->alloc_dag(sys_tablets_restore_dag, true/*is_ha_dag*/))) {
       LOG_WARN("failed to alloc sys tablets restore dag ", K(ret));
     } else if (OB_FAIL(sys_tablets_restore_dag->init(dag_net))) {
       LOG_WARN("failed to init sys tablets restore dag", K(ret), K(*ctx_));
@@ -1381,7 +1380,6 @@ int ObSysTabletsRestoreTask::process()
   return ret;
 }
 
-//TODO(zeyong) check need to create or update anyway
 int ObSysTabletsRestoreTask::create_or_update_tablets_()
 {
   int ret = OB_SUCCESS;
@@ -1465,7 +1463,7 @@ int ObSysTabletsRestoreTask::generate_sys_tablet_restore_dag_()
       if (!param.is_valid()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("init tablet restore param is invalid", K(ret), K(param), KPC(ctx_));
-      } else if (OB_FAIL(scheduler->alloc_dag(tablet_restore_dag))) {
+      } else if (OB_FAIL(scheduler->alloc_dag(tablet_restore_dag, true/*is_ha_dag*/))) {
         LOG_WARN("failed to alloc tablet restore dag", K(ret));
       } else if (OB_FAIL(tablet_restore_dag_array.push_back(tablet_restore_dag))) {
         LOG_WARN("failed to push tablet restore dag into array", K(ret), K(*ctx_));
@@ -1745,7 +1743,7 @@ int ObDataTabletsMetaRestoreTask::generate_tablet_group_dag_()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
   } else {
-    if (OB_FAIL(scheduler->alloc_dag(tablet_group_dag))) {
+    if (OB_FAIL(scheduler->alloc_dag(tablet_group_dag, true/*is_ha_dag*/))) {
       LOG_WARN("failed to alloc tablet group meta restore dag ", K(ret));
     } else if (OB_FAIL(tablet_group_dag->init(tablet_id_array, dag_net, finish_dag_))) {
       LOG_WARN("failed to init tablet group dag", K(ret), K(tablet_id_array));
@@ -1800,9 +1798,9 @@ bool ObTabletGroupMetaRestoreDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObTabletGroupMetaRestoreDag::hash() const
+uint64_t ObTabletGroupMetaRestoreDag::hash() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   ObLSRestoreCtx *ctx = get_ctx();
 
   if (NULL != ctx) {
@@ -1937,7 +1935,7 @@ int ObTabletGroupMetaRestoreDag::generate_next_dag(share::ObIDag *&dag)
   } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
-  } else if (OB_FAIL(scheduler->alloc_dag(tablet_group_meta_restore_dag))) {
+  } else if (OB_FAIL(scheduler->alloc_dag(tablet_group_meta_restore_dag, true/*is_ha_dag*/))) {
     LOG_WARN("failed to alloc tablet group meta restore dag ", K(ret));
   } else if (OB_FAIL(tablet_group_meta_restore_dag->init(tablet_id_array, dag_net, finish_dag_))) {
     LOG_WARN("failed to init tablet migration dag", K(ret), KPC(ctx));
@@ -2323,7 +2321,7 @@ int ObFinishLSRestoreTask::generate_initial_ls_restore_dag_()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
   } else {
-    if (OB_FAIL(scheduler->alloc_dag(initial_ls_restore_dag))) {
+    if (OB_FAIL(scheduler->alloc_dag(initial_ls_restore_dag, true/*is_ha_dag*/))) {
       LOG_WARN("failed to alloc ls restore dag", K(ret));
     } else if (OB_FAIL(initial_ls_restore_dag->init(dag_net_))) {
       LOG_WARN("failed to init initial ls restore dag", K(ret));

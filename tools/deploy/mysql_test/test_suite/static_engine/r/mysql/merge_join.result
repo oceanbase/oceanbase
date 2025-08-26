@@ -58,32 +58,32 @@ select /*+use_merge(t1 t2)*/ * from t1, t2 where t1.c1 = t2.c1;
 
 EXPLAIN select /*+use_merge(t1 t2)*/ * from t1 left join t2 on t1.c1 = t2.c1;
 Query Plan
-=======================================================
-|ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
--------------------------------------------------------
-|0 |MERGE RIGHT OUTER JOIN |    |11      |9           |
-|1 |├─SORT                 |    |9       |4           |
-|2 |│ └─TABLE FULL SCAN    |t2  |9       |3           |
-|3 |└─SORT                 |    |10      |4           |
-|4 |  └─TABLE FULL SCAN    |t1  |10      |3           |
-=======================================================
+===================================================
+|ID|OPERATOR           |NAME|EST.ROWS|EST.TIME(us)|
+---------------------------------------------------
+|0 |MERGE OUTER JOIN   |    |11      |9           |
+|1 |├─SORT             |    |10      |4           |
+|2 |│ └─TABLE FULL SCAN|t1  |10      |3           |
+|3 |└─SORT             |    |9       |4           |
+|4 |  └─TABLE FULL SCAN|t2  |9       |3           |
+===================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t2.c1], [t2.c2]), filter(nil), rowset=16
       equal_conds([t1.c1 = t2.c1]), other_conds(nil)
       merge_directions([ASC])
-  1 - output([t2.c1], [t2.c2]), filter(nil), rowset=16
-      sort_keys([t2.c1, ASC])
-  2 - output([t2.c1], [t2.c2]), filter(nil), rowset=16
-      access([t2.c1], [t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, 
-      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
-  3 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
+  1 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
       sort_keys([t1.c1, ASC])
-  4 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
+  2 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
       access([t1.c1], [t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  3 - output([t2.c1], [t2.c2]), filter(nil), rowset=16
+      sort_keys([t2.c1, ASC])
+  4 - output([t2.c1], [t2.c2]), filter(nil), rowset=16
+      access([t2.c1], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 select /*+use_merge(t1 t2)*/ * from t1 left join t2 on t1.c1 = t2.c1;
 +------+------+------+------+
 | c1   | c2   | c1   | c2   |
@@ -318,32 +318,32 @@ select /*+use_merge(t1 t2)*/ * from t1, t2 where t1.c1 <=> t2.c1;
 
 EXPLAIN select /*+use_merge(t1 t2)*/ * from t1 left join t2 on t1.c1 <=> t2.c1;
 Query Plan
-=======================================================
-|ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
--------------------------------------------------------
-|0 |MERGE RIGHT OUTER JOIN |    |13      |9           |
-|1 |├─SORT                 |    |9       |4           |
-|2 |│ └─TABLE FULL SCAN    |t2  |9       |3           |
-|3 |└─SORT                 |    |10      |4           |
-|4 |  └─TABLE FULL SCAN    |t1  |10      |3           |
-=======================================================
+===================================================
+|ID|OPERATOR           |NAME|EST.ROWS|EST.TIME(us)|
+---------------------------------------------------
+|0 |MERGE OUTER JOIN   |    |13      |9           |
+|1 |├─SORT             |    |10      |4           |
+|2 |│ └─TABLE FULL SCAN|t1  |10      |3           |
+|3 |└─SORT             |    |9       |4           |
+|4 |  └─TABLE FULL SCAN|t2  |9       |3           |
+===================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t2.c1], [t2.c2]), filter(nil), rowset=16
       equal_conds([t1.c1 <=> t2.c1]), other_conds(nil)
       merge_directions([ASC])
-  1 - output([t2.c1], [t2.c2]), filter(nil), rowset=16
-      sort_keys([t2.c1, ASC])
-  2 - output([t2.c1], [t2.c2]), filter(nil), rowset=16
-      access([t2.c1], [t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, 
-      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
-  3 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
+  1 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
       sort_keys([t1.c1, ASC])
-  4 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
+  2 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
       access([t1.c1], [t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  3 - output([t2.c1], [t2.c2]), filter(nil), rowset=16
+      sort_keys([t2.c1, ASC])
+  4 - output([t2.c1], [t2.c2]), filter(nil), rowset=16
+      access([t2.c1], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 select /*+use_merge(t1 t2)*/ * from t1 left join t2 on t1.c1 <=> t2.c1;
 +------+------+------+------+
 | c1   | c2   | c1   | c2   |
@@ -576,32 +576,32 @@ select /*+use_merge(t1 t2)*/ * from t1, t2 where t1.c1 = t2.c1 and t1.c2 * t2.c2
 
 EXPLAIN select /*+use_merge(t1 t2)*/ * from t1 left join t2 on t1.c1 = t2.c1 and t1.c2 * t2.c2 < 10;
 Query Plan
-=======================================================
-|ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
--------------------------------------------------------
-|0 |MERGE RIGHT OUTER JOIN |    |10      |8           |
-|1 |├─SORT                 |    |9       |4           |
-|2 |│ └─TABLE FULL SCAN    |t2  |9       |3           |
-|3 |└─SORT                 |    |10      |4           |
-|4 |  └─TABLE FULL SCAN    |t1  |10      |3           |
-=======================================================
+===================================================
+|ID|OPERATOR           |NAME|EST.ROWS|EST.TIME(us)|
+---------------------------------------------------
+|0 |MERGE OUTER JOIN   |    |10      |9           |
+|1 |├─SORT             |    |10      |4           |
+|2 |│ └─TABLE FULL SCAN|t1  |10      |3           |
+|3 |└─SORT             |    |9       |4           |
+|4 |  └─TABLE FULL SCAN|t2  |9       |3           |
+===================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t2.c1], [t2.c2]), filter(nil), rowset=16
       equal_conds([t1.c1 = t2.c1]), other_conds([t1.c2 * t2.c2 < 10])
       merge_directions([ASC])
-  1 - output([t2.c1], [t2.c2]), filter(nil), rowset=16
-      sort_keys([t2.c1, ASC])
-  2 - output([t2.c1], [t2.c2]), filter(nil), rowset=16
-      access([t2.c1], [t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, 
-      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
-  3 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
+  1 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
       sort_keys([t1.c1, ASC])
-  4 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
+  2 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
       access([t1.c1], [t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  3 - output([t2.c1], [t2.c2]), filter(nil), rowset=16
+      sort_keys([t2.c1, ASC])
+  4 - output([t2.c1], [t2.c2]), filter(nil), rowset=16
+      access([t2.c1], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 select /*+use_merge(t1 t2)*/ * from t1 left join t2 on t1.c1 = t2.c1 and t1.c2 * t2.c2 < 10;
 +------+------+------+------+
 | c1   | c2   | c1   | c2   |
@@ -878,47 +878,40 @@ select /*+use_merge(t1 t2) leading(t1 t2)*/ * from t1 left join t2 on t2.c1 = t1
 
 EXPLAIN select /*+use_merge(t1 t2) leading(t1 t2)*/ * from t1 right join t2 on t2.c1 = t1.c1 and t1.c2 * t2.c2 < 10;
 Query Plan
-=======================================================
-|ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
--------------------------------------------------------
-|0 |MERGE RIGHT OUTER JOIN |    |9       |9           |
-|1 |├─SORT                 |    |10      |4           |
-|2 |│ └─TABLE FULL SCAN    |t1  |10      |3           |
-|3 |└─SORT                 |    |9       |4           |
-|4 |  └─TABLE FULL SCAN    |t2  |9       |3           |
-=======================================================
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |HASH OUTER JOIN  |    |9       |9           |
+|1 |├─TABLE FULL SCAN|t2  |9       |3           |
+|2 |└─TABLE FULL SCAN|t1  |10      |3           |
+=================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t2.c1], [t2.c2]), filter(nil), rowset=16
       equal_conds([t2.c1 = t1.c1]), other_conds([t1.c2 * t2.c2 < 10])
-      merge_directions([ASC])
-  1 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
-      sort_keys([t1.c1, ASC])
+  1 - output([t2.c1], [t2.c2]), filter(nil), rowset=16
+      access([t2.c1], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
   2 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
       access([t1.c1], [t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
-  3 - output([t2.c1], [t2.c2]), filter(nil), rowset=16
-      sort_keys([t2.c1, ASC])
-  4 - output([t2.c1], [t2.c2]), filter(nil), rowset=16
-      access([t2.c1], [t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, 
-      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 select /*+use_merge(t1 t2) leading(t1 t2)*/ * from t1 right join t2 on t2.c1 = t1.c1 and t1.c2 * t2.c2 < 10;
 +------+------+------+------+
 | c1   | c2   | c1   | c2   |
 +------+------+------+------+
+|    2 |    2 |    2 |    2 |
+|    2 |    2 |    2 |    2 |
+|    3 |    3 |    3 |    3 |
+|    3 |    3 |    3 |    3 |
 | NULL | NULL | NULL |    3 |
+| NULL | NULL |   10 |   10 |
 | NULL | NULL |    1 |    1 |
 | NULL | NULL |    1 |    1 |
-|    2 |    2 |    2 |    2 |
-|    2 |    2 |    2 |    2 |
-|    3 |    3 |    3 |    3 |
-|    3 |    3 |    3 |    3 |
 | NULL | NULL |    6 |    6 |
 | NULL | NULL |    6 |    6 |
 | NULL | NULL |    9 |    9 |
-| NULL | NULL |   10 |   10 |
 +------+------+------+------+
 
 EXPLAIN select /*+use_merge(t1 t2) leading(t1 t2)*/ * from t1 full join t2 on t2.c1 = t1.c1 and t1.c2 * t2.c2 < 10;

@@ -16,8 +16,9 @@
 #define protected public
 
 #include "ob_index_block_data_prepare.h"
-#include "storage/blocksstable/index_block/ob_index_block_tree_cursor.h"
+#include "storage/blocksstable/ob_micro_block_reader.h"
 #include "storage/blocksstable/ob_macro_block_bare_iterator.h"
+#include "storage/blocksstable/index_block/ob_index_block_tree_cursor.h"
 
 namespace oceanbase
 {
@@ -74,6 +75,7 @@ public:
     table_schema_.set_row_store_type(row_store_type_);
     table_schema_.set_storage_format_version(OB_STORAGE_FORMAT_VERSION_V4);
     table_schema_.set_micro_index_clustered(false);
+    table_schema_.set_micro_block_format_version(ObMicroBlockFormatVersionHelper::LATEST_VERSION);
 
     index_schema_.reset();
     ASSERT_EQ(OB_SUCCESS, index_schema_.set_table_name("test_index_block"));
@@ -243,7 +245,8 @@ TEST_F(TestMicroHashIndex, hash_index_get_all_row)
       number_of_micro_block++;
       number_of_hash_index += micro_data.get_micro_header()->is_contain_hash_index();
 
-      ObMicroBlockGetReader reader;
+      ObMicroBlockGetReader<> reader;
+      ObMicroBlockAddr block_addr;
       for (int i = 0; i < micro_data.get_micro_header()->row_count_; i++) {
         row_key_array_[row_idx++].deep_copy(find_rowkey, allocator_);
         find_rowkey.datum_cnt_ = table_schema_.get_rowkey_column_num();
@@ -254,7 +257,7 @@ TEST_F(TestMicroHashIndex, hash_index_get_all_row)
         ObDatumRowkey row_key;
         ASSERT_EQ(OB_SUCCESS,
                   reader.exist_row(micro_data, find_rowkey, rowkey_read_info, exist, found));
-        ASSERT_EQ(OB_SUCCESS, reader.get_row(micro_data, find_rowkey, rowkey_read_info, row));
+        ASSERT_EQ(OB_SUCCESS, reader.get_row(block_addr, micro_data, find_rowkey, rowkey_read_info, row));
         ASSERT_TRUE(found);
         ASSERT_TRUE(exist);
         ASSERT_EQ(OB_SUCCESS, row_key.assign(row.storage_datums_, rowkey_read_info.datum_utils_.get_rowkey_count() - 2));
@@ -343,7 +346,7 @@ TEST_F(TestMicroHashIndex, hash_index_get_not_exist_row)
       number_of_micro_block++;
       number_of_hash_index += micro_data.get_micro_header()->is_contain_hash_index();
 
-      ObMicroBlockGetReader reader;
+      ObMicroBlockGetReader<> reader;
       for (int i = 0; i < micro_data.get_micro_header()->row_count_; i++) {
         int64_t next_block_row_idx
             = ((row_idx++) + micro_data.get_micro_header()->row_count_) % max_row_cnt_;

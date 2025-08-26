@@ -17,6 +17,7 @@
 #include "share/ob_global_merge_table_operator.h"
 #include "share/ob_zone_merge_info.h"
 #include "share/ob_all_server_tracer.h"
+#include "rootserver/ob_objpriv_mysql_schema_history_recycler.h"
 
 namespace oceanbase
 {
@@ -939,6 +940,37 @@ int ObSchemaHistoryRecycler::try_recycle_schema_history(
                          catalog_id);
     ret = OB_SUCCESS; // overwrite ret
 
+    // --------------------------- external_resource ---------------------------------------------------
+    RECYCLE_FIRST_SCHEMA(RECYCLE_AND_COMPRESS, external_resource, OB_ALL_EXTERNAL_RESOURCE_HISTORY_TNAME,
+                         resource_id);
+    ret = OB_SUCCESS; // overwrite ret
+
+    // --------------------------- location --------------------------------------------------
+    RECYCLE_FIRST_SCHEMA(RECYCLE_AND_COMPRESS, location, OB_ALL_TENANT_LOCATION_HISTORY_TNAME,
+                         location_id);
+    ret = OB_SUCCESS; // overwrite ret
+
+    // -------------------------- object priv --------------------------------------------
+    // (RECYCLE_AND_COMPRESS)
+    {
+      ObObjectPrivMysqlRecycleSchemaExecutor executor(tenant_id,
+                                                 recycle_schema_version,
+                                                 OB_ALL_TENANT_OBJAUTH_MYSQL_HISTORY_TNAME,
+                                                 sql_proxy_,
+                                                 this);
+      if (OB_FAIL(executor.execute())) { // overwrite ret
+        LOG_WARN("fail to recycle schema history",
+                 KR(ret), "type", "object_priv_mysql",
+                 K(tenant_id), K(recycle_schema_version));
+      }
+      ret = OB_SUCCESS;
+    }
+
+    // --------------------------- ccl ---------------------------------------------------
+    RECYCLE_FIRST_SCHEMA(RECYCLE_AND_COMPRESS, ccl_rule, OB_ALL_CCL_RULE_HISTORY_TNAME,
+                         ccl_rule_id);
+    ret = OB_SUCCESS; // overwrite ret
+
 #undef RECYCLE_FIRST_SCHEMA
     int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
     ROOTSERVICE_EVENT_ADD("schema_recycler", "batch_recycle_by_tenant",
@@ -1409,6 +1441,7 @@ DEFINE_FILL_SCHEMA_HISTORY_MAP(ObSecondRecycleSchemaExecutor, ObSecondSchemaKey)
 DEFINE_FILL_SCHEMA_HISTORY_MAP(ObThirdRecycleSchemaExecutor, ObThirdSchemaKey);
 DEFINE_FILL_SCHEMA_HISTORY_MAP(ObSystemVariableRecycleSchemaExecutor, ObSystemVariableSchemaKey);
 DEFINE_FILL_SCHEMA_HISTORY_MAP(ObObjectPrivRecycleSchemaExecutor, ObObjectPrivSchemaKey);
+DEFINE_FILL_SCHEMA_HISTORY_MAP(ObObjectPrivMysqlRecycleSchemaExecutor, ObObjectPrivMysqlSchemaKey);
 #undef DEFINE_FILL_SCHEMA_HISTORY_MAP
 
 #define DEFINE_FILL_SCHEMA_HISTORY_KEY(EXECUTOR, KEY) \
@@ -1422,6 +1455,7 @@ DEFINE_FILL_SCHEMA_HISTORY_KEY(ObRecycleSchemaExecutor, ObFirstSchemaKey);
 DEFINE_FILL_SCHEMA_HISTORY_KEY(ObSecondRecycleSchemaExecutor, ObSecondSchemaKey);
 DEFINE_FILL_SCHEMA_HISTORY_KEY(ObThirdRecycleSchemaExecutor, ObThirdSchemaKey);
 DEFINE_FILL_SCHEMA_HISTORY_KEY(ObObjectPrivRecycleSchemaExecutor, ObObjectPrivSchemaKey);
+DEFINE_FILL_SCHEMA_HISTORY_KEY(ObObjectPrivMysqlRecycleSchemaExecutor, ObObjectPrivMysqlSchemaKey);
 #undef DEFINE_FILL_SCHEMA_HISTORY_KEY
 
 #define DEFINE_FILL_SCHEMA_HISTORY_FUNC(EXECUTOR, KEY) \
@@ -1464,6 +1498,7 @@ DEFINE_FILL_SCHEMA_HISTORY_FUNC(ObSecondRecycleSchemaExecutor, ObSecondSchemaKey
 DEFINE_FILL_SCHEMA_HISTORY_FUNC(ObThirdRecycleSchemaExecutor, ObThirdSchemaKey);
 DEFINE_FILL_SCHEMA_HISTORY_FUNC(ObSystemVariableRecycleSchemaExecutor, ObSystemVariableSchemaKey);
 DEFINE_FILL_SCHEMA_HISTORY_FUNC(ObObjectPrivRecycleSchemaExecutor, ObObjectPrivSchemaKey);
+DEFINE_FILL_SCHEMA_HISTORY_FUNC(ObObjectPrivMysqlRecycleSchemaExecutor, ObObjectPrivMysqlSchemaKey);
 #undef DEFINE_FILL_SCHEMA_HISTORY_FUNC
 
 #define DEFINE_RECYCLE_SCHEMA_HISTORY(EXECUTOR, KEY) \
@@ -1518,6 +1553,7 @@ DEFINE_RECYCLE_SCHEMA_HISTORY(ObRecycleSchemaExecutor, ObFirstSchemaKey)
 DEFINE_RECYCLE_SCHEMA_HISTORY(ObSecondRecycleSchemaExecutor, ObSecondSchemaKey);
 DEFINE_RECYCLE_SCHEMA_HISTORY(ObThirdRecycleSchemaExecutor, ObThirdSchemaKey);
 DEFINE_RECYCLE_SCHEMA_HISTORY(ObObjectPrivRecycleSchemaExecutor, ObObjectPrivSchemaKey);
+DEFINE_RECYCLE_SCHEMA_HISTORY(ObObjectPrivMysqlRecycleSchemaExecutor, ObObjectPrivMysqlSchemaKey);
 #undef DEFINE_RECYCLE_SCHEMA_HISTORY
 
 int ObRecycleSchemaExecutor::gen_batch_recycle_schema_history_sql(
@@ -1575,6 +1611,7 @@ DEFINE_BATCH_RECYCLE_SCHEMA_HISTORY(ObRecycleSchemaExecutor, ObFirstSchemaKey)
 DEFINE_BATCH_RECYCLE_SCHEMA_HISTORY(ObSecondRecycleSchemaExecutor, ObSecondSchemaKey);
 DEFINE_BATCH_RECYCLE_SCHEMA_HISTORY(ObThirdRecycleSchemaExecutor, ObThirdSchemaKey);
 DEFINE_BATCH_RECYCLE_SCHEMA_HISTORY(ObObjectPrivRecycleSchemaExecutor, ObObjectPrivSchemaKey);
+DEFINE_BATCH_RECYCLE_SCHEMA_HISTORY(ObObjectPrivMysqlRecycleSchemaExecutor, ObObjectPrivMysqlSchemaKey);
 #undef DEFINE_BATCH_RECYCLE_SCHEMA_HISTORY
 
 int ObRecycleSchemaExecutor::gen_batch_compress_schema_history_sql(
@@ -1673,6 +1710,9 @@ DEFINE_COMPRESS_SCHEMA_HISTORY(ObSystemVariableRecycleSchemaExecutor,
 DEFINE_COMPRESS_SCHEMA_HISTORY(ObObjectPrivRecycleSchemaExecutor,
                                ObObjectPrivSchemaKey,
                                ObObjectPrivCompressSchemaInfo);
+DEFINE_COMPRESS_SCHEMA_HISTORY(ObObjectPrivMysqlRecycleSchemaExecutor,
+                               ObObjectPrivMysqlSchemaKey,
+                               ObObjectPrivMysqlCompressSchemaInfo);
 #undef DEFINE_COMPRESS_SCHEMA_HISTORY
 
 #define BATCH_COMPRESS_SCHEMA_HISTORY(EXECUTOR, INFO) \
@@ -1698,6 +1738,7 @@ int EXECUTOR::batch_compress_schema_history( \
 BATCH_COMPRESS_SCHEMA_HISTORY(ObRecycleSchemaExecutor, ObFirstCompressSchemaInfo);
 BATCH_COMPRESS_SCHEMA_HISTORY(ObSystemVariableRecycleSchemaExecutor, ObSystemVariableCompressSchemaInfo);
 BATCH_COMPRESS_SCHEMA_HISTORY(ObObjectPrivRecycleSchemaExecutor, ObObjectPrivCompressSchemaInfo);
+BATCH_COMPRESS_SCHEMA_HISTORY(ObObjectPrivMysqlRecycleSchemaExecutor, ObObjectPrivMysqlCompressSchemaInfo);
 #undef BATCH_COMPRESS_SCHEMA_HISTORY
 
 ObSecondRecycleSchemaExecutor::ObSecondRecycleSchemaExecutor(
@@ -2395,6 +2436,5 @@ int ObObjectPrivRecycleSchemaExecutor::gen_batch_compress_schema_history_sql(
   }
   return ret;
 }
-
 } // end namespace rootserver
 } // end namespace oceanbase

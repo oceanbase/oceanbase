@@ -54,6 +54,7 @@ struct ObMdsInfoDistinctMgr final
     const compaction::ObMdsFilterInfo &mds_filter_info);
   int get_distinct_truncate_info_array(
     ObTruncateInfoArray &distinct_array) const;
+  const ObIArray<ObTruncateInfo *> &get_distinct_truncate_info_array() const { return distinct_array_; }
   bool operator ==(const ObMdsInfoDistinctMgr &other) const = delete;
   TO_STRING_KV(K_(array), "distinct_array_cnt", distinct_array_.count(), K_(distinct_array));
 private:

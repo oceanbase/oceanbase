@@ -213,7 +213,7 @@ int ObMPStmtSendPieceData::process_send_long_data_stmt(ObSQLSessionInfo &session
   //对于tracelog的处理，不影响正常逻辑，错误码无须赋值给ret
   int tmp_ret = OB_SUCCESS;
   //清空WARNING BUFFER
-  tmp_ret = do_after_process(session, ctx_, false);
+  tmp_ret = do_after_process(session, false);
   UNUSED(tmp_ret);
   return ret;
 }

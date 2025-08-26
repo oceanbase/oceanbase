@@ -473,6 +473,7 @@ int ObLSServiceHelper::get_ls_replica_sync_scn(const uint64_t tenant_id,
 int ObLSServiceHelper::process_status_to_steady(
     const bool lock_sys_ls,
     const share::ObTenantSwitchoverStatus &working_sw_status,
+    const int64_t switchover_epoch,
     ObTenantLSInfo& tenant_ls_info)
 {
   int ret = OB_SUCCESS;
@@ -481,6 +482,9 @@ int ObLSServiceHelper::process_status_to_steady(
   if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql proxy is null", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (OB_INVALID_VERSION == switchover_epoch) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(switchover_epoch));
   } else if (OB_FAIL(construct_ls_status_machine(
           lock_sys_ls, tenant_id, GCTX.sql_proxy_, status_machine_array))) {
     LOG_WARN("failed to construct ls status machine array", KR(ret), K(lock_sys_ls), K(tenant_id));
@@ -490,7 +494,8 @@ int ObLSServiceHelper::process_status_to_steady(
       const ObLSStatusMachineParameter &machine = status_machine_array.at(idx);
       //ignore error of each ls
       //may ls can not create success
-      if (OB_SUCCESS != (tmp_ret = revision_to_equal_status_(machine, working_sw_status, tenant_ls_info))) {
+      if (OB_SUCCESS != (tmp_ret = revision_to_equal_status_(machine, working_sw_status,
+          switchover_epoch, tenant_ls_info))) {
         LOG_WARN("failed to fix ls status", KR(ret), KR(tmp_ret), K(machine), K(tenant_ls_info));
         ret = OB_SUCC(ret) ? tmp_ret : ret;
       } else if (machine.ls_info_.get_ls_status() != machine.status_info_.status_) {
@@ -620,6 +625,7 @@ int ObLSServiceHelper::check_if_need_wait_user_ls_sync_scn_(
 
 int ObLSServiceHelper::revision_to_equal_status_(const ObLSStatusMachineParameter &machine,
                                       const share::ObTenantSwitchoverStatus &working_sw_status,
+                                      const int64_t switchover_epoch,
                                       ObTenantLSInfo& tenant_ls_info)
 {
   int ret = OB_SUCCESS;
@@ -627,9 +633,9 @@ int ObLSServiceHelper::revision_to_equal_status_(const ObLSStatusMachineParamete
   const share::ObLSAttr &ls_info = machine.ls_info_;
   const uint64_t tenant_id = tenant_ls_info.get_tenant_id();
   ObLSStatusOperator status_op;
-  if (OB_UNLIKELY(!machine.is_valid())) {
+  if (OB_UNLIKELY(!machine.is_valid() || OB_INVALID_VERSION == switchover_epoch)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("status machine is valid", KR(ret), K(machine));
+    LOG_WARN("status machine is valid", KR(ret), K(machine), K(switchover_epoch));
   } else if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql proxy is null", KR(ret), KP(GCTX.sql_proxy_));
@@ -666,10 +672,10 @@ int ObLSServiceHelper::revision_to_equal_status_(const ObLSStatusMachineParamete
       if (FAILEDx(create_new_ls_in_trans(ls_info.get_ls_id(),
                                          ls_info.get_ls_group_id(),
                                          ls_info.get_create_scn(),
-                                         working_sw_status,
+                                         switchover_epoch,
                                          tenant_ls_info, trans, ls_info.get_ls_flag(),
                                          OB_INVALID_TENANT_ID/*source_tenant_id*/))) {
-        LOG_WARN("failed to create new ls in trans", KR(ret), K(ls_info), K(tenant_ls_info), K(working_sw_status));
+        LOG_WARN("failed to create new ls in trans", KR(ret), K(ls_info), K(tenant_ls_info), K(switchover_epoch));
       }
       END_TRANSACTION(trans);
     } else if (status_info.ls_is_created() || status_info.ls_is_create_abort()) {
@@ -805,7 +811,7 @@ int ObLSServiceHelper::create_new_ls_in_trans(
     const share::ObLSID &ls_id,
     const uint64_t ls_group_id,
     const SCN &create_scn,
-    const share::ObTenantSwitchoverStatus &working_sw_status,
+    const int64_t switchover_epoch,
     ObTenantLSInfo& tenant_ls_info,
     ObMySQLTransaction &trans,
     const share::ObLSFlag &ls_flag,
@@ -813,26 +819,22 @@ int ObLSServiceHelper::create_new_ls_in_trans(
 {
   int ret = OB_SUCCESS;
   int64_t info_index = OB_INVALID_INDEX_INT64;
+  ObAllTenantInfo tenant_info;
+  const uint64_t tenant_id = tenant_ls_info.get_tenant_id();
   if (OB_UNLIKELY(!ls_id.is_valid()
                   || OB_INVALID_ID == ls_group_id
                   || !create_scn.is_valid()
-                  || !ls_flag.is_valid())) {
+                  || !ls_flag.is_valid()
+                  || OB_INVALID_VERSION == switchover_epoch)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("ls id is invalid", KR(ret), K(ls_id), K(ls_group_id), K(create_scn), K(ls_flag));
-  } else if (OB_ISNULL(tenant_ls_info.get_tenant_schema())
-             || OB_ISNULL(GCTX.sql_proxy_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tenant stat not valid", KR(ret), KP(tenant_ls_info.get_tenant_schema()), KP(GCTX.sql_proxy_));
+    LOG_WARN("ls id is invalid", KR(ret), K(ls_id), K(ls_group_id), K(create_scn), K(switchover_epoch), K(ls_flag));
   } else if (OB_FAIL(tenant_ls_info.gather_stat())) {
     LOG_WARN("failed to gather stat", KR(ret));
   } else {
-    const uint64_t tenant_id = tenant_ls_info.get_tenant_id();
-    share::ObLSStatusInfo new_info;
     ObLSGroupInfo group_info;
     ObZone primary_zone;
-    ObLSLifeAgentManager ls_life_agent(*GCTX.sql_proxy_);
-    ObSqlString zone_priority;
     uint64_t unit_group_id = 0;
+    share::ObLSStatusInfo new_ls_info;
     if (OB_INVALID_TENANT_ID == source_tenant_id) {
       if (OB_FAIL(construct_unit_group_id_and_primary_zone_(
                       ls_id,
@@ -850,19 +852,14 @@ int ObLSServiceHelper::create_new_ls_in_trans(
       }
     }
 
-    if (FAILEDx(new_info.init(tenant_id, ls_id,
-                              ls_group_id,
-                              share::OB_LS_CREATING,
-                              unit_group_id,
-                              primary_zone, ls_flag))) {
+    if (FAILEDx(new_ls_info.init(tenant_id, ls_id, ls_group_id, share::OB_LS_CREATING,
+        unit_group_id, primary_zone, ls_flag))) {
       LOG_WARN("failed to init new info", KR(ret), K(tenant_id), K(unit_group_id),
-               K(ls_id), K(ls_group_id), K(group_info), K(primary_zone), K(ls_flag));
-    } else if (OB_FAIL(ObTenantThreadHelper::get_zone_priority(primary_zone,
-            *tenant_ls_info.get_tenant_schema(), zone_priority))) {
-      LOG_WARN("failed to get normalize primary zone", KR(ret), K(primary_zone), K(zone_priority));
-    } else if (OB_FAIL(ls_life_agent.create_new_ls_in_trans(new_info, create_scn,
-            zone_priority.string(), working_sw_status, trans))) {
-      LOG_WARN("failed to insert ls info", KR(ret), K(new_info), K(create_scn), K(zone_priority));
+          K(ls_id), K(ls_group_id), K(primary_zone), K(ls_flag));
+    } else if (OB_FAIL(life_agent_create_new_ls_in_trans(new_ls_info, create_scn,
+        switchover_epoch, tenant_ls_info, trans))) {
+      LOG_WARN("fail to execute life_agent_create_new_ls_in_trans", KR(ret), K(ls_id),
+          K(new_ls_info), K(switchover_epoch), K(tenant_ls_info));
     }
   }
   return ret;
@@ -1005,6 +1002,35 @@ int ObLSServiceHelper::construct_unit_group_id_and_primary_zone_(
       }
     } else {
       LOG_WARN("failed to get ls group info", KR(ret), K(ls_group_id), K(tenant_ls_info));
+    }
+  }
+  return ret;
+}
+
+int ObLSServiceHelper::life_agent_create_new_ls_in_trans(
+    const share::ObLSStatusInfo &new_info,
+    const share::SCN &create_scn,
+    const int64_t switchover_epoch,
+    ObTenantLSInfo& tenant_ls_info,
+    common::ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = tenant_ls_info.get_tenant_id();
+  ObSqlString zone_priority;
+  if (OB_UNLIKELY(!create_scn.is_valid() || OB_INVALID_VERSION == switchover_epoch)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(create_scn), K(switchover_epoch));
+  } else if (OB_ISNULL(GCTX.sql_proxy_) || OB_ISNULL(tenant_ls_info.get_tenant_schema())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant stat not valid", KR(ret), KP(tenant_ls_info.get_tenant_schema()), KP(GCTX.sql_proxy_));
+  } else {
+    ObLSLifeAgentManager ls_life_agent(*GCTX.sql_proxy_);
+    if (OB_FAIL(ObTenantThreadHelper::get_zone_priority(new_info.primary_zone_,
+        *tenant_ls_info.get_tenant_schema(), zone_priority))) {
+      LOG_WARN("failed to get normalize primary zone", KR(ret), K(new_info), K(zone_priority));
+    } else if (OB_FAIL(ls_life_agent.create_new_ls_in_trans(new_info, create_scn,
+        zone_priority.string(), switchover_epoch, trans))) {
+      LOG_WARN("failed to insert ls info", KR(ret), K(new_info), K(create_scn), K(zone_priority));
     }
   }
   return ret;
@@ -1625,6 +1651,30 @@ int ObLSServiceHelper::get_ls_all_replica_readable_scn_(const uint64_t tenant_id
   }
   return ret;
 
+}
+
+int ObLSServiceHelper::create_ls_in_user_tenant(
+  const uint64_t tenant_id,
+  const uint64_t ls_group_id,
+  const share::ObLSFlag &flag,
+  share::ObLSAttrOperator &ls_operator,
+  share::ObLSAttr &new_ls,
+  ObMySQLTransaction *trans)
+{
+  int ret = OB_SUCCESS;
+  SCN create_scn;
+  ObLSID ls_id;
+  if (OB_FAIL(fetch_new_ls_id(GCTX.sql_proxy_, tenant_id, ls_id))) {
+    LOG_WARN("failed to fetch new LS id", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(ObLSAttrOperator::get_tenant_gts(tenant_id, create_scn))) {
+    LOG_WARN("failed to get tenant gts", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(new_ls.init(ls_id, ls_group_id, flag, share::OB_LS_CREATING,
+      share::OB_LS_OP_CREATE_PRE, create_scn))) {
+    LOG_WARN("failed to init new operation", KR(ret), K(create_scn), K(ls_id), K(ls_group_id));
+  } else if (OB_FAIL(ls_operator.insert_ls(new_ls, share::NORMAL_SWITCHOVER_STATUS, trans))) {
+    LOG_WARN("failed to insert new operation", KR(ret), K(new_ls));
+  }
+  return ret;
 }
 
 }//end of rootserver

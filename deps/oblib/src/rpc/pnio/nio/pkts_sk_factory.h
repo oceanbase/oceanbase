@@ -44,6 +44,9 @@ static pkts_sk_t* pkts_sk_new(pkts_sf_t* sf) {
     memset(s, 0, sizeof(*s));
     s->fty = (sf_t*)sf;
     s->ep_fd = -1;
+    s->processing_cnt = 0;
+    s->relocate_status = SOCK_NORMAL;
+    s->relocate_sock_id = UINT64_MAX;
     s->handle_event = (handle_event_t)pkts_sk_handle_event;
     s->sk_diag_info.establish_time = rk_get_us();
     pkts_sk_init(sf, s);

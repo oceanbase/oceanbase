@@ -39,6 +39,7 @@ namespace pl
 {
 class ObDbmsCursorInfo;
 class ObPLSqlCodeInfo;
+class ObPLSqlAuditRecord;
 }
 
 namespace sql
@@ -457,6 +458,10 @@ public:
                              uint64_t package_id,
                              int64_t var_idx,
                              const ObObj &value);
+  static int spi_get_package_var_type(ObExecContext *exec_ctx,
+                              uint64_t package_id,
+                              int64_t var_idx,
+                              pl::ObPLDataType &type);
   static int check_and_deep_copy_result(ObIAllocator &alloc,
                                         const ObObj &src,
                                         ObObj &dst);
@@ -494,6 +499,7 @@ public:
                        bool for_update = false);
   static int spi_check_autonomous_trans(pl::ObPLExecCtx *ctx);
   static int spi_get_current_expr_allocator(pl::ObPLExecCtx *ctx, int64_t *addr);
+  static void spi_reset_allocator(ObIAllocator *allocator);
   static int spi_init_composite(ObIAllocator *current_allcator, int64_t addr, bool is_record, bool need_allocator);
   static int spi_get_parent_allocator(ObIAllocator *current_allcator, int64_t *parent_allocator_addr);
   static int spi_prepare(common::ObIAllocator &allocator,
@@ -784,7 +790,12 @@ public:
 
   static int spi_destruct_collection(pl::ObPLExecCtx *ctx, int64_t idx);
 
-  static int spi_sub_nestedtable(pl::ObPLExecCtx *ctx, int64_t src_idx, int64_t dst_idx, int32_t lower, int32_t upper);
+  static int spi_sub_nestedtable(pl::ObPLExecCtx *ctx,
+                                 int64_t src_expr_idx,
+                                 int64_t dst_coll_idx,
+                                 int64_t index_idx,
+                                 int32_t lower,
+                                 int32_t upper);
 
 #ifdef OB_BUILD_ORACLE_PL
   static int spi_extend_assoc_array(int64_t tenant_id,
@@ -933,7 +944,8 @@ public:
                          bool &is_iter_end,
                          int64_t orc_max_ret_rows = INT64_MAX);
 
-  static int cursor_release(ObSQLSessionInfo *session,
+  static int cursor_release(pl::ObPLExecCtx *ctx,
+                            ObSQLSessionInfo *session,
                             pl::ObPLCursorInfo *cursor,
                             bool is_refcursor,
                             uint64_t package_id,
@@ -953,6 +965,8 @@ public:
   static int fill_ps_cursor(ObSQLSessionInfo &session,
                             pl::ObPsCursorInfo &ps_cursor,
                             int64_t pre_store_size = 0);
+  static int close_ps_cursor_result_set(ObSQLSessionInfo &session,
+                                        int64_t cursor_id);
 
 #ifdef OB_BUILD_ORACLE_PL
   static int spi_execute_dblink(ObExecContext &exec_ctx,
@@ -977,6 +991,8 @@ public:
                                       ObObj *result,
                                       ObObj &tmp_result);
 #endif
+  static int spi_internal_error(pl::ObPLExecCtx *ctx);
+
 private:
   static int recreate_implicit_savapoint_if_need(pl::ObPLExecCtx *ctx, int &result);
   static int recreate_implicit_savapoint_if_need(sql::ObExecContext &ctx, int &result);
@@ -1299,6 +1315,12 @@ private:
                                     const int64_t *formal_param_idxs,
                                     const ObSqlExpression **actual_param_exprs,
                                     int64_t cursor_param_count);
+  static int release_cursor_parameters(pl::ObPLExecCtx *ctx,
+                                      ObSQLSessionInfo &session_info,
+                                      uint64_t package_id,
+                                      uint64_t routine_id,
+                                      const int64_t *formal_param_idxs,
+                                      int64_t cursor_param_count);
   static bool is_sql_type_into_pl(ObObj &dest_addr, ObIArray<ObObj> &obj_array);
 
   static int streaming_cursor_open(pl::ObPLExecCtx *ctx,
@@ -1309,6 +1331,8 @@ private:
                                    int64_t type,
                                    void *params,
                                    int64_t sql_param_count,
+                                   pl::ObPLSqlAuditRecord &audit_record,
+                                   observer::ObQueryRetryCtrl &retry_ctrl,
                                    bool is_server_cursor,
                                    bool is_for_update,
                                    bool has_hidden_rowid,

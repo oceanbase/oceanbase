@@ -30,4 +30,20 @@ CREATE OR REPLACE PACKAGE dbms_vector AUTHID CURRENT_USER
     IN     idx_parameters          LONGTEXT DEFAULT NULL,
     IN     idx_parallel_creation   INT DEFAULT 1);
 
+  FUNCTION index_vector_memory_advisor (
+    IN     idx_type           VARCHAR(65535),
+    IN     num_vectors        BIGINT UNSIGNED,
+    IN     dim_count          INT UNSIGNED,
+    IN     dim_type           VARCHAR(65535) DEFAULT 'FLOAT32',
+    IN     idx_parameters     LONGTEXT DEFAULT NULL,
+    IN     max_tablet_vectors BIGINT UNSIGNED DEFAULT 0)
+  RETURN VARCHAR(65535);
+
+  FUNCTION index_vector_memory_estimate (
+    IN     table_name        VARCHAR(65535),
+    IN     column_name       VARCHAR(65535),
+    IN     idx_type          VARCHAR(65535),
+    IN     idx_parameters    LONGTEXT DEFAULT NULL)
+  RETURN VARCHAR(65535);
+
 END dbms_vector;

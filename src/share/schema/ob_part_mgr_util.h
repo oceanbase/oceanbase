@@ -42,6 +42,17 @@ public:
   {}
   int get_part_ids(const common::ObString &part_name, common::ObIArray<ObObjectID> &part_ids);
   int get_subpart_ids(const common::ObString &part_name, common::ObIArray<ObObjectID> &part_ids);
+
+  // get level-one part_id for partition table or subparititon table
+  // return OB_UNKNOWN_PARTITION if part_name not found
+  int get_part_id(const common::ObString &part_name, ObObjectID &part_id);
+  // only for subparititon table
+  // return OB_UNKNOWN_SUBPARTITION if part_name or subpart_name not found
+  int get_part_id_and_subpart_id(
+      const common::ObString &part_name,
+      const common::ObString &subpart_name,
+      ObObjectID &part_id,
+      ObObjectID &subpart_id);
 private:
   ObPartGetter();
   int get_subpart_ids_in_partition(const common::ObString &part_name,

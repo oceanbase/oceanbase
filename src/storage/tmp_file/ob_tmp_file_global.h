@@ -31,42 +31,20 @@ struct ObTmpFileGlobal final
 
   static const int64_t TMP_FILE_READ_BATCH_SIZE;
   static const int64_t TMP_FILE_WRITE_BATCH_PAGE_NUM;
+  static const int64_t TMP_FILE_WRITE_BATCH_SIZE;
 
   static const int64_t TMP_FILE_MAX_LABEL_SIZE = 15;
 
   // SN_TMP_FILE_BLOCK
   static const int64_t INVALID_TMP_FILE_BLOCK_INDEX;
+  static const int64_t TMP_FILE_MAX_SHARED_PRE_ALLOC_PAGE_NUM = 64; // 512KB
+  static const int64_t TMP_FILE_MIN_SHARED_PRE_ALLOC_PAGE_NUM = 2; // 16KB
+  static const int64_t TMP_FILE_MAX_SHARED_PRE_ALLOC_BLOCK_NUM = 4;
 
   // TMP_FILE_WRITE_BUFFER
   static const uint32_t INVALID_PAGE_ID;
   static const int64_t INVALID_VIRTUAL_PAGE_ID;
 
-  // TMP_FILE_FLUSH_STAGE
-  enum FlushCtxState
-  {
-    FSM_F1 = 0,  // flush data list L1
-    FSM_F2 = 1,  // flush data list L2 & L3 & L4
-    FSM_F3 = 2,  // flush data list L5
-    FSM_F4 = 3,  // flush meta list non-rightmost pages
-    FSM_F5 = 4,  // flush meta list rightmost pages
-    FSM_FINISHED = 5
-  };
-  static int advance_flush_ctx_state(const FlushCtxState cur_stage, FlushCtxState &next_stage);
-  static const int64_t INVALID_FLUSH_SEQUENCE = -1;
-  static const int32_t FLUSH_TIMER_CNT = 4;
-  static const int64_t MAX_FLUSHING_BLOCK_NUM = 200;
-
-  enum FileList {
-    INVALID = -1,
-    L1 = 0, // [2MB, INFINITE)
-    L2,     // [1MB, 2MB)
-    L3,     // [128KB, 1MB)
-    L4,     // data_list: [8KB, 128KB); meta_list: (0KB, 128KB)
-    L5,     // data_list: (0, 8KB); meta_list: 0KB
-    MAX
-  };
-  static int switch_data_list_level_to_flush_state(const FileList list_level, FlushCtxState &flush_state);
-  static const int64_t TMP_FILE_STAT_FREQUENCY = 1 * 1000 * 1000; // 1s
 #ifdef OB_BUILD_SHARED_STORAGE
   // SS_TMP_FILE
   static const int64_t SHARE_STORAGE_DIR_ID = 1;
@@ -79,9 +57,39 @@ struct ObTmpFileGlobal final
   static constexpr int64_t SS_BLOCK_SIZE = 2 << 20; // 2MB
   static constexpr int64_t SS_BLOCK_PAGE_NUMS =
                            SS_BLOCK_SIZE / PAGE_SIZE;   // 256 pages per macro block
+
+  // TMP_FILE_FLUSH_STAGE
+  enum FlushCtxState //FARM COMPAT WHITELIST
+  {
+    FSM_F1 = 0,  // flush data list L1
+    FSM_F2,  // flush data list L2 & L3 & L4
+    FSM_F3,  // flush data list L5
+    FSM_FINISHED
+  };
+  static int advance_flush_ctx_state(const FlushCtxState cur_stage, FlushCtxState &next_stage);
+  static const int64_t MAX_FLUSHING_BLOCK_NUM = 200;
+
+  enum FileList {
+    INVALID = -1,
+    L1 = 0, // [2MB, INFINITE)
+    L2,     // [1MB, 2MB)
+    L3,     // [128KB, 1MB)
+    L4,     // [8KB, 128KB)
+    L5,     // (0, 8KB)
+    MAX
+  };
+  static int switch_data_list_level_to_flush_state(const FileList list_level, FlushCtxState &flush_state);
+  static const int64_t TMP_FILE_STAT_FREQUENCY = 1 * 1000 * 1000; // 1s
 #endif
 };
 
+enum OB_TMP_FILE_TYPE
+{
+  NORMAL = 0,
+  COMPRESS_BUFFER = 1,
+  COMPRESS_STORE = 2,
+  COMPRESS_INDEX = 3,
+};
 
 }  // end namespace tmp_file
 }  // end namespace oceanbase

@@ -48,8 +48,11 @@ private:
     SOURCE,
     EDIT_LEVEL,
   };
-  common::ObArray<omt::TenantConfigInfo> all_config_;
+  common::ObArray<omt::ObTenantID> all_tenant_;
+  common::ObArray<omt::ObTenantID>::iterator tenant_iter_;
+  common::ObArray<omt::TenantConfigInfo> tenant_config_cache_;
   common::ObArray<omt::TenantConfigInfo>::iterator config_iter_;
+
   char ip_buf_[common::OB_IP_STR_BUFF];
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualTenantParameterInfo);
 };

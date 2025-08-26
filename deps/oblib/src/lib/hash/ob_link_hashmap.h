@@ -554,10 +554,12 @@ protected:
     RemoveIf(ObLinkHashMap &hash, Function &fn) : hash_(hash), predicate_(fn) {}
     bool operator()(Key &key, Value* value)
     {
+      const Key tmp_key = key;
       bool need_remove = predicate_(key, value);
       hash_.revert(value);
       if (need_remove) {
-        (void)hash_.del(key);
+        // do not use key parameter, hash node may be freed already
+        (void)hash_.del(tmp_key);
       }
       // always return true
       return true;

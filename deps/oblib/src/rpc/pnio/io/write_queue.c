@@ -80,6 +80,28 @@ void wq_init(write_queue_t* wq) {
   memset(wq->categ_count_bucket, 0, sizeof(wq->categ_count_bucket));
 }
 
+void wq_move(write_queue_t* dest, write_queue_t* src) {
+  dqueue_init(&dest->queue);
+  dlink_t* src_head = &src->queue.head;
+  dlink_t* dest_head = &dest->queue.head;
+  if (src_head->next != src_head) {
+    // src write_queue is not empty
+    dlink_t* top = dqueue_top(&src->queue);
+    dest_head->next = top;
+    top->prev = dest_head;
+    dlink_t* bottom = top;
+    while (bottom->next != src_head) {
+      bottom = bottom->next;
+    }
+    bottom->next = dest_head;
+    dest_head->prev = bottom;
+  }
+  dest->pos = src->pos;
+  dest->cnt = src->cnt;
+  dest->sz = src->sz;
+  memcpy(dest->categ_count_bucket, src->categ_count_bucket, sizeof(src->categ_count_bucket));
+}
+
 inline void wq_push(write_queue_t* wq, dlink_t* l) {
   wq_inc(wq, l);
   dqueue_push(&wq->queue, l);

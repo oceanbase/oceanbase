@@ -359,6 +359,7 @@ int ObTableInsertUpOp::do_insert_up_cache()
   ObSEArray<ObConflictValue, 1> constraint_values;
   ObChunkDatumStore::Iterator insert_row_iter;
   bool is_skipped = false;
+  bool is_first_insert_row = true;
   const ObChunkDatumStore::StoredRow *insert_row = NULL;
   const ObInsertUpCtDef &insert_up_ctdef = *(MY_SPEC.insert_up_ctdefs_.at(0));
   const ObInsCtDef &ins_ctdef = *(insert_up_ctdef.ins_ctdef_);
@@ -412,8 +413,10 @@ int ObTableInsertUpOp::do_insert_up_cache()
           LOG_WARN("merge implict cursor failed", K(ret));
         } else if (need_after_row_process(ins_ctdef) && OB_FAIL(dml_modify_rows_.push_back(modify_row))) {
           LOG_WARN("failed to push dml modify row to modified row list", K(ret));
-        } else if (OB_FAIL(guarantee_last_insert_id())) {
+        } else if (is_first_insert_row && OB_FAIL(record_session_last_insert_id())) {
           LOG_WARN("fail to guarantee last_insert_id", K(ret));
+        } else {
+          is_first_insert_row = false;
         }
       }
     } else {
@@ -455,6 +458,8 @@ int ObTableInsertUpOp::do_insert_up_cache()
         LOG_WARN("convert expr to stored row failed", K(ret), "exprs", get_primary_table_upd_old_row());
       } else if (OB_FAIL(calc_auto_increment(upd_ctdef))) {
         LOG_WARN("calc auto_inc failed", K(ret), K(upd_ctdef));
+      } else if (OB_FAIL(record_stmt_last_update_id())) {
+        LOG_WARN("fail to record stmt last update id", K(ret));
       } else if (is_ignore_) {
         if (OB_FAIL(do_update_with_ignore())) {
           LOG_WARN("do update with ignore failed", K(ret));
@@ -504,15 +509,44 @@ int ObTableInsertUpOp::do_insert_up_cache()
   return ret;
 }
 
-int ObTableInsertUpOp::guarantee_last_insert_id()
+int ObTableInsertUpOp::record_stmt_last_update_id()
 {
   int ret = OB_SUCCESS;
-  if (!has_guarantee_last_insert_id_ && OB_NOT_NULL(MY_SPEC.ins_auto_inc_expr_)) {
+  if (OB_NOT_NULL(MY_SPEC.upd_auto_inc_expr_)) {
+    int64_t last_insert_id = 0;
+    ObDatum *auto_inc_id_datum = nullptr;
     bool is_zero = false;
     uint64_t casted_value = 0;
-    ObDatum *auto_inc_id_datum = nullptr;
     ObPhysicalPlanCtx *plan_ctx = ctx_.get_physical_plan_ctx();
-    if (OB_FAIL(MY_SPEC.ins_auto_inc_expr_->eval(eval_ctx_, auto_inc_id_datum))) {
+    if (OB_ISNULL(plan_ctx)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nullptr", K(ret));
+    } else if (OB_FAIL(MY_SPEC.upd_auto_inc_expr_->eval(eval_ctx_, auto_inc_id_datum))) {
+      LOG_WARN("eval auto_inc_expr failed", K(ret));
+    } else if (OB_FAIL(ObExprAutoincNextval::get_uint_value(*MY_SPEC.upd_auto_inc_expr_,
+                                                            auto_inc_id_datum,
+                                                            is_zero,
+                                                            casted_value))) {
+      LOG_WARN("get casted value failed", K(ret), K(is_zero), K(casted_value));
+    } else {
+      plan_ctx->set_last_insert_id_to_client(casted_value);
+    }
+  }
+  return ret;
+}
+
+int ObTableInsertUpOp::record_stmt_last_insert_id()
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(MY_SPEC.ins_auto_inc_expr_)) {
+    ObDatum *auto_inc_id_datum = nullptr;
+    bool is_zero = false;
+    uint64_t casted_value = 0;
+    ObPhysicalPlanCtx *plan_ctx = ctx_.get_physical_plan_ctx();
+    if (OB_ISNULL(plan_ctx)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nullptr", K(ret));
+    } else if (OB_FAIL(MY_SPEC.ins_auto_inc_expr_->eval(eval_ctx_, auto_inc_id_datum))) {
       LOG_WARN("eval auto_inc_expr failed", K(ret));
     } else if (OB_FAIL(ObExprAutoincNextval::get_uint_value(*MY_SPEC.ins_auto_inc_expr_,
                                                             auto_inc_id_datum,
@@ -520,25 +554,25 @@ int ObTableInsertUpOp::guarantee_last_insert_id()
                                                             casted_value))) {
       LOG_WARN("get casted value failed", K(ret), K(is_zero), K(casted_value));
     } else {
-      plan_ctx->set_last_insert_id_cur_stmt(casted_value);
-      has_guarantee_last_insert_id_ = true;
+      plan_ctx->set_last_insert_id_to_client(casted_value);
     }
   }
   return ret;
 }
 
-int ObTableInsertUpOp::get_last_insert_id_in_try_ins(int64_t &last_insert_id)
+int ObTableInsertUpOp::record_session_last_insert_id()
 {
   int ret = OB_SUCCESS;
-  ObDatum *auto_inc_id_datum = nullptr;
-  ObPhysicalPlanCtx *plan_ctx = ctx_.get_physical_plan_ctx();
-  if (!record_last_insert_id_try_ins_ && !has_guarantee_last_insert_id_) {
+  if (!has_guarantee_last_insert_id_) {
     if (OB_NOT_NULL(MY_SPEC.ins_auto_inc_expr_)) {
+      ObDatum *auto_inc_id_datum = nullptr;
       bool is_zero = false;
       uint64_t casted_value = 0;
-      ObDatum *auto_inc_id_datum = nullptr;
       ObPhysicalPlanCtx *plan_ctx = ctx_.get_physical_plan_ctx();
-      if (OB_FAIL(MY_SPEC.ins_auto_inc_expr_->eval(eval_ctx_, auto_inc_id_datum))) {
+      if (OB_ISNULL(plan_ctx)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected nullptr", K(ret));
+      } else if (OB_FAIL(MY_SPEC.ins_auto_inc_expr_->eval(eval_ctx_, auto_inc_id_datum))) {
         LOG_WARN("eval auto_inc_expr failed", K(ret));
       } else if (OB_FAIL(ObExprAutoincNextval::get_uint_value(*MY_SPEC.ins_auto_inc_expr_,
                                                               auto_inc_id_datum,
@@ -546,8 +580,7 @@ int ObTableInsertUpOp::get_last_insert_id_in_try_ins(int64_t &last_insert_id)
                                                               casted_value))) {
         LOG_WARN("get casted value failed", K(ret), K(is_zero), K(casted_value));
       } else {
-        last_insert_id = casted_value;
-        record_last_insert_id_try_ins_ = true;
+        plan_ctx->set_last_insert_id_cur_stmt(casted_value);
       }
     }
   }
@@ -957,16 +990,16 @@ int ObTableInsertUpOp::do_insert_up()
   int ret = OB_SUCCESS;
   bool is_iter_end = false;
   ObPhysicalPlanCtx *plan_ctx = ctx_.get_physical_plan_ctx();
+  int64_t last_stmt_insert_id = 0;
   while (OB_SUCC(ret) && !is_iter_end) {
     int64_t insert_rows = 0;
     bool has_record_last_insert_id = false;
     transaction::ObTxSEQ savepoint_no;
-    int64_t last_insert_id = 0;
     // must set conflict_row fetch flag
     add_need_conflict_result_flag();
     if (OB_FAIL(ObSqlTransControl::create_anonymous_savepoint(ctx_, savepoint_no))) {
       LOG_WARN("fail to create save_point", K(ret));
-    } else if (OB_FAIL(load_batch_insert_up_rows(is_iter_end, insert_rows, last_insert_id))) {
+    } else if (OB_FAIL(load_batch_insert_up_rows(is_iter_end, insert_rows))) {
       LOG_WARN("fail to load all row", K(ret));
     } else if (OB_FAIL(post_all_try_insert_das_task(dml_rtctx_))) {
       LOG_WARN("fail to post all das task", K(ret));
@@ -974,10 +1007,7 @@ int ObTableInsertUpOp::do_insert_up()
       LOG_WARN("try insert is not duplicated, failed to process foreign key handle", K(ret));
     } else if (!check_is_duplicated()) {
       insert_rows_ += insert_rows;
-      if (record_last_insert_id_try_ins_) {
-        has_guarantee_last_insert_id_ = true;
-        plan_ctx->set_last_insert_id_cur_stmt(last_insert_id);
-      }
+      guarantee_session_last_insert_id();
       LOG_TRACE("try insert is not duplicated", K(ret), K(insert_rows_));
     }
     GET_DIAGNOSTIC_INFO->get_ash_stat().in_duplicate_conflict_resolve_=true;
@@ -1013,15 +1043,15 @@ int ObTableInsertUpOp::do_insert_up()
   return ret;
 }
 
-int ObTableInsertUpOp::load_batch_insert_up_rows(bool &is_iter_end, int64_t &insert_rows, int64_t &last_insert_id)
+int ObTableInsertUpOp::load_batch_insert_up_rows(bool &is_iter_end,
+                                                 int64_t &insert_rows)
 {
   int ret = OB_SUCCESS;
   is_iter_end = false;
   bool reach_mem_limit = false;
   int row_count = 0;
-  last_insert_id = 0;
+  bool is_first_insert_row = true;
   NG_TRACE_TIMES(2, insert_up_start_load_row);
-  ObPhysicalPlanCtx *plan_ctx = ctx_.get_physical_plan_ctx();
   int64_t default_row_store_mem_limit = OB_DEFAULT_INSERT_UP_MEMORY_LIMIT;
   int64_t simulate_batch_count = - EVENT_CALL(EventTable::EN_TABLE_INSERT_UP_BATCH_ROW_COUNT);
   if (upd_rtctx_.das_ref_.get_parallel_type() != DAS_SERIALIZATION) {
@@ -1038,13 +1068,14 @@ int ObTableInsertUpOp::load_batch_insert_up_rows(bool &is_iter_end, int64_t &ins
       }
     } else if (OB_FAIL(try_insert_row(is_skipped))) {
       LOG_WARN("try insert row to das", K(ret));
-    } else if (OB_FAIL(get_last_insert_id_in_try_ins(last_insert_id))) {
+    } else if (is_first_insert_row && OB_FAIL(record_session_last_insert_id())) {
       LOG_WARN("fail to set last_insert_id", K(ret));
     } else if (!is_skipped &&
           OB_FAIL(insert_up_row_store_.add_row(MY_SPEC.all_saved_exprs_, &eval_ctx_))) {
       LOG_WARN("add insert_up row to row store failed", K(ret));
     } else {
       insert_rows++;
+      is_first_insert_row = false;
       row_count++;
       if (insert_up_row_store_.get_mem_used() >= default_row_store_mem_limit ||
             is_ignore_ || execute_single_row_) {
@@ -1203,7 +1234,20 @@ int ObTableInsertUpOp::fetch_conflict_rowkey(int64_t row_cnt)
     }
   }
 
-  if (gts_state_ == USE_PARTITION_SNAPSHOT_STATE) {
+  while (OB_SUCC(ret) && !task_iter.is_end()) {
+    // 不需要clear rowkey表达式的eval_flag，因为主键使用的是column_ref表达式，不存在eval_fun
+    if (OB_FAIL(get_next_conflict_rowkey(task_iter))) {
+      if (OB_ITER_END != ret) {
+        LOG_WARN("fail to get next conflict rowkey from das_result", K(ret));
+      }
+    } else if (OB_FAIL(conflict_checker_.build_primary_table_lookup_das_task())) {
+      LOG_WARN("fail to build lookup_das_task", K(ret));
+    }
+  }
+  ret = (ret == OB_ITER_END ? OB_SUCCESS : ret);
+
+  if (OB_FAIL(ret)) {
+  } else if (gts_state_ == USE_PARTITION_SNAPSHOT_STATE) {
     DASTaskIter task_iter = dml_rtctx_.das_ref_.begin_task_iter();
     while (OB_SUCC(ret) && !task_iter.is_end()) {
       ObDASInsertOp *ins_op = static_cast<ObDASInsertOp*>(*task_iter);
@@ -1220,19 +1264,32 @@ int ObTableInsertUpOp::fetch_conflict_rowkey(int64_t row_cnt)
         }
       ++task_iter;
     }
-  }
-
-  while (OB_SUCC(ret) && !task_iter.is_end()) {
-    // 不需要clear rowkey表达式的eval_flag，因为主键使用的是column_ref表达式，不存在eval_fun
-    if (OB_FAIL(get_next_conflict_rowkey(task_iter))) {
-      if (OB_ITER_END != ret) {
-        LOG_WARN("fail to get next conflict rowkey from das_result", K(ret));
+  } else if (gts_state_ == WITH_UNIQUE_GLOBAL_INDEX_STATE) {
+    bool refresh_snapshot = false;
+    share::ObLSID try_exec_ls_id;
+    share::ObLSID lookup_ls_id;
+    if (!dml_rtctx_.das_ref_.check_tasks_same_ls_and_is_local(try_exec_ls_id)) {
+      LOG_TRACE("tablets in different ls_id when try insert", K(ctx_.get_das_ctx().get_snapshot()));
+    } else if (!conflict_checker_.das_ref_.check_tasks_same_ls_and_is_local(lookup_ls_id)) {
+      refresh_snapshot = true;
+      LOG_TRACE("tablets in different ls_id when lookup get conflicted row", K(ctx_.get_das_ctx().get_snapshot()));
+    } else if ((OB_UNLIKELY(try_exec_ls_id != lookup_ls_id))) {
+      refresh_snapshot = true;
+      LOG_TRACE("tablets in ls_id of try execution are different with lookup", K(ctx_.get_das_ctx().get_snapshot()));
+    }
+    if (refresh_snapshot) {
+      ObSQLSessionInfo *my_session = GET_MY_SESSION(ctx_);
+      ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
+      if (OB_FAIL(ObSqlTransControl::get_read_snapshot(my_session,
+                                                       plan_ctx,
+                                                       ctx_.get_das_ctx().get_snapshot()))) {
+        LOG_WARN("fail to get global read snapshot", K(ret));
+      } else {
+        gts_state_ = GTE_GTS_STATE;
+        LOG_TRACE("get new snapshot", K(ctx_.get_das_ctx().get_snapshot()));
       }
-    } else if (OB_FAIL(conflict_checker_.build_primary_table_lookup_das_task())) {
-      LOG_WARN("fail to build lookup_das_task", K(ret));
     }
   }
-  ret = (ret == OB_ITER_END ? OB_SUCCESS : ret);
   return ret;
 }
 
@@ -1395,8 +1452,14 @@ int ObTableInsertUpOp::reset_das_env()
     ins_rtdef.das_rtdef_.is_duplicated_ = false;
   }
 
-  if (record_last_insert_id_try_ins_) {
-    record_last_insert_id_try_ins_ = false;
+  if (OB_NOT_NULL(MY_SPEC.ins_auto_inc_expr_) || OB_NOT_NULL(MY_SPEC.upd_auto_inc_expr_)) {
+    ObPhysicalPlanCtx *plan_ctx = ctx_.get_physical_plan_ctx();
+    if (OB_ISNULL(plan_ctx)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nullptr", K(ret));
+    } else {
+      plan_ctx->set_last_insert_id_cur_stmt(0);
+    }
   }
 
   return ret;

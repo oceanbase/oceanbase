@@ -26,7 +26,7 @@ int ObExternalFileWriter::open_file()
   int ret = OB_SUCCESS;
   if (IntoFileLocation::SERVER_DISK != file_location_) {//OSS,COS,S3,HDFS
     bool is_exist = false;
-    ObBackupIoAdapter adapter;
+    ObExternalIoAdapter adapter;
     ObStorageAccessType access_type = OB_STORAGE_ACCESS_APPENDER;
     // for S3, should use OB_STORAGE_ACCESS_BUFFERED_MULTIPART_WRITER
     // OSS,COS can also use multipart writer. need to check performance
@@ -35,7 +35,17 @@ int ObExternalFileWriter::open_file()
       access_type = OB_STORAGE_ACCESS_BUFFERED_MULTIPART_WRITER;
     }
     if (OB_FAIL(adapter.is_exist(url_, access_info_, is_exist))) {
-      LOG_WARN("fail to check file exist", KR(ret), K(url_), KPC(access_info_));
+      // When file object does not exist on hdfs then return OB_HDFS_PATH_NOT_FOUND.
+      if (IntoFileLocation::REMOTE_HDFS == file_location_ &&
+          OB_HDFS_PATH_NOT_FOUND == ret) {
+        ret = OB_SUCCESS;
+        is_exist = false;
+      } else {
+        LOG_WARN("fail to check file exist", KR(ret), K(url_), KPC(access_info_));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
     } else if (is_exist) {
       ret = OB_FILE_ALREADY_EXIST;
       LOG_WARN("file already exist", KR(ret), K(url_), K(access_info_));
@@ -274,6 +284,25 @@ int64_t ObCsvFileWriter::get_curr_bytes_exclude_curr_line()
     curr_bytes_exclude_curr_line = get_write_bytes();
   }
   return curr_bytes_exclude_curr_line;
+}
+
+int64_t ObCsvFileWriter::get_curr_file_pos()
+{
+  int64_t curr_bytes = 0;
+  if (has_compress_) {
+    if (compress_stream_writer_ == NULL) {
+      // do nothing
+    } else {
+      curr_bytes = get_compress_stream_writer()->get_write_bytes();
+    }
+  } else {
+    if (IntoFileLocation::SERVER_DISK != file_location_) { //OSS,COS,S3
+      curr_bytes = storage_appender_.offset_;
+    } else { // local disk
+      curr_bytes = file_appender_.get_buffered_file_pos();
+    }
+  }
+  return curr_bytes;
 }
 
 int ObParquetFileWriter::open_parquet_file_writer(ObArrowMemPool &arrow_alloc,

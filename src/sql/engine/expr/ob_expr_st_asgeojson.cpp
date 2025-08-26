@@ -23,7 +23,7 @@ namespace sql
 {
 ObExprSTAsGeoJson::ObExprSTAsGeoJson(common::ObIAllocator &alloc)
     : ObFuncExprOperator(alloc, T_FUN_SYS_ST_ASGEOJSON, N_ST_ASGEOJSON, MORE_THAN_ZERO,
-          NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
+          VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {}
 
 ObExprSTAsGeoJson::~ObExprSTAsGeoJson()

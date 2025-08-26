@@ -109,24 +109,25 @@ int ObNgramFTParserDesc::segment(
     ObITokenIterator *&iter) const
 {
   int ret = OB_SUCCESS;
-  void *buf = nullptr;
+  ObNgramFTParser *parser = nullptr;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ngram ft parser desc hasn't be initialized", K(ret), K(is_inited_));
   } else if (OB_ISNULL(param) || OB_ISNULL(param->fulltext_) || OB_UNLIKELY(!param->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KPC(param));
-  } else if (OB_ISNULL(buf = param->allocator_->alloc(sizeof(ObNgramFTParser)))) {
+  } else if (OB_ISNULL(parser = OB_NEWx(ObNgramFTParser, param->allocator_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate ngram ft parser", K(ret));
   } else {
-    ObNgramFTParser *parser = new (buf) ObNgramFTParser();
     if (OB_FAIL(parser->init(param))) {
       LOG_WARN("fail to init ngram fulltext parser", K(ret), KPC(param));
-      param->allocator_->free(parser);
     } else {
       iter = parser;
     }
+  }
+  if (OB_FAIL(ret)) {
+    OB_DELETEx(ObNgramFTParser, param->allocator_, parser);
   }
   return ret;
 }

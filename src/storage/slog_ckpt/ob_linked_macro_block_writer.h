@@ -39,10 +39,7 @@ public:
       const int64_t tenant_epoch_id,
       ObSlogCheckpointFdDispenser *fd_dispenser);
   int init_for_macro_info(
-    const uint64_t tablet_id,
-    const int64_t tablet_transfer_seq,
-    const int64_t snapshot_version,
-    const int64_t start_macro_seq);
+      const ObLinkedMacroInfoWriteParam &param);
   int write_block(
       char *buf, const int64_t buf_len,
       blocksstable::ObMacroBlockCommonHeader &common_header,
@@ -53,17 +50,12 @@ public:
   ObIArray<blocksstable::MacroBlockId> &get_meta_block_list();
   int64_t get_meta_block_cnt() const;
 
-  int64_t get_last_macro_seq() const { return cur_macro_seq_; }
+  int64_t get_last_macro_seq() const { return macro_info_param_.start_macro_seq_; }
   void reset();
   void reuse_for_next_round();
 
 private:
-  enum WriteType : int8_t {
-    PRIV_SLOG_CKPT    = 0,
-    PRIV_MACRO_INFO   = 1,
-    SHARED_MACRO_INFO = 2,
-    MAX_TYPE          = 3,
-  };
+  typedef ObLinkedMacroBlockWriteType WriteType;
   bool is_inited_;
   WriteType type_;
   blocksstable::ObMacroBlocksWriteCtx write_ctx_;
@@ -72,9 +64,7 @@ private:
   uint64_t tenant_id_;
   int64_t tenant_epoch_id_;
   ObSlogCheckpointFdDispenser *fd_dispenser_;
-  uint64_t tablet_id_;
-  int64_t tablet_transfer_seq_;
-  int64_t cur_macro_seq_;
+  ObLinkedMacroInfoWriteParam macro_info_param_;
 };
 
 class ObLinkedMacroBlockItemWriter final
@@ -85,12 +75,7 @@ public:
   ObLinkedMacroBlockItemWriter(const ObLinkedMacroBlockItemWriter &) = delete;
   ObLinkedMacroBlockItemWriter &operator=(const ObLinkedMacroBlockItemWriter &) = delete;
   // used for writing macro_info both in shared_nothing and shared_storage
-  int init_for_macro_info(
-    const uint64_t tablet_id,
-    const int64_t tablet_transfer_seq,
-    const int64_t snapshot_version,
-    const int64_t start_macro_seq,
-    blocksstable::ObIMacroBlockFlushCallback *write_callback = nullptr);
+  int init_for_macro_info(const ObLinkedMacroInfoWriteParam &param);
   // only used for slog checkpoint in shared nothing and shared storage
   int init_for_slog_ckpt(
       const uint64_t tenant_id,

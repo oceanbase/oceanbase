@@ -970,7 +970,8 @@ public:
                                      int64_t type_id,
                                      ObUDFInfo &udf_info,
                                      uint64_t dblink_id,
-                                     const ObString &dblink_name);
+                                     const ObString &dblink_name,
+                                     ObExternalRoutineType external_routine_type);
   static int resolve_udf_param_types(const share::schema::ObIRoutineInfo* func_info,
                                      share::schema::ObSchemaGetterGuard &schema_guard,
                                      sql::ObSQLSessionInfo &session_info,
@@ -978,12 +979,14 @@ public:
                                      common::ObMySQLProxy &sql_proxy,
                                      ObUDFInfo &udf_info,
                                      pl::ObPLDbLinkGuard &dblink_guard,
-                                     pl::ObPLEnumSetCtx &enum_set_ctx);
+                                     pl::ObPLEnumSetCtx &enum_set_ctx,
+                                     pl::ObPLResolveCache *resolve_cache = nullptr);
   static int resolve_udf_param_exprs(ObResolverParams &params,
                                      const share::schema::ObIRoutineInfo *func_info,
                                      ObUDFInfo &udf_info,
                                      pl::ObPLEnumSetCtx &enum_set_ctx,
-                                     pl::ObPLDependencyTable &deps);
+                                     pl::ObPLDependencyTable &deps,
+                                     pl::ObPLResolveCache *resolve_cache = nullptr);
   static int resolve_udf_param_exprs(const share::schema::ObIRoutineInfo* func_info,
                                      pl::ObPLBlockNS &secondary_namespace_,
                                      ObSchemaChecker &schema_checker,
@@ -995,7 +998,8 @@ public:
                                      ExternalParams *extern_param_info,
                                      ObUDFInfo &udf_info,
                                      pl::ObPLEnumSetCtx &enum_set_ctx,
-                                     pl::ObPLDependencyTable &deps);
+                                     pl::ObPLDependencyTable &deps,
+                                     pl::ObPLResolveCache *resolve_cache = nullptr);
 
   static int rebuild_expr_params(ObUDFInfo &udf_info,
                                  sql::ObRawExprFactory *expr_factory,
@@ -1267,6 +1271,15 @@ public:
 
   static int extract_params(const common::ObIArray<ObRawExpr*> &exprs,
                             common::ObIArray<ObRawExpr*> &params);
+
+  static int extract_dynamic_params(ObRawExpr* expr,
+                                    common::ObIArray<ObRawExpr*> &params,
+                                    const bool without_const_expr = false);
+
+  static int extract_dynamic_params(const common::ObIArray<ObRawExpr*> &exprs,
+                                    common::ObIArray<ObRawExpr*> &params,
+                                    const bool without_const_expr = false);
+
   static int is_contain_params(const common::ObIArray<ObRawExpr*> &exprs, bool &is_contain);
   static int is_contain_params(const ObRawExpr *expr, bool &is_contain);
   static int get_col_ref_expr_recursively(ObRawExpr *expr,

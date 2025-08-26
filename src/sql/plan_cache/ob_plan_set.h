@@ -370,6 +370,8 @@ public:
 #ifdef OB_BUILD_SPM
   int add_evolution_plan_for_spm(ObPhysicalPlan *plan, ObPlanCacheCtx &ctx);
   int get_evolving_evolution_task(EvolutionPlanList &evo_task_list);
+  int alloc_evolution_records(ObEvolutionRecords *&evolution_records);
+  void free_evolution_records(ObEvolutionRecords *&evolution_records);
 #endif
 private:
   enum

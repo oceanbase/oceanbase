@@ -14,7 +14,7 @@
 #include "ob_table.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "ob_table_object.h"
-#include "observer/table/ob_htable_utils.h"
+#include "observer/table/utils/ob_htable_utils.h"
 
 using namespace oceanbase::table;
 using namespace oceanbase::common;
@@ -3059,6 +3059,7 @@ OB_DEF_DESERIALIZE(ObTableSingleOp, )
       for (int64_t i = 0; OB_SUCC(ret) && i < entities_size; ++i) {
         ObTableSingleOpEntity &op_entity = entities_.at(i);
         op_entity.set_dictionary(all_rowkey_names_, all_properties_names_);
+        op_entity.set_allocator(deserialize_alloc_);
         op_entity.set_is_same_properties_names(is_same_properties_names_);
         OB_UNIS_DECODE(op_entity);
       }
@@ -3907,3 +3908,10 @@ int ObRedisResult::convert_to_table_op_result(ObTableOperationResult &result)
 
   return ret;
 }
+
+OB_SERIALIZE_MEMBER(ObTableMetaRequest,
+                     credential_,
+                     meta_type_,
+                     data_);
+
+OB_SERIALIZE_MEMBER((ObTableMetaResponse, ObTableResult), data_);

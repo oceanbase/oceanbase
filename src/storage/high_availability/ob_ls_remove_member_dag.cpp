@@ -109,7 +109,7 @@ bool ObLSRemoveMemberDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObLSRemoveMemberDag::hash() const
+uint64_t ObLSRemoveMemberDag::hash() const
 {
   int64_t hash_value = 0;
   if (!is_inited_) {
@@ -418,7 +418,7 @@ int ObLSRemoveMemberTask::report_to_disaster_recovery_()
     } else if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, sys_data_version))) {
       LOG_WARN("fail to get min data version", KR(ret));
     } else if (sys_data_version >= DATA_VERSION_4_3_5_1) {
-      if (OB_FAIL(rootserver::DisasterRecoveryUtils::report_to_meta_tenant(res))) {
+      if (OB_FAIL(rootserver::DisasterRecoveryUtils::report_to_disaster_recovery(res))) {
         LOG_WARN("failed to report to meta tenant", KR(ret), K(res));
       }
     } else if (OB_FAIL(rootserver::DisasterRecoveryUtils::report_to_rs(res))) {

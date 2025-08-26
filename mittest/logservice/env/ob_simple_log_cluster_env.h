@@ -74,12 +74,12 @@ class MockLSAdapter;
   return RUN_ALL_TESTS();
 
 #define EXPECT_UNTIL_EQ(x, y) while(!(x == y))        \
-        { usleep(500);                                \
+        { ob_usleep(500);                             \
           SERVER_LOG(INFO, "EXPECT_UNTIL_EQ WAIT",    \
           "file", oceanbase::common::occam::get_file_name_without_dir(__FILE__), \
           "line", __LINE__); }
 #define EXPECT_UNTIL_NE(x, y) while(x == y)           \
-        { usleep(500);                                \
+        { ob_usleep(500);                             \
           SERVER_LOG(INFO, "EXPECT_UNTIL_NE WAIT",    \
           "file", oceanbase::common::occam::get_file_name_without_dir(__FILE__), \
           "line", __LINE__); }

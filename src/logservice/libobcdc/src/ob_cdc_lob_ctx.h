@@ -72,13 +72,16 @@ struct ObLobDataGetCtx
   ~ObLobDataGetCtx() { reset(); }
 
   void reset();
-  void reset(
+  int reset(
       void *host,
       const uint64_t column_id,
       const blocksstable::ObDmlRowFlag &dml_flag,
-      const common::ObLobData *new_lob_data);
-  void set_old_lob_data(const common::ObLobData *old_lob_data) { old_lob_data_ = old_lob_data; }
+      const common::ObLobData *lob_data,
+      const bool is_new_col);
 
+  void set_old_lob_data(const common::ObLobData *old_lob_data) { old_lob_data_ = old_lob_data; }
+  bool has_new_lob_data() const { return nullptr != new_lob_data_; }
+  bool has_old_lob_data() const { return nullptr != old_lob_data_; }
   bool is_insert() const { return dml_flag_.is_insert(); }
   bool is_update() const { return dml_flag_.is_update(); }
   bool is_delete() const { return dml_flag_.is_delete(); }
@@ -98,7 +101,7 @@ struct ObLobDataGetCtx
   }
   const common::ObLobData *get_new_lob_data() { return new_lob_data_; }
   const common::ObLobData *get_old_lob_data() { return old_lob_data_; }
-  int get_lob_out_row_ctx(const ObLobDataOutRowCtx *&lob_data_out_row_ctx) const;
+  int get_lob_out_row_ctx(const bool is_new_col, const ObLobDataOutRowCtx *&lob_data_out_row_ctx) const;
   int get_lob_id(const bool is_new_col, ObLobId &lob_id) const;
   int get_data_length(const bool is_new_col, uint64_t &data_length) const;
   common::ObString **get_fragment_cb_array(const bool is_new_col)

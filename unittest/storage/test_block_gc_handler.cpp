@@ -14,8 +14,7 @@
 #define USING_LOG_PREFIX SERVER
 #define protected public
 #define private public
-
-#include "close_modules/shared_storage/storage/shared_storage/ob_public_block_gc_service.h"
+#include "close_modules/shared_storage/storage/shared_storage/ob_private_block_gc_task.h"
 #include "storage/ls/ob_ls.h"
 namespace oceanbase
 {
@@ -44,8 +43,11 @@ public:
   }
   virtual int get_blocks_for_tablet(
     int64_t tablet_meta_version,
+    const bool is_shared,
     ObIArray<blocksstable::MacroBlockId> &block_ids)
   {
+    UNUSED(tablet_meta_version);
+    UNUSED(is_shared);
     int ret = OB_SUCCESS;
     for (int i = 0; OB_SUCC(ret) && i < 3; i++) {
       ret = block_ids.push_back(macro_block_ids_[tablet_meta_version][i]);
@@ -66,6 +68,11 @@ public:
       ObIArray<blocksstable::MacroBlockId> &block_ids)
   {
     gc_blocks_.push_back(block_ids);
+    return OB_SUCCESS;
+  }
+
+  virtual int delete_macro_cache_(const ObIArray<blocksstable::MacroBlockId> &block_ids) override
+  {
     return OB_SUCCESS;
   }
   void reset()
@@ -138,85 +145,6 @@ TEST_F(TestBlockGCHandler, test_block_gc)
   }
 }
 
-class TestPublicBlockGCHandler : public ::testing::Test,
-                                 public storage::ObPublicBlockGCHandler
-{
-public:
-  TestPublicBlockGCHandler()
-  : storage::ObPublicBlockGCHandler(ObTabletID(1))
-  {
-    for (int i = 0; i < 1000; i++) {
-      macro_block_ids_[i].third_id_ = i;
-      macro_block_ids_[i].first_id_ = 1;
-    }
-    for (int i = 0; i < 2000; i++) {
-      macro_block_ids_[i].third_id_ = i;
-      macro_block_ids_[i].first_id_ = 1;
-    }
-    for (int i = 2000; i < 3000; i++) {
-      if (0 == i % 1000) {
-        macro_block_ids_[i].third_id_ = i;
-        macro_block_ids_[i].first_id_ = 0;
-      } else {
-        macro_block_ids_[i].third_id_ = i;
-        macro_block_ids_[i].first_id_ = 1;
-      }
-    }
-    for (int i = 3000; i < 4000; i++) {
-      macro_block_ids_[i].third_id_ = i;
-      macro_block_ids_[i].first_id_ = 0;
-    }
-  }
-  virtual ~TestPublicBlockGCHandler() {}
-
-  TO_STRING_KV(K(macro_block_ids_[0]),
-      K(macro_block_ids_[500]),
-      K(macro_block_ids_[1000]),
-      K(macro_block_ids_[1500]),
-      K(macro_block_ids_[2000]),
-      K(macro_block_ids_[2500]),
-      K(macro_block_ids_[3000]),
-      K(macro_block_ids_[3500]));
-
-  int is_exist_macro_block_(
-      const blocksstable::MacroBlockId &block_id,
-      bool &is_exist)
-  {
-    is_exist = false;
-    if (1 == macro_block_ids_[block_id.third_id_].first_id_) {
-      is_exist = true;
-    }
-    return OB_SUCCESS;
-  }
-
-  int delete_macro_blocks(
-        ObIArray<blocksstable::MacroBlockId> &block_ids)
-  {
-    int ret = OB_SUCCESS;
-    for (int64_t i = 0; i < block_ids.count(); i++) {
-      macro_block_ids_[block_ids.at(i).third_id_].first_id_ = 2;
-    }
-    return ret;
-  }
-
-  blocksstable::MacroBlockId macro_block_ids_[4000];
-};
-
-TEST_F(TestPublicBlockGCHandler, test_detect_and_gc)
-{
-  LOG_INFO("test detect_and_gc start", KPC(this));
-  blocksstable::MacroBlockId block_id;
-  block_id.third_id_ = 0;
-  ASSERT_EQ(OB_SUCCESS, detect_and_gc_block_(block_id));
-  for (int i = 0; i < 3000; i++) {
-    ASSERT_EQ(2, macro_block_ids_[i].first_id_);
-  }
-  for (int i = 3000; i < 4000; i++) {
-    ASSERT_EQ(0, macro_block_ids_[i].first_id_);
-  }
-  LOG_INFO("test detect_and_gc finish", KPC(this));
-}
-
 class TestPrivateBlockGCHandler : public ::testing::Test,
                                   public storage::ObPrivateBlockGCHandler
 {
@@ -237,8 +165,11 @@ public:
 
   int get_blocks_for_tablet(
       int64_t tablet_meta_version,
+      const bool is_shared,
       ObIArray<blocksstable::MacroBlockId> &block_ids)
   {
+    UNUSED(tablet_meta_version);
+    UNUSED(is_shared);
     for (int i = 11; i < 20; i++) {
       if (0 == i % 2) {
         block_ids.push_back(macro_block_ids_[i]);
@@ -270,6 +201,10 @@ public:
       macro_block_ids_[block_ids.at(i).tenant_seq_].third_id_ = 2;
     }
     return ret;
+  }
+  virtual int delete_macro_cache_(const ObIArray<blocksstable::MacroBlockId> &block_ids) override
+  {
+    return OB_SUCCESS;
   }
 
   blocksstable::MacroBlockId macro_block_ids_[30];

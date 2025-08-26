@@ -12,6 +12,9 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_sstable_copy_finish_task.h"
+#include "lib/ob_define.h"
+#include "lib/thread/ob_thread_name.h"
+#include "observer/ob_server_event_history_table_operator.h"
 #include "src/storage/high_availability/ob_storage_ha_macro_block_writer.h"
 #include "storage/high_availability/ob_storage_ha_tablet_builder.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
@@ -153,10 +156,13 @@ int ObCopiedSSTableCreatorImpl::init(
   return ret;
 }
 
-int ObCopiedSSTableCreatorImpl::init_create_sstable_param_(ObTabletCreateSSTableParam &param) const
+int ObCopiedSSTableCreatorImpl::init_create_sstable_param_(
+    ObTabletCreateSSTableParam &param,
+    const common::ObIArray<blocksstable::MacroBlockId> &data_block_ids,
+    const common::ObIArray<blocksstable::MacroBlockId> &other_block_ids) const
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(param.init_for_ha(*src_sstable_param_))) {
+  if (OB_FAIL(param.init_for_ha(*src_sstable_param_, data_block_ids, other_block_ids))) {
     LOG_WARN("fail to init create sstable param", K(ret), KPC(src_sstable_param_));
   }
   return ret;
@@ -191,6 +197,16 @@ int ObCopiedSSTableCreatorImpl::do_create_sstable_(
       LOG_WARN("failed to create sstable", K(ret), K(param));
     }
   }
+#ifdef ERRSIM
+  char *origin_thread_name = ob_get_tname_v2();
+  int64_t base_snapshot_version = src_sstable_param_->table_key_.get_end_scn().get_val_for_logservice();
+  SERVER_EVENT_SYNC_ADD("copy_errsim", "create_sstable",
+                        "origin_thread_name", origin_thread_name,
+                        "tablet_id", src_sstable_param_->table_key_.tablet_id_.id(),
+                        "column_group_idx", src_sstable_param_->table_key_.column_group_idx_,
+                        "base_snapshot_version", base_snapshot_version,
+                        "co_base_snapshot_version", param.co_base_snapshot_version());
+#endif
 
   LOG_INFO("create sstable", K(ret), KPC_(src_sstable_param), K(param));
 
@@ -204,13 +220,16 @@ int ObCopiedEmptySSTableCreator::create_sstable()
   int ret = OB_SUCCESS;
   ObTableHandleV2 table_handle;
   ObTabletCreateSSTableParam param;
+  const int64_t MACRO_BLOCK_CNT = 1;
+  common::ObSEArray<blocksstable::MacroBlockId, MACRO_BLOCK_CNT> data_block_ids;
+  common::ObSEArray<blocksstable::MacroBlockId, MACRO_BLOCK_CNT> other_block_ids;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObCopiedEmptySSTableCreator not init", K(ret));
   } else {
     SMART_VAR(ObTabletCreateSSTableParam, param) {
-      if (OB_FAIL(init_create_sstable_param_(param))) {
+      if (OB_FAIL(init_create_sstable_param_(param, data_block_ids, other_block_ids))) {
         LOG_WARN("fail to init create sstable param", K(ret));
       } else if (OB_FAIL(do_create_sstable_(param, table_handle))) {
         LOG_WARN("failed to create sstable", K(ret), K(param));
@@ -342,7 +361,7 @@ int ObRestoredSharedSSTableCreator::check_sstable_param_for_init_(const ObMigrat
   return ret;
 }
 
-
+//TODO(muwei.ym) check it after shared mini/minor with cangdi
 // ObCopiedSharedMacroBlocksSSTableCreator
 int ObCopiedSharedMacroBlocksSSTableCreator::create_sstable()
 {
@@ -425,13 +444,18 @@ int ObCopiedSharedSSTableCreator::create_sstable()
   int ret = OB_SUCCESS;
   ObSSTableMergeRes res;
   ObTableHandleV2 table_handle;
+  ObCopySSTableMacroIdInfo *macro_id_info = nullptr;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObCopiedSSTableCreator not init", K(ret));
   } else {
     SMART_VAR(ObTabletCreateSSTableParam, param) {
-      if (OB_FAIL(init_create_sstable_param_(param))) {
+      if (OB_ISNULL(macro_id_info = &finish_task_->get_macro_block_id_info())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("macro id info should not NULL", K(ret));
+      } else if (OB_FAIL(init_create_sstable_param_(param, macro_id_info->data_block_ids_,
+          macro_id_info->other_block_ids_))) {
         LOG_WARN("fail to init create sstable param", K(ret));
       } else if (OB_FAIL(do_create_sstable_(param, table_handle))) {
         LOG_WARN("failed to create sstable", K(ret), K(param));
@@ -470,7 +494,8 @@ ObSSTableCopyFinishTask::ObSSTableCopyFinishTask()
     ls_(nullptr),
     tablet_service_(nullptr),
     sstable_index_builder_(false /* not use writer buffer*/),
-    restore_macro_block_id_mgr_(nullptr)
+    restore_macro_block_id_mgr_(nullptr),
+    macro_id_info_()
 {
 }
 
@@ -695,7 +720,6 @@ int ObSSTableCopyFinishTask::process()
   }
   return ret;
 }
-
 
 int ObSSTableCopyFinishTask::update_major_sstable_reuse_info_()
 {
@@ -1168,6 +1192,18 @@ int ObSSTableCopyFinishTask::get_space_optimization_mode_(
     mode = ObSSTableIndexBuilder::DISABLE;
   }
 
+  return ret;
+}
+
+int ObSSTableCopyFinishTask::add_macro_block_id_info(const ObCopySSTableMacroIdInfo &macro_id_info)
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("sstable copy finish task do not init", K(ret));
+  } else if (OB_FAIL(macro_id_info_.assign(macro_id_info))) {
+    LOG_WARN("failed to assign macro block id info", K(ret), K(macro_id_info));
+  }
   return ret;
 }
 

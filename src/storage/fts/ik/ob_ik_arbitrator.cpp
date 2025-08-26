@@ -36,11 +36,9 @@ int ObIKArbitrator::process(TokenizeContext &ctx)
   ObIKTokenChain *chain_need_arbitrate = nullptr;
   bool use_smart = ctx.is_smart();
   if (OB_FAIL(prepare(ctx))) {
-  } else if (OB_ISNULL(chain_need_arbitrate
-                       = static_cast<ObIKTokenChain *>(alloc_.alloc(sizeof(ObIKTokenChain))))) {
+  } else if (OB_ISNULL(chain_need_arbitrate = OB_NEWx(ObIKTokenChain, &alloc_, alloc_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("alloc memory failed");
-  } else if (FALSE_IT(new (chain_need_arbitrate) ObIKTokenChain(alloc_))) {
   } else {
     while (OB_SUCC(ret) && !tokens.empty()) {
       ObIKToken token = tokens.get_first();
@@ -51,7 +49,7 @@ int ObIKArbitrator::process(TokenizeContext &ctx)
         LOG_WARN("add token if conflict failed", K(ret));
       } else if (!is_add) {
         ObFTSortList::CellIter iter = chain_need_arbitrate->list().tokens().begin();
-        ObIKTokenChain *judge_result;
+        ObIKTokenChain *judge_result = nullptr;
         if (chain_need_arbitrate->list().tokens().size() == 1 || !use_smart) {
           if (OB_FAIL(add_chain(chain_need_arbitrate))) {
             LOG_WARN("Add a chain failed", K(ret));
@@ -68,16 +66,14 @@ int ObIKArbitrator::process(TokenizeContext &ctx)
           LOG_WARN("Failed to add chain", K(ret));
         } else {
           // add best chain and delete origin chain
-          chain_need_arbitrate->~ObIKTokenChain();
-          alloc_.free(chain_need_arbitrate);
-          chain_need_arbitrate = nullptr;
+          OB_DELETEx(ObIKTokenChain, &alloc_, chain_need_arbitrate);
         }
 
         // start a new chain
         if (OB_FAIL(ret)) {
-        } else if (OB_ISNULL(chain_need_arbitrate = static_cast<ObIKTokenChain *>(
-                                 alloc_.alloc(sizeof(ObIKTokenChain))))) {
-        } else if (FALSE_IT(new (chain_need_arbitrate) ObIKTokenChain(alloc_))) {
+        } else if (OB_ISNULL(chain_need_arbitrate = OB_NEWx(ObIKTokenChain, &alloc_, alloc_))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("alloc memory failed");
         } else if (OB_FAIL(chain_need_arbitrate->add_token_if_conflict(token, is_add))) {
           LOG_WARN("add token if conflict failed", K(ret));
         } else {
@@ -89,12 +85,8 @@ int ObIKArbitrator::process(TokenizeContext &ctx)
     }
 
     // handle last chain
-    ObIKTokenChain *judge_result;
+    ObIKTokenChain *judge_result = nullptr;
     if (OB_FAIL(ret)) {
-      if (nullptr != chain_need_arbitrate) {
-        chain_need_arbitrate->~ObIKTokenChain();
-        alloc_.free(chain_need_arbitrate);
-      }
     } else if (chain_need_arbitrate->list().tokens().size() == 1 || !use_smart) {
       if (OB_FAIL(add_chain(chain_need_arbitrate))) {
         LOG_WARN("Failed to add last chain", K(ret));
@@ -105,8 +97,15 @@ int ObIKArbitrator::process(TokenizeContext &ctx)
                                 chain_need_arbitrate->offset_len(),
                                 judge_result))) {
     } else if (OB_FAIL(add_chain(judge_result))) {
+      OB_DELETEx(ObIKTokenChain, &alloc_, judge_result);
       LOG_WARN("Failed to add last chain", K(ret));
+    } else {
     }
+  }
+
+  // if failed, free chain_need_arbitrate
+  if (OB_FAIL(ret)) {
+    OB_DELETEx(ObIKTokenChain, &alloc_, chain_need_arbitrate);
   }
 
   return ret;
@@ -239,17 +238,14 @@ int ObIKArbitrator::optimize(TokenizeContext &ctx,
   ObIKTokenChain *option = nullptr;
   ObList<ObFTSortList::CellIter, ObIAllocator> conflict_stack(alloc_);
 
-  if (OB_ISNULL(option = static_cast<ObIKTokenChain *>(alloc_.alloc(sizeof(ObIKTokenChain))))) {
+  if (OB_ISNULL(option = OB_NEWx(ObIKTokenChain, &alloc_, alloc_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("alloc memory failed");
-  } else if (FALSE_IT(new (option) ObIKTokenChain(alloc_))) {
   } else if (OB_FAIL(try_add_next_words(chain, iter, option, true, conflict_stack))) {
     LOG_WARN("Failed to add chain and record conflict token.", K(ret));
-  } else if (OB_ISNULL(best
-                       = static_cast<ObIKTokenChain *>(alloc_.alloc(sizeof(ObIKTokenChain))))) {
+  } else if (OB_ISNULL(best = OB_NEWx(ObIKTokenChain, &alloc_, alloc_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("Alloc memory failed");
-  } else if (FALSE_IT(new (best) ObIKTokenChain(alloc_))) {
   } else if (OB_FAIL(best->copy(option))) {
     LOG_WARN("Copy best option failed", K(ret));
   } else {
@@ -261,12 +257,10 @@ int ObIKArbitrator::optimize(TokenizeContext &ctx,
       } else if (OB_FAIL(try_add_next_words(chain, iter, option, false, conflict_stack))) {
         LOG_WARN("Failed to add next words", K(ret));
       } else if (option->better_than(*best)) {
-        best->~ObIKTokenChain();
-        alloc_.free(best);
-        if (OB_ISNULL(best = static_cast<ObIKTokenChain *>(alloc_.alloc(sizeof(ObIKTokenChain))))) {
+        OB_DELETEx(ObIKTokenChain, &alloc_, best);
+        if (OB_ISNULL(best = OB_NEWx(ObIKTokenChain, &alloc_, alloc_))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("Alloc memory failed");
-        } else if (FALSE_IT(new (best) ObIKTokenChain(alloc_))) {
         } else if (OB_FAIL(best->copy(option))) {
           LOG_WARN("Copy best option failed", K(ret));
         } else {
@@ -278,16 +272,11 @@ int ObIKArbitrator::optimize(TokenizeContext &ctx,
     }
   }
 
-  if (!OB_ISNULL(option)) {
-    option->~ObIKTokenChain();
-    alloc_.free(option);
-  }
+  // any way, free option
+  OB_DELETEx(ObIKTokenChain, &alloc_, option);
 
   if (OB_FAIL(ret)) {
-    if (OB_ISNULL(best)) {
-      best->~ObIKTokenChain();
-      alloc_.free(best);
-    }
+    OB_DELETEx(ObIKTokenChain, &alloc_, best);
   }
   return ret;
 }
@@ -348,9 +337,11 @@ ObIKArbitrator::ObIKArbitrator() : alloc_(lib::ObMemAttr(MTL_ID(), "IK Arbitrato
 int ObIKArbitrator::add_chain(ObIKTokenChain *chain)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(chain) && chain->list().is_empty()) {
+  if (OB_ISNULL(chain)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid chain argument", K(ret));
+  } else if (chain->list().is_empty()) {
+    // no need to add empty chain
   } else if (OB_FAIL(chains_.set_refactored(chain->min_offset(), chain))) {
     LOG_WARN("Failed to add chain to map", K(ret));
   }

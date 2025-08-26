@@ -227,6 +227,7 @@ int TableItem::deep_copy(ObIRawExprCopier &expr_copier,
   //external table
   external_table_partition_ = other.external_table_partition_;
   catalog_name_ = other.catalog_name_;
+  external_location_id_ = other.external_location_id_;
   SampleInfo *buf = NULL;
   if (is_json_table()
       && OB_FAIL(deep_copy_json_table_def(*other.json_table_def_, expr_copier, allocator))) {
@@ -483,6 +484,8 @@ int ObDMLStmt::assign(const ObDMLStmt &other)
     LOG_WARN("faield to assign check constraint items", K(ret));
   } else if (OB_FAIL(match_exprs_.assign(other.match_exprs_))) {
     LOG_WARN("faield to assign fulltext search exprs", K(ret));
+  } else if (OB_FAIL(vector_index_query_param_.assign(other.vector_index_query_param_))) {
+    LOG_WARN("faield to assign vector index query param", K(ret));
   } else {
     limit_count_expr_ = other.limit_count_expr_;
     limit_offset_expr_ = other.limit_offset_expr_;
@@ -653,6 +656,8 @@ int ObDMLStmt::deep_copy_stmt_struct(ObIAllocator &allocator,
     LOG_WARN("failed to assign sequence ids", K(ret));
   } else if (OB_FAIL(currval_sequence_ids_.assign(other.currval_sequence_ids_))) {
     LOG_WARN("failed to assign sequence ids", K(ret));
+  } else if (OB_FAIL(vector_index_query_param_.assign(other.vector_index_query_param_))) {
+    LOG_WARN("faield to assign vector index query param", K(ret));
   } else {
     is_calc_found_rows_ = other.is_calc_found_rows_;
     has_top_limit_ = other.has_top_limit_;
@@ -1820,10 +1825,6 @@ int ObDMLStmt::formalize_relation_exprs(ObSQLSessionInfo *session_info, bool nee
         LOG_WARN("failed to formalize expr", K(ret));
       } else if (OB_FAIL(expr->pull_relation_id())) {
         LOG_WARN("pull expr relation ids failed", K(ret), K(*expr));
-      } else if (OB_FAIL(expr->extract_info())) {
-        // zhanyue todo: adjust this.
-        // Add IS_JOIN_COND flag need use expr relation_ids, here call extract_info() again.
-        LOG_WARN("failed to extract info", K(*expr));
       } else if (OB_FAIL(ObTransformUtils::extract_query_ref_expr(expr, subquery_exprs_, true))) {
         LOG_WARN("failed to extract query ref expr", K(ret));
       }
@@ -2110,6 +2111,73 @@ int ObDMLStmt::check_pseudo_column_valid()
         default:  /* do nothing for other type pseudo column like expr */
           break;
       }
+    }
+  }
+  return ret;
+}
+
+
+int ObDMLStmt::check_stmt_valid()
+{
+  int ret = OB_SUCCESS;
+  int64_t tmp_ret = (OB_E(EventTable::EN_CHECK_STMT_VALID) OB_SUCCESS);
+  bool check_stmt_valid = OB_SUCCESS != tmp_ret;
+  if (check_stmt_valid) {
+    if (OB_FAIL(recursively_check_stmt_valid())) {
+      if (ret == OB_NOT_SUPPORTED) {
+        LOG_WARN("stmt is not valid after formalize", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "invalid stmt occured after transform");
+      } else {
+        LOG_WARN("failed to check stmt valid", K(ret));
+      }
+    } else { /* do nothing */ }
+  }
+  return ret;
+}
+
+int ObDMLStmt::recursively_check_stmt_valid()
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObSelectStmt*, 4> child_stmts;
+  if (OB_FAIL(check_unpivot_valid())) {
+    LOG_WARN("check unpivot valid failed", K(ret));
+  } else if (OB_FAIL(get_child_stmts(child_stmts))) {
+    LOG_WARN("get child stmts failed", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); ++i) {
+      if (OB_ISNULL(child_stmts.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("child stmt is null", K(ret));
+      } else if (OB_FAIL(SMART_CALL(child_stmts.at(i)->recursively_check_stmt_valid()))) {
+        LOG_WARN("check child stmt valid failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDMLStmt::check_unpivot_valid()
+{
+  int ret = OB_SUCCESS;
+  if (!is_unpivot_select()) {
+    // do nothing
+  } else if (!is_select_stmt()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("unpivot stmt is not select stmt", K(ret));
+  } else {
+    bool has_rownum = false;
+    ObSelectStmt *sel_stmt = static_cast<ObSelectStmt *>(this);
+    if (OB_UNLIKELY(sel_stmt->has_group_by() || sel_stmt->has_having() ||
+                    sel_stmt->has_window_function() ||
+                    sel_stmt->has_distinct() || sel_stmt->has_order_by() ||
+                    sel_stmt->has_limit())) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("unpivot stmt contains unexpected expr", K(ret));
+    } else if (OB_FAIL(sel_stmt->has_rownum(has_rownum))) {
+      LOG_WARN("failed to check rownum", K(ret));
+    } else if (OB_UNLIKELY(has_rownum)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("unpivot stmt contains unexpected expr", K(ret));
     }
   }
   return ret;
@@ -3506,13 +3574,10 @@ int ObDMLStmt::get_table_items(common::ObIArray<int64_t>& table_ids) const
 ColumnItem *ObDMLStmt::get_column_item(uint64_t table_id, const ObString &col_name)
 {
   ColumnItem *item = NULL;
-  common::ObCollationType cs_type = common::CS_TYPE_UTF8MB4_GENERAL_CI;
-  if (lib::is_oracle_mode()) {
-    cs_type = common::CS_TYPE_UTF8MB4_BIN;
-  }
+
   for (int64_t i = 0; i < column_items_.count(); ++i) {
     if (table_id == column_items_[i].table_id_
-        && (0 == ObCharset::strcmp(cs_type, col_name, column_items_[i].column_name_))) {
+        && ObCharset::case_compat_mode_equal(col_name, column_items_[i].column_name_)) {
       item = &column_items_.at(i);
       break;
     }
@@ -3801,6 +3866,10 @@ int ObDMLStmt::get_relation_exprs(common::ObIArray<ObRawExpr *> &relation_exprs)
 {
   ObStmtExprGetter visitor;
   visitor.set_relation_scope();
+  if (is_insert_stmt() &&
+      static_cast<const ObInsertStmt*>(this)->get_insert_table_info().all_values_simple_const_) {
+    visitor.remove_scope(SCOPE_INSERT_VECTOR);
+  }
   return get_relation_exprs(relation_exprs, visitor);
 }
 
@@ -3810,6 +3879,10 @@ int ObDMLStmt::get_relation_exprs(common::ObIArray<ObRawExpr *> &relation_exprs,
 {
   ObStmtExprGetter visitor;
   visitor.set_relation_scope();
+  if (is_insert_stmt() &&
+      static_cast<const ObInsertStmt*>(this)->get_insert_table_info().all_values_simple_const_) {
+    visitor.remove_scope(SCOPE_INSERT_VECTOR);
+  }
   visitor.set_expr_flags_required(flags, match_any_flag);
   return get_relation_exprs(relation_exprs, visitor);
 }
@@ -3818,6 +3891,10 @@ int ObDMLStmt::get_relation_exprs(common::ObIArray<ObRawExprPointer> &relation_e
 {
   ObStmtExprGetter visitor;
   visitor.set_relation_scope();
+  if (is_insert_stmt() &&
+      static_cast<const ObInsertStmt*>(this)->get_insert_table_info().all_values_simple_const_) {
+    visitor.remove_scope(SCOPE_INSERT_VECTOR);
+  }
   return get_relation_exprs(relation_expr_ptrs, visitor);
 }
 
@@ -3827,6 +3904,10 @@ int ObDMLStmt::get_relation_exprs(common::ObIArray<ObRawExprPointer> &relation_e
 {
   ObStmtExprGetter visitor;
   visitor.set_relation_scope();
+  if (is_insert_stmt() &&
+      static_cast<const ObInsertStmt*>(this)->get_insert_table_info().all_values_simple_const_) {
+    visitor.remove_scope(SCOPE_INSERT_VECTOR);
+  }
   visitor.set_expr_flags_required(flags, match_any_flag);
   return get_relation_exprs(relation_expr_ptrs, visitor);
 }

@@ -308,6 +308,9 @@ int ObTransformQueryPushDown::check_transform_validity(ObSelectStmt *select_stmt
   } else if (select_stmt->has_order_by() && view_stmt->has_limit()) {//判断9
     can_transform = false;
     OPT_TRACE("stmt has order by, but view has limit ,can not pushdown");
+  } else if (select_stmt->is_unpivot_select() || view_stmt->is_unpivot_select()) {
+    can_transform = false;
+    OPT_TRACE("unpivot, can not transform");
   } else if (select_stmt->has_limit()) {//判断10
     can_transform = (!select_stmt->is_calc_found_rows()
                      && !view_stmt->is_contains_assignment()

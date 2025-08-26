@@ -199,6 +199,9 @@ public:
 private:
   void do_stop_(const char *stop_reason);
   int init_logger_();
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  int init_max_syslog_file_count_with_libpalf_();
+#endif
   int dump_config_();
   int check_sync_mode_();
   int init_sys_var_for_generate_column_schema_();

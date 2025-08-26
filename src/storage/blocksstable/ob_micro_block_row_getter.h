@@ -14,6 +14,7 @@
 #define OB_STORAGE_BLOCKSSTABLE_OB_MICRO_BLOCK_ROW_GETTER_H_
 
 #include "storage/blocksstable/ob_micro_block_reader.h"
+#include "storage/blocksstable/ob_micro_block_reader_helper.h"
 #include "storage/blocksstable/encoding/ob_micro_block_decoder.h"
 #include "ob_datum_row.h"
 #include "ob_row_cache.h"
@@ -52,9 +53,7 @@ protected:
   storage::ObTableAccessContext *context_;
   const blocksstable::ObSSTable *sstable_;
   ObIMicroBlockGetReader *reader_;
-  ObMicroBlockGetReader *flat_reader_;
-  ObEncodeBlockGetReader *encode_reader_;
-  ObCSEncodeBlockGetReader *cs_encode_reader_;
+  ObMicroBlockGetReaderHelper reader_helper_;
   const ObITableReadInfo *read_info_;
   ObIAllocator *long_life_allocator_;
   bool is_inited_;
@@ -83,7 +82,7 @@ private:
   int get_not_exist_row(const ObDatumRowkey &rowkey, const ObDatumRow *&row);
   int project_cache_row(const ObRowCacheValue &value, ObDatumRow &row);
   int inner_get_row(
-      const MacroBlockId &macro_id,
+      const ObMicroBlockAddr &block_addr,
       const ObDatumRowkey &rowkey,
       const ObMicroBlockData &block_data,
       const ObDatumRow *&row);

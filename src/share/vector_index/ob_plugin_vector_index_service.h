@@ -12,6 +12,7 @@
 
 #ifndef OCEANBASE_OBSERVER_OB_PLUGIN_VECTOR_INDEX_SERVICE_DEFINE_H_
 #define OCEANBASE_OBSERVER_OB_PLUGIN_VECTOR_INDEX_SERVICE_DEFINE_H_
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "share/ob_ls_id.h"
 #include "logservice/ob_log_base_type.h"
 #include "share/scn.h"
@@ -25,12 +26,12 @@
 #include "share/vector_index/ob_tenant_vector_index_async_task.h"
 #include "share/vector_index/ob_vector_index_async_task_util.h"
 #include "ob_vector_kmeans_ctx.h"
+#include "share/vector_index/ob_vector_index_ivf_cache_mgr.h"
 
 namespace oceanbase
 {
 namespace share
 {
-
 struct ObIvfHelperKey final
 {
 public:
@@ -83,6 +84,7 @@ public:
 };
 
 typedef common::hash::ObHashMap<ObIvfHelperKey, ObIvfBuildHelper*> IvfVectorIndexHelperMap;
+typedef common::hash::ObHashMap<common::ObTabletID, ObIvfCacheMgr*> IvfCacheMgrMap;
 // Manage all vector index adapter in a ls
 class ObPluginVectorIndexMgr
 {
@@ -102,7 +104,8 @@ public:
       mem_sync_info_(tenant_id),
       memory_context_(memory_context),
       all_vsag_use_mem_(nullptr),
-      async_task_opt_(tenant_id)
+      async_task_opt_(tenant_id),
+      ls_leader_(false)
   {}
   virtual ~ObPluginVectorIndexMgr();
 
@@ -112,6 +115,7 @@ public:
   ObPluginVectorIndexLSTaskCtx& get_ls_task_ctx() { return ls_tablet_task_ctx_; }
   VectorIndexAdaptorMap& get_partial_adapter_map() { return partial_index_adpt_map_; }
   VectorIndexAdaptorMap& get_complete_adapter_map() { return complete_index_adpt_map_; }
+  IvfCacheMgrMap& get_ivf_cache_mgr_map() { return ivf_cache_mgr_map_; }
   IvfVectorIndexHelperMap& get_ivf_helper_map() { return ivf_index_helper_map_; }
   lib::MemoryContext& get_memory_context() { return memory_context_; }
   uint64_t *get_all_vsag_use_mem() { return all_vsag_use_mem_; }
@@ -120,8 +124,11 @@ public:
   void destroy();
 
   void release_all_adapters();
+  bool get_ls_leader() { return ls_leader_; }
+  void set_ls_leader(const bool ls_leader) { ls_leader_ = ls_leader; }
 
   int get_adapter_inst_guard(ObTabletID tablet_id, ObPluginVectorIndexAdapterGuard &adpt_guard);
+  int get_adapter_inst_guard_in_lock(ObTabletID tablet_id, ObPluginVectorIndexAdapterGuard &adpt_guard);
   int get_build_helper_inst_guard(const ObIvfHelperKey &key, ObIvfBuildHelperGuard &helper_guard);
   int create_partial_adapter(ObTabletID idx_tablet_id,
                              ObTabletID data_tablet_id,
@@ -169,12 +176,26 @@ public:
   int erase_complete_adapter(ObTabletID tablet_id);
   int erase_partial_adapter(ObTabletID tablet_id);
   int erase_ivf_build_helper(const ObIvfHelperKey &key);
+  int release_ivf_cache_mgr(ObIvfCacheMgr* &mgr);
+  int set_ivf_cache_mgr(const ObIvfCacheMgrKey& cachr_mgr_key,
+                        ObIvfCacheMgr *cache_mgr,
+                        int overwrite = 0);
+  int get_ivf_cache_mgr(const ObIvfCacheMgrKey& cachr_mgr_key, ObIvfCacheMgr *&cache_mgr);
+  int erase_ivf_cache_mgr(const ObIvfCacheMgrKey& cachr_mgr_key);
+  int get_ivf_cache_mgr_guard(const ObIvfCacheMgrKey& cachr_mgr_key, ObIvfCacheMgrGuard &cache_mgr_guard);
+  int get_or_create_ivf_cache_mgr_guard(ObIAllocator &allocator,
+                                        const ObIvfCacheMgrKey &key,
+                                        const ObVectorIndexParam &vec_index_param,
+                                        int64_t dim,
+                                        int64_t table_id,
+                                        ObIvfCacheMgrGuard &cache_mgr_guard);
   ObVectorIndexMemSyncInfo &get_mem_sync_info() { return mem_sync_info_; }
   ObVecIndexAsyncTaskOption &get_async_task_opt() { return async_task_opt_; }
   // for debug
   void dump_all_inst();
   // for virtual table
   int get_snapshot_tablet_ids(ObIArray<obrpc::ObLSTabletPair> &complete_tablet_ids,  ObIArray<obrpc::ObLSTabletPair> &partial_tablet_ids);
+  int get_cache_tablet_ids(ObLSID &ls_id, ObIArray<ObLSTabletPair> &cache_tablet_ids);
 
   TO_STRING_KV(K_(is_inited), K_(need_check), K_(ls_id), K_(ls_tablet_task_ctx));
 
@@ -195,6 +216,11 @@ private:
                                      ObIAllocator &allocator);
 
   int get_build_helper_inst_(const ObIvfHelperKey &key, ObIvfBuildHelper *&helper_inst);
+  int create_ivf_cache_mgr(ObIAllocator &allocator,
+                          const ObIvfCacheMgrKey &key,
+                          const ObVectorIndexParam &vec_index_param,
+                          int64_t dim,
+                          int64_t table_id);
 private:
   static const int64_t DEFAULT_ADAPTER_HASH_SIZE = 1000;
   static const int64_t DEFAULT_CANDIDATE_ADAPTER_HASH_SIZE = 1000;
@@ -209,7 +235,8 @@ private:
   VectorIndexAdaptorMap complete_index_adpt_map_; // map of complete index adapters with full info
   VectorIndexAdaptorMap partial_index_adpt_map_; // map of passive created index adapters
   IvfVectorIndexHelperMap ivf_index_helper_map_; // map of ivf inder build helper
-  RWLock adapter_map_rwlock_; // lock for adapter maps
+  IvfCacheMgrMap ivf_cache_mgr_map_; // map of ivf cache managers
+  TCRWLock adapter_map_rwlock_; // lock for adapter maps
   ObPluginVectorIndexLSTaskCtx ls_tablet_task_ctx_; // task ctx of ls level
   uint64_t tenant_id_;
   uint32_t interval_factor_; // used to expand real execute interval
@@ -218,7 +245,8 @@ private:
   ObVectorIndexMemSyncInfo mem_sync_info_; // handle follower memdata sync
   lib::MemoryContext &memory_context_;
   uint64_t *all_vsag_use_mem_;
-  ObVecIndexAsyncTaskOption async_task_opt_; //
+  ObVecIndexAsyncTaskOption async_task_opt_;
+  bool ls_leader_;
 };
 
 // id to unique identify an vector index adapter
@@ -271,7 +299,7 @@ public:
     ls_service_(NULL),
     sql_proxy_(NULL),
     memory_context_(NULL),
-    all_vsag_use_mem_(0),
+    all_vsag_use_mem_(NULL),
     tenant_vec_async_task_sched_(nullptr),
     is_vec_async_task_started_(false)
 
@@ -317,6 +345,7 @@ public:
 
   // feature interfaces
   ObVecIndexAsyncTaskHandler &get_vec_async_task_handle() { return vec_async_task_handle_; }
+  ObKmeansBuildTaskHandler& get_kmeans_build_handler() { return kmeans_build_task_handler_; };
   LSIndexMgrMap &get_ls_index_mgr_map() { return index_ls_mgr_map_; };
   int get_adapter_inst_guard(ObLSID ls_id, ObTabletID tablet_id, ObPluginVectorIndexAdapterGuard &adapter_guard);
   int get_build_helper_inst_guard(ObLSID ls_id, const ObIvfHelperKey &key, ObIvfBuildHelperGuard &helper_guard);
@@ -357,6 +386,7 @@ public:
   int dump_all_inst();
   // for virtual table
   int get_snapshot_ids(ObIArray<obrpc::ObLSTabletPair> &complete_tablet_ids,  ObIArray<obrpc::ObLSTabletPair> &partial_tablet_ids);
+  int get_cache_ids(ObIArray<ObLSTabletPair> &cache_tablet_ids);
   // for ivf
   // ivfflat index needs center ids
   // ivfsq index needs sq metas and center ids
@@ -366,7 +396,22 @@ public:
       const ObTabletID tablet_id,
       ObIAllocator &allocator,
       ObIArray<float*> &aux_info);
-  uint64_t get_all_vsag_use_mem() { return all_vsag_use_mem_; }
+  // NOTE(liyao): int callback_func(int64_t dim, float *data);
+  //              data should be deep copied if used outside callback_func
+  template<class CallbackFunc>
+  int process_ivf_aux_info(
+      const uint64_t table_id,
+      const ObTabletID tablet_id,
+      ObIAllocator &allocator,
+      CallbackFunc &callback_func);
+  int acquire_ivf_cache_mgr_guard(ObLSID ls_id,
+                                  const ObIvfCacheMgrKey &key,
+                                  const ObVectorIndexParam &vec_index_param,
+                                  int64_t dim,
+                                  int64_t table_id,
+                                  ObIvfCacheMgrGuard &cache_mgr_guard);
+  int acquire_ivf_cache_mgr_guard(ObLSID ls_id, const ObIvfCacheMgrKey &key, ObIvfCacheMgrGuard &cache_mgr_guard);
+  uint64_t *get_all_vsag_use_mem() { return all_vsag_use_mem_; }
 
   TO_STRING_KV(K_(is_inited), K_(has_start), K_(tenant_id),
                K_(is_ls_or_tablet_changed), KP_(schema_service), KP_(ls_service));
@@ -392,16 +437,80 @@ private:
   common::ObMySQLProxy *sql_proxy_;
   ObFIFOAllocator allocator_;
   common::ObArenaAllocator alloc_;
+  // do not use this memory context directly
+  // use wrapped memory context in ob_tenant_vector_allocator.h and init by this memory context
   lib::MemoryContext memory_context_;
-  uint64_t all_vsag_use_mem_;
+  uint64_t *all_vsag_use_mem_;
   ObTenantVecAsyncTaskScheduler *tenant_vec_async_task_sched_;
   bool is_vec_async_task_started_;
   ObVecIndexAsyncTaskHandler vec_async_task_handle_;
-
+  ObKmeansBuildTaskHandler kmeans_build_task_handler_;
 
 public:
   volatile bool stop_flag_;
 };
+
+template<class CallbackFunc>
+int ObPluginVectorIndexService::process_ivf_aux_info(
+    const uint64_t table_id,
+    const ObTabletID tablet_id,
+    ObIAllocator &allocator,
+    CallbackFunc &callback_func)
+{
+  int ret = OB_SUCCESS;
+  bool is_hidden_table = false;
+  ObSqlString sql_string;
+  static_assert(std::is_same<typename std::result_of<CallbackFunc(int64_t, float*)>::type, int>::value,
+        "process_ivf_aux_info callback format error");
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    OB_LOG(WARN, "ObPluginVectorIndexService is not inited", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(generate_get_aux_info_sql(table_id, tablet_id, is_hidden_table, sql_string))) {
+    OB_LOG(WARN, "failed to generate sql", K(ret), K(table_id));
+  } else {
+    ObSessionParam session_param;
+    session_param.sql_mode_ = nullptr;
+    session_param.tz_info_wrap_ = nullptr;
+    session_param.ddl_info_.set_is_dummy_ddl_for_inner_visibility(true);
+    session_param.ddl_info_.set_source_table_hidden(is_hidden_table);
+    session_param.ddl_info_.set_dest_table_hidden(false);
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      sqlclient::ObMySQLResult *result = NULL;
+      if (OB_FAIL(sql_proxy_->read(res, tenant_id_, sql_string.ptr(), &session_param))) {
+        OB_LOG(WARN, "failed to execute sql", K(ret), K(sql_string));
+      } else if (NULL == (result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        OB_LOG(WARN, "failed to execute sql", K(ret), K(sql_string));
+      } else {
+        while (OB_SUCC(ret) && OB_SUCC(result->next())) {
+          const int64_t col_idx = 0;
+          ObObj vec_obj;
+          ObString blob_data;
+          if (OB_FAIL(result->get_obj(col_idx, vec_obj))) {
+            OB_LOG(WARN, "failed to get vid", K(ret));
+          } else if (FALSE_IT(blob_data = vec_obj.get_string())) {
+          } else if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(&allocator,
+                                                                        ObLongTextType,
+                                                                        CS_TYPE_BINARY,
+                                                                        true,
+                                                                        blob_data))) {
+            OB_LOG(WARN, "fail to get real data.", K(ret), K(blob_data));
+          } else {
+            int64_t dim = blob_data.length() / sizeof(float);
+            if (OB_FAIL(callback_func(dim, reinterpret_cast<float*>(blob_data.ptr())))) {
+              OB_LOG(WARN, "fail to do callback func", K(ret), K(dim));
+            }
+          }
+        }
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+        }
+      }
+    }
+  }
+
+  return ret;
+}
 
 } // namespace share
 } // namespace oceanbase

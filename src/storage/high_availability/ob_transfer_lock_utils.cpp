@@ -47,7 +47,7 @@ static int get_ls_handle(const uint64_t tenant_id, const share::ObLSID &ls_id, s
 
 int ObMemberListLockUtils::batch_lock_ls_member_list(const uint64_t tenant_id, const int64_t task_id,
     const common::ObArray<share::ObLSID> &lock_ls_list, const common::ObMemberList &member_list,
-    const ObTransferLockStatus &status, const int32_t group_id, common::ObMySQLProxy &sql_proxy)
+    const ObTransferLockStatus &status, const int32_t group_id, const share::ObLSID &unlock_check_ls_id, common::ObMySQLProxy &sql_proxy)
 {
   int ret = OB_SUCCESS;
   ObArray<share::ObLSID> sorted_ls_list;
@@ -57,7 +57,7 @@ int ObMemberListLockUtils::batch_lock_ls_member_list(const uint64_t tenant_id, c
     lib::ob_sort(sorted_ls_list.begin(), sorted_ls_list.end());
     for (int64_t i = 0; OB_SUCC(ret) && i < sorted_ls_list.count(); ++i) {
       const share::ObLSID &ls_id = sorted_ls_list.at(i);
-      if (OB_FAIL(lock_ls_member_list(tenant_id, ls_id, task_id, member_list, status, group_id, sql_proxy))) {
+      if (OB_FAIL(lock_ls_member_list(tenant_id, ls_id, task_id, member_list, status, group_id, unlock_check_ls_id, sql_proxy))) {
         LOG_WARN("failed to lock ls member list", K(ret), K(ls_id), K(member_list));
       }
     }
@@ -67,7 +67,7 @@ int ObMemberListLockUtils::batch_lock_ls_member_list(const uint64_t tenant_id, c
 
 int ObMemberListLockUtils::lock_ls_member_list(const uint64_t tenant_id, const share::ObLSID &ls_id,
     const int64_t task_id, const common::ObMemberList &member_list, const ObTransferLockStatus &status,
-    const int32_t group_id, common::ObMySQLProxy &sql_proxy)
+    const int32_t group_id, const share::ObLSID &unlock_check_ls_id, common::ObMySQLProxy &sql_proxy)
 {
   int ret = OB_SUCCESS;
   int64_t lock_owner = -1;
@@ -77,7 +77,7 @@ int ObMemberListLockUtils::lock_ls_member_list(const uint64_t tenant_id, const s
   if (!ls_id.is_valid() || !member_list.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(ls_id));
-  } else if (OB_FAIL(unlock_ls_member_list(tenant_id, ls_id, task_id, member_list, status, group_id, sql_proxy))) {
+  } else if (OB_FAIL(unlock_ls_member_list(tenant_id, ls_id, task_id, member_list, status, group_id, true/*need_check_palf_leader*/, unlock_check_ls_id, sql_proxy))) {
     LOG_WARN("failed to unlock ls member list", K(ret));
   } else if (OB_FAIL(get_lock_owner(tenant_id, ls_id, task_id, status, group_id, sql_proxy, lock_owner))) {
     LOG_WARN("failed to get lock owner", K(ret), K(tenant_id), K(ls_id), K(task_id), K(status));
@@ -122,7 +122,8 @@ int ObMemberListLockUtils::lock_ls_member_list(const uint64_t tenant_id, const s
 
 int ObMemberListLockUtils::unlock_ls_member_list(const uint64_t tenant_id, const share::ObLSID &ls_id,
     const int64_t task_id, const common::ObMemberList &member_list, const ObTransferLockStatus &status,
-    const int32_t group_id, common::ObMySQLProxy &sql_proxy)
+    const int32_t group_id, const bool need_check_palf_leader, const share::ObLSID &need_check_palf_leader_ls_id,
+    common::ObMySQLProxy &sql_proxy)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -160,6 +161,8 @@ int ObMemberListLockUtils::unlock_ls_member_list(const uint64_t tenant_id, const
         } else {
           LOG_WARN("failed to get lock info", K(ret), K(tenant_id), K(row_key));
         }
+      } else if (need_check_palf_leader && OB_FAIL(check_is_palf_leader_(tenant_id, need_check_palf_leader_ls_id))) {
+        LOG_WARN("failed to check is palf leader", K(ret), K(tenant_id), K(ls_id));
       } else if (OB_FAIL(get_config_change_lock_stat_(lock_info, group_id, palf_lock_owner, palf_is_locked))) {
         LOG_WARN("failed to get config change lock stat");
       } else if (OB_FAIL(check_unlock_status_(palf_is_locked, palf_lock_owner, lock_info.lock_owner_,
@@ -246,6 +249,8 @@ int ObMemberListLockUtils::unlock_member_list_when_switch_to_standby(
                                         fake_member_list,
                                         status,
                                         group_id,
+                                        false/*need_check_palf_leader*/,
+                                        ls_id,
                                         sql_proxy))) {
         LOG_WARN("failed to unlock ls member list", K(ret), K(lock_info));
       }
@@ -662,6 +667,31 @@ int ObMemberListLockUtils::unlock_for_ob_admin(
   }
 
   LOG_INFO("unlock for ob admin", K(ret), K(tenant_id), K(ls_id), K(palf_is_locked), K(palf_lock_owner));
+  return ret;
+}
+
+int ObMemberListLockUtils::check_is_palf_leader_(const uint64_t tenant_id, const share::ObLSID &ls_id)
+{
+  int ret = OB_SUCCESS;
+  ObLSHandle ls_handle;
+  ObLS *ls = nullptr;
+  ObRole role;
+  int64_t proposal_id = 0;
+
+  if (OB_INVALID_ID == tenant_id || !ls_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid args", K(ret), K(tenant_id), K(ls_id));
+  } else if (OB_FAIL(get_ls_handle(tenant_id, ls_id, ls_handle))) {
+    LOG_WARN("failed to get ls handle", K(ret), K(tenant_id), K(ls_id));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls should not be null", K(ret));
+  } else if (OB_FAIL(ls->get_log_handler()->get_role(role, proposal_id))) {
+    LOG_WARN("failed to get role", K(ret), KPC(ls));
+  } else if (!is_strong_leader(role)) {
+    ret = OB_NOT_MASTER;
+    LOG_WARN("ls is not leader, can not block tx", K(ret), K(role));
+  }
   return ret;
 }
 

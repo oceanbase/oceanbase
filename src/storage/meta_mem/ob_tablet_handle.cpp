@@ -71,6 +71,7 @@ void ObTabletHandle::set_obj(const ObTabletHdlType type, ObMetaObj<ObTablet> &ob
   set_obj(obj);
   type_ = type;
 }
+
 void ObTabletHandle::set_obj(const ObTabletHdlType type, ObTablet *obj, common::ObIAllocator *allocator, ObTenantMetaMemMgr *t3m)
 {
   set_obj(obj, allocator, t3m);
@@ -159,8 +160,7 @@ void ObTabletHandle::reset()
         case ObTabletHandle::ObTabletHdlType::STANDALONE : {
           int tmp_ret = OB_SUCCESS;
           if (0 != ref_cnt) {
-            // LOG_ERROR("obj ref cnt isn't 0", K(ref_cnt), KPC(this));
-            LOG_WARN("obj ref cnt isn't 0", K(ref_cnt), KPC(this));
+            LOG_ERROR("obj ref cnt isn't 0", K(ref_cnt), KPC(this));
           }
           if (ObTabletHdlType::COPY_FROM_T3M == type_
               && OB_TMP_FAIL(t3m_->dec_external_tablet_cnt(obj_->get_tablet_id().id(), obj_->get_transfer_seq()))) {

@@ -20,6 +20,7 @@
 #include "sql/engine/basic/ob_chunk_datum_store.h"
 #include "sql/engine/ob_tenant_sql_memory_manager.h"
 #include "sql/engine/ob_sql_mem_mgr_processor.h"
+#include "share/detect/ob_detectable_id.h"
 namespace oceanbase
 {
 namespace sql
@@ -125,6 +126,7 @@ public:
 
   // for detect & interrupt
   ObDASTCBInterruptInfo interrupt_info_;
+  ObDasExecuteRemoteInfo das_execute_remote_info_;
 private:
   common::ObSpinLock tcb_lock_; //用于控制资源资源释放的时序，保证并发访问的安全
 };

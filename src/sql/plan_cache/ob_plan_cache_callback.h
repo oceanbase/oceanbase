@@ -26,8 +26,8 @@ protected:
   typedef common::hash::HashMapPair<ObILibCacheKey*, ObILibCacheNode *> LibCacheKV;
 
 public:
-  ObLibCacheAtomicOp(const CacheRefHandleID ref_handle)
-    : cache_node_(NULL), ref_handle_(ref_handle)
+  ObLibCacheAtomicOp(const CacheRefHandleID ref_handle, const int64_t timeout)
+    : cache_node_(NULL), ref_handle_(ref_handle), timeout_(timeout)
   {
   }
   virtual ~ObLibCacheAtomicOp() {}
@@ -45,6 +45,7 @@ protected:
   // cache_node_ - the plan cache value that is referenced.
   ObILibCacheNode *cache_node_;
   CacheRefHandleID ref_handle_;
+  const int64_t timeout_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLibCacheAtomicOp);
 };
@@ -52,14 +53,14 @@ private:
 class ObLibCacheWlockAndRef : public ObLibCacheAtomicOp
 {
 public:
-  ObLibCacheWlockAndRef(const CacheRefHandleID ref_handle)
-    : ObLibCacheAtomicOp(ref_handle)
+  ObLibCacheWlockAndRef(const CacheRefHandleID ref_handle, const int64_t timeout)
+    : ObLibCacheAtomicOp(ref_handle, timeout)
   {
   }
   virtual ~ObLibCacheWlockAndRef() {}
   int lock(ObILibCacheNode &cache_node)
   {
-    return cache_node.lock(false/*wlock*/);
+    return cache_node.lock(false/*wlock*/, timeout_);
   };
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLibCacheWlockAndRef);
@@ -68,14 +69,14 @@ private:
 class ObLibCacheRlockAndRef : public ObLibCacheAtomicOp
 {
 public:
-  ObLibCacheRlockAndRef(const CacheRefHandleID ref_handle)
-    : ObLibCacheAtomicOp(ref_handle)
+  ObLibCacheRlockAndRef(const CacheRefHandleID ref_handle, const int64_t timeout)
+    : ObLibCacheAtomicOp(ref_handle, timeout)
   {
   }
   virtual ~ObLibCacheRlockAndRef() {}
   int lock(ObILibCacheNode &cache_node)
   {
-    return cache_node.lock(true/*rlock*/);
+    return cache_node.lock(true/*rlock*/, timeout_);
   };
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLibCacheRlockAndRef);

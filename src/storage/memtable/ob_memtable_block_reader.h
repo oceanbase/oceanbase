@@ -61,7 +61,7 @@ public:
       const sql::ObPushdownFilterExecutor *parent,
       sql::ObPushdownFilterExecutor &filter,
       const sql::PushdownFilterInfo &pd_filter_info,
-      common::ObBitmap &result_bitmap);
+      common::ObBitmap &result_bitmap) override;
 
 public:
   /********** derived from ObIMicroBlockReader **********/

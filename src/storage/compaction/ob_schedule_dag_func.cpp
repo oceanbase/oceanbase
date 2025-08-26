@@ -17,13 +17,6 @@
 #include "storage/multi_data_source/ob_mds_table_merge_dag_param.h"
 #include "storage/ddl/ob_tablet_lob_split_task.h"
 #include "storage/compaction/ob_batch_freeze_tablets_dag.h"
-#ifdef OB_BUILD_SHARED_STORAGE
-#include "storage/compaction/ob_tablet_refresh_dag.h"
-#include "storage/compaction/ob_verify_ckm_dag.h"
-#include "storage/compaction/ob_update_skip_major_tablet_dag.h"
-#include "storage/compaction/ob_batch_freeze_tablets_dag.h"
-#include "lib/utility/ob_sort.h"
-#endif
 
 namespace oceanbase
 {
@@ -142,11 +135,11 @@ int ObScheduleDagFunc::schedule_and_get_lob_tablet_split_dag(
 }
 
 int ObScheduleDagFunc::schedule_mds_table_merge_dag(
-    storage::mds::ObMdsTableMergeDagParam &param,
+    storage::mds::ObTabletMdsMiniMergeDagParam &param,
     const bool is_emergency)
 {
   int ret = OB_SUCCESS;
-  CREATE_DAG(storage::mds::ObMdsTableMergeDag);
+  CREATE_DAG(storage::mds::ObTabletMdsMiniMergeDag);
   return ret;
 }
 
@@ -162,54 +155,6 @@ int ObScheduleDagFunc::schedule_batch_freeze_dag(
   }
   return ret;
 }
-
-#ifdef OB_BUILD_SHARED_STORAGE
-int ObScheduleDagFunc::schedule_tablet_refresh_dag(
-    ObTabletsRefreshSSTableParam &param,
-    const bool is_emergency)
-{
-  int ret = OB_SUCCESS;
-  CREATE_DAG(ObTabletsRefreshSSTableDag);
-  return ret;
-}
-
-int ObScheduleDagFunc::schedule_verify_ckm_dag(ObVerifyCkmParam &param)
-{
-  int ret = OB_SUCCESS;
-  bool is_emergency = true;
-  if (param.tablet_info_array_.empty()) {
-    // do nothing
-  } else {
-    lib::ob_sort(param.tablet_info_array_.begin(), param.tablet_info_array_.end());
-    CREATE_DAG(ObVerifyCkmDag);
-  }
-
-  if (OB_FAIL(ret)) {
-    ADD_SUSPECT_LS_INFO(MAJOR_MERGE,
-                        ObDiagnoseTabletType::TYPE_MEDIUM_MERGE,
-                        param.ls_id_,
-                        ObSuspectInfoType::SUSPECT_LS_SCHEDULE_DAG,
-                        param.compaction_scn_,
-                        (int64_t) ObDagType::DAG_TYPE_VERIFY_CKM,
-                        (int64_t) ret /*error_code*/);
-  }
-  return ret;
-}
-
-int ObScheduleDagFunc::schedule_update_skip_major_tablet_dag(
-    const ObUpdateSkipMajorParam &param)
-{
-  int ret = OB_SUCCESS;
-  bool is_emergency = false;
-  if (param.tablet_info_array_.empty()) {
-    // do nothing
-  } else {
-    CREATE_DAG(ObUpdateSkipMajorTabletDag);
-  }
-  return ret;
-}
-
-#endif
 
 int ObDagParamFunc::fill_param(
     const share::ObLSID &ls_id,

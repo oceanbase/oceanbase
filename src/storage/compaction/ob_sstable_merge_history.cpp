@@ -43,10 +43,12 @@ int64_t ObParalleMergeInfo::to_string(char *buf, const int64_t buf_len) const
   } else {
     J_OBJ_START();
     for (int i = 0; i < ARRAY_IDX_MAX; ++i) {
-      J_OBJ_START();
-      J_KV("type", get_para_info_str(i), "info", info_[i]);
-      J_OBJ_END();
-      J_COMMA();
+      if (!info_[i].is_empty()) {
+        J_OBJ_START();
+        J_KV("type", get_para_info_str(i), "info", info_[i]);
+        J_OBJ_END();
+        J_COMMA();
+      }
     }
     J_OBJ_END();
   }
@@ -176,6 +178,34 @@ void ObMergeStaticInfo::shallow_copy(const ObMergeStaticInfo &other)
   MEMSET(mds_filter_info_str_, '\0', sizeof(mds_filter_info_str_));
   strncpy(mds_filter_info_str_, other.mds_filter_info_str_, strlen(other.mds_filter_info_str_));
 }
+
+int64_t ObMergeStaticInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  if (OB_ISNULL(buf) || buf_len <= 0) {
+  } else {
+    J_OBJ_START();
+    J_KV(K_(ls_id), K_(tablet_id), "merge_type", merge_type_to_str(merge_type_),
+      K_(compaction_scn), K_(is_full_merge), K_(concurrent_cnt),
+      "merge_level", merge_level_to_str(merge_level_),
+      "exec_mode", exec_mode_to_str(exec_mode_));
+    if (is_major_merge_type(merge_type_)) {
+      J_COMMA();
+      J_KV("merge_reason", ObAdaptiveMergePolicy::merge_reason_to_str(merge_reason_),
+        "progressive_merge_round", progressive_merge_round_, "progressive_merge_num", progressive_merge_num_);
+      if (ObCOMajorMergePolicy::is_valid_major_merge_type(co_major_merge_type_)) {
+        J_COMMA();
+        J_KV("base_major_status", co_major_sstable_status_to_str(base_major_status_),
+        "co_major_merge_type", ObCOMajorMergePolicy::co_major_merge_type_to_str(co_major_merge_type_));
+      }
+    }
+    J_COMMA();
+    J_KV(K_(kept_snapshot_info), K_(participant_table_info), K_(mds_filter_info_str), K_(is_fake));
+    J_OBJ_END();
+  }
+  return pos;
+}
+
 /**
  * -------------------------------------------------------------------ObMergeRunningInfo-------------------------------------------------------------------
  */
@@ -429,6 +459,26 @@ int ObSSTableMergeHistory::fill_comment(char *buf, const int64_t buf_len, const 
     compaction::ObIDiagnoseInfoMgr::add_compaction_info_param(buf, buf_len, "]"); // finish add dag warning info
   }
   return ret;
+}
+
+int64_t ObSSTableMergeHistory::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  if (OB_ISNULL(buf) || buf_len <= 0) {
+  } else {
+    J_OBJ_START();
+    J_KV(K_(static_info), K_(running_info));
+    if (!block_info_.is_empty()) {
+      J_COMMA();
+      J_KV("block_info", block_info_);
+    }
+    if (!diagnose_info_.is_empty()) {
+      J_COMMA();
+      J_KV("diagnose_info", diagnose_info_);
+    }
+    J_OBJ_END();
+  }
+  return pos;
 }
 
 } // namespace compaction

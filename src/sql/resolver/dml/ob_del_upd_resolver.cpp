@@ -232,8 +232,22 @@ int ObDelUpdResolver::resolve_assignments(const ParseNode &parse_node,
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(resolve_json_partial_update_flag(table_assigns, scope))) {
-      LOG_WARN("resolve_json_partial_update_flag fail", K(ret));
+    } else {
+      const TableItem &base_table_item = table->get_base_table_item();
+      const ObTableSchema *table_schema = NULL;
+      if (OB_ISNULL(schema_checker_) || OB_ISNULL(params_.session_info_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(schema_checker_), K(params_.session_info_),
+            K(allocator_), K(ret));
+      } else if (OB_FAIL(schema_checker_->get_table_schema(params_.session_info_->get_effective_tenant_id(),
+                                                         base_table_item.ref_id_,
+                                                         table_schema,
+                                                         base_table_item.is_link_table()))) {
+        LOG_WARN("failed to get table schema", K(ret));
+      } else if (table_schema->is_delete_insert_merge_engine()) {
+      } else if (OB_FAIL(resolve_json_partial_update_flag(table_assigns, scope))) {
+        LOG_WARN("resolve_json_partial_update_flag fail", K(ret));
+      }
     }
   }
   return ret;
@@ -659,6 +673,7 @@ int ObDelUpdResolver::resolve_additional_assignments(ObIArray<ObTableAssignment>
           //do nothing
         } else if (OB_FAIL(check_need_assignment(assigns.at(i).assignments_,
                                                  table_item->table_id_,
+                                                 table_schema->get_table_id(),
                                                  trigger_exist,
                                                  *column_schema,
                                                  need_assigned))) {
@@ -851,6 +866,7 @@ int ObDelUpdResolver::add_assignment(common::ObIArray<ObTableAssignment> &assign
 
 int ObDelUpdResolver::check_need_assignment(const common::ObIArray<ObAssignment> &assigns,
                                             uint64_t table_id,
+                                            uint64_t ref_table_id,
                                             bool before_update_row_trigger_exist,
                                             const ObColumnSchemaV2 &column,
                                             bool &need_assign)
@@ -886,13 +902,25 @@ int ObDelUpdResolver::check_need_assignment(const common::ObIArray<ObAssignment>
         need_assign = true;
       }
     }
-  } else if (column.is_on_update_current_timestamp() || before_update_row_trigger_exist) {
+  } else if (column.is_on_update_current_timestamp()) {
     if (column.get_column_id() == OB_HIDDEN_PK_INCREMENT_COLUMN_ID) {
       // for heap_table the hidden_pk should not be updated
-    } else if (OB_FAIL(ObResolverUtils::check_whether_assigned(stmt, assigns, table_id, column.get_column_id(), exist))) {
+  } else if (OB_FAIL(ObResolverUtils::check_whether_assigned(stmt, assigns, table_id, column.get_column_id(), exist))) {
       LOG_WARN("check whether assigned cascaded columns failed", K(ret), K(table_id), K(column.get_column_id()));
     } else if (!exist) {
       need_assign = true;
+    }
+  } else if (before_update_row_trigger_exist) {
+    if (column.get_column_id() == OB_HIDDEN_PK_INCREMENT_COLUMN_ID) {
+      // for heap_table the hidden_pk should not be updated
+    } else if (OB_FAIL(ObResolverUtils::check_whether_assigned_for_before_update_trigger(params_,
+                      schema_checker_, column, ref_table_id, need_assign))) {
+      LOG_WARN("failed to check", K(ret), K(ref_table_id));
+    } else if (!need_assign) {
+    } else if (OB_FAIL(ObResolverUtils::check_whether_assigned(stmt, assigns, table_id, column.get_column_id(), exist))) {
+      LOG_WARN("check whether assigned cascaded columns failed", K(ret), K(table_id), K(column.get_column_id()));
+    } else if (exist) {
+      need_assign = false;
     }
   }
   return ret;
@@ -1287,7 +1315,7 @@ int ObDelUpdResolver::add_all_column_to_updatable_view(ObDMLStmt &stmt,
             OB_SUCC(ret) && iter != table_schema->column_end(); iter++) {
           col_item = stmt.get_column_item_by_id(table_item.table_id_, (*iter)->get_column_id());
           if (NULL == col_item) { // column not found
-            if (OB_FAIL(resolve_basic_column_item(table_item, (*iter)->get_column_name(), true, col_item, &stmt))) {
+            if (OB_FAIL(resolve_basic_column_item(table_item, (*iter)->get_column_name(), true, col_item, &stmt, false))) {
               LOG_WARN("resolve basic column item failed", K(ret), K(table_item), K(*iter));
             }
           }
@@ -1900,6 +1928,7 @@ bool ObDelUpdResolver::need_all_columns(const ObTableSchema &table_schema,
           table_schema.get_trigger_list().count() > 0 ||
           table_schema.has_check_constraint() ||
           table_schema.has_generated_and_partkey_column() ||
+          table_schema.is_delete_insert_merge_engine() || // delete insert mode needs all columns in old rows
           binlog_row_image == ObBinlogRowImage::FULL ||
           binlog_row_image == ObBinlogRowImage::MINIMAL);
 }
@@ -3058,6 +3087,15 @@ int ObDelUpdResolver::build_column_conv_function_with_default_expr(ObInsertTable
     if (OB_SUCC(ret)) {
       table_info.column_conv_exprs_.at(idx) = function_expr;
       LOG_DEBUG("add column conv expr", K(*function_expr));
+      ObSEArray<ObRawExpr *, 8> pseudo_column_like_exprs;
+      if (OB_FAIL(ObTransformUtils::extract_pseudo_column_like_expr(function_expr, pseudo_column_like_exprs))) {
+        LOG_WARN("failed to extract pseudo column like expr", K(ret));
+      } else if (OB_ISNULL(get_stmt())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null stmt", K(ret));
+      } else if (OB_FAIL(append_array_no_dup(get_stmt()->get_pseudo_column_like_exprs(), pseudo_column_like_exprs))) {
+        LOG_WARN("failed to push back pseudo column like expr", K(ret));
+      }
     }
   }
   return ret;
@@ -3493,6 +3531,7 @@ int ObDelUpdResolver::resolve_insert_values(const ParseNode *node,
   bool is_all_default = false;
   bool is_update_view = false;
   TableItem* table_item = NULL;
+  table_info.all_values_simple_const_ = true;
   if (OB_ISNULL(del_upd_stmt) || OB_ISNULL(node) || OB_ISNULL(session_info_) ||
       T_VALUE_LIST != node->type_ || OB_ISNULL(node->children_) || OB_ISNULL(del_upd_stmt->get_query_ctx())) {
     ret = OB_INVALID_ARGUMENT;
@@ -3714,6 +3753,8 @@ int ObDelUpdResolver::resolve_insert_values(const ParseNode *node,
           LOG_WARN("failed to add __session_id value");
         } else if (OB_FAIL(add_new_value_for_oracle_label_security_table(table_info, label_se_columns, value_row))) {
           LOG_WARN("fail to add new value for oracle label security table", K(ret));
+        } else if (OB_FAIL(check_value_row_all_simple_const(value_row, table_info.all_values_simple_const_))) {
+          LOG_WARN("failed to check value row all const", K(ret));
         } else if (OB_FAIL(append(table_info.values_vector_, value_row))) {
           LOG_WARN("failed to append value row", K(ret));
         }
@@ -5078,6 +5119,30 @@ int ObDelUpdResolver::build_domain_id_function_expr(
           func_expr, true, get_del_upd_stmt()))) {
     LOG_WARN("resolve generated column expr failed", K(ret));
   }
+  return ret;
+}
+
+int ObDelUpdResolver::check_value_row_all_simple_const(const ObIArray<ObRawExpr*> &value_row,
+                                                       bool &all_const)
+{
+  int ret = OB_SUCCESS;
+  bool tmp_all_const = true;
+  for (int64_t i = 0; OB_SUCC(ret) && tmp_all_const && i < value_row.count(); ++i) {
+    if (OB_ISNULL(value_row.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("value expr is null", K(ret));
+    } else if (!value_row.at(i)->is_static_scalar_const_expr()) {
+      tmp_all_const = false;
+    } else if (!value_row.at(i)->is_deterministic()) {
+      tmp_all_const = false;
+    } else if (value_row.at(i)->has_flag(CNT_PL_UDF) ||
+               value_row.at(i)->has_flag(CNT_SO_UDF) ||
+               value_row.at(i)->has_flag(CNT_ONETIME) ||
+               value_row.at(i)->has_flag(CNT_SUB_QUERY)) {
+      tmp_all_const = false;
+    }
+  }
+  all_const &= tmp_all_const;
   return ret;
 }
 

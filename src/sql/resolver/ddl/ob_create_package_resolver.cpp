@@ -441,6 +441,9 @@ int ObCreatePackageResolver::resolve_functions_spec(const ObPackageInfo &package
       if (pl_routine_info->is_deterministic()) {
         routine_info.set_deterministic();
       }
+      if (pl_routine_info->is_result_cache()) {
+        routine_info.set_result_cache();
+      }
       if (pl_routine_info->is_parallel_enable()) {
         routine_info.set_parallel_enable();
       }

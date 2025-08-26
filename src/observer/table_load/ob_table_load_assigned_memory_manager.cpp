@@ -131,7 +131,7 @@ int ObTableLoadAssignedMemoryManager::get_sort_memory(int64_t &sort_memory)
       ret = OB_EAGAIN;
       LOG_WARN("avail_memory_ equal to zero, resource has been migrated", KR(ret));
     } else {
-      sort_memory = avail_sort_memory_ / chunk_count_;
+      sort_memory = MAX(avail_sort_memory_ / chunk_count_, ObDirectLoadExternalMultiPartitionRowChunk::MIN_MEMORY_LIMIT);
     }
   }
 

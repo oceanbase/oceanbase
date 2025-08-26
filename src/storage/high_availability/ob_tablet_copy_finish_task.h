@@ -78,7 +78,6 @@ public:
 private:
   int create_new_table_store_with_major_();
   int create_new_table_store_with_minor_();
-  int trim_tablet_();
 
   int check_finish_copy_tablet_data_valid_();
   int get_tables_handle_ptr_(
@@ -91,16 +90,6 @@ private:
       const ObTablesHandleArray &major_tables_handle);
   int get_mds_sstable_max_end_scn_(share::SCN &max_escn);
   int check_log_replay_to_mds_sstable_end_scn_();
-  int classify_major_sstables_(
-      ObTablesHandleArray &shared_major_sstables,
-      ObTablesHandleArray &local_major_sstables);
-  int deal_with_shared_majors_(ObTablesHandleArray &major_tables_handle);
-#ifdef OB_BUILD_SHARED_STORAGE
-  int check_local_sstable_exist_(
-      const ObITable::TableKey &table_key,
-      ObTabletMemberWrapper<ObTabletTableStore> &table_store_wrapper,
-      bool &is_exist);
-#endif
 
 private:
   bool is_inited_;

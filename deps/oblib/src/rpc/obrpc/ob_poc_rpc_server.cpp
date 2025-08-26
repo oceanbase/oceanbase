@@ -12,6 +12,7 @@
 
 #include "rpc/obrpc/ob_poc_rpc_server.h"
 #include "rpc/obrpc/ob_net_keepalive.h"
+#include "lib/utility/ob_tracepoint.h"
 
 #define rk_log_macro(level, ret, format, ...) _OB_LOG_RET(level, ret, "PNIO " format, ##__VA_ARGS__)
 #include "lib/lock/ob_futex.h"
@@ -62,18 +63,14 @@ using namespace oceanbase::obrpc;
 using namespace oceanbase::rpc;
 
 frame::ObReqDeliver* global_deliver;
-int ObPocServerHandleContext::create(int64_t resp_id, const char* buf, int64_t sz, ObRequest*& req)
+int ObPocServerHandleContext::create(int64_t resp_id, const ObRpcPacket &tmp_pkt, int64_t sz, ObRequest*& req)
 {
   int ret = OB_SUCCESS;
   ObPocServerHandleContext* ctx = NULL;
-  ObRpcPacket tmp_pkt;
   char rpc_timeguard_str[ObPocRpcServer::RPC_TIMEGUARD_STRING_SIZE] = {'\0'};
   ObTimeGuard timeguard("rpc_request_create", 200 * 1000);
   const int64_t alloc_payload_sz = sz;
-  if (OB_FAIL(tmp_pkt.decode(buf, sz))) {
-    RPC_LOG(ERROR, "decode packet fail", K(ret));
-  } else {
-    ObCurTraceId::set(tmp_pkt.get_trace_id());
+  {
     obrpc::ObRpcPacketCode pcode = tmp_pkt.get_pcode();
     if (OB_UNLIKELY(ussl_check_pcode_mismatch_connection(pn_get_fd(resp_id), pcode))) {
       ret = OB_UNKNOWN_CONNECTION;
@@ -83,7 +80,11 @@ int ObPocServerHandleContext::create(int64_t resp_id, const char* buf, int64_t s
       const char* pcode_label = set.label_of_idx(set.idx_of_pcode(pcode));
       const int64_t pool_size = sizeof(ObPocServerHandleContext) + sizeof(ObRequest) + sizeof(ObRpcPacket) + alloc_payload_sz;
       int64_t tenant_id = tmp_pkt.get_tenant_id();
-      if (OB_UNLIKELY(tmp_pkt.get_group_id() == OBCG_ELECTION)) {
+      pn_set_trace_info(resp_id, tenant_id, pcode, tmp_pkt.get_trace_id());
+      bool is_stream = tmp_pkt.is_stream();
+      bool is_ddl_rpc = (ORPR_DDL == tmp_pkt.get_priority());
+      if (OB_UNLIKELY(tmp_pkt.get_group_id() == OBCG_ELECTION
+                       || is_stream || is_ddl_rpc) ) { // avoid tenant memory leak error when deleting tenant
         tenant_id = OB_SERVER_TENANT_ID;
       }
       IGNORE_RETURN snprintf(rpc_timeguard_str, sizeof(rpc_timeguard_str), "sz=%ld,pcode=%x,id=%ld", sz, pcode, tenant_id);
@@ -112,7 +113,7 @@ int ObPocServerHandleContext::create(int64_t resp_id, const char* buf, int64_t s
           RPC_LOG(WARN, "pool allocate rpc packet memory failed", K(tenant_id), K(pcode_label));
           ret = common::OB_ALLOCATE_MEMORY_FAILED;
         } else {
-          MEMCPY(reinterpret_cast<void *>(pkt), reinterpret_cast<void *>(&tmp_pkt), sizeof(ObRpcPacket));
+          MEMCPY(reinterpret_cast<void *>(pkt), reinterpret_cast<const void *>(&tmp_pkt), sizeof(ObRpcPacket));
           const char* packet_data = NULL;
           if (alloc_payload_sz > 0) {
             packet_data = reinterpret_cast<char *>(pkt + 1);
@@ -165,6 +166,7 @@ void ObPocServerHandleContext::resp(ObRpcPacket* pkt)
   char* pkt_ptr = reinterpret_cast<char*>(pkt);
   char rpc_timeguard_str[ObPocRpcServer::RPC_TIMEGUARD_STRING_SIZE] = {'\0'};
   ObTimeGuard timeguard("rpc_resp", 10 * 1000);
+  pn_set_trace_point(resp_id_, rpc::ObRequest::OB_EASY_REQUEST_RPC_PROCESSOR_RUN_DONE);
   if (NULL == pkt) {
     // do nothing
   } else if (OB_UNLIKELY(pkt_ptr != resp_ptr_)) {
@@ -255,6 +257,11 @@ ObAddr ObPocServerHandleContext::get_peer()
   return peer_;
 }
 
+inline void ObPocServerHandleContext::set_trace_point(int32_t trace_point)
+{
+  pn_set_trace_point(resp_id_, trace_point);
+}
+
 int serve_cb(int grp, const char* b, int64_t sz, uint64_t resp_id)
 {
   int ret = OB_SUCCESS;
@@ -269,11 +276,33 @@ int serve_cb(int grp, const char* b, int64_t sz, uint64_t resp_id)
     b = b + easy_head_size;
     sz = sz - easy_head_size;
     ObRequest* req = NULL;
-    if (OB_TMP_FAIL(ObPocServerHandleContext::create(resp_id, b, sz, req))) {
-      RPC_LOG(WARN, "created req is null", K(tmp_ret), K(sz), K(resp_id));
+    ObRpcPacket tmp_pkt;
+    if (OB_FAIL(OB_FAIL(tmp_pkt.decode(b, sz)))) {
+      RPC_LOG(ERROR, "decode packet fail");
     } else {
-      timeguard.click();
-      global_deliver->deliver(*req);
+      ObCurTraceId::set(tmp_pkt.get_trace_id());
+      bool is_stream = tmp_pkt.is_stream();
+      bool is_ddl_rpc = (ORPR_DDL == tmp_pkt.get_priority());
+      bool is_lease = (OB_RENEW_LEASE == tmp_pkt.get_pcode());
+      bool is_to_tenant_queue = (!is_stream && !is_ddl_rpc && !is_lease);
+
+      int lock_ret = OB_SUCCESS;
+      if (is_to_tenant_queue) {
+        lock_ret = global_deliver->lock_tenant_list();
+      }
+      if (OB_TMP_FAIL(lock_ret)) {
+        RPC_LOG_RET(WARN, tmp_ret, "lock_tenant_list failed");
+      } else if (OB_TMP_FAIL(ObPocServerHandleContext::create(resp_id, tmp_pkt, sz, req))) {
+        RPC_LOG_RET(WARN, tmp_ret, "created req is null", K(tmp_ret), K(sz), K(resp_id));
+      } else {
+        timeguard.click();
+        global_deliver->deliver(*req);
+      }
+      if (OB_LIKELY(is_to_tenant_queue && OB_SUCCESS == lock_ret)) {
+        if (OB_UNLIKELY(OB_SUCCESS != global_deliver->unlock_tenant_list())) {
+          RPC_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "unlock tenant_list failed");
+        }
+      }
     }
   }
   if (OB_SUCCESS != tmp_ret) {
@@ -340,6 +369,22 @@ int ObPocRpcServer::start_net_client(int net_thread_count)
   return ret;
 }
 
+int ObPocRpcServer::update_thread_count(int thread_count) {
+  int ret = OB_SUCCESS;
+  int rl_thread_count = max(1, thread_count/4);
+  if (!has_start_) {
+    ret = OB_NOT_INIT;
+    RPC_LOG(WARN, "rpc server is not inited", K(rl_thread_count));
+  } else if (OB_FAIL(tranlate_to_ob_error(pn_update_thread_count(DEFAULT_PNIO_GROUP, thread_count)))) {
+    RPC_LOG(WARN, "DEFAULT_PNIO_GROUP set thread count failed", K(thread_count));
+  } else if (OB_FAIL(tranlate_to_ob_error(pn_update_thread_count(RATELIMIT_PNIO_GROUP, rl_thread_count)))) {
+    RPC_LOG(WARN, "RATELIMIT_PNIO_GROUP set thread count failed", K(rl_thread_count));
+  } else {
+    RPC_LOG(INFO, "set thread count success", K(thread_count), K(rl_thread_count));
+  }
+  return ret;
+}
+
 void ObPocRpcServer::stop()
 {
   for (uint64_t gid = 1; gid < END_GROUP; gid++) {
@@ -397,16 +442,39 @@ extern "C" {
 void* pkt_nio_malloc(int64_t sz, const char* label) {
   ObMemAttr attr(OB_SERVER_TENANT_ID, label, ObCtxIds::PKT_NIO);
   SET_USE_500(attr);
+  #ifdef ERRSIM
+    int tmp_ret = OB_E(EventTable::EN_RPC_IO_THREAD_HANG) OB_SUCCESS;
+    if (OB_SUCCESS != tmp_ret) {
+      int64_t sleep_us = -tmp_ret;
+      RPC_LOG_RET(WARN, OB_IO_ERROR, "inject rpc io thread hung", K(sleep_us));
+      ob_usleep(sleep_us);
+    }
+  #endif
   return oceanbase::common::ob_malloc(sz, attr);
 }
 void pkt_nio_free(void *ptr) {
   oceanbase::common::ob_free(ptr);
 }
+
 bool server_in_black(struct sockaddr* sa) {
   easy_addr_t ez_addr;
   easy_inet_atoe(sa, &ez_addr);
-  return ObNetKeepAlive::get_instance().in_black(ez_addr);
+  bool bool_ret = ObNetKeepAlive::get_instance().in_black(ez_addr);
+  return bool_ret;
 }
+
+#ifdef ERRSIM
+bool trigger_rpc_socket_errsim() {
+  bool bool_ret = false;;
+  int tmp_ret = OB_E(EventTable::EN_RPC_SOCKET_ERROR) OB_SUCCESS;
+  if (OB_SUCCESS != tmp_ret) {
+    bool_ret = true;
+    RPC_LOG_RET(WARN, tmp_ret, "inject rpc socket io error");
+  }
+  return bool_ret;
+}
+#endif
+
 int dispatch_to_ob_listener(int accept_fd) {
   int ret = -1;
   if (OB_NOT_NULL(ATOMIC_LOAD(&oceanbase::obrpc::global_ob_listener))) {
@@ -416,17 +484,22 @@ int dispatch_to_ob_listener(int accept_fd) {
 }
 int tranlate_to_ob_error(int err) {
   int ret = OB_SUCCESS;
+  if (err < 0) {
+    err = -err;
+  }
   if (PNIO_OK == err) {
   } else if (PNIO_STOPPED == err) {
     ret = OB_RPC_SEND_ERROR;
   } else if (PNIO_LISTEN_ERROR == err) {
     ret = OB_SERVER_LISTEN_ERROR;
-  } else if (ENOMEM == err || -ENOMEM == err) {
+  } else if (ENOMEM == err) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-  } else if (EINVAL == err || -EINVAL == err) {
+  } else if (EINVAL == err) {
     ret = OB_INVALID_ARGUMENT;
-  } else if (EIO == err || -EIO == err) {
+  } else if (EIO == err) {
     ret = OB_IO_ERROR;
+  } else if (ENOTSUP == err) {
+    ret = OB_NOT_SUPPORTED;
   } else {
     ret = OB_ERR_UNEXPECTED;
   }

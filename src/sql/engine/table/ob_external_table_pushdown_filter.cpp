@@ -56,7 +56,8 @@ int ObExternalTablePushdownFilter::prepare_filter_col_meta(
   int ret = OB_SUCCESS;
   CK (file_col_index.count() == col_exprs.count());
   CK (col_ids.count() == col_exprs.count());
-  bool filter_enabled_ = true;
+  filter_enabled_ = true;
+  int64_t real_filter_cnt = 0;
   for (int64_t i = 0; OB_SUCC(ret) && filter_enabled_ && i < file_col_index.count(); ++i) {
     const int file_col_id = file_col_index.at(i);
     for (int64_t f_idx = 0; OB_SUCC(ret) && f_idx < skipping_filter_nodes_.count(); ++f_idx) {
@@ -69,8 +70,12 @@ int ObExternalTablePushdownFilter::prepare_filter_col_meta(
       } else if (node.filter_->get_col_ids().at(0) == col_ids.at(i)) {
         file_filter_col_ids_.at(f_idx) = file_col_id;
         file_filter_exprs_.at(f_idx) = col_exprs.at(i);
+        ++real_filter_cnt;
       }
     }
+  }
+  if (0 == real_filter_cnt) {
+    filter_enabled_ = false;
   }
   return ret;
 }
@@ -88,13 +93,15 @@ int ObExternalTablePushdownFilter::apply_skipping_index_filter(
       filter_param.set_uncertain();
       ObSkippingFilterNode &node = skipping_filter_nodes_.at(i);
       const int ext_tbl_col_id = file_filter_col_ids_.at(i);
-      if (OB_FAIL(param_builder.build(ext_tbl_col_id, file_filter_exprs_.at(i), filter_param))) {
+      if (nullptr == file_filter_exprs_.at(i)) {
+      } else if (OB_FAIL(param_builder.build(ext_tbl_col_id, file_filter_exprs_.at(i), filter_param))) {
         LOG_WARN("fail to build param", K(ret), K(i));
       } else if (!filter_param.is_uncertain()) {
         bool filter_valid = true;
         const uint64_t ob_col_id = node.filter_->get_col_ids().at(0);
         if (OB_FAIL(node.filter_->init_evaluated_datums(filter_valid))) {
           LOG_WARN("failed to init filter", K(ret));
+        } else if (!filter_valid) {
         } else if (OB_FAIL(skip_filter_executor_.falsifiable_pushdown_filter(
             ob_col_id, node.skip_index_type_, MOCK_ROW_COUNT, filter_param, *node.filter_, allocator_,
             true))) {

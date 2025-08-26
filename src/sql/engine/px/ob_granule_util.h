@@ -420,7 +420,26 @@ public:
                                               common::ObIArray<ObDASTabletLoc*> &granule_tablets,
                                               common::ObIArray<common::ObNewRange> &granule_ranges,
                                               common::ObIArray<int64_t> &granule_idx);
-
+  static int split_granule_by_partition_line_tunnel(ObIAllocator &allocator,
+                                        const ObIArray<ObDASTabletLoc *> &tablets,
+                                        const ObIArray<share::ObExternalFileInfo> &external_table_files,
+                                        ObIArray<ObDASTabletLoc *> &granule_tablets,
+                                        ObIArray<ObNewRange> &granule_ranges,
+                                        ObIArray<int64_t> &granule_idx);
+  static int split_granule_by_total_byte(ObIAllocator &allocator,
+                                         int64_t parallelism,
+                                         const ObIArray<ObDASTabletLoc *> &tablets,
+                                         const ObIArray<share::ObExternalFileInfo> &external_table_files,
+                                         ObIArray<ObDASTabletLoc *> &granule_tablets,
+                                         ObIArray<ObNewRange> &granule_ranges,
+                                         ObIArray<int64_t> &granule_idx);
+  static int split_granule_by_total_row(ObIAllocator &allocator,
+                                        int64_t parallelism,
+                                        const ObIArray<ObDASTabletLoc *> &tablets,
+                                        const ObIArray<share::ObExternalFileInfo> &external_table_files,
+                                        ObIArray<ObDASTabletLoc *> &granule_tablets,
+                                        ObIArray<ObNewRange> &granule_ranges,
+                                        ObIArray<int64_t> &granule_idx);
   /**
    * get the total task count for all partitions
    * params                     IN the parameters for splitting

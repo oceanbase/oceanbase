@@ -188,7 +188,7 @@ void ObTruncatePartitionFitlerTest::build_filter(
 {
   ObTruncateInfoArray truncate_info_array;
   truncate_info_array.init_for_first_creation(allocator_);
-  ASSERT_EQ(OB_SUCCESS, truncate_info_array.append(truncate_info));
+  ASSERT_EQ(OB_SUCCESS, truncate_info_array.append_with_deep_copy(truncate_info));
   ASSERT_EQ(OB_SUCCESS, filter.init_truncate_filter(schema_rowkey_cnt_, cols_desc_, &cols_param_, truncate_info_array));
   filter.filter_type_ = ObTruncateFilterType::NORMAL_FILTER;
 }
@@ -199,7 +199,7 @@ void ObTruncatePartitionFitlerTest::rescan_filter(
 {
   ObTruncateInfoArray truncate_info_array;
   truncate_info_array.init_for_first_creation(allocator_);
-  ASSERT_EQ(OB_SUCCESS, truncate_info_array.append(truncate_info));
+  ASSERT_EQ(OB_SUCCESS, truncate_info_array.append_with_deep_copy(truncate_info));
   ASSERT_EQ(OB_SUCCESS, filter.truncate_filter_executor_->switch_info(filter.filter_factory_, schema_rowkey_cnt_, cols_desc_, truncate_info_array));
 }
 
@@ -912,14 +912,14 @@ TEST_F(ObTruncatePartitionFitlerTest, multi_truncate_info)
   ObTruncateInfo range_truncate_info1;
   col_idxs_[0] = 0;
   build_truncate_info(ObTruncatePartition::RANGE_PART, 1000/*row_scn*/, range_begin_rowkey, range_end_rowkey, 1, range_truncate_info1);
-  ASSERT_EQ(OB_SUCCESS, truncate_info_array.append(range_truncate_info1));
+  ASSERT_EQ(OB_SUCCESS, truncate_info_array.append_with_deep_copy(range_truncate_info1));
   // ---- second partition [100 : 200), scn = 1200
   range_begin_obj.set_int(100);
   range_end_obj.set_int(200);
 
   ObTruncateInfo range_truncate_info2;
   build_truncate_info(ObTruncatePartition::RANGE_PART, 1200/*row_scn*/, range_begin_rowkey, range_end_rowkey, 1, range_truncate_info2);
-  ASSERT_EQ(OB_SUCCESS, truncate_info_array.append(range_truncate_info2));
+  ASSERT_EQ(OB_SUCCESS, truncate_info_array.append_with_deep_copy(range_truncate_info2));
 
 #define CHECK_ROW(scn, range_column, flag)                                     \
   scn_datum.set_int(scn);                                                      \
@@ -959,7 +959,7 @@ TEST_F(ObTruncatePartitionFitlerTest, multi_truncate_info)
 
     ObTruncateInfo range_truncate_info3;
     build_truncate_info(ObTruncatePartition::RANGE_PART, 900/*row_scn*/, range_begin_rowkey, range_end_rowkey, 1, range_truncate_info3);
-    ASSERT_EQ(OB_SUCCESS, truncate_info_array.append(range_truncate_info3));
+    ASSERT_EQ(OB_SUCCESS, truncate_info_array.append_with_deep_copy(range_truncate_info3));
     ObTruncatePartitionFilter truncate_range_part_filter;
     get_index_table_cols_param(true);
     build_filter(truncate_info_array, truncate_range_part_filter);
@@ -1024,7 +1024,7 @@ TEST_F(ObTruncatePartitionFitlerTest, multi_truncate_info)
   ObTruncateInfo list_truncate_info1;
   ASSERT_EQ(OB_SUCCESS, list_row_values.push_back_with_deep_copy(allocator_, list_row1));
   build_truncate_info(ObTruncatePartition::LIST_PART, 1000/*row_scn*/, list_row_values, 1, list_truncate_info1);
-  ASSERT_EQ(OB_SUCCESS, truncate_info_array2.append(list_truncate_info1));
+  ASSERT_EQ(OB_SUCCESS, truncate_info_array2.append_with_deep_copy(list_truncate_info1));
   // ---- second partition except((1, 2, 3, 4, 5)), scn = 1200
   list_obj1.set_int(2);
   ASSERT_EQ(OB_SUCCESS, list_row_values.push_back_with_deep_copy(allocator_, list_row1));
@@ -1037,7 +1037,7 @@ TEST_F(ObTruncatePartitionFitlerTest, multi_truncate_info)
 
   ObTruncateInfo list_truncate_info2;
   build_truncate_info(ObTruncatePartition::LIST_PART, 1200/*row_scn*/, list_row_values, 1, list_truncate_info2, ObTruncatePartition::EXCEPT);
-  ASSERT_EQ(OB_SUCCESS, truncate_info_array2.append(list_truncate_info2));
+  ASSERT_EQ(OB_SUCCESS, truncate_info_array2.append_with_deep_copy(list_truncate_info2));
   {
     ObTruncatePartitionFilter truncate_list_part_filter;
     get_index_table_cols_param(true);

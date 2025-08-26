@@ -21,7 +21,7 @@ using namespace oceanbase::sql::dtl;
 
 OB_SERIALIZE_MEMBER(ObPxTabletInfo,
                     tablet_id_,
-                    logical_row_count_,
+                    estimated_row_count_,// FARM COMPAT WHITELIST for logical_row_count_
                     physical_row_count_);
 OB_SERIALIZE_MEMBER(ObPxTaskMonitorInfo, sched_exec_time_start_, sched_exec_time_end_, exec_time_start_, exec_time_end_, metrics_);
 OB_SERIALIZE_MEMBER((ObPxTaskChSet, dtl::ObDtlChSet), sqc_id_, task_id_);
@@ -32,7 +32,16 @@ OB_SERIALIZE_MEMBER(ObPxInitSqcResultMsg, dfo_id_, sqc_id_, rc_, task_count_, er
 OB_SERIALIZE_MEMBER(ObPxFinishSqcResultMsg, dfo_id_, sqc_id_, rc_, trans_result_,
                     task_monitor_info_array_, sqc_affected_rows_, dml_row_info_, temp_table_id_,
                     interm_result_ids_, fb_info_, err_msg_, das_retry_rc_,
-                    sqc_memstore_row_read_count_, sqc_ssstore_row_read_count_);
+                    sqc_memstore_row_read_count_, sqc_ssstore_row_read_count_,
+                    sqc_wait_time_micro_, sqc_waits_, sqc_rpc_count_,
+                    sqc_application_wait_time_, sqc_concurrency_wait_time_,
+                    sqc_user_io_wait_time_, sqc_schedule_time_, sqc_row_cache_hit_cnt_,
+                    sqc_bloom_filter_cache_hit_cnt_, sqc_block_cache_hit_cnt_,
+                    sqc_disk_reads_, sqc_data_block_read_cnt_,
+                    sqc_data_block_cache_hit_cnt_, sqc_index_block_read_cnt_,
+                    sqc_index_block_cache_hit_cnt_, sqc_blockscan_block_cnt_,
+                    sqc_blockscan_row_cnt_, sqc_pushdown_storage_filter_row_cnt_,
+                    sqc_fuse_row_cache_hit_, sqc_network_wait_time_);
 OB_SERIALIZE_MEMBER(ObPxFinishTaskResultMsg, dfo_id_, sqc_id_, task_id_, rc_);
 OB_SERIALIZE_MEMBER((ObPxBloomFilterChInfo, dtl::ObDtlChTotalInfo), filter_id_);
 OB_SERIALIZE_MEMBER((ObPxBloomFilterChSet, dtl::ObDtlChSet), filter_id_, sqc_id_);

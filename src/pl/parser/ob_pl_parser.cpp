@@ -263,7 +263,7 @@ int ObPLParser::parse_routine_body(const ObString &routine_body,
   if (lib::is_oracle_mode()) {
     buf = const_cast<char*>(routine_body.ptr());
   } else {
-    const char *prefix = "CALL\n";
+    const char *prefix = "^ ";  // something totally different from SQL style
     prefix_len = static_cast<int32_t>(strlen(prefix));
     buf = static_cast<char*>(allocator_.alloc(routine_body.length() + prefix_len));
     if (OB_UNLIKELY(NULL == buf)) {

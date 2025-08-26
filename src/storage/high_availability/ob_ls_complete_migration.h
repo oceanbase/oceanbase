@@ -86,7 +86,7 @@ public:
   virtual bool is_valid() const override;
   virtual int start_running() override;
   virtual bool operator == (const share::ObIDagNet &other) const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   virtual int fill_comment(char *buf, const int64_t buf_len) const override;
   virtual int fill_dag_net_key(char *buf, const int64_t buf_len) const override;
   virtual int clear_dag_net_ctx() override;
@@ -100,6 +100,10 @@ public:
 private:
   int start_running_for_migration_();
   int update_migration_status_(ObLS *ls);
+  int get_next_migration_status_(
+      ObLS *ls,
+      const ObMigrationStatus current_migration_status,
+      ObMigrationStatus &next_migration_status);
   int report_ls_meta_table_(ObLS *ls);
   int report_result_();
   int trans_rebuild_fail_status_(
@@ -123,7 +127,7 @@ public:
   explicit ObCompleteMigrationDag(const share::ObDagType::ObDagTypeEnum &dag_type);
   virtual ~ObCompleteMigrationDag();
   virtual bool operator == (const share::ObIDag &other) const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
   int prepare_ctx(share::ObIDagNet *dag_net);
 
@@ -215,10 +219,12 @@ private:
       const int64_t timeout);
   int check_tablet_transfer_table_ready_(
       const common::ObTabletID &tablet_id,
+      const share::SCN &transfer_scn,
       ObLS *ls,
       const int64_t timeout);
   int inner_check_tablet_transfer_table_ready_(
       const common::ObTabletID &tablet_id,
+      const share::SCN &transfer_scn,
       ObLS *ls,
       bool &need_skip);
   int check_need_wait_transfer_table_replace_(
@@ -231,6 +237,23 @@ private:
   int init_timeout_ctx_(
       const int64_t timeout,
       ObTimeoutCtx &timeout_ctx);
+  int change_member_list_with_leader_();
+  // All transfer tasks should complete the replace operation in the following
+  // function check_tablet_transfer_table_ready_ whose transfer_start_scn is
+  // smaller than the returned transfer_scn. And for the last transfer, barrier
+  // condition should be matched.
+  int get_transfer_scn_and_wait_barrier_match_if_need_(
+      ObLS *ls,
+      SCN &transfer_scn);
+  int wait_src_ls_match_barrier_(
+      const share::SCN &transfer_scn,
+      const ObLSTransferMetaInfo &transfer_meta_info);
+  int check_self_is_valid_member_(bool &is_valid_member) const;
+#ifdef OB_BUILD_SHARED_STORAGE
+  int force_elect_and_wait_become_leader_();
+  int change_member_list_with_log_service_();
+  int force_set_self_as_only_member_(ObLS *ls);
+#endif
 
 private:
   static const int64_t IS_REPLAY_DONE_THRESHOLD_US = 3L * 1000 * 1000L;

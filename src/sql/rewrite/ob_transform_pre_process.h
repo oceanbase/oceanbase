@@ -621,7 +621,9 @@ private:
                                    const TableItem *table_item,
                                    ObSqlBitSet<> &rel_ids);
 
-  int formalize_limit_expr(ObDMLStmt &stmt);
+  int formalize_limit_expr(ObDMLStmt &stmt, bool formalize_oracle_limit);
+  int formalize_limit_expr_oracle(ObDMLStmt &stmt);
+  int formalize_limit_expr_mysql(ObDMLStmt &stmt);
   int transform_rollup_exprs(ObDMLStmt *stmt, bool &trans_happened);
   int get_rollup_const_exprs(ObSelectStmt *stmt,
                              ObIArray<ObRawExpr*> &const_exprs,
@@ -707,6 +709,8 @@ private:
                               ObLeadingTable &leading_table);
   int construct_leaf_leading_table(ObDMLStmt *stmt, TableItem *table, ObLeadingTable *&leading_table);
   int reset_view_base_and_transpose_item(ObDMLStmt *stmt);
+  int transform_any_all_row(ObDMLStmt *stmt, bool &trans_happened);
+  int convert_any_all_row_expr(ObRawExpr *expr, ObRawExpr *&new_expr, bool &happened);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTransformPreProcess);

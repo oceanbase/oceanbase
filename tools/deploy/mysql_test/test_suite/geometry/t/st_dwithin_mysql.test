@@ -178,3 +178,22 @@ INSERT INTO t2 VALUES
   (6, ST_GeomFromText('POLYGON((1.0 1.0, 5.0 1.0, 5.0 5.0, 1.0 5.0, 1.0 1.0))'));
 SELECT k FROM t2 WHERE _st_dwithin(ST_GeomFromText('POINT(2.5 2.5)'), g, 1) ORDER BY k;
 drop table t2;
+
+# bugfix: 2025080700110355426
+--disable_warnings
+drop table if exists t_gis1;
+--enable_warnings
+create table t_gis1 (c1 INT primary key, g GEOMETRY NOT NULL SRID 0, SPATIAL INDEX(g));
+insert into t_gis1 values (1, ST_GeomFromText('POINT (8 5)', 0));
+insert into t_gis1 values (2, ST_GeomFromText('POINT (7 -4)', 0));
+insert into t_gis1 values (3, ST_GeomFromText('POINT (-6 9)', 0));
+insert into t_gis1 values (4, ST_GeomFromText('POINT (6 3)', 0));
+insert into t_gis1 values (5, ST_GeomFromText('POLYGON((0 0, -4 -9, -9 -8, -9 -1, 0 0))', 0));
+insert into t_gis1 values (6, ST_GeomFromText('LINESTRING(3 -8, 9 -8)', 0));
+insert into t_gis1 values (7, ST_GeomFromText('POLYGON((0 0, 1 -9, 1 -2, -3 -7, 0 0))', 0));
+insert into t_gis1 values (8, ST_GeomFromText('POLYGON((0 0, -4 0, 1 0, -0 1, 0 0))', 0));
+SELECT c1, ST_AsText(g) FROM t_gis1 where _st_dwithin(g, ST_GeomFromText('POLYGON((0 0, -6 -6, 8 -0, 8 -2, 0 0))', 0), 1 );
+explain SELECT c1, ST_AsText(g) FROM t_gis1 where _st_dwithin(g, ST_GeomFromText('POLYGON((0 0, -6 -6, 8 -0, 8 -2, 0 0))', 0), 1 );
+SELECT c1, ST_AsText(g) FROM t_gis1 where _st_dwithin(g, ST_GeomFromText('POLYGON((0 0, -6 -6, 8 -2, 0 0))', 0), 1 );
+explain SELECT c1, ST_AsText(g) FROM t_gis1 where _st_dwithin(g, ST_GeomFromText('POLYGON((0 0, -6 -6, 8 -2, 0 0))', 0), 1 );
+drop table t_gis1;

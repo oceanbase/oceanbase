@@ -22,11 +22,12 @@ namespace common
 class ObLogConstants
 {
 public:
-  static constexpr int64_t MAX_LOG_FILE_SIZE = 64 << 20; // 64MB
+  static constexpr int64_t MAX_LOG_FILE_SIZE_IN_HISTORY = 64 << 20; // 64MB
+  static constexpr int64_t MAX_LOG_FILE_SIZE = 32 << 20; // 32MB
   static constexpr int64_t LOG_FILE_ALIGN_SIZE = 4 << 10; // 4KB
   static constexpr int64_t LOG_FILE_ALIGN_MASK = LOG_FILE_ALIGN_SIZE - 1;
   static constexpr int64_t LOG_BUF_RESERVED_SIZE = 3 * LOG_FILE_ALIGN_SIZE; // NOP + switch_log
-  static constexpr int64_t LOG_ITEM_MAX_LENGTH = 63 << 20; // 63MB
+  static constexpr int64_t LOG_ITEM_MAX_LENGTH = 31 << 20; // 31MB
   static constexpr int64_t NOP_SWITCH_LOG_SEQ = 0;
 };
 } // namespace blocksstable

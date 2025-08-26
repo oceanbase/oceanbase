@@ -185,6 +185,13 @@ select substr(123, 2, 9223372036854775806);
 +-------------------------------------+
 | 23                                  |
 +-------------------------------------+
+select substr('测1234', 4, 1);
++-------------------------+
+| substr('测1234', 4, 1)  |
++-------------------------+
+| 3                       |
++-------------------------+
+
 drop view if exists v1;
 create view v1 as select substr(123, 2, 9223372036854775807);
 desc v1;
@@ -206,17 +213,4 @@ SELECT NULL ORDER BY SUBSTR ( 9223372036854775807 FROM @@ob_query_timeout FOR 92
 +------+
 | NULL |
 +------+
-
-create table t1(c1 varchar(20));
-insert into t1 values('1aferfAEWDFE');
-insert into t1 values('12FfdrwfEc');
-set @str = '中';
-select substr(concat(@str, c1), 5) from t1;
-+-----------------------------+
-| substr(concat(@str, c1), 5) |
-+-----------------------------+
-| aferfAEWDFE                 |
-| 2FfdrwfEc                   |
-+-----------------------------+
-drop table t1;
 

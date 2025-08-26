@@ -238,6 +238,7 @@ public:
     retry_major_info_ = retry_major_info;
   }
   static int64_t get_freeze_trigger_interval() { return FREEZE_TRIGGER_INTERVAL; }
+  static int64_t get_freeze_trigger_percentage();
   bool exist_ls_freezing();
   bool exist_ls_throttle_is_skipping();
   bool memstore_remain_memory_is_exhausting();
@@ -281,7 +282,6 @@ private:
   // unset tenant freezing flag.
   // @param[in] rollback_freeze_cnt, reduce the tenant's freeze count by 1, if true.
   int unset_tenant_freezing_(const bool rollback_freeze_cnt);
-  static int64_t get_freeze_trigger_percentage_();
   static int64_t get_memstore_limit_percentage_();
   int post_freeze_request_(const storage::ObFreezeType freeze_type,
                            const int64_t try_frozen_version);

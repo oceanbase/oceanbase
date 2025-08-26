@@ -185,7 +185,7 @@
 #include "ob_expr_collection_construct.h"
 #include "ob_expr_obj_access.h"
 #include "ob_expr_pl_associative_index.h"
-#include "ob_expr_udf.h"
+#include "ob_expr_udf/ob_expr_udf.h"
 #include "ob_expr_object_construct.h"
 #include "ob_expr_pl_get_cursor_attr.h"
 #include "ob_expr_pl_integer_checker.h"
@@ -316,6 +316,7 @@
 #include "ob_expr_generator_func.h"
 #include "ob_expr_random.h"
 #include "ob_expr_randstr.h"
+#include "ob_expr_startup_mode.h"
 #include "ob_expr_zipf.h"
 #include "ob_expr_normal.h"
 #include "ob_expr_uniform.h"
@@ -448,6 +449,13 @@
 #include "ob_expr_map_keys.h"
 #include "ob_expr_current_catalog.h"
 #include "ob_expr_check_catalog_access.h"
+#include "ob_expr_check_location_access.h"
+#include "ob_expr_tmp_file_open.h"
+#include "ob_expr_tmp_file_write.h"
+#include "ob_expr_tmp_file_read.h"
+#include "ob_expr_tmp_file_close.h"
+#include "ob_expr_local_dynamic_filter.h"
+#include "ob_expr_format_profile.h"
 
 namespace oceanbase
 {
@@ -1398,9 +1406,34 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprMapValues::eval_map_values,                                    /* 846 */
   ObExprSpivDim::generate_spiv_dim,                                    /* 847 */
   ObExprInnerInfoColsColumnKeyPrinter::eval_column_column_key,         /* 848 */
-  NULL, //ObExprCheckLocationAccess::eval_check_location_access        /* 849 */
-  NULL,// ObExprUDF::eval_external_udf,                                /* 850 */
-  NULL,// ObExprStartUpMode::eval_startup_mode,                        /* 851 */
+  ObExprCheckLocationAccess::eval_check_location_access,               /* 849 */
+  ObExprUDF::eval_external_udf,                                        /* 850 */
+  ObExprStartUpMode::eval_startup_mode,                                /* 851 */
+  NULL, // ObExprVectorL2Squared::calc_l2_squared,                     /* 852 */
+#if defined(ENABLE_DEBUG_LOG) || !defined(NDEBUG)
+  ObExprTmpFileOpen::eval_tmp_file_open,                              /* 853 */
+  ObExprTmpFileClose::eval_tmp_file_close,                            /* 854 */
+  ObExprTmpFileWrite::eval_tmp_file_write,                            /* 855 */
+  ObExprTmpFileRead::eval_tmp_file_read,                              /* 856 */
+#else
+  NULL,// ObExprTmpFileOpen::eval_tmp_file_open,                      /* 853 */
+  NULL,// ObExprTmpFileClose::eval_tmp_file_close,                    /* 854 */
+  NULL,// ObExprTmpFileWrite::eval_tmp_file_write,                    /* 855 */
+  NULL,// ObExprTmpFileRead::eval_tmp_file_read,                      /* 856 */
+#endif
+  NULL,//ObExprAIComplete::eval_ai_complete,                          /* 857 */
+  NULL,//ObExprAIEmbed::eval_ai_embed,                                /* 858 */
+  NULL,//ObExprAIRerank::eval_ai_rerank,                              /* 859 */
+  NULL,//ObExprMd5ConcatWs::calc_md5_concat_ws_expr                   /* 860 */
+  NULL,//ObExprUDF::eval_mysql_udtf,                                  /* 861 */
+  NULL,//ObExprHiddenClusteringKey::eval_hidden_clustering_key,       /* 862 */
+  ObExprFormatProfile::format_profile,                                /* 863 */
+  ObExprLocalDynamicFilter::eval_local_dynamic_filter,                /* 864 */
+  NULL, // ObExprVecChunk::generate_vec_chunk,                        /* 865 */
+  NULL, // ObExprEmbeddedVec::generate_embedded_vec,                  /* 866 */
+  NULL, // ObExprSemanticDistance::calc_semantic_distance,            /* 867 */
+  NULL, // ObExprBucket::calc_bucket_expr,                            /* 868 */
+  NULL, // ObExprSemanticVectorDistance::calc_semantic_vector_distance, /* 869 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
@@ -1582,7 +1615,8 @@ static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
   ObExprArrayUnion::eval_array_union_batch,                           /* 175 */
   NULL, // ObExprArrayReplace::eval_array_replace_batch,              /* 176 */
   NULL, // ObExprArrayPopfront::eval_array_popfront_batch,            /* 177 */
-  NULL, // ObExprUDF::eval_udf_batch                                  /* 178 */
+  ObExprUDF::eval_udf_batch,                                          /* 178 */
+  ObExprLocalDynamicFilter::eval_local_dynamic_filter_batch,          /* 179 */
 };
 
 static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
@@ -1807,8 +1841,34 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   ObExprMapValues::eval_map_values_vector,                               /* 218 */
   ObExprRbToArray::eval_rb_to_array_vector,                              /* 219 */
   ObExprRbContains::eval_rb_contains_vector,                             /* 220 */
-  NULL, // ObExprUDF::eval_udf_vector                                    /* 221 */
-  NULL, // ObExprUDF::eval_external_udf_vector,                          /* 222 */
+  ObExprUDF::eval_udf_vector,                                            /* 221 */
+  ObExprUDF::eval_external_udf_vector,                                   /* 222 */
+  NULL, // ObExprInstr::calc_mysql_instr_expr_vector,                             /* 223 */
+  NULL, // ObExprOracleInstr::calc_oracle_instr_expr_vector,                      /* 224 */
+  NULL, // ObLocationExprOperator::calc_location_expr_vector,                     /* 225 */
+  ObExprConvertTZ::calc_convert_tz_vector,                               /* 226 */
+  NULL, // ObExprMul::mul_decimalint64_int64_int64_vector,                        /* 227 */
+  NULL, // ObExprHash::calc_hash_value_expr_vector,                               /* 228 */
+  NULL, // ObExprAIComplete::eval_ai_complete_vector,                           /* 229 */
+  NULL, // ObExprAIEmbed::eval_ai_embed_vector,                                 /* 230 */
+  NULL, // ObExprAIRerank::eval_ai_rerank_vector,                               /* 231 */
+  NULL, // ObExprMd5ConcatWs::calc_md5_concat_ws_vector                         /* 232 */
+  NULL, // ObExprHiddenClusteringKey::eval_vector_hidden_clustering_key,         /* 233 */
+  ObExprToPinyin::eval_to_pinyin_vector,                                 /* 234 */
+  NULL, // ObExprMul::mul_decint32_decint32_int32_vector,                         /* 235 */
+  NULL, // ObExprMul::mul_decint32_int32_decint32_vector,                         /* 236 */
+  NULL, // ObExprMul::mul_decint64_decint32_int32_vector,                         /* 237 */
+  NULL, // ObExprMul::mul_decint64_int32_decint32_vector,                         /* 238 */
+  NULL, // ObExprMul::mul_decint64_decint64_int32_vector,                         /* 239 */
+  NULL, // ObExprMul::mul_decint64_int32_decint64_vector,                         /* 240 */
+  NULL, // ObExprMul::mul_decint128_decint64_int32_vector,                        /* 241 */
+  NULL, // ObExprMul::mul_decint128_int32_decint64_vector,                        /* 242 */
+  NULL, // ObExprMul::mul_decint256_int32_decint128_vector,                       /* 243 */
+  NULL, // ObExprMul::mul_decint256_decint128_int32_vector,                       /* 244 */
+  NULL, // ObExprMul::mul_decint128_decint128_int32_vector,                       /* 245 */
+  NULL, // ObExprMul::mul_decint128_int32_decint128_vector,                       /* 246 */
+  NULL, // ObExprMul::mul_decint256_decint256_int32_vector,                       /* 247 */
+  NULL, // ObExprMul::mul_decint256_int32_decint256_vector,                       /* 248 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,
@@ -1930,6 +1990,7 @@ static ObExpr::EvalFunc g_decimal_int_eval_functions[] = {
   ObExprDiv::decint_div_mysql_fn<int512_t, int128_t>,
   ObExprDiv::decint_div_mysql_fn<int512_t, int256_t>,
   ObExprDiv::decint_div_mysql_fn<int512_t, int512_t>,
+  NULL, // ObExprMul::mul_decimalint64_int64_int64
 };
 
 static ObExpr::EvalBatchFunc g_decimal_int_eval_batch_functions[] = {
@@ -2040,6 +2101,7 @@ static ObExpr::EvalBatchFunc g_decimal_int_eval_batch_functions[] = {
   ObExprDiv::decint_div_mysql_batch_fn<int512_t, int128_t>,
   ObExprDiv::decint_div_mysql_batch_fn<int512_t, int256_t>,
   ObExprDiv::decint_div_mysql_batch_fn<int512_t, int512_t>,
+  NULL, // ObExprMul::mul_decimalint64_int64_int64_batch
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_DECIMAL_INT_EXPR_EVAL,

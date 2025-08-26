@@ -111,7 +111,8 @@ int ObPLDataType::get_pkg_type_by_name(uint64_t tenant_id,
                                        common::ObMySQLProxy &sql_proxy,
                                        bool is_pkg_var, // pkg var or pkg type
                                        ObPLDataType &pl_type,
-                                       ObIArray<ObSchemaObjVersion> *deps)
+                                       ObIArray<ObSchemaObjVersion> *deps,
+                                       ObPLResolveCache *resolve_cache)
 {
   int ret = OB_SUCCESS;
   const share::schema::ObPackageInfo *package_info = NULL;
@@ -120,7 +121,9 @@ int ObPLDataType::get_pkg_type_by_name(uint64_t tenant_id,
   ObPLPackageManager *package_manager = NULL;
   pl::ObPLPackageGuard package_guard(session_info.get_effective_tenant_id());
   pl::ObPLResolveCtx resolve_ctx(allocator, session_info, schema_guard,
-                                package_guard, sql_proxy, false);
+                                package_guard, sql_proxy, false,
+                                false, false, nullptr, nullptr,  TgTimingEvent::TG_TIMING_EVENT_INVALID,
+                                resolve_cache);
   OZ (package_guard.init());
   CK (OB_NOT_NULL(session_info.get_pl_engine()));
   OZ (schema_guard.get_package_info(tenant_id, owner_id, pkg, share::schema::PACKAGE_TYPE,
@@ -219,13 +222,16 @@ int ObPLDataType::get_table_type_by_name(uint64_t tenant_id,
                                          share::schema::ObSchemaGetterGuard &schema_guard,
                                          bool is_rowtype,
                                          ObPLDataType &pl_type,
-                                         ObIArray<ObSchemaObjVersion> *deps)
+                                         ObIArray<ObSchemaObjVersion> *deps,
+                                         ObPLResolveCache *resolve_cache)
 {
   int ret = OB_SUCCESS;
   const ObTableSchema *table_info = NULL;
   ObPLPackageGuard dummy_guard(session_info.get_effective_tenant_id());
   ObMySQLProxy dummy_proxy;
-  ObPLResolveCtx ctx(allocator, session_info, schema_guard, dummy_guard, dummy_proxy, false);
+  ObPLResolveCtx ctx(allocator, session_info, schema_guard, dummy_guard, dummy_proxy, false,
+                      false, false, nullptr, nullptr,  TgTimingEvent::TG_TIMING_EVENT_INVALID,
+                      resolve_cache);
   OZ (schema_guard.get_table_schema(tenant_id, owner_id, table, false, table_info));
   if (OB_SUCC(ret) && OB_ISNULL(table_info)) {
     uint64_t object_owner_id = owner_id;
@@ -255,7 +261,7 @@ int ObPLDataType::get_table_type_by_name(uint64_t tenant_id,
     for (; OB_SUCC(ret) && i < record_type->get_member_count(); ++i) {
       const ObString *record_name = record_type->get_record_member_name(i);
       CK (OB_NOT_NULL(record_name));
-      if (OB_SUCC(ret) && 0 == record_name->case_compare(type)) {
+      if (OB_SUCC(ret) && record_name->case_compare_equal(type)) {
         CK (OB_NOT_NULL(member_type = record_type->get_record_member_type(i)));
         OX (pl_type = *member_type);
         OX (pl_type.set_type_from(PL_TYPE_ATTR_TYPE));
@@ -273,6 +279,22 @@ int ObPLDataType::get_table_type_by_name(uint64_t tenant_id,
   return ret;
 }
 
+int ObPLDataType::adjust_routine_param_type(const ObRoutineParam *iparam,
+                                            pl::ObPLDataType &pl_type)
+{
+  int ret = OB_SUCCESS;
+  if (ob_is_numeric_type(pl_type.get_obj_type())) {
+    if (iparam->is_in_param()) {
+      OZ (ObPLResolver::adjust_routine_param_type(pl_type));
+    } else {
+      // do nothing
+    }
+  } else {
+    OZ (ObPLResolver::adjust_routine_param_type(pl_type));
+  }
+  return ret;
+}
+
 int ObPLDataType::transform_from_iparam(const ObRoutineParam *iparam,
                                         share::schema::ObSchemaGetterGuard &schema_guard,
                                         sql::ObSQLSessionInfo &session_info,
@@ -280,7 +302,8 @@ int ObPLDataType::transform_from_iparam(const ObRoutineParam *iparam,
                                         common::ObMySQLProxy &sql_proxy,
                                         pl::ObPLDataType &pl_type,
                                         ObIArray<ObSchemaObjVersion> *deps,
-                                        ObPLDbLinkGuard *dblink_guard)
+                                        ObPLDbLinkGuard *dblink_guard,
+                                        ObPLResolveCache *resolve_cache)
 {
   int ret = OB_SUCCESS;
   CK (OB_NOT_NULL(iparam));
@@ -335,7 +358,8 @@ int ObPLDataType::transform_from_iparam(const ObRoutineParam *iparam,
                                  sql_proxy,
                                  false,
                                  pl_type,
-                                 deps));
+                                 deps,
+                                 resolve_cache));
         break;
       }
       case SP_EXTERN_PKG_VAR: {
@@ -349,7 +373,9 @@ int ObPLDataType::transform_from_iparam(const ObRoutineParam *iparam,
                                  sql_proxy,
                                  true,
                                  pl_type,
-                                 deps));
+                                 deps,
+                                 resolve_cache));
+        OZ (adjust_routine_param_type(iparam, pl_type));
         break;
       }
       case SP_EXTERN_TAB_COL: {
@@ -362,14 +388,9 @@ int ObPLDataType::transform_from_iparam(const ObRoutineParam *iparam,
                                    schema_guard,
                                    false,
                                    pl_type,
-                                   deps));
-        if (OB_SUCC(ret) && iparam->is_in_param() && ob_is_numeric_type(pl_type.get_obj_type())) {
-          const ObAccuracy &default_accuracy =  ObAccuracy::DDL_DEFAULT_ACCURACY2[lib::is_oracle_mode()][pl_type.get_obj_type()];
-          // precision of decimal int must be equal to precision defined in schema.
-          if (!pl_type.get_data_type()->get_meta_type().is_decimal_int()) {
-            pl_type.get_data_type()->set_accuracy(default_accuracy);
-          }
-        }
+                                   deps,
+                                   resolve_cache));
+        OZ (adjust_routine_param_type(iparam, pl_type));
         break;
       }
       case SP_EXTERN_PKGVAR_OR_TABCOL: {
@@ -382,7 +403,8 @@ int ObPLDataType::transform_from_iparam(const ObRoutineParam *iparam,
                                    schema_guard,
                                    false,
                                    pl_type,
-                                   deps));
+                                   deps,
+                                   resolve_cache));
         if (OB_TABLE_NOT_EXIST == ret || OB_ERR_COLUMN_NOT_FOUND == ret) {
           ret = OB_SUCCESS;
           OZ (get_pkg_type_by_name(tenant_id,
@@ -395,8 +417,10 @@ int ObPLDataType::transform_from_iparam(const ObRoutineParam *iparam,
                                    sql_proxy,
                                    true,
                                    pl_type,
-                                   deps));
+                                   deps,
+                                   resolve_cache));
         }
+        OZ (adjust_routine_param_type(iparam, pl_type));
         break;
       }
       case SP_EXTERN_SYS_REFCURSOR: {
@@ -414,7 +438,8 @@ int ObPLDataType::transform_from_iparam(const ObRoutineParam *iparam,
                                    schema_guard,
                                    true,
                                    pl_type,
-                                   deps));
+                                   deps,
+                                   resolve_cache));
         break;
       }
       case SP_EXTERN_LOCAL_VAR : {
@@ -994,6 +1019,54 @@ int ObPLDataType::deserialize(
   return ret;
 }
 
+int ObPLDataType::intervalym_element_cell_str(char *buf,
+                                              const int64_t len,
+                                              ObIntervalYMValue val,
+                                              int64_t &pos,
+                                              const ObScale scale)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid input args", K(ret), KP(buf));
+  } else if (OB_UNLIKELY(len - pos <= 1)) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("buf is oversize", K(ret), K(len), K(pos));
+  } else {
+    /* skip 1 byte to store length */
+    int64_t pos_begin = pos++;
+    OZ (ObTimeConverter::interval_ym_to_str(val, scale, buf, len, pos, false));
+    // store length as beginning
+    int64_t total_len = pos - pos_begin - 1;
+    OZ (ObMySQLUtil::store_length(buf, len, total_len, pos_begin));
+  }
+  return ret;
+}
+
+int ObPLDataType::intervalds_element_cell_str(char *buf,
+                                              const int64_t len,
+                                              ObIntervalDSValue val,
+                                              int64_t &pos,
+                                              const ObScale scale)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid input args", K(ret), KP(buf));
+  } else if (OB_UNLIKELY(len - pos <= 1)) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("buf is oversize", K(ret), K(len), K(pos));
+  } else {
+    /* skip 1 byte to store length */
+    int64_t pos_begin = pos++;
+    OZ (ObTimeConverter::interval_ds_to_str(val, scale, buf, len, pos, false));
+    // store length as beginning
+    int64_t total_len = pos - pos_begin - 1;
+    OZ (ObMySQLUtil::store_length(buf, len, total_len, pos_begin));
+  }
+  return ret;
+}
+
 // -------------------- End for Package Session Variable Serialize/DeSerialize ------
 
 int ObPLDataType::serialize(share::schema::ObSchemaGetterGuard &schema_guard,
@@ -1038,6 +1111,14 @@ int ObPLDataType::serialize(share::schema::ObSchemaGetterGuard &schema_guard,
           LOG_WARN("failed to process lob locator_results", K(ret), K(obj), K(session.is_client_use_lob_locator()), K(session.is_client_support_lob_locatorv2()));
         } else if (OB_FAIL(ObSMUtils::cell_str(dst, dst_len, obj, type, dst_pos, OB_INVALID_ID, NULL, tz_info, &field, session, NULL))) {
           LOG_WARN("failed to cell str", K(ret), K(obj), K(dst_len), K(dst_pos));
+        }
+      } else if (MYSQL_PROTOCOL_TYPE::TEXT == type && obj.is_interval_ym()) {
+        if (OB_FAIL(intervalym_element_cell_str(dst, dst_len, obj.get_interval_ym(), dst_pos, field.accuracy_.get_scale()))) {
+          LOG_WARN("failed to cell intervalym element type of collection", K(ret), K(obj), K(dst_len), K(dst_pos));
+        }
+      } else if (MYSQL_PROTOCOL_TYPE::TEXT == type && obj.is_interval_ds()) {
+        if (OB_FAIL(intervalds_element_cell_str(dst, dst_len, obj.get_interval_ds(), dst_pos, field.accuracy_.get_scale()))) {
+          LOG_WARN("failed to cell intervalds element type of collection", K(ret), K(obj), K(dst_len), K(dst_pos));
         }
       } else if (OB_FAIL(ObSMUtils::cell_str(dst, dst_len, obj, type, dst_pos, OB_INVALID_ID, NULL, tz_info, &field, session, NULL))) {
         LOG_WARN("failed to cell str", K(ret), K(obj), K(dst_len), K(dst_pos));
@@ -1099,18 +1180,25 @@ int ObPLDataType::deserialize(ObSchemaGetterGuard &schema_guard,
       LOG_WARN("data size overflow", K(ret));
     } else if (OB_FAIL(ObSMUtils::get_mysql_type(get_obj_type(), mysql_type, flags, num_decimals))) {
       LOG_WARN("get mysql type failed", K(ret));
-    } else if (OB_FAIL(ObMPStmtExecute::parse_basic_param_value(
+    } else if (obmysql::EMySQLFieldType::MYSQL_TYPE_ORA_BLOB == mysql_type
+              && CS_TYPE_BINARY != get_data_type()->get_collation_type()) {
+      // Here must check collation_type which is set by request_type to distinguish clob or blob
+      mysql_type = obmysql::EMySQLFieldType::MYSQL_TYPE_ORA_CLOB;
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(ObMPStmtExecute::parse_basic_param_value(
         local_allocator, (uint8_t)mysql_type, session, charset, ObCharsetType::CHARSET_INVALID,
         cs_type, ncs_type, src, tz_info, param, true, NULL,
         NULL == get_data_type() ? false : get_data_type()->get_meta_type().is_unsigned_integer()))) {
-      // get_data_type() is null, its a extend type, unsigned need false.
-      LOG_WARN("failed to parse basic param value", K(ret));
-    } else {
-      ObObj *obj = reinterpret_cast<ObObj *>(dst + dst_pos);
-      OZ (deep_copy_obj(allocator, param, *obj));
-      OX (dst_pos += sizeof(ObObj));
-      LOG_DEBUG("deserialize ob pl data type success",
-                K(*this), K(*obj), K(obj), K(dst_pos), K(dst), K(ret));
+        // get_data_type() is null, its a extend type, unsigned need false.
+        LOG_WARN("failed to parse basic param value", K(ret));
+      } else {
+        ObObj *obj = reinterpret_cast<ObObj *>(dst + dst_pos);
+        OZ (deep_copy_obj(allocator, param, *obj));
+        OX (dst_pos += sizeof(ObObj));
+        LOG_DEBUG("deserialize ob pl data type success",
+                  K(*this), K(*obj), K(obj), K(dst_pos), K(dst), K(ret));
+      }
     }
   } else {
     const ObUserDefinedType *user_type = NULL;
@@ -1709,7 +1797,7 @@ bool ObObjAccessIdx::operator==(const ObObjAccessIdx &other) const
   check_ctx.need_check_deterministic_ = false;
   return elem_type_ == other.elem_type_
       && access_type_ == other.access_type_
-      && 0 == var_name_.case_compare(other.var_name_)
+      && var_name_.case_compare_equal(other.var_name_)
       && var_type_ == other.var_type_
       && var_index_ == other.var_index_
       && routine_info_ == other.routine_info_
@@ -2551,6 +2639,7 @@ int ObPLCursorInfo::prepare_entity(ObSQLSessionInfo &session,
                                    lib::MemoryContext &entity)
 {
   int ret = OB_SUCCESS;
+  OZ (session.init_cursor_cache());
   if (OB_ISNULL(entity)) {
     uint64_t eff_tenant_id = session.get_effective_tenant_id();
     lib::MemoryContext parent_entity = session.get_cursor_cache().mem_context_;
@@ -2587,7 +2676,14 @@ int ObPLCursorInfo::prepare_spi_result(ObPLExecCtx *ctx, ObSPIResultSet *&spi_re
   }
   OX (spi_result = new (spi_cursor_) ObSPIResultSet());
   OX (last_stream_cursor_ = true);
-  OZ (spi_result->init(*ctx->exec_ctx_->get_my_session()));
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(spi_result->init(*ctx->exec_ctx_->get_my_session()))) {
+    LOG_WARN("spi result init failed", K(ret));
+    if (is_ps_cursor()) {
+      spi_result->~ObSPIResultSet();
+      spi_result = NULL;
+    }
+  }
   return ret;
 }
 

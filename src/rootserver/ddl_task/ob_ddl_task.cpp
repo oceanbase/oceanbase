@@ -1250,6 +1250,13 @@ int ObDDLTask::switch_status(const ObDDLTaskStatus new_status, const bool enable
       LOG_INFO("ddl_scheduler switch status", K(ret), "ddl_event_info", ObDDLEventInfo(), K(task_status_));
     }
 
+    if (old_status != real_new_status) {
+      if (OB_TMP_FAIL(inner_refresh_task_context(real_new_status))) {
+        LOG_WARN("fail to inner refresh task context", K(tmp_ret), K(ret), K(real_new_status));
+      }
+      ret = (OB_SUCCESS == ret) ? tmp_ret : ret;
+    }
+
     if (OB_CANCELED == real_ret_code || ObDDLTaskStatus::FAIL == task_status_) {
       (void)ObDDLTaskRecordOperator::kill_task_inner_sql(*GCTX.sql_proxy_,
           trace_id_, dst_tenant_id_, task_id_, snapshot_version_, sql_exec_addrs_); // ignore return code
@@ -1578,7 +1585,7 @@ int ObDDLTask::push_execution_id(const uint64_t tenant_id, const int64_t task_id
         if (1 == execution_id && !ddl_can_retry) {
             // has been executed before
             ret = OB_TASK_EXPIRED; //task can not be retry
-            LOG_WARN("do not retry for heap table ddl plan", K(tenant_id), K(task_id), K(ddl_can_retry));
+            LOG_WARN("do not retry for heap table ddl plan", K(ret_code), K(task_status), K(tenant_id), K(task_id), K(ddl_can_retry));
         } else {
           if ( -1 == execution_id) {
             execution_id = 0;
@@ -4418,7 +4425,8 @@ int ObDDLTaskRecordOperator::kill_task_inner_sql(
         } else if (!sql_exec_addrs.at(i).is_valid()) {
           if (OB_FAIL(sql_string.assign_fmt(" SELECT id as session_id FROM %s WHERE trace_id like \"%c%s\" "
               " and tenant = (select tenant_name from __all_tenant where tenant_id = %lu) "
-              " and info like \"%cINSERT%c('ddl_task_id', %ld)%cINTO%cSELECT%c%ld%c\" ",
+              " and info like \"%cINSERT%c('ddl_task_id', %ld)%cINTO%cSELECT%c%ld%c\""
+              " and id != connection_id()",
               OB_ALL_VIRTUAL_SESSION_INFO_TNAME,
               spec_charater,
               trace_id_like,
@@ -4439,7 +4447,8 @@ int ObDDLTaskRecordOperator::kill_task_inner_sql(
             LOG_WARN("ip to string failed", K(ret), K(sql_exec_addrs.at(i)));
           } else if (OB_FAIL(sql_string.assign_fmt(" SELECT id as session_id FROM %s WHERE trace_id like \"%c%s\" "
               " and tenant = (select tenant_name from __all_tenant where tenant_id = %lu) "
-              " and svr_ip = \"%s\" and svr_port = %d and info like \"%cINSERT%c('ddl_task_id', %ld)%cINTO%cSELECT%c%ld%c\" ",
+              " and svr_ip = \"%s\" and svr_port = %d and info like \"%cINSERT%c('ddl_task_id', %ld)%cINTO%cSELECT%c%ld%c\""
+              " and id != connection_id()",
               OB_ALL_VIRTUAL_SESSION_INFO_TNAME,
               spec_charater,
               trace_id_like,
@@ -4528,7 +4537,8 @@ int ObDDLTaskRecordOperator::get_running_tasks_inner_sql(
       } else if (!sql_exec_addr.is_valid()) {
         if (OB_FAIL(sql_string.assign_fmt(" SELECT info FROM %s WHERE trace_id like \"%c%s\""
             " and tenant = (select tenant_name from __all_tenant where tenant_id = %lu) "
-            " and info like \"%cINSERT%c('ddl_task_id', %ld)%cINTO%cSELECT%cPARTITION%c%ld%c\" ",
+            " and info like \"%cINSERT%c('ddl_task_id', %ld)%cINTO%cSELECT%cPARTITION%c%ld%c\""
+            " and id != connection_id()",
             OB_ALL_VIRTUAL_SESSION_INFO_TNAME,
             spec_charater,
             trace_id_like,
@@ -4550,7 +4560,8 @@ int ObDDLTaskRecordOperator::get_running_tasks_inner_sql(
           LOG_WARN("ip to string failed", K(ret), K(sql_exec_addr));
         } else if (OB_FAIL(sql_string.assign_fmt(" SELECT info FROM %s WHERE trace_id like \"%c%s\""
             " and tenant = (select tenant_name from __all_tenant where tenant_id = %lu) "
-            " and svr_ip = \"%s\" and svr_port = %d and info like \"%cINSERT%c('ddl_task_id', %ld)%cINTO%cSELECT%cPARTITION%c%ld%c\" ",
+            " and svr_ip = \"%s\" and svr_port = %d and info like \"%cINSERT%c('ddl_task_id', %ld)%cINTO%cSELECT%cPARTITION%c%ld%c\""
+            " and id != connection_id()",
             OB_ALL_VIRTUAL_SESSION_INFO_TNAME,
             spec_charater,
             trace_id_like,
@@ -4615,6 +4626,17 @@ int ObDDLTask::init_ddl_task_monitor_info(const uint64_t target_table_id)
     LOG_WARN("failed to get ddl type str", K(ret));
   } else if (OB_FAIL(stat_info_.init(ddl_type_str, target_table_id))) {
     LOG_WARN("failed to init stat info", K(ret));
+  }
+  return ret;
+}
+
+int ObDDLTask::inner_refresh_task_context(const share::ObDDLTaskStatus status)
+{
+  int ret = OB_SUCCESS;
+  // you can refresh the shared context of ddl task here
+  // inherit the refresh_task_comtext function to refresh the task specific context
+  if (OB_FAIL(refresh_task_context(status))) {
+    LOG_WARN("fail to refresh task context", K(ret));
   }
   return ret;
 }

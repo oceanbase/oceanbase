@@ -9,6 +9,7 @@ import sys
 import mysql.connector
 from mysql.connector import errorcode
 from my_error import MyError
+from my_utils import SetSessionTimeout
 import logging
 
 class SqlItem:
@@ -18,8 +19,8 @@ class SqlItem:
     self.action_sql = action_sql
     self.rollback_sql = rollback_sql
 
-current_cluster_version = "4.4.0.0"
-current_data_version = "4.4.0.0"
+current_cluster_version = "4.4.1.0"
+current_data_version = "4.4.1.0"
 g_succ_sql_list = []
 g_commit_sql_list = []
 
@@ -127,11 +128,6 @@ def set_parameter(cur, parameter, value, timeout = 0):
   cur.execute(sql)
   wait_parameter_sync(cur, False, parameter, value, timeout)
 
-def set_session_timeout(cur, seconds):
-  sql = "set @@session.ob_query_timeout = {0}".format(seconds * 1000 * 1000)
-  logging.info(sql)
-  cur.execute(sql)
-
 def set_default_timeout_by_tenant(cur, timeout, timeout_per_tenant, min_timeout):
   if timeout > 0:
     logging.info("use timeout from opt, timeout(s):{0}".format(timeout))
@@ -159,14 +155,11 @@ def set_tenant_parameter(cur, parameter, value, timeout = 0, only_sys_tenant = F
 
   query_timeout = set_default_timeout_by_tenant(cur, timeout, 10, 60)
 
-  set_session_timeout(cur, query_timeout)
-
-  for tenants in tenants_list:
-    sql = """alter system set {0} = '{1}' tenant = '{2}'""".format(parameter, value, tenants)
-    logging.info(sql)
-    cur.execute(sql)
-
-  set_session_timeout(cur, 10)
+  with SetSessionTimeout(cur, query_timeout):
+    for tenants in tenants_list:
+      sql = """alter system set {0} = '{1}' tenant = '{2}'""".format(parameter, value, tenants)
+      logging.info(sql)
+      cur.execute(sql)
 
   wait_parameter_sync(cur, True, parameter, value, timeout, only_sys_tenant)
 
@@ -268,29 +261,26 @@ def wait_parameter_sync(cur, is_tenant_config, key, value, timeout, only_sys_ten
     wait_timeout = set_default_timeout_by_tenant(cur, timeout, 10, 60)
     query_timeout = set_default_timeout_by_tenant(cur, timeout, 2, 60)
 
-  set_session_timeout(cur, query_timeout)
+  with SetSessionTimeout(cur, query_timeout):
+    times = wait_timeout / 5
+    while times >= 0:
+      logging.info(sql)
+      cur.execute(sql)
+      result = cur.fetchall()
+      if len(result) != 1 or len(result[0]) != 1:
+        logging.exception('result cnt not match')
+        raise MyError('result cnt not match')
+      elif result[0][0] == 0:
+        logging.info("""{0} is sync, value is {1}""".format(key, value))
+        break
+      else:
+        logging.info("""{0} is not sync, value should be {1}""".format(key, value))
 
-  times = wait_timeout / 5
-  while times >= 0:
-    logging.info(sql)
-    cur.execute(sql)
-    result = cur.fetchall()
-    if len(result) != 1 or len(result[0]) != 1:
-      logging.exception('result cnt not match')
-      raise MyError('result cnt not match')
-    elif result[0][0] == 0:
-      logging.info("""{0} is sync, value is {1}""".format(key, value))
-      break
-    else:
-      logging.info("""{0} is not sync, value should be {1}""".format(key, value))
-
-    times -= 1
-    if times == -1:
-      logging.exception("""check {0}:{1} sync timeout""".format(key, value))
-      raise MyError("""check {0}:{1} sync timeout""".format(key, value))
-    time.sleep(5)
-
-  set_session_timeout(cur, 10)
+      times -= 1
+      if times == -1:
+        logging.exception("""check {0}:{1} sync timeout""".format(key, value))
+        raise MyError("""check {0}:{1} sync timeout""".format(key, value))
+      time.sleep(5)
 
 def do_begin_upgrade(cur, timeout):
 
@@ -366,15 +356,12 @@ def do_suspend_merge(cur, timeout):
 
   query_timeout = set_default_timeout_by_tenant(cur, timeout, 10, 60)
 
-  set_session_timeout(cur, query_timeout)
-
-  for tenants in tenants_list:
-    action_sql = "alter system suspend merge tenant = {0}".format(tenants)
-    rollback_sql = "alter system resume merge tenant = {0}".format(tenants)
-    logging.info(action_sql)
-    cur.execute(action_sql)
-
-  set_session_timeout(cur, 10)
+  with SetSessionTimeout(cur, query_timeout):
+    for tenants in tenants_list:
+      action_sql = "alter system suspend merge tenant = {0}".format(tenants)
+      rollback_sql = "alter system resume merge tenant = {0}".format(tenants)
+      logging.info(action_sql)
+      cur.execute(action_sql)
 
 def do_resume_merge(cur, timeout):
   tenants_list = []
@@ -385,15 +372,12 @@ def do_resume_merge(cur, timeout):
 
   query_timeout = set_default_timeout_by_tenant(cur, timeout, 10, 60)
 
-  set_session_timeout(cur, query_timeout)
-
-  for tenants in tenants_list:
-    action_sql = "alter system resume merge tenant = {0}".format(tenants)
-    rollback_sql = "alter system suspend merge tenant = {0}".format(tenants)
-    logging.info(action_sql)
-    cur.execute(action_sql)
-
-  set_session_timeout(cur, 10)
+  with SetSessionTimeout(cur, query_timeout):
+    for tenants in tenants_list:
+      action_sql = "alter system resume merge tenant = {0}".format(tenants)
+      rollback_sql = "alter system suspend merge tenant = {0}".format(tenants)
+      logging.info(action_sql)
+      cur.execute(action_sql)
 
 class Cursor:
   __cursor = None

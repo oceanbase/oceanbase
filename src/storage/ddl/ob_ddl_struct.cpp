@@ -567,14 +567,14 @@ int ObTabletDirectLoadMgrHandle::assign(const ObTabletDirectLoadMgrHandle &other
 
 #ifdef OB_BUILD_SHARED_STORAGE
 ObDDLFinishLogInfo::ObDDLFinishLogInfo()
- : ls_id_(), table_key_(), data_buffer_(), macro_block_id_()
+ : ls_id_(), table_key_(), data_buffer_()
 {
 }
 
 bool ObDDLFinishLogInfo::is_valid() const
 {
   return ls_id_.is_valid() && table_key_.is_valid() && data_buffer_.ptr() != nullptr
-         &&  macro_block_id_.is_valid() && data_format_version_ >= 0 ;
+         && data_format_version_ >= 0 ;
 }
 
 void ObDDLFinishLogInfo::reset()
@@ -582,7 +582,6 @@ void ObDDLFinishLogInfo::reset()
   ls_id_.reset();
   table_key_.reset();
   data_buffer_.reset();
-  macro_block_id_.reset();
   data_format_version_ = 0;
 }
 
@@ -595,12 +594,12 @@ int ObDDLFinishLogInfo::assign(const ObDDLFinishLogInfo &other)
   } else {
     ls_id_ = other.ls_id_;
     table_key_ = other.table_key_;
-    macro_block_id_ = other.macro_block_id_;
     data_buffer_ = other.data_buffer_;
     data_format_version_ = other.data_format_version_;
   }
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObDDLFinishLogInfo, ls_id_, table_key_, data_buffer_, macro_block_id_, data_format_version_);
+OB_SERIALIZE_MEMBER(ObDDLFinishLogInfo, // FARM COMPAT WHITELIST
+    ls_id_, table_key_, data_buffer_, data_format_version_);
 #endif

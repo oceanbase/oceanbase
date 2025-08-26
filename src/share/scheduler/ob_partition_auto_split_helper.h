@@ -18,6 +18,9 @@
 #include "share/schema/ob_table_schema.h"
 #include "share/ob_ls_id.h"
 #include "common/ob_tablet_id.h"
+#include "rootserver/ob_rs_async_rpc_proxy.h"
+#include "storage/tablet/ob_tablet_split_mds_user_data.h"
+#include "storage/tablet/ob_tablet_split_info_mds_user_data.h"
 
 namespace oceanbase
 {
@@ -33,74 +36,150 @@ struct AlterTableSchema;
 class ObSimpleDatabaseSchema;
 }
 
-class ObAutoSplitTaskKey final
+class ObSplitTask
 {
 public:
-  ObAutoSplitTaskKey();
-  ObAutoSplitTaskKey(const uint64_t tenant_id, const ObTabletID &tablet_id);
-  ~ObAutoSplitTaskKey() = default;
+  ObSplitTask()
+  : tenant_id_(OB_INVALID_TENANT_ID),
+    tablet_id_(common::ObTabletID::INVALID_TABLET_ID)
+  {}
+
+  ObSplitTask(const uint64_t tenant_id, const ObTabletID &tablet_id)
+  : tenant_id_(tenant_id),
+    tablet_id_(tablet_id)
+  {}
+  virtual ~ObSplitTask() = default;
   uint64_t hash() const;
   int hash(uint64_t &hash_val) const
   {
     hash_val = hash(); return OB_SUCCESS;
   }
-  bool operator==(const ObAutoSplitTaskKey &other) const;
-  bool operator!=(const ObAutoSplitTaskKey &other) const;
-  bool is_valid() const
+  bool operator==(const ObSplitTask &other) const;
+  bool operator!=(const ObSplitTask &other) const;
+  virtual bool is_valid() const
   {
     return OB_INVALID_TENANT_ID != tenant_id_ && tablet_id_.is_valid();
   }
-  int assign(const ObAutoSplitTaskKey&other);
-  TO_STRING_KV(K(tenant_id_), K(tablet_id_));
+  virtual void reset()
+  {
+    tenant_id_ = OB_INVALID_TENANT_ID;
+    tablet_id_.reset();
+  }
+  virtual int assign(const ObSplitTask&other);
+  int get_tenant_id() const { return tenant_id_; }
+
+  VIRTUAL_TO_STRING_KV(K(tenant_id_), K(tablet_id_));
 
 public:
   uint64_t tenant_id_;
   ObTabletID tablet_id_;
 };
 
-struct ObAutoSplitTask final
+struct ObAutoSplitTask final : public ObSplitTask
 {
 public:
   ObAutoSplitTask()
-    : tenant_id_(OB_INVALID_ID), ls_id_(), tablet_id_(), auto_split_tablet_size_(OB_INVALID_SIZE), used_disk_space_(OB_INVALID_SIZE), retry_times_(OB_INVALID_COUNT)
+    :  ls_id_(), auto_split_tablet_size_(OB_INVALID_SIZE), used_disk_space_(OB_INVALID_SIZE), retry_times_(OB_INVALID_COUNT)
     {}
-  ObAutoSplitTask(const uint64_t tenant_id, const ObLSID &ls_id, const ObTableID &tablet_id, const int64_t auto_split_tablet_size, const int64_t used_disk_space, const int64_t retry_times)
-    : tenant_id_(tenant_id), ls_id_(ls_id), tablet_id_(tablet_id),
-      auto_split_tablet_size_(auto_split_tablet_size), used_disk_space_(used_disk_space), retry_times_(retry_times)
+  ObAutoSplitTask(const uint64_t tenant_id, const ObLSID &ls_id, const ObTabletID &tablet_id, const int64_t auto_split_tablet_size, const int64_t used_disk_space, const int64_t retry_times)
+    : ObSplitTask(tenant_id, tablet_id), ls_id_(ls_id), auto_split_tablet_size_(auto_split_tablet_size),
+      used_disk_space_(used_disk_space), retry_times_(retry_times)
     {}
-  ~ObAutoSplitTask() = default;
+  virtual ~ObAutoSplitTask() = default;
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), K_(auto_split_tablet_size), K_(used_disk_space), K_(retry_times));
-  bool is_valid() const
+  virtual bool is_valid() const override
   {
     return ls_id_.is_valid() && tablet_id_.is_valid() && retry_times_ >= 0
         && auto_split_tablet_size_ > 0 && used_disk_space_ > 0 && used_disk_space_ > auto_split_tablet_size_;
   }
-  void reset()
+  virtual void reset() override
   {
-    tenant_id_ = OB_INVALID_ID;
+    tenant_id_ = OB_INVALID_TENANT_ID;
     auto_split_tablet_size_ = OB_INVALID_SIZE;
     used_disk_space_ = OB_INVALID_SIZE;
     retry_times_ = OB_INVALID_COUNT;
     ls_id_.reset();
     tablet_id_.reset();
   }
-  int assign(const ObAutoSplitTask &other);
+  virtual int assign(const ObAutoSplitTask &other);
   void increment_retry_times() { ++retry_times_; }
 public:
-  uint64_t tenant_id_;
   ObLSID ls_id_;
-  ObTabletID tablet_id_;
   int64_t auto_split_tablet_size_;
   int64_t used_disk_space_;
   int64_t retry_times_;
 };
 
-class ObAutoSplitTaskCache final
+enum TabletSplitTaskTatus
+{
+  INVALID_STATUS,
+  WAITING_SPLIT_DATA_COMPLEMENT,
+  WAITING_PRE_WARM,
+};
+
+struct ObTabletSplitTask final : public ObSplitTask
+{
+public:
+  ObTabletSplitTask()
+    : ObSplitTask(), next_schedule_time_(OB_INVALID_TIMESTAMP), task_status_(INVALID_STATUS)
+    {}
+  ObTabletSplitTask(const uint64_t tenant_id, const ObTabletID &tablet_id, const int64_t next_schedule_time, const TabletSplitTaskTatus &task_status)
+    : ObSplitTask(tenant_id, tablet_id), next_schedule_time_(next_schedule_time), task_status_(task_status)
+    {}
+
+  virtual ~ObTabletSplitTask() {}
+  virtual void reset() override
+  {
+    tenant_id_ = OB_INVALID_TENANT_ID;
+    tablet_id_ = OB_INVALID_ID;
+    next_schedule_time_ = OB_INVALID_TIMESTAMP;
+    task_status_ = INVALID_STATUS;
+  }
+
+ virtual bool is_valid() const override
+ {
+   return OB_INVALID_TENANT_ID != tenant_id_ && tablet_id_.is_valid()
+      && next_schedule_time_ > 0 && TabletSplitTaskTatus::INVALID_STATUS != task_status_;
+ }
+ virtual int assign(const ObTabletSplitTask &other);
+ TO_STRING_KV(K_(tenant_id), K_(tablet_id), K_(next_schedule_time), K_(task_status));
+
+public:
+  int64_t next_schedule_time_;
+  TabletSplitTaskTatus task_status_;
+};
+
+
+class ObSplitTaskCache
+{
+public:
+  ObSplitTaskCache()
+    : inited_(false), total_tasks_(0), tenant_id_(OB_INVALID_TENANT_ID),
+      host_tenant_id_(OB_INVALID_TENANT_ID), lock_()
+    {}
+  virtual ~ObSplitTaskCache() {}
+  virtual int pop_tasks(const int64_t num_tasks_to_pop, ObIArray<ObSplitTask*> &task_array, ObIAllocator &allocator) = 0;
+  virtual int push_tasks(const ObIArray<const ObSplitTask*> &task_array) = 0;
+  inline uint64_t get_tenant_id() { return tenant_id_; };
+  inline int64_t get_tasks_num() { return ATOMIC_LOAD(&total_tasks_); }
+
+  VIRTUAL_TO_STRING_KV(K_(inited), K_(total_tasks), K_(tenant_id), K_(host_tenant_id));
+public:
+  bool inited_;
+  int64_t total_tasks_;
+  uint64_t tenant_id_;
+  uint64_t host_tenant_id_;
+  ObSpinLock lock_;
+};
+
+class ObAutoSplitTaskCache final : public ObSplitTaskCache
 {
   struct ObAutoSplitTaskWrapper
   {
   public:
-    ObAutoSplitTaskWrapper () {}
+    ObAutoSplitTaskWrapper ()
+     : priority_(0), pos_at_min_heap_(-1), pos_at_max_heap_(-1), task_()
+     {}
     ~ObAutoSplitTaskWrapper () {}
     TO_STRING_KV(K_(priority), K_(pos_at_min_heap), K_(pos_at_max_heap), K_(task));
   public:
@@ -123,16 +202,13 @@ class ObAutoSplitTaskCache final
   };
 public:
   ObAutoSplitTaskCache ();
-  ~ObAutoSplitTaskCache() { destroy(); }
-  int init(const int64_t capacity, const uint64_t tenant_id, const uint64_t host_tenant_id);
+  virtual ~ObAutoSplitTaskCache() override { destroy(); }
+  int init(const int64_t bucket_num, const uint64_t tenant_id, const uint64_t host_tenant_id);
   void destroy();
-  int pop_tasks(const int64_t num_tasks_to_pop, ObArray<ObAutoSplitTask> &task_array);
-  int push_tasks(const ObArray<ObAutoSplitTask> &task_array);
-  uint64_t get_tenant_id() const { return tenant_id_; };
-  inline int64_t get_tasks_num() { return ATOMIC_LOAD(&total_tasks_); }
-  inline uint64_t get_tenant_id() { return tenant_id_; }
+  virtual int pop_tasks(const int64_t num_tasks_to_pop, ObIArray<ObSplitTask*> &task_array, ObIAllocator &allocator) override;
+  virtual int push_tasks(const ObIArray<const ObSplitTask*> &task_array) override;
   static int mtl_init(ObAutoSplitTaskCache *&task_cache);
-  TO_STRING_KV(K_(max_heap), K_(min_heap), K_(tasks_set));
+  TO_STRING_KV(K_(inited), K_(tenant_id), K_(total_tasks), K_(host_tenant_id), K_(max_heap), K_(min_heap), K_(tasks_set));
 public:
   const static int64_t CACHE_MAX_CAPACITY = 100;
 private:
@@ -142,20 +218,53 @@ private:
   int remove_tasks(const int64_t num_tasks_to_rem);
 
 private:
-  bool inited_;
-  int64_t total_tasks_;
-  uint64_t tenant_id_;
-  uint64_t host_tenant_id_;
-  ObSpinLock lock_;
   MaxHeapComp max_comp_;
   MinHeapComp min_comp_;
   ObMalloc cache_malloc_;
   ObRemovableHeap<ObAutoSplitTaskWrapper *, MaxHeapComp, &ObAutoSplitTaskWrapper::pos_at_max_heap_> max_heap_;
   ObRemovableHeap<ObAutoSplitTaskWrapper *, MinHeapComp, &ObAutoSplitTaskWrapper::pos_at_min_heap_> min_heap_;
-  common::hash::ObHashSet<ObAutoSplitTaskKey> tasks_set_;
+  common::hash::ObHashSet<ObSplitTask> tasks_set_;
 };
 
-class ObAutoSplitTaskPollingMgr
+#ifdef OB_BUILD_SHARED_STORAGE
+class ObTabletSplitTaskCache final : public ObSplitTaskCache {
+  struct MinHeapComp
+  {
+  public:
+    int get_error_code() { return OB_SUCCESS; }
+    bool operator()(const ObTabletSplitTask *lhs, const ObTabletSplitTask *rhs) { return lhs->next_schedule_time_ > rhs->next_schedule_time_ ? true : false; }
+  };
+public:
+  ObTabletSplitTaskCache ()
+  : ObSplitTaskCache(), tasks_set_(), comp(), cache_malloc_(), schedule_time_min_heap_(comp, &cache_malloc_)
+  {}
+  virtual ~ObTabletSplitTaskCache() override { destroy(); }
+  int init(const int64_t capacity, const uint64_t tenant_id, const uint64_t host_tenant_id);
+  void destroy() {};
+  virtual int pop_tasks(const int64_t num_tasks_to_pop, ObIArray<ObSplitTask*> &task_array, ObIAllocator &allocator) override;
+  virtual int push_tasks(const ObIArray<const ObSplitTask*> &task_array) override;
+  static int mtl_init(ObTabletSplitTaskCache *&task_cache);
+
+public:
+  const static int64_t BUCKET_NUM = 50;
+public:
+  common::hash::ObHashSet<ObTabletSplitTask> tasks_set_;
+  MinHeapComp comp;
+  ObMalloc cache_malloc_;
+  ObBinaryHeap<ObTabletSplitTask *, MinHeapComp, 50> schedule_time_min_heap_;
+};
+#endif
+
+enum ObSplitCacheType
+{
+  INVALID_SPLIT_CACHE_TYPE,
+  AUTO_SPLIT_CACHE_TYPE,
+#ifdef OB_BUILD_SHARED_STORAGE
+  TABLET_SPLIT_CACHE_TYPE,
+#endif
+};
+
+class ObSplitTaskPollingMgr
 {
   struct GcTenantCacheOperator
   {
@@ -163,42 +272,50 @@ class ObAutoSplitTaskPollingMgr
     GcTenantCacheOperator(common::hash::ObHashSet<uint64_t> &existed_tenants_set)
       : existed_tenants_set_(existed_tenants_set)
       {}
-    int operator () (oceanbase::common::hash::HashMapPair<uint64_t, ObAutoSplitTaskCache*> &entry);
+    int operator () (oceanbase::common::hash::HashMapPair<uint64_t, ObSplitTaskCache*> &entry);
   public:
     common::hash::ObHashSet<uint64_t> &existed_tenants_set_;
-    ObSEArray<oceanbase::common::hash::HashMapPair<uint64_t, ObAutoSplitTaskCache*>, 1> needed_gc_tenant_caches_;
+    ObSEArray<oceanbase::common::hash::HashMapPair<uint64_t, ObSplitTaskCache*>, 1> needed_gc_tenant_caches_;
   };
 public:
-  ObAutoSplitTaskPollingMgr(const bool is_root_server)
-    : is_root_server_(is_root_server), inited_(false), total_tasks_(0)
+  ObSplitTaskPollingMgr(const bool is_root_server, const ObSplitCacheType cache_type)
+    : is_root_server_(is_root_server), cache_type_(cache_type), inited_(false), total_tasks_(0)
     {}
-  ~ObAutoSplitTaskPollingMgr() { reset(); }
+  ~ObSplitTaskPollingMgr() { reset(); }
   int init();
   void reset();
-  int pop_tasks(const int64_t num_tasks_to_pop, ObArray<ObArray<ObAutoSplitTask>> &task_array);
-  int push_tasks(const ObArray<ObAutoSplitTask> &task_array);
-  inline bool is_busy() { return ATOMIC_LOAD(&total_tasks_) >= ObAutoSplitTaskPollingMgr::BUSY_THRESHOLD; }
-  inline bool empty() { return ATOMIC_LOAD(&total_tasks_) == 0; };
+  int pop_tasks(const int64_t num_tasks_to_pop,
+                const bool need_to_prior_pop,
+                ObIArray<ObSEArray<ObSplitTask*, 10>> &task_array,
+                ObIAllocator &allocator);
+  int push_tasks(const ObIArray<const ObSplitTask*> &task_array);
+  inline bool is_busy() { return ATOMIC_LOAD(&total_tasks_) >= ObSplitTaskPollingMgr::BUSY_THRESHOLD; }
+  inline bool is_empty() { return ATOMIC_LOAD(&total_tasks_) == 0; };
+  inline int64_t get_total_tasks_num() { return ATOMIC_LOAD(&total_tasks_); };
   int gc_deleted_tenant_caches();
-
+  int get_or_create_task_cache(uint64_t tenant_id, ObSplitTaskCache *&task_cache);
 
 private:
   inline int64_t get_total_tenants() { return map_tenant_to_cache_.size(); }
   int pop_tasks_from_tenant_cache(const int64_t num_tasks_to_pop,
-                                  ObArray<ObAutoSplitTask> &task_array,
-                                  ObAutoSplitTaskCache *tenant_cache);
-  int create_tenant_cache(const uint64_t tenant_id, const uint64_t host_tenant_id, ObAutoSplitTaskCache *&tenant_cache);
-  int register_tenant_cache(const uint64_t tenant_id, ObAutoSplitTaskCache * const tenant_cache);
-  int get_tenant_cache(const int tenant_id, ObAutoSplitTaskCache *&tenant_cache);
+                                  ObIArray<ObSplitTask*> &task_array,
+                                  ObSplitTaskCache *tenant_cache,
+                                  ObIAllocator &allocator);
+  int create_auto_split_task_cache(const uint64_t tenant_id, const uint64_t host_tenant_id, ObAutoSplitTaskCache *&tenant_cache);
+  int register_task_cache(const uint64_t tenant_id, ObSplitTaskCache * const tenant_cache);
+  int get_task_cache(const int tenant_id, ObSplitTaskCache *&tenant_cache);
+  int push_tasks_(const ObIArray<const ObSplitTask*> &task_array, uint64_t tenant_id, ObSplitTaskCache *task_cache);
 
 private:
   const static int64_t INITIAL_TENANT_COUNT = 10;
   const static int64_t BUSY_THRESHOLD = 500;
   const bool is_root_server_;
+  const ObSplitCacheType cache_type_;
   bool inited_;
+
   int64_t total_tasks_;
   //key:tenant_id, val: idx at tenants_cache_
-  common::hash::ObHashMap<uint64_t, ObAutoSplitTaskCache*> map_tenant_to_cache_;
+  common::hash::ObHashMap<uint64_t, ObSplitTaskCache*> map_tenant_to_cache_;
   ObMalloc polling_mgr_malloc_;
   ObSpinLock lock_;
 };
@@ -265,6 +382,7 @@ private:
                                 bool &need_cast,
                                 ObIAllocator &allocator);
   int check_need_to_cast(const ObObj &obj, bool &need_to_cast);
+  int check_null_value(const ObRowkey &high_bound_val);
 private:
   static const int32_t MAX_SPLIT_PARTITION_NUM = 2;
 };
@@ -308,27 +426,33 @@ public:
   static ObRsAutoSplitScheduler &get_instance();
   inline bool is_busy() { return polling_mgr_.is_busy(); }
   int push_tasks(const ObArray<ObAutoSplitTask> &task_array);
-  int pop_tasks(const int64_t num_tasks_can_pop, ObArray<ObAutoSplitTask> &task_array);
-  bool can_retry(const ObAutoSplitTask &task, const int ret);
-  int init() { return polling_mgr_.init(); }
-  void reset() { polling_mgr_.reset(); }
+  int init();
+  void reset()
+  {
+    inited_ = false;
+    polling_mgr_.reset();
+  }
+  int pop_tasks(const int64_t num_tasks_can_pop, const bool throttle_by_table, ObArray<ObAutoSplitTask> &task_array);
   static int check_ls_migrating(const uint64_t tenant_id, const ObTabletID &tablet_id, bool &is_migrating);
+  static bool can_retry(const ObAutoSplitTask &task, const int ret);
   int gc_deleted_tenant_caches();
+  void reset_direct_cache() { task_direct_cache_.reset(); }
 private:
   ObRsAutoSplitScheduler ()
-    : polling_mgr_(true/*is_root_server*/)
+    : polling_mgr_(true/*is_root_server*/, ObSplitCacheType::AUTO_SPLIT_CACHE_TYPE)
     {}
   ~ObRsAutoSplitScheduler () {}
   int pop_from_direct_cache(const int64_t num_tasks_can_pop, ObIArray<ObAutoSplitTask> &task_array);
   int push_to_direct_cache(ObArray<ObArray<ObAutoSplitTask>> &tenant_task_arrays);
 
 private:
+  bool inited_;
   const static int64_t MAX_TIMES_TASK_RETRY = 5;
   const static int64_t MAX_SPLIT_TASK_DIRECT_CACHE_SIZE = 10;
   const static int64_t SINGLE_TABLE_SCHEDULE_TIME_INTERVAL = 5L * 1000L * 1000L; //5s
-  ObAutoSplitTaskPollingMgr polling_mgr_;
   // to help avoid schedule too much times of split on a single table in a short time interval
   ObSEArray<ObAutoSpTaskSchedEntry, MAX_SPLIT_TASK_DIRECT_CACHE_SIZE> task_direct_cache_;
+  ObSplitTaskPollingMgr polling_mgr_;
 };
 
 class ObServerAutoSplitScheduler final
@@ -338,25 +462,71 @@ public:
 public:
   static ObServerAutoSplitScheduler &get_instance();
   int push_task(const storage::ObTabletHandle &teblet_handle, storage::ObLS &ls);
-  int init() { return polling_manager_.init(); }
-  void reset() { polling_manager_.reset(); }
+  int pop_tasks(ObIArray<ObSEArray<ObSplitTask*, 10>> &task_array, ObIAllocator &allocator);
+  int init();
+  void reset()
+  {
+    polling_manager_.reset();
+    inited_ = false;
+  }
   static int cal_real_auto_split_size(const double base_ratio, const double cur_ratio, const int64_t auto_split_size, int64_t &real_auto_split_size);
   static int check_tablet_creation_limit(const int64_t inc_tablet_cnt, const double safe_ratio, const int64_t auto_split_size, int64_t &real_auto_split_size);
 private:
   ObServerAutoSplitScheduler ()
-    : next_valid_time_(0), polling_manager_(false/*is_root_server*/)
+    : next_valid_time_(0), polling_manager_(false/*is_root_server*/, ObSplitCacheType::AUTO_SPLIT_CACHE_TYPE)
     {}
   ~ObServerAutoSplitScheduler () {}
-  int batch_send_split_request(const ObArray<ObArray<ObAutoSplitTask>> &task_array);
+  int batch_send_split_request(const ObIArray<ObSEArray<ObSplitTask*, 10>> &tenant_task_arrays);
   int check_and_fetch_tablet_split_info(const storage::ObTabletHandle &teblet_handle, storage::ObLS &ls, bool &can_split, ObAutoSplitTask &task);
   int check_sstable_limit(const storage::ObTablet &tablet, bool &exceed_limit);
 private:
+  bool inited_;
   const static int64_t MAX_SPLIT_RPC_IN_BATCH = 20;
   const static int64_t TABLET_CNT_PER_GB = 20000;
   const static int64_t SOURCE_TABLET_SSTABLE_LIMIT = 30;
   int64_t next_valid_time_;
-  ObAutoSplitTaskPollingMgr polling_manager_;
+  ObSplitTaskPollingMgr polling_manager_;
 };
+
+#ifdef OB_BUILD_SHARED_STORAGE
+class ObLSTabletSplitScheduler final
+{
+public:
+  static ObLSTabletSplitScheduler &get_instance();
+  static int is_split_src_tablet(ObTabletHandle &tablet_handle, bool &is_split_tablet);
+  int init ();
+  bool is_empty() { return polling_manager_.is_empty(); };
+  int push_task(const ObIArray<ObTabletSplitTask> &task_array);
+  int try_schedule_available_tasks();
+public:
+  const static int64_t SPLIT_TASK_CHECK_TIME_INTERVAL = (10 * 1000L * 1000L); //10s
+
+private:
+  ObLSTabletSplitScheduler ()
+    : inited_(false), polling_manager_(false/*is_root_server_*/, ObSplitCacheType::TABLET_SPLIT_CACHE_TYPE)
+    {}
+  ~ObLSTabletSplitScheduler () {}
+  int process_rpc_results(const ObIArray<obrpc::ObDDLBuildSingleReplicaRequestArg> &args,
+                          const ObIArray<ObAddr> &addrs,
+                          const ObIArray<const obrpc::ObDDLBuildSingleReplicaRequestResult *> &result_array,
+                          const ObIArray<int> &ret_array,
+                          const ObIArray<TabletSplitTaskTatus> &split_task_status);
+  int construct_args_from_mds_data(const ObLSID &ls_id,
+                                   const ObTabletSplitTask &split_task,
+                                   const ObIArray<ObAddr> &split_replica_addrs,
+                                   ObTabletSplitInfoMdsUserData &split_info_data,
+                                   ObIArray<obrpc::ObDDLBuildSingleReplicaRequestArg> &args,
+                                   ObIArray<ObAddr> &addrs,
+                                   ObIArray<TabletSplitTaskTatus> &split_task_status,
+                                   ObIAllocator &allocator);
+  int schedule_data_split_dag(ObIArray<ObTabletSplitTask> &split_data_tasks);
+  int get_split_addr(const ObTabletSplitTask &split_task, ObLSID &ls_id, ObIArray<ObAddr> &split_replica_addrs);
+
+private:
+  bool inited_;
+  ObSplitTaskPollingMgr polling_manager_;
+};
+#endif
 
 class ObSplitSampler
 {
@@ -389,6 +559,7 @@ private:
                     const int64_t range_num, const int64_t used_disk_space,
                     const bool query_index,
                     const bool is_oracle_mode,
+                    const bool is_query_table_hidden,
                     common::ObRowkey &low_bound_val,
                     common::ObRowkey &high_bound_val,
                     common::ObArenaAllocator &range_allocator,

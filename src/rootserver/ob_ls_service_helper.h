@@ -221,16 +221,23 @@ public:
   static int process_status_to_steady(
       const bool lock_sys_ls,
       const share::ObTenantSwitchoverStatus &working_sw_status,
+      const int64_t switchover_epoch,
       ObTenantLSInfo& tenant_ls_info);
   //for recovery tenant, create new ls according to ls_id and ls_group_id
   static int create_new_ls_in_trans(const share::ObLSID &ls_id,
       const uint64_t ls_group_id,
       const share::SCN &create_scn,
-      const share::ObTenantSwitchoverStatus &working_sw_status,
+      const int64_t switchover_epoch,
       ObTenantLSInfo& tenant_ls_info,
       common::ObMySQLTransaction &trans,
       const share::ObLSFlag &ls_flag,
       const uint64_t source_tenant_id);
+  static int life_agent_create_new_ls_in_trans(
+      const share::ObLSStatusInfo &new_info,
+      const share::SCN &create_scn,
+      const int64_t switchover_epoch,
+      ObTenantLSInfo& tenant_ls_info,
+      common::ObMySQLTransaction &trans);
   static int balance_ls_group(
       const bool need_execute_balance,
       ObTenantLSInfo& tenant_ls_info,
@@ -257,11 +264,19 @@ public:
       const share::ObLSID &dest_id,
       const share::SCN &transfer_scn,
       bool &replay_finish);
+  static int create_ls_in_user_tenant(
+      const uint64_t tenant_id,
+      const uint64_t ls_group_id,
+      const share::ObLSFlag &flag,
+      share::ObLSAttrOperator &ls_operator,
+      share::ObLSAttr &new_ls,
+      ObMySQLTransaction *trans = NULL);
 private:
   static int check_if_need_wait_user_ls_sync_scn_(const uint64_t tenant_id, const share::SCN &sys_ls_target_scn);
   static int revision_to_equal_status_(
       const ObLSStatusMachineParameter &status_machine,
       const share::ObTenantSwitchoverStatus &working_sw_status,
+      const int64_t switchover_epoch,
       ObTenantLSInfo& tenant_ls_info);
   static int balance_ls_group_between_unit_group_(
      ObTenantLSInfo& tenant_ls_info,

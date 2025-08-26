@@ -25,6 +25,7 @@
 #include "storage/access/ob_rows_info.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/ob_file_manager.h"
+#include "storage/shared_storage/macro_cache/ob_ss_macro_cache_mgr.h"
 #endif
 
 namespace oceanbase {
@@ -506,6 +507,7 @@ public:
   ObIndexTreeMultiPassPrefetcher() :
       is_prefetch_end_(false),
       is_row_lock_checked_(false),
+      multi_block_prefetch_batch_count_(0),
       cur_range_fetch_idx_(0),
       cur_range_prefetch_idx_(0),
       cur_micro_data_fetch_idx_(-1),
@@ -555,10 +557,22 @@ public:
   { return micro_data_infos_[cur_micro_data_fetch_idx_ % max_micro_handle_cnt_]; }
   OB_INLINE bool current_micro_data_can_blockscan() const
   { return micro_data_infos_[cur_micro_data_fetch_idx_ % max_micro_handle_cnt_].can_blockscan(); }
-  OB_INLINE int64_t prefetching_range_idx()
+  OB_INLINE int64_t prefetching_range_idx() const
   {
     return 0 == cur_level_ ? cur_range_prefetch_idx_ - 1 :
         tree_handles_[cur_level_].current_block_read_handle().index_info_.range_idx();
+  }
+  OB_INLINE bool is_current_range_prefetch_finished() const
+  {
+    bool is_finished = false;
+    if (is_prefetch_end_) {
+      is_finished = true;
+    } else if (cur_range_fetch_idx_ < prefetching_range_idx()) {
+      if (cur_level_ == index_tree_height_ - 1 || !tree_handles_[cur_level_ + 1].is_prefetching_range(cur_range_fetch_idx_)) {
+        is_finished = true;
+      }
+    }
+    return is_finished;
   }
   OB_INLINE bool is_not_border(ObMicroIndexInfo &index_info)
   { return !index_info.is_left_border() && !index_info.is_right_border(); }
@@ -609,10 +623,11 @@ public:
     return DEFAULT_SCAN_MICRO_DATA_HANDLE_CNT;
   }
 
-  static const int16_t MIN_DATA_READ_BATCH_COUNT = 4;
+  static const int64_t MIN_MULTI_BLOCK_PREFETCH_BATCH_COUNT = 4;
+  static const int64_t MULTI_BLOCK_PREFETCH_FAKE_BLOCK_SIZE = 16 << 10; // 16KB
   static const int16_t MAX_INDEX_TREE_HEIGHT = 16;
-  static const int32_t MAX_DATA_PREFETCH_DEPTH = 32;
-  static const int32_t MAX_INDEX_PREFETCH_DEPTH = 3;
+  static const int32_t MAX_DATA_PREFETCH_DEPTH = DATA_PREFETCH_DEPTH;
+  static const int32_t MAX_INDEX_PREFETCH_DEPTH = INDEX_PREFETCH_DEPTH;
 
   INHERIT_TO_STRING_KV("ObIndexTreeMultiPassPrefetcher", ObIndexTreePrefetcher,
                        K_(is_prefetch_end), K_(cur_range_fetch_idx), K_(cur_range_prefetch_idx), K_(max_range_prefetching_cnt),
@@ -775,11 +790,21 @@ protected:
     }
     OB_INLINE bool is_prefetch_end() const { return is_prefetch_end_; }
     OB_INLINE void set_prefetch_end() { is_prefetch_end_ = true; }
-    OB_INLINE bool reach_scanner_end() { return index_scanner_.end_of_block(); }
+    OB_INLINE bool reach_scanner_end() const { return index_scanner_.end_of_block(); }
     OB_INLINE ObIndexBlockReadHandle &current_block_read_handle()
     {
       OB_ASSERT(0 <= fetch_idx_);
       return index_block_read_handles_[fetch_idx_ % INDEX_TREE_PREFETCH_DEPTH];
+    }
+    OB_INLINE bool is_prefetching_range(const int64_t range_idx) const
+    {
+      bool is_prefetching = false;
+      if (prefetch_idx_ >= 0 && (fetch_idx_ < prefetch_idx_ || !reach_scanner_end())) {
+        int8_t fetch_idx = reach_scanner_end() ? (fetch_idx_ + 1) % INDEX_TREE_PREFETCH_DEPTH :
+            fetch_idx_ % INDEX_TREE_PREFETCH_DEPTH;
+        is_prefetching = (range_idx == index_block_read_handles_[fetch_idx].index_info_.range_idx());
+      }
+      return is_prefetching;
     }
 #ifdef OB_BUILD_SHARED_STORAGE
     OB_INLINE int try_prefetch_data_macro_block(
@@ -793,33 +818,46 @@ protected:
           || !prefetcher.use_multi_block_prefetch_
           || prefetcher.index_tree_height_ - 1 != level
           || !index_info.has_valid_shared_macro_id()
-          || !prefetcher.sstable_->is_major_sstable()
           || prefetcher.sstable_->is_small_sstable()
           || !ObStoreRowIterator::is_scan(prefetcher.iter_type_)) {
         // do nothing
       } else if (FALSE_IT(macro_id = index_info.get_shared_data_macro_id())) {
-      } else if (OB_UNLIKELY(ObStorageObjectType::SHARED_MAJOR_DATA_MACRO != macro_id.storage_object_type()))  {
+      } else if (OB_ISNULL(prefetcher.access_ctx_)) {
         ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "macro id type is not SHARED_MAJOR_DATA_MACRO");
-      } else if (OB_FAIL(prefetch_macro_block(macro_id))) {
-        STORAGE_LOG(WARN, "fail to prefetch data macro block", K(ret), K(level));
+        STORAGE_LOG(WARN, "table access ctx is null", KR(ret));
+      } else if (OB_FAIL(prefetch_macro_block(macro_id, prefetcher.access_ctx_->tablet_id_))) {
+        STORAGE_LOG(WARN, "fail to prefetch data macro block", KR(ret), K(level));
       } else {
-        STORAGE_LOG(DEBUG, "succeed to prefetch data macro block", K(level), K(macro_id));
+        STORAGE_LOG(DEBUG, "succeed to prefetch data macro block", K(level), K(macro_id),
+                    "tablet_id", prefetcher.access_ctx_->tablet_id_);
       }
       return ret;
     }
 
-    OB_INLINE int prefetch_macro_block(const MacroBlockId &macro_id)
+    OB_INLINE int prefetch_macro_block(
+        const MacroBlockId &macro_id,
+        const common::ObTabletID &tablet_id)
     {
       int ret = OB_SUCCESS;
-      const ObStorageObjectType object_type = macro_id.storage_object_type();
+      bool is_exist = false;
+      ObTenantFileManager *tnt_file_manager = nullptr;
+      ObSSMacroCacheMgr *macro_cache_mgr = nullptr;
       if (!GCTX.is_shared_storage_mode()) {
         // do nothing
       } else if (OB_UNLIKELY(!macro_id.is_valid())) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "get unexpected invalid macro id", K(ret), K(macro_id));
-      } else if (OB_FAIL(MTL(ObTenantFileManager*)->get_preread_cache_mgr().push_file_id_to_lru(macro_id))) {
-        STORAGE_LOG(WARN, "fail to push macro id into lru read cache", K(ret), K(macro_id));
+      } else if (OB_ISNULL(tnt_file_manager = MTL(ObTenantFileManager *)) ||
+                 OB_ISNULL(macro_cache_mgr = MTL(ObSSMacroCacheMgr *))) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "tenant file manager or macro cache mgr is null", KR(ret), K(macro_id),
+                    KP(tnt_file_manager), KP(macro_cache_mgr));
+      } else if (OB_FAIL(macro_cache_mgr->exist(macro_id, is_exist))) {
+        STORAGE_LOG(WARN, "fail to check if exist", KR(ret), K(macro_id));
+      } else if (is_exist) {
+        STORAGE_LOG(DEBUG, "already exists in macro cache, no need to prefetch", K(macro_id));
+      } else if (OB_FAIL(tnt_file_manager->push_to_preread_queue(macro_id, tablet_id))) {
+        STORAGE_LOG(WARN, "fail to push macro id to preread queue", KR(ret), K(macro_id), K(tablet_id));
       }
       return ret;
     }
@@ -863,6 +901,9 @@ protected:
 public:
   bool is_prefetch_end_;
   bool is_row_lock_checked_;
+protected:
+  int16_t multi_block_prefetch_batch_count_;
+public:
   int64_t cur_range_fetch_idx_;
   int64_t cur_range_prefetch_idx_;
   int64_t cur_micro_data_fetch_idx_;

@@ -18,6 +18,7 @@
 #endif
 #include "logservice/ob_log_service.h"
 #include "logservice/ob_reconfig_checker_adapter.h"
+#include "storage/concurrency_control/ob_data_validation_service.h"
 
 #define INVOKE_PALF_HANDLE_FN(fn, args...) \
   do { \
@@ -537,7 +538,16 @@ int ObLogHandler::get_max_decided_scn_as_leader(share::SCN &scn) const
 
 int ObLogHandler::advance_base_lsn(const LSN &lsn)
 {
-  return advance_base_lsn_impl_(lsn);
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(concurrency_control::ObDataValidationService::
+                  need_delay_resource_recycle(share::ObLSID(id_)))) {
+    if (REACH_TIME_INTERVAL(1_s)) {
+      CLOG_LOG(WARN, "4377 stopping the resource recyle", K(id_));
+    }
+  } else {
+    ret = advance_base_lsn_impl_(lsn);
+  }
+  return ret;
 }
 
 int ObLogHandler::get_begin_lsn(LSN &lsn) const
@@ -960,6 +970,22 @@ int ObLogHandler::force_set_member_list(const common::ObMemberList &new_member_l
   return ret;
 }
 
+int ObLogHandler::inc_config_version(int64_t timeout_us)
+{
+  int ret = OB_SUCCESS;
+  common::TCWLockGuard deps_guard(deps_lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "ObLogHandler is not inited", KR(ret));
+  } else if (is_in_stop_state_) {
+    ret = OB_NOT_RUNNING;
+    CLOG_LOG(WARN, "ObLogHandler is in stop state", KR(ret));
+  } else {
+    // direct execute inc_config_version for SS mode
+    PALF_MEMBER_PROXY_WITH_RET(inc_config_version, timeout_us);
+  }
+  return ret;
+}
 
 // @desc: add_member interface
 //        | 1.add_member()
@@ -1660,6 +1686,8 @@ int ObLogHandler::submit_config_change_cmd_(const LogConfigChangeCmd &req,
           has_added_to_blacklist = true;
           need_renew_leader = true;
         }
+        CLOG_LOG(INFO, "not allow removing leader, try again", KR(ret), KPC(this), K(req), K(leader), K_(self), K(resp),
+            K(has_added_to_blacklist), K(need_renew_leader));
       } else {
         CLOG_LOG(WARN, "handle_config_change_cmd_ failed", KR(ret), KPC(this), K(req), K(leader));
       }
@@ -1669,6 +1697,7 @@ int ObLogHandler::submit_config_change_cmd_(const LogConfigChangeCmd &req,
         ret = lc_cb_->nonblock_renew_leader(id_);
         CLOG_LOG(INFO, "renew location cache leader", KR(ret), K_(id));
       }
+      ob_usleep(1000000); // sleep 1 sec and retry
     }
   }
   return ret;
@@ -1856,7 +1885,8 @@ int ObLogHandler::get_member_gc_stat(const common::ObAddr &addr,
       ret = OB_ERR_UNEXPECTED;
       CLOG_LOG(ERROR, "get_role failed", K(ret), KPC(this));
     } else if (role == new_role && proposal_id == new_proposal_id) {
-      is_valid_member = member_list.contains(addr) || learner_list.contains(addr);
+      // member_list may be empty before set_member_list, set is_valid_member = true in case of gc unexpected;
+      is_valid_member = member_list.contains(addr) || learner_list.contains(addr) || member_list.is_empty();
       if (learner_list.contains(addr)) {
         ObMember member;
         if (OB_FAIL(learner_list.get_learner_by_addr(addr, member))) {
@@ -2234,69 +2264,77 @@ int ObLogHandler::handle_config_change_cmd_(
     CLOG_LOG(WARN, "log_service.get_reporter failed", K(ret));
   } else if (OB_FAIL(reconfig_checker.init(MTL_ID(), share::ObLSID(req.palf_id_), req.timeout_us_))) {
     CLOG_LOG(WARN, "ObReconfigCheckerAdapter init failed", K(ret), K(req.palf_id_));
-  } else if (OB_FAIL(palf_handle_->set_reconfig_checker_cb(&reconfig_checker))) {
-    CLOG_LOG(WARN, "set_reconfig_checker_cb failed, another reconfiguration is running", K(ret), K(req.palf_id_));
-    ret = OB_EAGAIN;
   } else {
-    switch (req.cmd_type_) {
-      case FORCE_SINGLE_MEMBER_CMD:
-        PALF_MEMBER_PROXY_WITH_RET(force_set_as_single_replica);
-        break;
-      case FORCE_SET_MEMBER_LIST_CMD:
-        PALF_MEMBER_PROXY_WITH_RET(force_set_member_list, req.new_member_list_, req.new_replica_num_);
-        break;
-      case CHANGE_REPLICA_NUM_CMD:
-        PALF_MEMBER_PROXY_WITH_RET(change_replica_num, req.curr_member_list_, req.curr_replica_num_,
-            req.new_replica_num_, req.timeout_us_);
-        break;
-      case ADD_MEMBER_CMD:
-        PALF_MEMBER_PROXY_WITH_RET(add_member, req.added_member_, req.new_replica_num_, req.config_version_, req.timeout_us_);
-        break;
-      case REMOVE_MEMBER_CMD:
-        PALF_MEMBER_PROXY_WITH_RET(remove_member, req.removed_member_, req.new_replica_num_, req.timeout_us_);
-        break;
+    PALF_MEMBER_PROXY_WITH_RET(set_reconfig_checker_cb, &reconfig_checker);
+    if (OB_FAIL(ret)) {
+      ret = OB_EAGAIN;
+    } else {
+      switch (req.cmd_type_) {
+        case FORCE_SINGLE_MEMBER_CMD:
+          PALF_MEMBER_PROXY_WITH_RET(force_set_as_single_replica);
+          break;
+        case FORCE_SET_MEMBER_LIST_CMD:
+          PALF_MEMBER_PROXY_WITH_RET(force_set_member_list, req.new_member_list_, req.new_replica_num_);
+          break;
+        case CHANGE_REPLICA_NUM_CMD:
+          PALF_MEMBER_PROXY_WITH_RET(change_replica_num, req.curr_member_list_, req.curr_replica_num_,
+              req.new_replica_num_, req.timeout_us_);
+          break;
+        case ADD_MEMBER_CMD:
+          PALF_MEMBER_PROXY_WITH_RET(add_member, req.added_member_, req.new_replica_num_, req.config_version_, req.timeout_us_);
+          break;
+        case REMOVE_MEMBER_CMD:
+          PALF_MEMBER_PROXY_WITH_RET(remove_member, req.removed_member_, req.new_replica_num_, req.timeout_us_);
+          break;
 #ifdef OB_BUILD_ARBITRATION
-      case ADD_ARB_MEMBER_CMD:
-        ret = static_cast<palf::PalfHandle*>(palf_handle_)->add_arb_member(req.added_member_, req.timeout_us_);
-        break;
-      case REMOVE_ARB_MEMBER_CMD:
-        ret = static_cast<palf::PalfHandle*>(palf_handle_)->remove_arb_member(req.removed_member_, req.timeout_us_);
-        break;
+        case ADD_ARB_MEMBER_CMD:
+          ret = static_cast<palf::PalfHandle*>(palf_handle_)->add_arb_member(req.added_member_, req.timeout_us_);
+          break;
+        case REMOVE_ARB_MEMBER_CMD:
+          ret = static_cast<palf::PalfHandle*>(palf_handle_)->remove_arb_member(req.removed_member_, req.timeout_us_);
+          break;
 #endif
-      case REPLACE_MEMBER_CMD:
-        PALF_MEMBER_PROXY_WITH_RET(replace_member, req.added_member_, req.removed_member_, req.config_version_, req.timeout_us_);
-        break;
-      case ADD_LEARNER_CMD:
-        PALF_MEMBER_PROXY_WITH_RET(add_learner, req.added_member_, req.timeout_us_);
-        break;
-      case REMOVE_LEARNER_CMD:
-        PALF_MEMBER_PROXY_WITH_RET(remove_learner, req.removed_member_, req.timeout_us_);
-        break;
-      case SWITCH_TO_ACCEPTOR_CMD:
-        PALF_MEMBER_PROXY_WITH_RET(switch_learner_to_acceptor, req.added_member_, req.new_replica_num_, req.config_version_, req.timeout_us_);
-        break;
-      case SWITCH_TO_LEARNER_CMD:
-        PALF_MEMBER_PROXY_WITH_RET(switch_acceptor_to_learner, req.removed_member_, req.new_replica_num_, req.timeout_us_);
-        break;
-      case TRY_LOCK_CONFIG_CHANGE_CMD:
-        PALF_MEMBER_PROXY_WITH_RET(try_lock_config_change, req.lock_owner_, req.timeout_us_);
-        break;
-      case UNLOCK_CONFIG_CHANGE_CMD:
-        PALF_MEMBER_PROXY_WITH_RET(unlock_config_change, req.lock_owner_, req.timeout_us_);
-        break;
-      case GET_CONFIG_CHANGE_LOCK_STAT_CMD:
-        PALF_MEMBER_PROXY_WITH_RET(get_config_change_lock_stat, resp.lock_owner_, resp.is_locked_);
-        break;
-      case REPLACE_LEARNERS_CMD:
-        PALF_MEMBER_PROXY_WITH_RET(replace_learners, req.added_list_, req.removed_list_, req.timeout_us_);
-        break;
-      case REPLACE_MEMBER_WITH_LEARNER_CMD:
-        PALF_MEMBER_PROXY_WITH_RET(replace_member_with_learner, req.added_member_, req.removed_member_, req.config_version_, req.timeout_us_);
-        break;
-      default:
-        break;
+        case REPLACE_MEMBER_CMD:
+          PALF_MEMBER_PROXY_WITH_RET(replace_member, req.added_member_, req.removed_member_, req.config_version_, req.timeout_us_);
+          break;
+        case ADD_LEARNER_CMD:
+          PALF_MEMBER_PROXY_WITH_RET(add_learner, req.added_member_, req.timeout_us_);
+          break;
+        case REMOVE_LEARNER_CMD:
+          PALF_MEMBER_PROXY_WITH_RET(remove_learner, req.removed_member_, req.timeout_us_);
+          break;
+        case SWITCH_TO_ACCEPTOR_CMD:
+          PALF_MEMBER_PROXY_WITH_RET(switch_learner_to_acceptor, req.added_member_, req.new_replica_num_, req.config_version_, req.timeout_us_);
+          break;
+        case SWITCH_TO_LEARNER_CMD:
+          PALF_MEMBER_PROXY_WITH_RET(switch_acceptor_to_learner, req.removed_member_, req.new_replica_num_, req.timeout_us_);
+          break;
+        case TRY_LOCK_CONFIG_CHANGE_CMD:
+          PALF_MEMBER_PROXY_WITH_RET(try_lock_config_change, req.lock_owner_, req.timeout_us_);
+          break;
+        case UNLOCK_CONFIG_CHANGE_CMD:
+          PALF_MEMBER_PROXY_WITH_RET(unlock_config_change, req.lock_owner_, req.timeout_us_);
+          break;
+        case GET_CONFIG_CHANGE_LOCK_STAT_CMD:
+          PALF_MEMBER_PROXY_WITH_RET(get_config_change_lock_stat, resp.lock_owner_, resp.is_locked_);
+          break;
+        case REPLACE_LEARNERS_CMD:
+          PALF_MEMBER_PROXY_WITH_RET(replace_learners, req.added_list_, req.removed_list_, req.timeout_us_);
+          break;
+        case REPLACE_MEMBER_WITH_LEARNER_CMD:
+          PALF_MEMBER_PROXY_WITH_RET(replace_member_with_learner, req.added_member_, req.removed_member_, req.config_version_, req.timeout_us_);
+          break;
+        default:
+          break;
+      }
+      if (enable_logservice_) {
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+        libpalf_proposer_config_mgr_.reset_reconfig_checker_cb();
+#endif
+      } else {
+        palf_handle_->reset_reconfig_checker_cb();
+      }
     }
-    palf_handle_->reset_reconfig_checker_cb();
   }
   resp.ret_ = ret;
   if (OB_SUCC(ret) && OB_FAIL(reporter->report_replica_info(req.palf_id_))) {
@@ -2317,6 +2355,27 @@ void ObLogHandler::refresh_proposer_member_info() const
     libpalf_proposer_config_mgr_.try_refresh_member_info();
   }
 }
+
+int ObLogHandler::set_allow_election_without_memlist(const bool allow_election_without_memlist)
+{
+  int ret = OB_SUCCESS;
+  RLockGuard guard(lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "ObLogHandler is not init", KR(ret), K_(id));
+  } else if (is_in_stop_state_) {
+    ret = OB_NOT_RUNNING;
+    CLOG_LOG(WARN, "ObLogHandler is not running", KR(ret), K_(id));
+  } else if (!enable_logservice_) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "logservice is not enable, unexpected error", KR(ret), K_(id), K_(enable_logservice));
+  } else if (OB_FAIL(palf_handle_->set_allow_election_without_memlist(allow_election_without_memlist))) {
+    CLOG_LOG(WARN, "failed to set allow_election_without_memlist flag", KR(ret), K_(id), K(allow_election_without_memlist));
+  } else {
+    CLOG_LOG(INFO, "set allow_election_without_memlist flag successfully", K_(id), K(allow_election_without_memlist));
+  }
+  return ret;
+}
 #endif
 
 int ObLogHandler::advance_base_lsn_impl_(const LSN &lsn)
@@ -2329,6 +2388,12 @@ int ObLogHandler::advance_base_lsn_impl_(const LSN &lsn)
   } else if (is_in_stop_state_) {
     ret = OB_NOT_RUNNING;
     CLOG_LOG(WARN, "ObLogHandler is not running", KR(ret), K_(id));
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  } else if (enable_logservice_) {
+    if (OB_FAIL(palf_env_->advance_base_lsn(id_, lsn))) {
+      CLOG_LOG(WARN, "advance_base_lsn failed", K(lsn));
+    }
+#endif
   } else if (OB_FAIL(palf_handle_->advance_base_lsn(lsn))) {
     CLOG_LOG(WARN, "advance_base_lsn failed", KR(ret), K(lsn));
   } else {}

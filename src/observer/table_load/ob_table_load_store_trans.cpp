@@ -121,7 +121,7 @@ int ObTableLoadStoreTrans::get_store_writer(ObTableLoadTransStoreWriter *&store_
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadStoreTrans not init", KR(ret), KP(this));
   } else {
-    obsys::ObRLockGuard guard(trans_ctx_->rwlock_);
+    obsys::ObRLockGuard<> guard(trans_ctx_->rwlock_);
     if (OB_ISNULL(trans_store_writer_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null store writer", KR(ret));
@@ -143,7 +143,7 @@ void ObTableLoadStoreTrans::put_store_writer(ObTableLoadTransStoreWriter *store_
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid null store", KR(ret));
   } else {
-    obsys::ObRLockGuard guard(trans_ctx_->rwlock_);
+    obsys::ObRLockGuard<> guard(trans_ctx_->rwlock_);
     OB_ASSERT(trans_store_writer_ == store_writer);
   }
   if (OB_SUCC(ret)) {
@@ -175,7 +175,7 @@ int ObTableLoadStoreTrans::output_store(ObTableLoadTransStore *&trans_store)
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadStoreTrans not init", KR(ret), KP(this));
   } else {
-    obsys::ObWLockGuard guard(trans_ctx_->rwlock_);
+    obsys::ObWLockGuard<> guard(trans_ctx_->rwlock_);
     if (OB_ISNULL(trans_store_) || OB_ISNULL(trans_store_writer_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null store", KR(ret), KP_(trans_store), KP_(trans_store_writer));

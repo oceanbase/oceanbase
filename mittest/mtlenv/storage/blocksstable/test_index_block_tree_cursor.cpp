@@ -36,6 +36,45 @@ bool ObDataStoreDesc::micro_index_clustered() const
   return ::mock_micro_index_clustered_result;
 }
 
+void ObFIFOAllocator::reset()
+{
+  ObLockGuard<ObSpinLock> guard(lock_);
+  if (IS_NOT_INIT || OB_ISNULL(allocator_)) {
+    // do nothing
+  } else {
+    DLIST_FOREACH_REMOVESAFE_NORET(iter, free_page_list_) {
+      auto *page = iter->get_data();
+      free_page_list_.remove(iter);
+      allocator_->free(page);
+    }
+
+    // check if there is some pages using ?
+    if (OB_ISNULL(current_using_)) {
+      // reset already.
+    } else if (OB_LIKELY(1 == current_using_->ref_count_)) {
+      allocator_->free(current_using_);
+    } else {
+      LOG_ERROR_RET(OB_ERROR, "current_using_ is still used now",
+                "ref_count", current_using_->ref_count_, KP(current_using_));
+      ob_abort();
+    }
+    DLIST_FOREACH_NORET(iter, using_page_list_) {
+      auto *page = iter->get_data();
+      LOG_ERROR_RET(OB_ERROR, "dump using page list:  ", KP(page));
+    }
+    DLIST_FOREACH_NORET(iter, special_page_list_) {
+      auto *page = iter->get_data();
+      LOG_ERROR_RET(OB_ERROR, "dump special page list:  ", KP(page));
+    }
+    using_page_list_.clear();
+    current_using_ = nullptr;
+    special_page_list_.clear();
+    normal_used_ = 0;
+    special_total_ = 0;
+    is_inited_ = false;
+  }
+}
+
 namespace blocksstable
 {
 
@@ -49,6 +88,7 @@ public:
 
   virtual void SetUp();
   virtual void TearDown();
+  void allocate_memory(ObIAllocator &allocator, const char *&dst_buf, int64_t &dst_buf_size);
 };
 
 TestIndexBlockTreeCursor::TestIndexBlockTreeCursor()
@@ -84,6 +124,14 @@ void TestIndexBlockTreeCursor::TearDown()
   TestIndexBlockDataPrepare::TearDown();
 }
 
+void TestIndexBlockTreeCursor::allocate_memory(ObIAllocator &allocator, const char *&dst_buf, int64_t &dst_buf_size)
+{
+  const int allocate_size = 32;
+  dst_buf = reinterpret_cast<char *>(allocator.alloc(allocate_size));
+  dst_buf_size = allocate_size;
+  ASSERT_NE(nullptr, dst_buf);
+}
+
 TEST_F(TestIndexBlockTreeCursor, test_path)
 {
   ObIndexBlockTreePath tree_path;
@@ -100,6 +148,30 @@ TEST_F(TestIndexBlockTreeCursor, test_path)
     ASSERT_EQ(OB_SUCCESS, tree_path.get_next_item_ptr(curr_item));
   }
   ASSERT_EQ(OB_ERR_UNEXPECTED, tree_path.pop(curr_item));
+}
+
+TEST_F(TestIndexBlockTreeCursor, test_tree_path_memory_leak)
+{
+  STORAGE_LOG(INFO, "tree path memory leak test start");
+  int64_t item_cnt_upper_bound = ObIndexBlockTreePath::PathItemStack::MAX_TREE_FIX_BUF_LENGTH + 1;
+  for (int item_cnt = 0; item_cnt <= item_cnt_upper_bound; ++item_cnt) {
+    ObIndexBlockTreePath tree_path;
+    ObIndexBlockTreePathItem *curr_item;
+    ASSERT_EQ(OB_SUCCESS, tree_path.init());
+    ASSERT_EQ(OB_SUCCESS, tree_path.get_next_item_ptr(curr_item));
+    // tree_path.idx_ = 0 now.
+    for (int64_t i = 0; i < item_cnt; ++i) {
+      allocate_memory(tree_path.allocator_, curr_item->block_data_.get_buf(), curr_item->block_data_.get_buf_size());
+      curr_item->is_block_allocated_ = true;
+      ASSERT_EQ(OB_SUCCESS, tree_path.push(curr_item));
+      ASSERT_EQ(OB_SUCCESS, tree_path.get_next_item_ptr(curr_item));
+    }
+    // tree_path.idx_ = item_cnt now.
+    allocate_memory(tree_path.allocator_, curr_item->block_data_.get_buf(), curr_item->block_data_.get_buf_size());
+    curr_item->is_block_allocated_ = true;
+    tree_path.reset();
+  }
+  STORAGE_LOG(INFO, "tree path memory leak test end");
 }
 
 TEST_F(TestIndexBlockTreeCursor, test_normal)
@@ -469,6 +541,10 @@ TEST_F(TestIndexBlockTreeCursor, test_micro_block_index_iter)
   ObMicroIndexInfo micro_index_info;
   iter_range.set_whole_range();
 
+  uint64_t offset = 0;
+  MacroBlockId block_id;
+  block_id.reset();
+  ASSERT_EQ(false, block_id.is_valid());
   // reverse whole scan
   ASSERT_EQ(OB_SUCCESS, micro_iter.open(
     sstable_, iter_range, tablet_handle_.get_obj()->get_rowkey_read_info(), allocator_, true));
@@ -476,6 +552,16 @@ TEST_F(TestIndexBlockTreeCursor, test_micro_block_index_iter)
     tmp_ret = micro_iter.get_next(micro_index_info);
     STORAGE_LOG(DEBUG, "Reverse get next micro block", K(tmp_ret), K(micro_block_cnt), K(micro_index_info));
     if (OB_SUCCESS == tmp_ret) {
+      ASSERT_EQ(true, micro_index_info.get_macro_id().is_valid());
+      ASSERT_GT(micro_index_info.get_block_offset(), 0);
+      ASSERT_GT(micro_index_info.get_block_size(), 0);
+      if (block_id != micro_index_info.get_macro_id()) {
+        block_id = micro_index_info.get_macro_id();
+        offset = micro_index_info.get_block_offset();
+      } else {
+        ASSERT_EQ(offset - micro_index_info.get_block_size(), micro_index_info.get_block_offset());
+        offset = micro_index_info.get_block_offset();
+      }
       micro_block_cnt++;
     }
   }
@@ -483,6 +569,10 @@ TEST_F(TestIndexBlockTreeCursor, test_micro_block_index_iter)
   ASSERT_EQ(data_micro_block_cnt_, micro_block_cnt);
 
   // sequential whole scan
+  offset = 0;
+  uint64_t block_size = 0;
+  block_id.reset();
+  ASSERT_EQ(false, block_id.is_valid());
   tmp_ret = OB_SUCCESS;
   micro_block_cnt = 0;
   micro_iter.reset();
@@ -490,6 +580,18 @@ TEST_F(TestIndexBlockTreeCursor, test_micro_block_index_iter)
     sstable_, iter_range, tablet_handle_.get_obj()->get_rowkey_read_info(), allocator_, false));
   tmp_ret = micro_iter.get_next(micro_index_info);
   while (OB_SUCCESS == tmp_ret) {
+    ASSERT_EQ(true, micro_index_info.get_macro_id().is_valid());
+    ASSERT_GT(micro_index_info.get_block_offset(), 0);
+    ASSERT_GT(micro_index_info.get_block_size(), 0);
+    if (block_id != micro_index_info.get_macro_id()) {
+      block_id = micro_index_info.get_macro_id();
+      offset = micro_index_info.get_block_offset();
+      block_size = micro_index_info.get_block_size();
+    } else {
+      ASSERT_EQ(offset + block_size, micro_index_info.get_block_offset());
+      offset = micro_index_info.get_block_offset();
+      block_size = micro_index_info.get_block_size();
+    }
     micro_block_cnt++;
     STORAGE_LOG(DEBUG, "Sequential get next micro block", K(tmp_ret), K(micro_block_cnt), K(micro_index_info));
     tmp_ret = micro_iter.get_next(micro_index_info);

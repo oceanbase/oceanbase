@@ -85,10 +85,9 @@ int ObTxTable::check_with_tx_data(ObReadTxDataArg &read_tx_data_arg, ObITxDataCh
   return ret;
 }
 
-int clear_tx_data()
+void clear_tx_data()
 {
   TX_DATA_ARR.reset();
-  return OB_SUCCESS;
 };
 
 struct MultiVersionDIResult
@@ -186,6 +185,7 @@ void TestMultiVersionDeleteInsertBlockscan::SetUpTestCase()
 
 void TestMultiVersionDeleteInsertBlockscan::TearDownTestCase()
 {
+  clear_tx_data();
   ObMultiVersionSSTableTest::TearDownTestCase();
 }
 
@@ -740,18 +740,18 @@ void TestMultiVersionDeleteInsertBlockscan::test_get_next_compacted_row_basic()
       "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
       "2        var2  -20      DI_VERSION 44      43    INSERT    NORMAL        CF\n"
       "2        var2  -20      0          42      41    DELETE    NORMAL        C\n"
-      "2        var2  -10      0          42      41    INSERT    NORMAL        CL\n"
-      "3        var3  -20      0          40      39    INSERT    NORMAL        CLF\n";
+      "2        var2  -10      DI_VERSION 42      41    INSERT    NORMAL        CL\n"
+      "3        var3  -20      DI_VERSION 40      39    INSERT    NORMAL        CLF\n";
   // case 3: with delete row 1
   micro_data[2] =
       "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag  trans_id\n"
       "4        var4  MIN      -100       38      37    DELETE    NORMAL        UCF                 trans_id_2\n"
-      "4        var4  -10      0          38      37    INSERT    NORMAL        CL                  MIN\n";
+      "4        var4  -10      DI_VERSION 38      37    INSERT    NORMAL        CL                  trans_id_0\n";
   // case 4: with delete row 2
   micro_data[3] =
       "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag  trans_id\n"
-      "5        var5  -20      MIN        36      35    DELETE    INSERT_DELETE SCF                 MIN\n"
-      "5        var5  -20      0          36      35    DELETE    NORMAL        CL                  MIN\n"
+      "5        var5  -20      MIN        36      35    DELETE    INSERT_DELETE SCF                 trans_id_0\n"
+      "5        var5  -20      0          36      35    DELETE    NORMAL        CL                  trans_id_0\n"
       "6        var6  MIN      -100       34      33    DELETE    NORMAL        UCFL                trans_id_2\n";
   // case 5: insert row and delete row from another rowkey
   micro_data[4] =
@@ -771,8 +771,8 @@ void TestMultiVersionDeleteInsertBlockscan::test_get_next_compacted_row_basic()
   micro_data[6] =
       "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag  trans_id\n"
       "11       var11 MIN      -99        18      17    DELETE    NORMAL        UCFL                trans_id_2\n"
-      "12       var12 -10      MIN        16      15    DELETE    INSERT_DELETE SCF                 MIN\n"
-      "12       var12 -10      0          16      15    DELETE    NORMAL        CL                  MIN\n";
+      "12       var12 -10      MIN        16      15    DELETE    INSERT_DELETE SCF                 trans_id_0\n"
+      "12       var12 -10      0          16      15    DELETE    NORMAL        CL                  trans_id_0\n";
   // case 8: delete row and insert row from another rowkey
   micro_data[7] =
       "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
@@ -785,10 +785,10 @@ void TestMultiVersionDeleteInsertBlockscan::test_get_next_compacted_row_basic()
       "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
       "15       var15 -25      0           8     8      DELETE    NORMAL        CLF\n"
       "16       var17 -25      0           7     7      DELETE    NORMAL        CLF\n"
-      "17       var16 -25      0           6     6      INSERT    NORMAL        CLF\n"
+      "17       var16 -25      DI_VERSION  6     6      INSERT    NORMAL        CLF\n"
       "18       var17 -25      0           5     5      DELETE    NORMAL        CLF\n"
-      "19       var18 -25      0           4     4      INSERT    NORMAL        CLF\n"
-      "20       var18 -25      0           3     3      INSERT    NORMAL        CLF\n";
+      "19       var18 -25      DI_VERSION  4     4      INSERT    NORMAL        CLF\n"
+      "20       var18 -25      DI_VERSION  3     3      INSERT    NORMAL        CLF\n";
   // case 10: with filtered rowkey and version not fit rowkey
   micro_data[9] =
       "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
@@ -1120,13 +1120,13 @@ void TestMultiVersionDeleteInsertBlockscan::test_get_next_compacted_row_with_cac
       "1        var1  MIN      -100       48      47    DELETE    NORMAL        UCF                 trans_id_2\n";
   micro_data[1] =
       "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag  trans_id\n"
-      "1        var1  -2       DI_VERSION 48      47    INSERT    NORMAL        C                   MIN\n"
-      "1        var1  -2       0          46      45    DELETE    NORMAL        CL                  MIN\n"
+      "1        var1  -2       DI_VERSION 48      47    INSERT    NORMAL        C                   trans_id_0\n"
+      "1        var1  -2       0          46      45    DELETE    NORMAL        CL                  trans_id_0\n"
       "2        var2  MIN      -99        44      43    DELETE    NORMAL        UCF                 trans_id_2\n";
   micro_data[2] =
       "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag  trans_id\n"
-      "2        var2  -2       DI_VERSION 44      43    INSERT    NORMAL        C                   MIN\n"
-      "2        var2  -2       0          42      41    DELETE    NORMAL        CL                  MIN\n"
+      "2        var2  -2       DI_VERSION 44      43    INSERT    NORMAL        C                   trans_id_0\n"
+      "2        var2  -2       0          42      41    DELETE    NORMAL        CL                  trans_id_0\n"
       "3        var3  MIN      -98        40      39    INSERT    NORMAL        UCFL                trans_id_2\n";
   prepare_table_schema(micro_data, SCHEMA_ROWKEY_CNT, scn_range, snapshot_version, ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT);
   reset_writer(snapshot_version);
@@ -1171,13 +1171,13 @@ void TestMultiVersionDeleteInsertBlockscan::test_get_next_compacted_row_with_cac
       "1        var1  MIN      -100       48      47    DELETE    NORMAL        UCF                 trans_id_2\n";
   micro_data[1] =
       "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag  trans_id\n"
-      "1        var1  -12      DI_VERSION 48      47    INSERT    NORMAL        C                   MIN\n"
-      "1        var1  -12      0          46      45    DELETE    NORMAL        CL                  MIN\n"
+      "1        var1  -12      DI_VERSION 48      47    INSERT    NORMAL        C                   trans_id_0\n"
+      "1        var1  -12      0          46      45    DELETE    NORMAL        CL                  trans_id_0\n"
       "2        var2  MIN      -99        44      43    DELETE    NORMAL        UCF                 trans_id_2\n";
   micro_data[2] =
       "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag  trans_id\n"
-      "2        var2  -12      DI_VERSION 44      43    INSERT    NORMAL        C                   MIN\n"
-      "2        var2  -12      0          42      41    DELETE    NORMAL        CL                  MIN\n"
+      "2        var2  -12      DI_VERSION 44      43    INSERT    NORMAL        C                   trans_id_0\n"
+      "2        var2  -12      0          42      41    DELETE    NORMAL        CL                  trans_id_0\n"
       "3        var3  MIN      -98        40      39    INSERT    NORMAL        UCFL                trans_id_2\n";
   prepare_table_schema(micro_data, SCHEMA_ROWKEY_CNT, scn_range, snapshot_version, ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT);
   reset_writer(snapshot_version);
@@ -1404,11 +1404,11 @@ void TestMultiVersionDeleteInsertBlockscan::test_get_next_compacted_row_with_cac
   // case 4: with delete row to cache
   micro_data[3] =
       "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag   trans_id\n"
-      "4        var4  -2       DI_VERSION 9       9     INSERT    NORMAL        C                    MIN\n"
-      "4        var4  -2       0          9       1     DELETE    NORMAL        CL                   MIN\n"
+      "4        var4  -2       DI_VERSION 9       9     INSERT    NORMAL        C                    trans_id_0\n"
+      "4        var4  -2       0          9       1     DELETE    NORMAL        CL                   trans_id_0\n"
       "5        var5  MIN      -100       19      19    DELETE    NORMAL        UCF                  trans_id_2\n"
-      "5        var5  -18      DI_VERSION 19      19    INSERT    NORMAL        C                    MIN\n"
-      "5        var5  -18      0          19      9     DELETE    NORMAL        C                    MIN\n";
+      "5        var5  -18      DI_VERSION 19      19    INSERT    NORMAL        C                    trans_id_0\n"
+      "5        var5  -18      0          19      9     DELETE    NORMAL        C                    trans_id_0\n";
   // case 5: with insert row to cache, without delete version
   micro_data[4] =
       "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
@@ -1422,10 +1422,10 @@ void TestMultiVersionDeleteInsertBlockscan::test_get_next_compacted_row_with_cac
   // case 6: with insert row to cache, with uncommitted delete version
   micro_data[5] =
       "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag   trans_id\n"
-      "6        var6  -15      0          9       9     DELETE    NORMAL        C                    MIN\n"
-      "6        var6  -8       DI_VERSION 9       9     INSERT    NORMAL        C                    MIN\n"
-      "6        var6  -8       0          9       1     DELETE    NORMAL        C                    MIN\n"
-      "6        var6  -6       0          9       1     INSERT    NORMAL        CL                   MIN\n"
+      "6        var6  -15      0          9       9     DELETE    NORMAL        C                    trans_id_0\n"
+      "6        var6  -8       DI_VERSION 9       9     INSERT    NORMAL        C                    trans_id_0\n"
+      "6        var6  -8       0          9       1     DELETE    NORMAL        C                    trans_id_0\n"
+      "6        var6  -6       0          9       1     INSERT    NORMAL        CL                   trans_id_0\n"
       "7        var7  MIN      -99        19      19    INSERT    NORMAL        UCF                  trans_id_2\n"
       "7        var7  MIN      -98        19      19    DELETE    NORMAL        UC                   trans_id_2\n";
   // case 7: with out-of-range snapshot version, without row to cache

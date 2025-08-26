@@ -351,6 +351,16 @@ int ObZoneInfo::get_region(common::ObRegion &region) const
   return ret;
 }
 
+int ObZoneInfo::get_idc(common::ObIDC &idc) const
+{
+  int ret = OB_SUCCESS;
+  idc.reset();
+  if (OB_FAIL(idc.assign(idc_.info_.ptr()))) {
+    LOG_WARN("get_idc assign failed", K(ret));
+  }
+  return ret;
+}
+
 bool ObGlobalInfo::is_valid() const
 {
   bool is_valid = true;

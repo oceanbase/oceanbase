@@ -910,9 +910,10 @@ int ObIMicroBlockCache::prefetch(
     const MacroBlockId &macro_id,
     const ObMicroIndexInfo& idx_row,
     const bool use_cache,
+    const ObTabletID &effective_tablet_id,
     ObStorageObjectHandle &macro_handle,
     ObIAllocator *allocator,
-    const bool is_major_macro_preread)
+    const bool is_preread)
 {
   int ret = OB_SUCCESS;
   const ObIndexBlockRowHeader *idx_header = idx_row.row_header_;
@@ -932,7 +933,7 @@ int ObIMicroBlockCache::prefetch(
       callback = new (buf) ObAsyncSingleMicroBlockIOCallback;
       callback->allocator_ = allocator;
       callback->use_block_cache_ = use_cache;
-            if (OB_FAIL(prefetch(tenant_id, macro_id, idx_row, macro_handle, *callback, is_major_macro_preread))) {
+      if (OB_FAIL(prefetch(tenant_id, macro_id, idx_row, effective_tablet_id, macro_handle, *callback, is_preread))) {
         LOG_WARN("Fail to prefetch data micro block", K(ret));
       }
     }
@@ -944,9 +945,10 @@ int ObIMicroBlockCache::prefetch(
     const uint64_t tenant_id,
     const MacroBlockId &macro_id,
     const ObMicroIndexInfo& idx_row,
+    const ObTabletID &effective_tablet_id,
     ObStorageObjectHandle &macro_handle,
     ObIMicroBlockIOCallback &callback,
-    const bool is_major_macro_preread)
+    const bool is_preread)
 {
   int ret = OB_SUCCESS;
   const ObIndexBlockRowHeader *idx_row_header = idx_row.row_header_;
@@ -976,9 +978,10 @@ int ObIMicroBlockCache::prefetch(
     read_info.mtl_tenant_id_ = MTL_ID();
     read_info.set_logic_micro_id(idx_row.get_logic_micro_id());
     read_info.set_micro_crc(idx_row.get_data_checksum());
-    if (is_major_macro_preread) {
+    read_info.set_effective_tablet_id(effective_tablet_id);
+    if (is_preread) {
       read_info.set_bypass_micro_cache(true);
-      read_info.set_is_major_macro_preread(true);
+      read_info.io_desc_.set_preread();
     }
 
     if (OB_FAIL(ObObjectManager::async_read_object(read_info, macro_handle))) {
@@ -1001,6 +1004,7 @@ int ObIMicroBlockCache::prefetch(
     const MacroBlockId &macro_id,
     const ObMultiBlockIOParam &io_param,
     const bool use_cache,
+    const ObTabletID &effective_tablet_id,
     ObStorageObjectHandle &macro_handle,
     ObIMicroBlockIOCallback &callback)
 {
@@ -1027,9 +1031,10 @@ int ObIMicroBlockCache::prefetch(
   read_info.size_ = size;
   read_info.io_timeout_ms_ = max(THIS_WORKER.get_timeout_remain() / 1000, 0);
   read_info.mtl_tenant_id_ = MTL_ID();
+  read_info.set_effective_tablet_id(effective_tablet_id);
   read_info.set_bypass_micro_cache(true);
   // only prefetch_multi_block need preread major macro
-  read_info.set_is_major_macro_preread(true);
+  read_info.io_desc_.set_preread();
 
   if (OB_FAIL(ObObjectManager::async_read_object(read_info, macro_handle))) {
     STORAGE_LOG(WARN, "Fail to async read block, ", K(ret), K(read_info));
@@ -1194,6 +1199,7 @@ int ObDataMicroBlockCache::prefetch_multi_block(
     const MacroBlockId &macro_id,
     const ObMultiBlockIOParam &io_param,
     const bool use_cache,
+    const ObTabletID &effective_tablet_id,
     ObStorageObjectHandle &macro_handle)
 {
   int ret = OB_SUCCESS;
@@ -1219,8 +1225,9 @@ int ObDataMicroBlockCache::prefetch_multi_block(
           allocator->free(callback);
         }
       } else if (OB_FAIL(ObIMicroBlockCache::prefetch(
-          tenant_id, macro_id, io_param, use_cache, macro_handle, *callback))) {
-        LOG_WARN("Fail to prefetch multi data blocks", K(ret));
+          tenant_id, macro_id, io_param, use_cache, effective_tablet_id, macro_handle, *callback))) {
+        LOG_WARN("Fail to prefetch multi data blocks", K(ret), K(tenant_id), K(macro_id),
+                 K(io_param), K(use_cache), K(effective_tablet_id));
       }
     }
   }
@@ -1232,6 +1239,7 @@ int ObDataMicroBlockCache::load_block(
     const ObMicroBlockDesMeta &des_meta,
     const ObLogicMicroBlockId &logic_micro_id,
     const int64_t data_checksum,
+    const ObTabletID &effective_tablet_id,
     ObMacroBlockReader *macro_reader,
     ObMicroBlockData &block_data,
     ObIAllocator *allocator)
@@ -1270,6 +1278,7 @@ int ObDataMicroBlockCache::load_block(
       macro_read_info.mtl_tenant_id_ = MTL_ID();
       macro_read_info.set_logic_micro_id(logic_micro_id);
       macro_read_info.set_micro_crc(data_checksum);
+      macro_read_info.set_effective_tablet_id(effective_tablet_id);
 
       if (OB_FAIL(ObObjectManager::async_read_object(macro_read_info, macro_handle))) {
         LOG_WARN("Fail to async read block", K(ret), K(macro_read_info));
@@ -1533,6 +1542,7 @@ int ObIndexMicroBlockCache::load_block(
     const ObMicroBlockDesMeta &des_meta,
     const ObLogicMicroBlockId &logic_micro_id,
     const int64_t data_checksum,
+    const ObTabletID &effective_tablet_id,
     ObMacroBlockReader *macro_reader,
     ObMicroBlockData &block_data,
     ObIAllocator *allocator)
@@ -1574,6 +1584,7 @@ int ObIndexMicroBlockCache::load_block(
       macro_read_info.mtl_tenant_id_ = MTL_ID();
       macro_read_info.set_logic_micro_id(logic_micro_id);
       macro_read_info.set_micro_crc(data_checksum);
+      macro_read_info.set_effective_tablet_id(effective_tablet_id);
 
       ObIndexBlockDataTransformer idx_transformer;
       char *transform_buf = nullptr;

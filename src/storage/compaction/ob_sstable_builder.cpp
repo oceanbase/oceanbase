@@ -189,7 +189,7 @@ int ObSSTableBuilder::build_sstable_merge_res(
   const ObMergeType merge_type = data_store_desc_.get_desc().get_merge_type();
   if (GCTX.is_shared_storage_mode()
       && is_output_exec_mode(data_store_desc_.get_desc().get_exec_mode())
-      && (is_major_merge_type(merge_type) || is_minor_merge_type(merge_type))) {
+      && (is_major_merge_type(merge_type) || is_minor_merge_type(merge_type) || is_mds_minor_merge(merge_type))) {
 #ifdef OB_BUILD_SHARED_STORAGE
     // no need to rebuild sstable in shared storage mode
     if (OB_FAIL(index_builder_.close_with_macro_seq(

@@ -21,6 +21,7 @@
 #include "storage/meta_store/ob_server_storage_meta_service.h"
 #include "storage/concurrency_control/ob_data_validation_service.h"
 #include "lib/wait_event/ob_wait_event.h"
+#include "storage/high_availability/ob_storage_ha_utils.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/incremental/ob_shared_meta_service.h"
 #endif
@@ -1480,6 +1481,12 @@ void ObGarbageCollector::run1()
         CLOG_LOG(INFO, "Garbage Collector is running", K(seq_), K(gc_interval));
         ObGCCandidateArray gc_candidates;
         gc_candidates.reset();
+        // remove sslog ls from member list if need.
+        (void)fix_sslog_memberlist_();
+
+        (void)gc_check_ls_migration_failed_(gc_candidates);
+        (void)execute_gc_(gc_candidates);
+        gc_candidates.reset();
         (void)gc_check_member_list_(gc_candidates);
         (void)execute_gc_(gc_candidates);
         gc_candidates.reset();
@@ -1553,6 +1560,198 @@ bool ObGarbageCollector::is_normal_ls_status_(const LSStatus &status)
 bool ObGarbageCollector::is_need_delete_entry_ls_status_(const LSStatus &status)
 {
   return LSStatus::LS_NEED_DELETE_ENTRY == status;
+}
+
+class CheckOnlySSLogLSFn
+{
+public:
+  CheckOnlySSLogLSFn() : only_sslog_ls_(true) {}
+  ~CheckOnlySSLogLSFn() {}
+  int operator()(ObLS &ls)
+  {
+    int ret = OB_SUCCESS;
+    if (!GCTX.is_shared_storage_mode()) {
+      ret = OB_NOT_SUPPORTED;
+      CLOG_LOG(WARN, "only ss support sslog", K(ret));
+    } else if (!is_tenant_sslog_ls(ls.get_tenant_id(), ls.get_ls_id())) {
+      only_sslog_ls_ = false;
+      ret = OB_EAGAIN;
+      CLOG_LOG(WARN, "this ls is not sslog ls", K(ret), K(ls));
+    }
+    return ret;
+  }
+public:
+  bool only_sslog_ls_;
+};
+
+int ObGarbageCollector::check_can_remove_sslog_ls_(bool &can_remove_sslog)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
+  const uint64_t user_tenant_id = gen_user_tenant_id(tenant_id);
+  ObLSService *ls_service = MTL(ObLSService*);
+  can_remove_sslog = false;
+  if (!is_tenant_has_sslog(tenant_id)) {
+    // user tenant should never remove the sslog ls from member list.
+  } else if (OB_ISNULL(ls_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "ls_service should not be NULL", KR(ret), KP(ls_service));
+  } else {
+    CheckOnlySSLogLSFn user_tenant_fn;
+    CheckOnlySSLogLSFn meta_tenant_fn;
+    if (OB_FAIL(ls_service->foreach_ls(meta_tenant_fn))) {
+      CLOG_LOG(WARN, "check meta tenant failed", K(ret));
+    } else {
+      MTL_SWITCH(user_tenant_id) {
+        ls_service = MTL(ObLSService*);
+        if (OB_FAIL(ls_service->foreach_ls(user_tenant_fn))) {
+          CLOG_LOG(WARN, "check user tenant failed", K(ret));
+        }
+      }
+      // if tenant not in server, ignore the error.
+      if (OB_TENANT_NOT_IN_SERVER == ret) {
+        ret = OB_SUCCESS;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      can_remove_sslog = user_tenant_fn.only_sslog_ls_ && meta_tenant_fn.only_sslog_ls_;
+    }
+    CLOG_LOG(TRACE, "check can remove sslog", K(can_remove_sslog));
+  }
+  return ret;
+}
+
+int ObGarbageCollector::get_ls_leader_(const share::ObLSID &ls_id, common::ObAddr &addr)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
+  if (OB_UNLIKELY(!ls_id.is_valid_with_tenant(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid argument", K(ret), K(ls_id));
+  } else if (OB_ISNULL(GCTX.location_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "location service should not be NULL", K(ret), KP(GCTX.location_service_));
+  } else if (OB_FAIL(GCTX.location_service_->get_leader(GCONF.cluster_id, tenant_id, ls_id, true/*force_renew*/, addr))) {
+    CLOG_LOG(WARN, "fail to get ls leader server", K(ret), K(tenant_id), K(ls_id));
+  }
+  return ret;
+}
+
+int ObGarbageCollector::remove_from_member_list_(const share::ObLSID &ls_id)
+{
+  int ret = OB_SUCCESS;
+  const int64_t TIMEOUT_US = 10 * 1000 * 1000L;
+  LogGetPalfStatReq get_palf_stat_req(self_addr_, ls_id.id(), true/*is_to_leader*/);
+  LogGetPalfStatResp get_palf_stat_resp;
+  ObAddr leader;
+  ObLSHandle handle;
+  ObLS *ls = nullptr;
+  if (OB_FAIL(get_ls_leader_(ls_id, leader))) {
+    CLOG_LOG(WARN, "get ls leader failed", K(ret), K(ls_id));
+  } else if (OB_ISNULL(log_rpc_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "log_rpc_proxy should not be NULL", KR(ret), KP(log_rpc_proxy_));
+  } else if (OB_FAIL(log_rpc_proxy_->to(leader)
+              .by(MTL_ID())
+              .timeout(TIMEOUT_US)
+              .max_process_handler_time(TIMEOUT_US)
+              .group_id(share::OBCG_STORAGE)
+              .get_palf_stat(get_palf_stat_req, get_palf_stat_resp))) {
+    CLOG_LOG(WARN, "get_palf_stat failed", K(ls_id), K(leader), K(get_palf_stat_req));
+  } else {
+     const common::GlobalLearnerList &learner_list = get_palf_stat_resp.palf_stat_.learner_list_;
+     ObMember member;
+     if (OB_FAIL(learner_list.get_learner_by_addr(self_addr_, member))) {
+       if (OB_ENTRY_NOT_EXIST == ret) {
+         ret = OB_SUCCESS;
+         CLOG_LOG(INFO, "self is not in learnerlist", K(leader), K(learner_list), K(ls_id));
+       } else {
+         CLOG_LOG(WARN, "failed to get_learner_by_addr", K(leader), K(learner_list), K(ls_id));
+       }
+     } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, handle, ObLSGetMod::OBSERVER_MOD))) {
+      CLOG_LOG(WARN, "get ls failed", K(ret), K(ls_id));
+     } else if (OB_ISNULL(ls = handle.get_ls())) {
+      ret = OB_ERR_UNEXPECTED;
+      CLOG_LOG(WARN, "get ls failed", K(ret), K(handle));
+     } else if (OB_FAIL(ls->remove_learner(member, TIMEOUT_US))) {
+       CLOG_LOG(WARN, "failed to remove_learner", K(leader), K(learner_list), K(ls_id), K(member));
+     } else {
+       CLOG_LOG(INFO, "learner is removed from leader", K(leader), K(learner_list), K(ls_id), K(member));
+     }
+  }
+  return ret;
+}
+
+int ObGarbageCollector::fix_sslog_memberlist_()
+{
+  int ret = OB_SUCCESS;
+  bool is_tenant_will_be_deleted = false;
+  bool can_remove_sslog = false;
+  // 1. check unit will be deleted.
+  if (!is_tenant_has_sslog(MTL_ID())) {
+    // do nothing, if it is not meta tenant or sys tenant or not in ss mode.
+  } else if (OB_FAIL(ObStorageHAUtils::check_tenant_will_be_deleted(is_tenant_will_be_deleted))) {
+    CLOG_LOG(WARN, "check tenant will be deleted failed", K(ret));
+  } else if (!is_tenant_will_be_deleted) {
+    // do nothing.
+    CLOG_LOG(INFO, "tenant status is normal, does not need gc sslog ls", K(MTL_ID()));
+  // 2. check only sslog ls exist.
+  } else if (OB_FAIL(check_can_remove_sslog_ls_(can_remove_sslog))) {
+    CLOG_LOG(WARN, "check only sslog ls left failed", K(ret));
+  } else if (!can_remove_sslog) {
+    CLOG_LOG(INFO, "sslog ls should delete after all the ls, do nothing now", K(MTL_ID()));
+  // 3. remove sslog ls from member list if need.
+  } else if (OB_FAIL(remove_from_member_list_(SSLOG_LS))) {
+    CLOG_LOG(WARN, "remove sslog ls from member list failed", K(ret), K(SSLOG_LS));
+  }
+  return ret;
+}
+
+int ObGarbageCollector::gc_check_ls_migration_failed_(ObGCCandidateArray &gc_candidates)
+{
+  int ret = OB_SUCCESS;
+  ObLSIterator *iter = NULL;
+  common::ObSharedGuard<ObLSIterator> guard;
+  ObMigrationStatus migration_status;
+  if (OB_FAIL(ls_service_->get_ls_iter(guard, ObLSGetMod::OBSERVER_MOD))) {
+    CLOG_LOG(WARN, "get log stream iter failed", K(ret));
+  } else if (OB_ISNULL(iter = guard.get_ptr())) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(ERROR, "iter is NULL", K(ret), K(iter));
+  } else {
+    ObLS *ls = NULL;
+    int tmp_ret = OB_SUCCESS;
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(iter->get_next(ls))) {
+        if (OB_ITER_END != ret) {
+          CLOG_LOG(WARN, "get next log stream failed", K(ret));
+        }
+      } else if (OB_ISNULL(ls)) {
+        tmp_ret = OB_ERR_UNEXPECTED;
+        CLOG_LOG(ERROR, "log stream is NULL", K(tmp_ret), KP(ls));
+      } else if (OB_UNLIKELY(!ls->is_create_committed())) {
+        CLOG_LOG(INFO, "ls is not committed, just ignore", K(ls));
+      } else if (OB_SUCCESS != (tmp_ret = ls->get_migration_status(migration_status))) {
+        CLOG_LOG(WARN, "get_migration_status failed", K(tmp_ret), "ls_id", ls->get_ls_id());
+      } else if (!ObMigrationStatusHelper::can_gc_ls_without_member_verification(migration_status)) {
+        // ignore
+      } else {
+        CLOG_LOG(INFO, "ls can gc", "ls_id", ls->get_ls_id(), K(migration_status));
+        GCCandidate candidate;
+        candidate.ls_id_ = ls->get_ls_id();
+        candidate.ls_status_ = LSStatus::LS_NEED_GC;
+        candidate.gc_reason_ = MIGRATION_FAILED;
+        if (OB_SUCCESS != (tmp_ret = gc_candidates.push_back(candidate))) {
+          CLOG_LOG(WARN, "gc_candidates push_back failed", K(tmp_ret), "ls_id", ls->get_ls_id());
+        }
+      }
+    }
+
+    if (OB_ITER_END == ret) {
+      ret = OB_SUCCESS;
+    }
+  }
+  return ret;
 }
 
 int ObGarbageCollector::gc_check_member_list_(ObGCCandidateArray &gc_candidates)
@@ -1756,6 +1955,7 @@ int ObGarbageCollector::gc_check_ls_status_(storage::ObLS &ls,
   candidate.ls_id_ = ls_id;
   candidate.ls_status_ = LSStatus::LS_NORMAL;
   candidate.gc_reason_ = GCReason::INVALID_GC_REASON;
+  common::ObArray<ObTabletID> tablet_id_set;
   if (OB_FAIL(get_ls_status_from_table(ls_id, ls_status))) {
     int tmp_ret = OB_SUCCESS;
     bool is_tenant_dropped = false;
@@ -1783,6 +1983,15 @@ int ObGarbageCollector::gc_check_ls_status_(storage::ObLS &ls,
       if (OB_SUCC(ret)) {
       } else if (OB_SUCCESS != (tmp_ret = ls.get_migration_status(migration_status))) {
         CLOG_LOG(WARN, "get_migration_status failed", K(tmp_ret), K(ls_id));
+#ifdef OB_BUILD_SHARED_STORAGE
+      } else if (GCTX.is_shared_storage_mode()
+                 && OB_TMP_FAIL(ls.get_tablet_svr()->get_all_tablet_ids(
+                     true /* except_ls_inner_tablet */, tablet_id_set))) {
+        CLOG_LOG(WARN, "get_all_tablet_ids failed", KR(tmp_ret), K(ls_id));
+      } else if (GCTX.is_shared_storage_mode() && tablet_id_set.count() != 0) {
+        CLOG_LOG(INFO, "tablets in ls are not mark delete, ls is not allowd to GC", K(ls_id),
+            K(tablet_id_set.count()), K(tablet_id_set));
+#endif
       } else if (OB_SUCCESS != (tmp_ret = ObMigrationStatusHelper::check_ls_allow_gc(
             ls.get_ls_id(), migration_status, allow_gc))) {
         CLOG_LOG(WARN, "failed to check ls allowed to gc", K(tmp_ret), K(migration_status), K(ls_id));
@@ -1861,8 +2070,17 @@ void ObGarbageCollector::execute_gc_(ObGCCandidateArray &gc_candidates)
         }
       }
       ObSwitchLeaderAdapter switch_leader_adapter;
+      bool can_remove_sslog_ls = true;
       if (OB_SUCCESS != (tmp_ret = (gc_handler->execute_pre_remove()))) {
         CLOG_LOG(WARN, "failed to execute_pre_remove", K(tmp_ret), K(id), K_(self_addr));
+#ifdef OB_BUILD_SHARED_STORAGE
+      } else if (GCTX.is_shared_storage_mode()
+                 && is_tenant_sslog_ls(MTL_ID(), ls->get_ls_id())
+                 && OB_TMP_FAIL(check_can_remove_sslog_ls_(can_remove_sslog_ls))) {
+        CLOG_LOG(WARN, "failed to check sslog ls", K(tmp_ret), K(id), K_(self_addr));
+      } else if (!can_remove_sslog_ls) {
+        CLOG_LOG(INFO, "sslog ls can not be removed", K(id), K_(self_addr));
+#endif
       } else if (OB_SUCCESS != (tmp_ret = switch_leader_adapter.remove_from_election_blacklist(id.id(), self_addr_))) {
         CLOG_LOG(WARN, "remove_from_election_blacklist failed", K(tmp_ret), K(id), K_(self_addr));
       } else if (OB_SUCCESS != (tmp_ret = ls_service_->remove_ls(id))) {

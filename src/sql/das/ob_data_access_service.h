@@ -40,7 +40,7 @@ public:
       ObDasAggregatedTask &task_ops, bool async = true);
   //关闭DAS Task的执行流程，并释放task持有的资源，并结束相关的事务控制
   int end_das_task(ObDASRef &das_ref, ObIDASTaskOp &task_op);
-  int get_das_task_id(int64_t &das_id);
+  int get_das_task_id(int64_t &das_id, const share::ObLSID target_ls_id);
   int rescan_das_task(ObDASRef &das_ref, ObDASScanOp &scan_op);
   obrpc::ObDASRpcProxy &get_rpc_proxy() { return das_rpc_proxy_; }
   ObDASTaskResultMgr &get_task_res_mgr() { return task_result_mgr_; }

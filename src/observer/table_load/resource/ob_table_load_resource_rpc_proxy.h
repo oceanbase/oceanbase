@@ -50,6 +50,7 @@ public:
                                  .group_id(ObTableLoadRpcPriority::HIGH_PRIO == prio                  \
                                              ? share::OBCG_DIRECT_LOAD_HIGH_PRIO                      \
                                              : share::OBCG_DEFAULT)                                   \
+                                 .detect_session_killed(true)                                      \
                                  .direct_load_resource(request, result))) {                           \
       SERVER_LOG(WARN, "fail to rpc call direct load resource", K(ret), K_(addr), K(arg));            \
     } else if (OB_UNLIKELY(result.command_type_ != pcode)) {                                          \
@@ -78,6 +79,7 @@ public:
                                  .group_id(ObTableLoadRpcPriority::HIGH_PRIO == prio                  \
                                              ? share::OBCG_DIRECT_LOAD_HIGH_PRIO                      \
                                              : share::OBCG_DEFAULT)                                   \
+                                 .detect_session_killed(true)                                      \
                                  .direct_load_resource(request, result))) {                           \
       SERVER_LOG(WARN, "fail to rpc call direct load resource", K(ret), K_(addr), K(arg));            \
     } else if (OB_UNLIKELY(result.command_type_ != pcode)) {                                          \

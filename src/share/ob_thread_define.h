@@ -177,6 +177,8 @@ TG_DEF(TenantTTLManager, TTLManager, TIMER)
 TG_DEF(TenantTabletTTLMgr, TTLTabletMgr, TIMER)
 TG_DEF(TntSharedTimer, TntSharedTimer, TIMER)
 TG_DEF(VectorAsyncTaskPool, VectorAsyncTask, QUEUE_THREAD, 1, 8)   // for tmp
+TG_DEF(DRCreateSSLOGTimer, DRCreateSSLOGTimer, TIMER)
+TG_DEF(VectorTaskPool, VectorTaskPool, QUEUE_THREAD, 1, 1024)
 
 #ifdef OB_BUILD_SHARED_STORAGE
 TG_DEF(ReplicaPrewarmHdlr, RepPrewarmHdlr, QUEUE_THREAD, 1, storage::ObReplicaPrewarmHandler::MAX_TASK_NUM)
@@ -192,10 +194,7 @@ TG_DEF(ReplicaPrewarmTimer, ReplicaPrewarmTimer, TIMER)
 TG_DEF(StorageCachePolicyMgr, StorageCachePolicyMgr, TIMER)
 TG_DEF(StorageCacheTabletScheduler, StorageCacheTabletScheduler, QUEUE_THREAD, 1, storage::ObStorageCacheTabletScheduler::MAX_TASK_NUM)
 TG_DEF(TenantDirGCTimer, TntGCTimer, TIMER)
-TG_DEF(ObPublicBlockGCThread, PubGCThread, QUEUE_THREAD,
-       ThreadCountPair(storage::ObPublicBlockGCThread::THREAD_NUM,
-       storage::ObPublicBlockGCThread::MINI_MODE_THREAD_NUM),
-       storage::ObPublicBlockGCThread::MAX_BLOCK_GC_TASK_NUM)
+TG_DEF(ServerSlogFlushTimer, SvrSlogFlushTimer, TIMER)
 TG_DEF(ObPrivateBlockGCThread, PrivGCThread, QUEUE_THREAD,
        ThreadCountPair(storage::ObPrivateBlockGCThread::THREAD_NUM,
        storage::ObPrivateBlockGCThread::MINI_MODE_THREAD_NUM),
@@ -203,6 +202,7 @@ TG_DEF(ObPrivateBlockGCThread, PrivGCThread, QUEUE_THREAD,
 TG_DEF(SSWriterWorker, SSWSrv, THREAD_POOL, 1)
 #endif
 
+TG_DEF(ExtDiskCacheServerTimer, ExtDiskCacheServerTimer, TIMER)
 
 TG_DEF(TmpFileSwap, TFSwap, THREAD_POOL, 1)
 TG_DEF(TableGroupCommitMgr, TableGroupCommitMgr, TIMER)

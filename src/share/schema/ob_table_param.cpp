@@ -635,8 +635,9 @@ ObTableParam::ObTableParam(ObIAllocator &allocator)
     is_mlog_table_(false),
     is_enable_semistruct_encoding_(false),
     is_safe_filter_with_di_(true),
+    access_virtual_col_cnt_(0),
     aggregate_param_props_(allocator),
-    access_virtual_col_cnt_(0)
+    plan_enable_rich_format_(false)
 {
   reset();
 }
@@ -673,8 +674,9 @@ void ObTableParam::reset()
   is_mlog_table_ = false;
   is_enable_semistruct_encoding_ = false;
   is_safe_filter_with_di_ = true;
-  aggregate_param_props_.reset();
   access_virtual_col_cnt_ = 0;
+  aggregate_param_props_.reset();
+  plan_enable_rich_format_ = false;
 }
 
 OB_DEF_SERIALIZE(ObTableParam)
@@ -735,10 +737,9 @@ OB_DEF_SERIALIZE(ObTableParam)
                 is_safe_filter_with_di_);
   }
   if (OB_SUCC(ret)) {
-    OB_UNIS_ENCODE(aggregate_param_props_);
-  }
-  if (OB_SUCC(ret)) {
     OB_UNIS_ENCODE(access_virtual_col_cnt_);
+    OB_UNIS_ENCODE(aggregate_param_props_);
+    OB_UNIS_ENCODE(plan_enable_rich_format_);
   }
   return ret;
 }
@@ -855,10 +856,9 @@ OB_DEF_DESERIALIZE(ObTableParam)
                 is_safe_filter_with_di_);
   }
   if (OB_SUCC(ret)) {
-    LST_DO_CODE(OB_UNIS_DECODE, aggregate_param_props_);
-  }
-  if (OB_SUCC(ret)) {
     LST_DO_CODE(OB_UNIS_DECODE, access_virtual_col_cnt_);
+    LST_DO_CODE(OB_UNIS_DECODE, aggregate_param_props_);
+    LST_DO_CODE(OB_UNIS_DECODE, plan_enable_rich_format_);
   }
   return ret;
 }
@@ -928,11 +928,9 @@ OB_DEF_SERIALIZE_SIZE(ObTableParam)
   }
   if (OB_SUCC(ret)) {
     LST_DO_CODE(OB_UNIS_ADD_LEN,
-                aggregate_param_props_);
-  }
-  if (OB_SUCC(ret)) {
-    LST_DO_CODE(OB_UNIS_ADD_LEN,
-                access_virtual_col_cnt_);
+                access_virtual_col_cnt_,
+                aggregate_param_props_,
+                plan_enable_rich_format_);
   }
   return len;
 }
@@ -1441,12 +1439,15 @@ int ObTableParam::convert_group_by(const ObTableSchema &table_schema,
                                    const ObIArray<uint64_t> &output_column_ids,
                                    const common::ObIArray<uint64_t> &aggregate_column_ids,
                                    const common::ObIArray<uint64_t> &group_by_column_ids,
+                                   const common::ObIArray<share::ObAggrParamProperty> &aggregate_param_props,
                                    const sql::ObStoragePushdownFlag &pd_pushdown_flag)
 {
   int ret = OB_SUCCESS;
   if (aggregate_column_ids.count() > 0) {
-     if (OB_FAIL(aggregate_projector_.init(aggregate_column_ids.count()))) {
+    if (OB_FAIL(aggregate_projector_.init(aggregate_column_ids.count()))) {
       LOG_WARN("failed to init aggregate projector", K(ret), K(aggregate_column_ids.count()));
+    } else if (OB_FAIL(aggregate_param_props_.assign(aggregate_param_props))) {
+      LOG_WARN("failed to assign aggregate param mono array", K(ret), K(aggregate_param_props));
     }
     for (int32_t i = 0; OB_SUCC(ret) && i < aggregate_column_ids.count(); ++i) {
       if (OB_COUNT_AGG_PD_COLUMN_ID == aggregate_column_ids.at(i)) {
@@ -1687,7 +1688,9 @@ int ObTableParam::convert_fulltext_index_info(const ObTableSchema &table_schema)
   return ret;
 }
 
-int ObTableParam::check_is_safe_filter_with_di(sql::ObPushdownFilterNode &pushdown_filters)
+int ObTableParam::check_is_safe_filter_with_di(
+    common::ObIArray<sql::ObRawExpr *> &exprs,
+    sql::ObPushdownFilterNode &pushdown_filters)
 {
   int ret = OB_SUCCESS;
   bool has_lob_column_out = false;
@@ -1700,10 +1703,22 @@ int ObTableParam::check_is_safe_filter_with_di(sql::ObPushdownFilterNode &pushdo
     for (int64_t i = 0; !has_lob_column_out && i < out_cols.count(); i++) {
       has_lob_column_out = (is_lob_storage(out_cols.at(i).col_type_.get_type()));
     }
-    if (OB_FAIL(pushdown_filters.check_filter_info(main_read_info_,
-                                                   has_lob_column_out,
-                                                   is_safe_filter_with_di_))) {
-      LOG_WARN("Fail to check filter info", K(ret));
+    if (has_lob_column_out) {
+      for (int64_t i = 0; OB_SUCC(ret) && is_safe_filter_with_di_ && i < exprs.count(); i++) {
+        const sql::ObRawExpr *expr = exprs.at(i);
+        if (OB_ISNULL(expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Unexpected null filter expr", K(ret), K(exprs));
+        } else if (expr->is_topn_filter()) {
+          is_safe_filter_with_di_ = false;
+        }
+      }
+    }
+    if (OB_SUCC(ret) && is_safe_filter_with_di_) {
+      if (OB_FAIL(pushdown_filters.check_filter_info(main_read_info_,
+                                                     is_safe_filter_with_di_))) {
+        LOG_WARN("Fail to check filter info", K(ret));
+      }
     }
   }
   return ret;
@@ -1734,7 +1749,9 @@ int64_t ObTableParam::to_string(char *buf, const int64_t buf_len) const
        K_(is_mlog_table),
        K_(is_enable_semistruct_encoding),
        K_(is_safe_filter_with_di),
-       K_(access_virtual_col_cnt));
+       K_(aggregate_param_props),
+       K_(access_virtual_col_cnt),
+       K_(plan_enable_rich_format));
   J_OBJ_END();
 
   return pos;

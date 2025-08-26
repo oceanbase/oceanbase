@@ -27,11 +27,13 @@ public:
   /* member list*/
   static int batch_lock_ls_member_list(const uint64_t tenant_id, const int64_t task_id,
       const common::ObArray<share::ObLSID> &lock_ls_list, const common::ObMemberList &member_list,
-      const ObTransferLockStatus &status, const int32_t group_id, common::ObMySQLProxy &sql_proxy);
+      const ObTransferLockStatus &status, const int32_t group_id, const share::ObLSID &unlock_check_ls_id, common::ObMySQLProxy &sql_proxy);
   static int lock_ls_member_list(const uint64_t tenant_id, const share::ObLSID &ls_id, const int64_t task_id,
-      const common::ObMemberList &member_list, const ObTransferLockStatus &status, const int32_t group_id, common::ObMySQLProxy &sql_proxy);
+      const common::ObMemberList &member_list, const ObTransferLockStatus &status, const int32_t group_id,
+      const share::ObLSID &unlock_check_ls_id, common::ObMySQLProxy &sql_proxy);
   static int unlock_ls_member_list(const uint64_t tenant_id, const share::ObLSID &ls_id, const int64_t task_id,
-      const common::ObMemberList &member_list, const ObTransferLockStatus &status, const int32_t group_id, common::ObMySQLProxy &sql_proxy);
+      const common::ObMemberList &member_list, const ObTransferLockStatus &status, const int32_t group_id,
+      const bool need_check_palf_leader, const share::ObLSID &need_check_palf_leader_ls_id, common::ObMySQLProxy &sql_proxy);
   static int unlock_for_ob_admin(const uint64_t tenant_id, const share::ObLSID &ls_id, const int64_t lock_id);
 
 public:
@@ -74,6 +76,7 @@ private:
       const int64_t lock_timeout, const int32_t group_id);
   static int init_storage_rpc_(obrpc::ObStorageRpcProxy &storage_svr_rpc_proxy, storage::ObStorageRpc &storage_rpc);
   static void destory_storage_rpc_(obrpc::ObStorageRpcProxy &storage_svr_rpc_proxy, storage::ObStorageRpc &storage_rpc);
+  static int check_is_palf_leader_(const uint64_t tenant_id, const share::ObLSID &ls_id);
 
 private:
   static const int64_t CONFIG_CHANGE_TIMEOUT = 10 * 1000 * 1000L;  // 10s

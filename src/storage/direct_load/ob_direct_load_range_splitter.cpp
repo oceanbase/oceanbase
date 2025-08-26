@@ -487,7 +487,7 @@ int ObDirectLoadSampleInfo::get_sstable_info(
 {
   int ret = OB_SUCCESS;
   if (sstable_array.empty()) {
-    origin_sample_num_ = 0;
+    sstable_sample_num_ = 0;
     sstable_rows_per_sample_ = 0;
   } else {
     int64_t total_row_count = 0;

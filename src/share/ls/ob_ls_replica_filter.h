@@ -31,6 +31,14 @@ public:
   virtual int check(const ObLSReplica &replica, bool &pass) const = 0;
 };
 
+class ObSSLOGReplicaFilter : public ObLSReplicaFilter
+{
+public:
+  ObSSLOGReplicaFilter() {}
+  virtual ~ObSSLOGReplicaFilter() {}
+  virtual int check(const ObLSReplica &replica, bool &pass) const;
+};
+
 // reserve ls replica by server
 class ObServerLSReplicaFilter : public ObLSReplicaFilter
 {

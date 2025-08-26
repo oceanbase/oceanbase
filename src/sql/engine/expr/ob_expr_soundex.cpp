@@ -64,7 +64,7 @@ int ObExprSoundex::calc_result_type1(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("raw expr is null", K(ret));
   } else {
-    if (type1.is_string_type() || type1.is_enum_or_set()) {
+    if (type1.is_string_type() || type1.is_enum_or_set() || type1.is_geometry()) {
       if (ObCharset::is_cs_nonascii(type1.get_collation_type())) {
         param_calc_cs_type = CS_TYPE_UTF8MB4_GENERAL_CI;
       }
@@ -79,6 +79,10 @@ int ObExprSoundex::calc_result_type1(
       } else if (ObTinyTextType == type1.get_type()) {
         res_type = ObVarcharType;
         res_length = OB_MAX_BINARY_LENGTH;
+      } else if (type1.is_geometry()) {
+        param_calc_type = ObHexStringType;
+        res_type = ObLongTextType;
+        res_length = OB_MAX_LONGTEXT_LENGTH;
       } else {
         res_type = ObLongTextType;
         res_length = OB_MAX_LONGTEXT_LENGTH;

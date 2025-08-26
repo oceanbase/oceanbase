@@ -45,7 +45,8 @@ public:
       probe_table_id_(OB_INVALID_ID),
       range_column_cnt_(-1),
       jf_material_control_info_(),
-      rf_max_wait_time_(0)
+      rf_max_wait_time_(0),
+      enable_runtime_filter_adaptive_apply_(true)
   { }
   virtual ~ObLogJoinFilter() = default;
   const char *get_name() const;
@@ -160,6 +161,9 @@ public:
     return all_join_key_left_exprs_.assign(exprs);
   }
 
+  void set_runtime_filter_adaptive_apply(bool value) { enable_runtime_filter_adaptive_apply_ = value; }
+  bool enable_runtime_filter_adaptive_apply() { return enable_runtime_filter_adaptive_apply_; }
+
 private:
   bool is_create_;   //判断是否是create算子
   int64_t filter_id_; //设置filter_id
@@ -188,6 +192,7 @@ private:
   ObJoinFilterMaterialControlInfo jf_material_control_info_;
   int64_t rf_max_wait_time_;
   common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> all_join_key_left_exprs_;
+  bool enable_runtime_filter_adaptive_apply_;
   DISALLOW_COPY_AND_ASSIGN(ObLogJoinFilter);
 };
 

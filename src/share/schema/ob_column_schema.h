@@ -201,6 +201,9 @@ int assign(const ObColumnSchemaV2 &src_schema);
   inline bool is_decimal_int() const { return meta_type_.is_decimal_int(); }
   inline bool is_string_lob() const { return column_flags_ & STRING_LOB_COLUMN_FLAG; }
   inline bool is_key_forbid_lob() const { return ob_is_text_tc(meta_type_.get_type()) && !is_string_lob(); }
+  inline bool is_mysql_date_or_date() const { return meta_type_.is_mysql_date_or_date(); }
+  inline bool is_mysql_datetime_or_datetime() const { return meta_type_.is_mysql_datetime_or_datetime(); }
+  inline bool is_timestamp() const { return meta_type_.is_timestamp(); }
 
   inline bool is_xmltype() const {
     return ((meta_type_.is_ext() || meta_type_.is_user_defined_sql_type()) && sub_type_ == T_OBJ_XML)

@@ -22,6 +22,40 @@ namespace oceanbase
 {
 namespace obrpc
 {
+struct ObMVRequiredColumnsInfo {
+  OB_UNIS_VERSION(1);
+
+public:
+  ObMVRequiredColumnsInfo()
+  : base_table_id_(OB_INVALID_ID)
+  {
+  }
+  ObMVRequiredColumnsInfo(const uint64_t base_table_id, const ObSEArray<uint64_t, 16> &required_columns)
+  {
+    base_table_id_ = base_table_id;
+    required_columns_.assign(required_columns);
+  }
+  int assign(const ObMVRequiredColumnsInfo &other);
+  TO_STRING_KV(K_(base_table_id), K_(required_columns));
+
+public:
+  uint64_t base_table_id_;
+  ObSEArray<uint64_t, 16> required_columns_;
+};
+
+struct ObMVAdditionalInfo {
+  OB_UNIS_VERSION(1);
+
+public:
+  share::schema::ObTableSchema container_table_schema_;
+  share::schema::ObMVRefreshInfo mv_refresh_info_;
+  ObSEArray<ObMVRequiredColumnsInfo, 8> required_columns_infos_;
+
+  int assign(const ObMVAdditionalInfo &other);
+
+  TO_STRING_KV(K_(container_table_schema), K_(mv_refresh_info));
+};
+
 struct ObMViewCompleteRefreshArg final : public ObDDLArg
 {
   OB_UNIS_VERSION(1);
@@ -37,7 +71,10 @@ public:
       tz_info_(),
       tz_info_wrap_(),
       nls_formats_(),
-      parent_task_id_(0)
+      parent_task_id_(0),
+      target_data_sync_scn_(),
+      select_sql_(),
+      required_columns_infos_()
   {
   }
   ~ObMViewCompleteRefreshArg() = default;
@@ -65,6 +102,10 @@ public:
   common::ObTimeZoneInfoWrap tz_info_wrap_;
   common::ObString nls_formats_[common::ObNLSFormatEnum::NLS_MAX];
   int64_t parent_task_id_;
+  // placeholder
+  share::SCN target_data_sync_scn_;
+  ObString select_sql_;
+  ObSEArray<ObMVRequiredColumnsInfo, 8> required_columns_infos_;
 };
 
 struct ObMViewCompleteRefreshRes final
@@ -101,7 +142,9 @@ public:
       last_refresh_scn_(),
       refresh_scn_(),
       start_time_(OB_INVALID_TIMESTAMP),
-      is_mview_complete_refresh_(false)
+      is_mview_complete_refresh_(false),
+      mview_target_data_sync_scn_(),
+      select_sql_()
   {
   }
   ~ObMViewRefreshInfo() = default;
@@ -119,6 +162,9 @@ public:
   share::SCN refresh_scn_;
   int64_t start_time_;
   bool is_mview_complete_refresh_;
+  // placeholer
+  share::SCN mview_target_data_sync_scn_;
+  ObString select_sql_;
 };
 
 struct ObAlterMViewArg
@@ -138,7 +184,9 @@ public:
     is_alter_refresh_start_(false),
     start_time_(),
     is_alter_refresh_next_(false),
-    next_time_expr_()
+    next_time_expr_(),
+    is_alter_nested_refresh_mode_(false),
+    nested_refresh_mode_(share::schema::ObMVNestedRefreshMode::MAX)
   {
   }
   ~ObAlterMViewArg() = default;
@@ -221,6 +269,9 @@ private:
   common::ObObj start_time_;
   bool is_alter_refresh_next_;
   ObString next_time_expr_;
+  // placeholer
+  bool is_alter_nested_refresh_mode_;
+  share::schema::ObMVNestedRefreshMode nested_refresh_mode_;
 };
 
 struct ObAlterMLogArg

@@ -1187,9 +1187,8 @@ int ObTransformSimplifyGroupby::convert_valid_count_aggr(ObSelectStmt *select_st
       if (OB_ISNULL(aggr = count_const.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null", K(ret), K(aggr));
-      } else if (OB_FAIL(ObTransformUtils::add_const_param_constraints(aggr->get_param_expr(0),
-                                                                       ctx_))) {
-        LOG_WARN("failed to add const param constraints", K(ret));
+      } else if (OB_FAIL(ObTransformUtils::add_param_not_null_constraint(*ctx_, aggr->get_param_expr(0)))) {
+        LOG_WARN("failed to add param not null constraint", K(ret));
       } else {
         aggr->get_real_param_exprs_for_update().reuse();
       }
@@ -1976,7 +1975,8 @@ int ObTransformSimplifyGroupby::find_null_propagate_select_exprs(ObSelectStmt *s
   for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_select_item_size(); ++i) {
     bool is_null_propagate = false;
     ObRawExpr *select_expr = stmt->get_select_item(i).expr_;
-    if (OB_FAIL(ObTransformUtils::is_null_propagate_expr(select_expr,
+    if (select_expr->has_flag(CNT_AGG)) {// do nothing
+    } else if (OB_FAIL(ObTransformUtils::is_null_propagate_expr(select_expr,
                                                          dummy_exprs,
                                                          is_null_propagate))) {
       LOG_WARN("failed to check null propagate expr", K(ret));                                                    

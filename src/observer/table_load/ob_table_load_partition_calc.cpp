@@ -131,7 +131,10 @@ int ObTableLoadPartitionCalc::init_part_key_index(const ObTableSchema *table_sch
     }
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(part_key_obj_index_.create(part_key_num, allocator))) {
+    if (OB_UNLIKELY(0 == part_key_num)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected zero part_key_num", KR(ret), K(part_key_num));
+    } else if (OB_FAIL(part_key_obj_index_.create(part_key_num, allocator))) {
       LOG_WARN("fail to create", KR(ret));
     }
   }

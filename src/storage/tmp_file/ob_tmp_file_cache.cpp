@@ -23,225 +23,61 @@ namespace oceanbase
 {
 namespace tmp_file
 {
-/* -------------------------- ObTmpBlockCacheKey --------------------------- */
-ObTmpBlockCacheKey::ObTmpBlockCacheKey()
-  : block_id_(-1), tenant_id_(OB_INVALID_TENANT_ID)
-{
-}
-
-ObTmpBlockCacheKey::ObTmpBlockCacheKey(const int64_t block_id, const uint64_t tenant_id)
-  : block_id_(block_id), tenant_id_(tenant_id)
-{
-}
-
-ObTmpBlockCacheKey::~ObTmpBlockCacheKey()
-{
-}
-
-bool ObTmpBlockCacheKey::operator ==(const ObIKVCacheKey &other) const
-{
-  const ObTmpBlockCacheKey &other_key = reinterpret_cast<const ObTmpBlockCacheKey &> (other);
-  return block_id_ == other_key.block_id_ && tenant_id_ == other_key.tenant_id_;
-}
-
-uint64_t ObTmpBlockCacheKey::get_tenant_id() const
-{
-  return tenant_id_;
-}
-
-uint64_t ObTmpBlockCacheKey::hash() const
-{
-  return murmurhash(this, sizeof(ObTmpBlockCacheKey), 0);
-}
-
-int64_t ObTmpBlockCacheKey::size() const
-{
-  return sizeof(*this);
-}
-
-int ObTmpBlockCacheKey::deep_copy(char *buf, const int64_t buf_len, ObIKVCacheKey *&key) const
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(buf) || OB_UNLIKELY(buf_len < size())) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invalid argument, ", KR(ret));
-  } else if (OB_UNLIKELY(!is_valid())) {
-    ret = OB_INVALID_DATA;
-    STORAGE_LOG(WARN, "invalid tmp block cache key, ", KPC(this), KR(ret));
-  } else {
-    key = new (buf) ObTmpBlockCacheKey(block_id_, tenant_id_);
-  }
-  return ret;
-}
-
-bool ObTmpBlockCacheKey::is_valid() const
-{
-  return OB_LIKELY(block_id_ >= 0 && tenant_id_ > 0 && size() > 0);
-}
-
-/* -------------------------- ObTmpBlockCacheValue --------------------------- */
-ObTmpBlockCacheValue::ObTmpBlockCacheValue(char *buf)
-  : buf_(buf), size_(ObTmpFileGlobal::SN_BLOCK_SIZE)
-{
-}
-
-ObTmpBlockCacheValue::~ObTmpBlockCacheValue()
-{
-}
-
-int64_t ObTmpBlockCacheValue::size() const
-{
-  return sizeof(*this) + size_;
-}
-
-int ObTmpBlockCacheValue::deep_copy(char *buf, const int64_t buf_len, ObIKVCacheValue *&value) const
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(buf) || OB_UNLIKELY(buf_len < size())) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid arguments", KR(ret), KP(buf), K(buf_len),
-                      "request_size", size());
-  } else if (OB_UNLIKELY(!is_valid())) {
-    ret = OB_INVALID_DATA;
-    STORAGE_LOG(WARN, "invalid tmp block cache value", KR(ret));
-  } else {
-    ObTmpBlockCacheValue *blk_cache_value = new (buf) ObTmpBlockCacheValue(buf + sizeof(*this));
-    MEMCPY(buf + sizeof(*this), buf_, size() - sizeof(*this));
-    blk_cache_value->size_ = size_;
-    value = blk_cache_value;
-  }
-  return ret;
-}
-
-/* -------------------------- ObTmpBlockCache --------------------------- */
-
-ObTmpBlockCache &ObTmpBlockCache::get_instance()
-{
-  static ObTmpBlockCache instance;
-  return instance;
-}
-
-int ObTmpBlockCache::init(const char *cache_name, const int64_t priority)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL((common::ObKVCache<ObTmpBlockCacheKey, ObTmpBlockCacheValue>::init(
-      cache_name, priority)))) {
-    STORAGE_LOG(WARN, "Fail to init kv cache, ", KR(ret));
-  }
-  return ret;
-}
-
-void ObTmpBlockCache::destroy()
-{
-  common::ObKVCache<ObTmpBlockCacheKey, ObTmpBlockCacheValue>::destroy();
-}
-
-int ObTmpBlockCache::get_block(const ObTmpBlockCacheKey &key, ObTmpBlockValueHandle &handle)
-{
-  int ret = OB_SUCCESS;
-  const ObTmpBlockCacheValue *value = NULL;
-  if (OB_UNLIKELY(!key.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid arguments", KR(ret), K(key));
-  } else if (OB_FAIL(get(key, value, handle.handle_))) {
-    if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
-      STORAGE_LOG(WARN, "fail to get key from block cache", KR(ret), K(key));
-    } else {
-      EVENT_INC(ObStatEventIds::TMP_BLOCK_CACHE_MISS);
-    }
-  } else {
-    if (OB_ISNULL(value)) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "unexpected error, the value must not be NULL", KR(ret));
-    } else {
-      handle.value_ = const_cast<ObTmpBlockCacheValue *>(value);
-      EVENT_INC(ObStatEventIds::TMP_BLOCK_CACHE_HIT);
-    }
-  }
-  return ret;
-}
-
-int ObTmpBlockCache::put_block(ObKVCacheInstHandle &inst_handle,
-                               ObKVCachePair *&kvpair,
-                               ObTmpBlockValueHandle &block_handle)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inst_handle.is_valid() || nullptr == kvpair || !block_handle.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", KR(ret), K(inst_handle), KP(kvpair), K(block_handle));
-  } else if (OB_FAIL(put_kvpair(inst_handle, kvpair, block_handle.handle_, false/*overwrite*/))) {
-    STORAGE_LOG(WARN, "fail to put tmp block to block cache", KR(ret));
-  } else {
-    // refresh the block cache score by calling get_block() to prevent eviction,
-    // otherwise new block's score is 0 and may be evicted immediately
-    ObTmpBlockValueHandle block_value_handle;
-    const ObIKVCacheKey &key = *kvpair->key_;
-    get_block(dynamic_cast<const ObTmpBlockCacheKey &>(key), block_value_handle);
-  }
-
-  return ret;
-}
-
-int ObTmpBlockCache::prealloc_block(const ObTmpBlockCacheKey &key, ObKVCacheInstHandle &inst_handle,
-                                    ObKVCachePair *&kvpair,
-                                    ObTmpBlockValueHandle &block_handle)
-{
-  int ret = OB_SUCCESS;
-  inst_handle.reset();
-  kvpair = nullptr;
-  block_handle.reset();
-  if (OB_UNLIKELY(!key.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", KR(ret), K(key));
-  } else if (OB_FAIL(alloc(key.get_tenant_id(), key.size(),
-                     sizeof(ObTmpBlockCacheValue) + ObTmpFileGlobal::SN_BLOCK_SIZE,
-                     kvpair, block_handle.handle_, inst_handle))) {
-    STORAGE_LOG(WARN, "failed to alloc kvcache buf", KR(ret), K(key));
-  } else if (OB_FAIL(key.deep_copy(reinterpret_cast<char *>(kvpair->key_),
-                     key.size(), kvpair->key_))) {
-    STORAGE_LOG(WARN, "failed to deep copy key", KR(ret), K(key));
-  } else {
-    char *buf = reinterpret_cast<char *>(kvpair->value_);
-    block_handle.value_ = new (buf) ObTmpBlockCacheValue(buf + sizeof(ObTmpBlockCacheValue));
-  }
-
-  if (OB_FAIL(ret)) {
-    block_handle.reset();
-    inst_handle.reset();
-    kvpair = NULL;
-  }
-  return ret;
-}
-
 /* -------------------------- ObTmpPageCacheKey --------------------------- */
 ObTmpPageCacheKey::ObTmpPageCacheKey()
-  : block_id_(-1), page_id_(-1), tenant_id_(OB_INVALID_TENANT_ID)
+  : page_key_(), tenant_id_(OB_INVALID_TENANT_ID)
 {
 }
 
-ObTmpPageCacheKey::ObTmpPageCacheKey(const int64_t block_id, const int64_t page_id,
-    const uint64_t tenant_id)
-  : block_id_(block_id), page_id_(page_id), tenant_id_(tenant_id)
+ObTmpPageCacheKey::ObTmpPageCacheKey(const ObTmpFileWriteCacheKey &page_key, const uint64_t tenant_id)
 {
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!page_key.is_valid() || tenant_id == OB_INVALID_TENANT_ID)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(ERROR, "invalid argument", KR(ret), K(page_key), K(tenant_id));
+  } else {
+    page_key_ = page_key;
+    tenant_id_ = tenant_id;
+  }
 }
 
-ObTmpPageCacheKey::ObTmpPageCacheKey(const int64_t tmp_file_id,
-                                     const uint64_t unfilled_page_length,
-                                     const uint64_t virtual_page_id,
+ObTmpPageCacheKey::ObTmpPageCacheKey(const int64_t fd,
+                                     const int64_t virtual_page_id,
+                                     const int64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  // Validate Check.
+  if (OB_UNLIKELY(fd == ObTmpFileGlobal::INVALID_TMP_FILE_FD ||
+                  virtual_page_id == ObTmpFileGlobal::INVALID_VIRTUAL_PAGE_ID ||
+                  tenant_id == OB_INVALID_TENANT_ID)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(ERROR, "invalid argument", KR(ret), K(fd), K(virtual_page_id), K(tenant_id));
+  } else {
+    page_key_.type_ = PageType::DATA;
+    page_key_.fd_ = fd;
+    page_key_.virtual_page_id_ = virtual_page_id;
+    tenant_id_ = tenant_id;
+  }
+}
+
+ObTmpPageCacheKey::ObTmpPageCacheKey(const int64_t fd,
+                                     const int64_t tree_level,
+                                     const int64_t level_page_index,
                                      const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   // Validate Check.
-  if (OB_UNLIKELY(
-          tmp_file_id <= 0 || unfilled_page_length >= PAGE_CACHE_KEY_PAGE_LENGTH_MAX ||
-          virtual_page_id >= PAGE_CACHE_KEY_VIRTUAL_PAGE_ID_MAX || tenant_id <= 0)) {
+  if (OB_UNLIKELY(fd == ObTmpFileGlobal::INVALID_TMP_FILE_FD ||
+                  tree_level < 0 ||
+                  level_page_index < 0 ||
+                  tenant_id == OB_INVALID_TENANT_ID)) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(ERROR, "unexpected tmp page cache key", KR(ret), K(tmp_file_id),
-                K(unfilled_page_length), K(virtual_page_id), K(tenant_id));
+    STORAGE_LOG(ERROR, "invalid argument", KR(ret), K(fd), K(tree_level), K(level_page_index), K(tenant_id));
   } else {
-    tmp_file_id_ = tmp_file_id;
-    unfilled_page_length_ = unfilled_page_length;
-    virtual_page_id_ = virtual_page_id;
+    page_key_.type_ = PageType::META;
+    page_key_.fd_ = fd;
+    page_key_.tree_level_ = tree_level;
+    page_key_.level_page_index_ = level_page_index;
     tenant_id_ = tenant_id;
   }
 }
@@ -253,9 +89,10 @@ ObTmpPageCacheKey::~ObTmpPageCacheKey()
 bool ObTmpPageCacheKey::operator ==(const ObIKVCacheKey &other) const
 {
   const ObTmpPageCacheKey &other_key = reinterpret_cast<const ObTmpPageCacheKey &> (other);
-  return block_id_ == other_key.block_id_
-         && page_id_ == other_key.page_id_
-         && tenant_id_ == other_key.tenant_id_;
+  return page_key_.type_ == other_key.page_key_.type_ &&
+         page_key_.fd_ == other_key.page_key_.fd_ &&
+         page_key_.virtual_page_id_ == other_key.page_key_.virtual_page_id_ &&
+         tenant_id_ == other_key.tenant_id_;
 }
 
 uint64_t ObTmpPageCacheKey::get_tenant_id() const
@@ -283,26 +120,24 @@ int ObTmpPageCacheKey::deep_copy(char *buf, const int64_t buf_len, ObIKVCacheKey
     ret = OB_INVALID_DATA;
     STORAGE_LOG(WARN, "invalid tmp page cache key, ", KPC(this), KR(ret));
   } else {
-    key = new (buf) ObTmpPageCacheKey(block_id_, page_id_, tenant_id_);
+    key = new (buf) ObTmpPageCacheKey(page_key_, tenant_id_);
   }
   return ret;
 }
 
 bool ObTmpPageCacheKey::is_valid() const
 {
-  return OB_LIKELY(block_id_ >= 0 && page_id_ >= 0 && tenant_id_ > 0 && size() > 0);
+  return OB_LIKELY(page_key_.is_valid() && tenant_id_ != OB_INVALID_TENANT_ID && size() > 0);
 }
 
 int64_t ObTmpPageCacheKey::to_string(char* buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
   J_OBJ_START();
-  if (!GCTX.is_shared_storage_mode()) {
-    J_KV(K(block_id_), K(page_id_), K(tenant_id_));
-  #ifdef OB_BUILD_SHARED_STORAGE
+  if (page_key_.type_ == PageType::DATA) {
+    J_KV(K(page_key_.type_), K(page_key_.fd_), K(page_key_.virtual_page_id_), K(tenant_id_));
   } else {
-    J_KV(K(tmp_file_id_), K(unfilled_page_length_), K(virtual_page_id_), K(tenant_id_));
-  #endif
+    J_KV(K(page_key_.type_), K(page_key_.fd_), K(page_key_.level_page_index_), K(page_key_.tree_level_), K(tenant_id_));
   }
   J_OBJ_END();
   return pos;
@@ -490,7 +325,7 @@ void ObTmpPageCache::try_put_page_to_cache(const ObTmpPageCacheKey &key,
   if (OB_UNLIKELY(!key.is_valid() || !value.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid arguments", KR(ret), K(key), K(value));
-  } else if (OB_FAIL(put(key, value, false/*overwrite*/))) {
+  } else if (OB_FAIL(put(key, value, true/*overwrite*/))) {
     STORAGE_LOG(WARN, "fail to put tmp page into cache", KR(ret), K(key), K(value));
   } else {
     // refresh the page cache score by calling get_page() to prevent eviction,
@@ -501,16 +336,20 @@ void ObTmpPageCache::try_put_page_to_cache(const ObTmpPageCacheKey &key,
 }
 
 int ObTmpPageCache::load_page(const ObTmpPageCacheKey &key,
+                              const int64_t block_index,
+                              const int64_t physical_page_id,
                               ObIAllocator *callback_allocator,
-                              ObTmpPageValueHandle &p_handle)
+                              ObTmpPageValueHandle &p_handle,
+                              const int64_t io_timeout_ms)
 {
   int ret = OB_SUCCESS;
   ObKVCacheInstHandle inst_handle;
   ObKVCachePair *kvpair = NULL;
   p_handle.reset();
-  if (OB_UNLIKELY(!key.is_valid())) {
+  if (OB_UNLIKELY(!key.is_valid() ||
+                  physical_page_id < 0 || physical_page_id >= ObTmpFileGlobal::BLOCK_PAGE_NUMS)) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", KR(ret), K(key));
+    STORAGE_LOG(WARN, "invalid argument", KR(ret), K(key), K(physical_page_id));
   } else if (OB_ISNULL(callback_allocator)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "callback_allocator is unexpected nullptr", KR(ret), K(key));
@@ -528,24 +367,27 @@ int ObTmpPageCache::load_page(const ObTmpPageCacheKey &key,
     char *buf = reinterpret_cast<char *>(kvpair->value_);
     p_handle.value_ = new (buf) ObTmpPageCacheValue(buf + sizeof(ObTmpPageCacheValue));
   }
+
   if (OB_SUCC(ret)) {
     ObTmpFileBlockManager &block_manager = MTL(ObTenantTmpFileManager*)->get_sn_file_manager().get_tmp_file_block_manager();
     blocksstable::ObStorageObjectHandle obj_handle;
-    blocksstable::MacroBlockId macro_block_id;
-    //TODO: io_desc and io_timeout_ms value settings
+    //TODO: io_desc value settings
     common::ObIOFlag io_desc;
-    io_desc.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
-    int64_t io_timeout_ms = 10 * 1000; // 10s
+    io_desc.set_wait_event(ObWaitEventIds::TMP_FILE_READ);
     ObTmpPageCacheReadInfo read_info;
+    blocksstable::MacroBlockId macro_block_id;
 
-    if (OB_FAIL(block_manager.get_macro_block_id(key.get_block_id(), macro_block_id))) {
-      STORAGE_LOG(WARN, "failed to get macro block id", KR(ret), K(key));
+    if (OB_FAIL(block_manager.get_macro_block_id(block_index, macro_block_id))) {
+      STORAGE_LOG(WARN, "fail to get macro block id", KR(ret), K(block_index));
+    } else if (OB_UNLIKELY(!macro_block_id.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "unexpected macro_block_id", KR(ret), K(macro_block_id));
     } else if (OB_FAIL(read_info.init_read(macro_block_id, ObTmpFileGlobal::PAGE_SIZE,
-                                           key.get_page_id() * ObTmpFileGlobal::PAGE_SIZE,
-                                           io_desc, io_timeout_ms,
-                                           &obj_handle))) {
-      STORAGE_LOG(WARN, "failed to get macro block id", KR(ret), K(macro_block_id), K(key),
-                                                        K(io_desc), K(io_timeout_ms), K(obj_handle));
+                                    physical_page_id * ObTmpFileGlobal::PAGE_SIZE,
+                                    io_desc, io_timeout_ms,
+                                    &obj_handle))) {
+      STORAGE_LOG(WARN, "failed to init read", KR(ret), K(macro_block_id), K(key),
+                  K(physical_page_id), K(io_desc), K(io_timeout_ms), K(obj_handle));
     } else if (OB_FAIL(direct_read(read_info, *callback_allocator))) {
       STORAGE_LOG(WARN, "failed to alloc kvcache buf", KR(ret), K(read_info), KP(callback_allocator));
     } else if (OB_FAIL(obj_handle.wait())) {
@@ -678,7 +520,7 @@ int ObTmpPageCache::aggregate_read(const common::ObIArray<std::pair<ObTmpPageCac
 // refactor logic of callback.
 // currently, the buffer of callback is freed in different places.
 // if async_read_() is failed, it will be released in here;
-// otherwise, it will be released after ObTmpFileIOCtx::do_read_wait_() has been called.
+// otherwise, it will be released after ObTmpFileIOReadCtx::do_read_wait_() has been called.
 // (callback is bound with ObIOResult of io_handle, do_read_wait_() will call reset() of io_handle to
 //  destroy callback and its data buf)
 // we need to refactor it by removing callback allocator and directly copy read io buf to user buf

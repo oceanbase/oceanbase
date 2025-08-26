@@ -18,6 +18,7 @@
 #include "storage/truncate_info/ob_truncate_info_array.h"
 #include "storage/blocksstable/ob_imicro_block_reader.h"
 #include "storage/blocksstable/ob_datum_row.h"
+#include "lib/container/ob_fixed_array_iterator.h"
 
 namespace oceanbase
 {

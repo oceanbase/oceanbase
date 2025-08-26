@@ -114,7 +114,7 @@ protected:
 
 protected:
   static const int64_t DEFAULT_DECODER_CNT = 16;
-
+  ObMicroBlockAddr block_addr_;
   int64_t request_cnt_;  // request column count
   const ObBlockCachedCSDecoderHeader *cached_decoder_;
   ObColumnCSDecoder *decoders_;
@@ -135,7 +135,6 @@ protected:
   common::ObObjMeta *column_type_array_;
   int32_t default_store_ids_[DEFAULT_DECODER_CNT];
   common::ObObjMeta default_column_types_[DEFAULT_DECODER_CNT];
-  bool need_cast_;
   ObSemiStructDecodeCtx semistruct_decode_ctx_;
   static ObNoneExistColumnCSDecoder none_exist_column_decoder_;
   static ObColumnCSDecoderCtx none_exist_column_decoder_ctx_;
@@ -147,16 +146,18 @@ public:
   void reuse();
   ObCSEncodeBlockGetReader() = default;
   virtual ~ObCSEncodeBlockGetReader() = default;
-  virtual int get_row(const ObMicroBlockData &block_data, const ObDatumRowkey &rowkey,
-    const ObITableReadInfo &read_info, ObDatumRow &row) final;
+  virtual int get_row(const ObMicroBlockAddr &block_addr, const ObMicroBlockData &block_data,
+      const ObDatumRowkey &rowkey, const ObITableReadInfo &read_info, ObDatumRow &row) final;
   virtual int exist_row(const ObMicroBlockData &block_data, const ObDatumRowkey &rowkey,
     const ObITableReadInfo &read_info, bool &exist, bool &found);
   virtual int get_row(
+      const ObMicroBlockAddr &block_addr,
       const ObMicroBlockData &block_data,
       const ObITableReadInfo &read_info,
       const uint32_t row_idx,
       ObDatumRow &row) final;
   int get_row_id(
+      const ObMicroBlockAddr &block_addr,
       const ObMicroBlockData &block_data,
       const ObDatumRowkey &rowkey,
       const ObITableReadInfo &read_info,
@@ -166,7 +167,8 @@ protected:
   int get_all_columns(const int64_t row_id, ObDatumRow &row);
 
 private:
-  int init(const ObMicroBlockData &block_data, const ObITableReadInfo &read_info);
+  int init(const ObMicroBlockAddr &block_addr, const ObMicroBlockData &block_data, const ObITableReadInfo &read_info);
+  int init_if_need(const ObMicroBlockAddr &block_addr, const ObMicroBlockData &block_data, const ObITableReadInfo &read_info);
   int init(const ObMicroBlockData &block_data, const int64_t schema_rowkey_cnt,
            const ObColDescIArray &cols_desc, const int64_t request_cnt);
   int locate_row(const ObDatumRowkey &rowkey, const ObStorageDatumUtils &datum_utils,
@@ -271,9 +273,16 @@ public:
     const bool is_padding_mode, storage::ObGroupByCellBase &group_by_cell) const override;
   virtual int read_reference(const int32_t group_by_col, const int32_t *row_ids,
     const int64_t row_cap, storage::ObGroupByCellBase &group_by_cell) const override;
-  virtual int get_group_by_aggregate_result(const int32_t *row_ids, const char **cell_datas,
-    const int64_t row_cap, storage::ObGroupByCell &group_by_cell) override;
   virtual int get_group_by_aggregate_result(
+      const ObTableIterParam &iter_param,
+      const ObTableAccessContext &context,
+      const int32_t *row_ids,
+      const char **cell_datas,
+      const int64_t row_cap,
+      storage::ObGroupByCell &group_by_cell) override;
+  virtual int get_group_by_aggregate_result(
+      const ObTableIterParam &iter_param,
+      const ObTableAccessContext &context,
       const int32_t *row_ids,
       const char **cell_datas,
       const int64_t row_cap,
@@ -281,7 +290,8 @@ public:
       const common::ObIArray<blocksstable::ObStorageDatum> &default_datums,
       uint32_t *len_array,
       sql::ObEvalCtx &eval_ctx,
-      storage::ObGroupByCellVec &group_by_cell) override;
+      storage::ObGroupByCellVec &group_by_cell,
+      const bool enable_rich_format) override;
   virtual int get_rows(
       const common::ObIArray<int32_t> &cols,
       const common::ObIArray<const share::schema::ObColumnParam *> &col_params,

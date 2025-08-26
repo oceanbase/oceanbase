@@ -30,7 +30,10 @@ OB_SERIALIZE_MEMBER(ObMViewOpArg,
                     read_snapshot_,
                     parallel_,
                     session_id_,
-                    start_ts_);
+                    start_ts_,
+                    refresh_id_,
+                    nested_mview_lists_,
+                    target_data_sync_scn_);
 
 int ObMViewMdsOpHelper::on_register(
       const char* buf,
@@ -95,6 +98,11 @@ int ObMViewOpArg::assign(const ObMViewOpArg& other)
   parallel_ = other.parallel_;
   session_id_ = other.session_id_;
   start_ts_ = other.start_ts_;
+  refresh_id_ = other.refresh_id_;
+  target_data_sync_scn_ = other.target_data_sync_scn_;
+  if (OB_FAIL(nested_mview_lists_.assign(other.nested_mview_lists_))) {
+    LOG_WARN("failed to copy nested mview lists", KR(ret), K(other));
+  }
   return ret;
 }
 

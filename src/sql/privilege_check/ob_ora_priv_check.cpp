@@ -2142,8 +2142,9 @@ int ObOraSysChecker::check_ora_obj_priv(
             }
           }
         } else if (obj_type == static_cast<uint64_t>(ObObjectType::DIRECTORY)
-                   || obj_type == static_cast<uint64_t>(ObObjectType::CATALOG)) {
-          /* directory, catalog对象的owner是sys */
+                   || obj_type == static_cast<uint64_t>(ObObjectType::CATALOG)
+                   || obj_type == static_cast<uint64_t>(ObObjectType::LOCATION)) {
+          /* directory, catalog和location对象的owner是sys */
           OZ (check_obj_p1(guard, tenant_id, user_id, obj_type,
                           obj_id, col_id, raw_obj_priv, NO_OPTION, role_id_array),
               tenant_id, user_id, obj_type, obj_id, col_id, raw_obj_priv, NO_OPTION);
@@ -2152,7 +2153,7 @@ int ObOraSysChecker::check_ora_obj_priv(
           if (!OB_SUCC(ret)) {
             ret = (obj_type == static_cast<uint64_t>(ObObjectType::DIRECTORY))
                   ? OB_ERR_DIRECTORY_ACCESS_DENIED
-                  : OB_ERR_NO_CATALOG_PRIVILEGE;
+                  : (obj_type == static_cast<uint64_t>(ObObjectType::CATALOG)? OB_ERR_NO_CATALOG_PRIVILEGE : OB_ERR_LOCATION_ACCESS_DENIED);
           }
         } else {
           ret = OB_TABLE_NOT_EXIST;
@@ -2424,6 +2425,19 @@ int ObOraSysChecker::check_ora_ddl_priv(
       }
       case stmt::T_LOAD_TIME_ZONE_INFO: {
         DEFINE_PUB_CHECK_CMD(PRIV_ID_ALTER_SYSTEM);
+        break;
+      }
+      case stmt::T_CREATE_LOCATION:
+      case stmt::T_DROP_LOCATION: {
+        DEFINE_PUB_CHECK_CMD(PRIV_ID_CREATE_LOCATION);
+        break;
+      }
+      case stmt::T_CREATE_CCL_RULE: {
+        DEFINE_PUB_CHECK_CMD(PRIV_ID_CREATE_ANY_CCL_RULE);
+        break;
+      }
+      case stmt::T_DROP_CCL_RULE: {
+        DEFINE_PUB_CHECK_CMD(PRIV_ID_DROP_ANY_CCL_RULE);
         break;
       }
       default: {

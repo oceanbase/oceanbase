@@ -185,7 +185,7 @@ private:
   ObTableLoadInstance instance_;
   ObTableLoadInstance::TransCtx trans_ctx_;
   int64_t next_batch_id_ CACHE_ALIGNED;
-  mutable obsys::ObRWLock rw_lock_;
+  mutable obsys::ObRWLock<> rw_lock_;
   table::ObTableLoadClientStatus client_status_;
   int error_code_;
   table::ObTableLoadResultInfo result_info_;

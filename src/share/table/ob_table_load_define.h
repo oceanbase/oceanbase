@@ -26,8 +26,6 @@ namespace oceanbase
 namespace table
 {
 
-static constexpr uint64_t OB_STORAGE_ID_DDL = 2000;
-
 struct ObTableLoadConfig final
 {
   OB_UNIS_VERSION(1);

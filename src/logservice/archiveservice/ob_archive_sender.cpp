@@ -18,6 +18,8 @@
 #include "ob_archive_task_queue.h"   // ObArchiveTaskStatus
 #include "ob_archive_io.h"           // ObArchiveIO
 #include "share/backup/ob_archive_path.h"   // ObArchivePathUtil
+#include "share/scn.h"   // ObArchivePathUtil
+#include "ob_archive_fetcher.h"           // ObArchiveFetcher
 
 namespace oceanbase
 {
@@ -29,6 +31,7 @@ ObArchiveSender::ObArchiveSender() :
   inited_(false),
   tenant_id_(OB_INVALID_TENANT_ID),
   allocator_(NULL),
+  archive_fetcher_(NULL),
   ls_mgr_(NULL),
   persist_mgr_(NULL),
   round_mgr_(NULL),
@@ -46,6 +49,7 @@ ObArchiveSender::~ObArchiveSender()
 int ObArchiveSender::init(const uint64_t tenant_id,
     ObArchiveAllocator *allocator,
     ObArchiveLSMgr *ls_mgr,
+    ObArchiveFetcher *fetcher,
     ObArchivePersistMgr *persist_mgr,
     ObArchiveRoundMgr *round_mgr)
 {
@@ -57,6 +61,7 @@ int ObArchiveSender::init(const uint64_t tenant_id,
     ARCHIVE_LOG(WARN, "archive sender init twice", K(ret), K(tenant_id_));
   } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)
       || OB_ISNULL(allocator_ = allocator)
+      || OB_ISNULL(archive_fetcher_ = fetcher)
       || OB_ISNULL(ls_mgr_ = ls_mgr)
       || OB_ISNULL(persist_mgr_ = persist_mgr)
       || OB_ISNULL(round_mgr_ = round_mgr)) {
@@ -82,6 +87,7 @@ void ObArchiveSender::destroy()
     task_queue_.destroy();
     tenant_id_ = OB_INVALID_TENANT_ID;
     allocator_ = NULL;
+    archive_fetcher_ = NULL;
     ls_mgr_ = NULL;
     persist_mgr_ = NULL;
     round_mgr_ = NULL;
@@ -232,7 +238,8 @@ void ObArchiveSender::do_thread_task_()
     if (OB_FAIL(try_free_send_task_())) {
       ARCHIVE_LOG(WARN, "try free send task failed", K(ret));
     }
-    ob_usleep(100 * 1000L, true /*idle sleep*/);
+    const int64_t sleep_time = cal_thread_run_interval();
+    ob_usleep(sleep_time, true /*idle sleep*/);
   }
 
   if (REACH_TIME_INTERVAL(10 * 1000 * 1000L)) {
@@ -271,6 +278,7 @@ int ObArchiveSender::do_consume_send_task_()
       case TaskConsumeStatus::DONE:
         break;
       case TaskConsumeStatus::STALE_TASK:
+        (void) release_ref_file_id_(task);
         task->mark_stale();
         break;
       case TaskConsumeStatus::NEED_RETRY:
@@ -282,6 +290,7 @@ int ObArchiveSender::do_consume_send_task_()
       default:
         ret = OB_ERR_UNEXPECTED;
         ARCHIVE_LOG(ERROR, "handle send_task status unexpected", K(consume_status), KPC(task));
+        (void) release_ref_file_id_(task);
         task->mark_stale();
         break;
     }
@@ -314,6 +323,7 @@ int ObArchiveSender::get_send_task_(ObArchiveSendTask *&task, bool &exist)
     ARCHIVE_LOG(ERROR, "link is NULL", K(ret));
   } else {
     task = static_cast<ObArchiveSendTask *>(link);
+    task->consume_ts_ = ObTimeUtility::current_time();
     exist = true;
   }
 
@@ -328,7 +338,9 @@ int ObArchiveSender::get_send_task_(ObArchiveSendTask *&task, bool &exist)
   // if no task exist, sleep
   if (! exist) {
     common::ObBKGDSessInActiveGuard inactive_guard;
-    send_cond_.timedwait(10 * 1000L);
+    int64_t start_wait_ts = ObTimeUtility::current_time();
+    send_cond_.timedwait(100 * 1000L);
+    ARCHIVE_LOG(TRACE, "task not exist, wait time", "time_cost", ObTimeUtility::current_time() - start_wait_ts);
   }
 
   return ret;
@@ -443,7 +455,7 @@ void ObArchiveSender::handle(ObArchiveSendTask &task, TaskConsumeStatus &consume
       } else {
         consume_status = TaskConsumeStatus::DONE;
         // after archive_log, task is marked finish and not safe, can not print it any more
-        ARCHIVE_LOG(INFO, "archive log succ", K(id));
+        ARCHIVE_LOG(TRACE, "archive log succ", K(id));
       }
     }
   }
@@ -606,7 +618,16 @@ int ObArchiveSender::archive_log_(const ObBackupDest &backup_dest,
     ARCHIVE_LOG(WARN, "push log failed", K(ret), K(task));
   // 7. 更新日志流归档任务archive file info
   } else {
+    task.finish_ts_ = common::ObTimeUtility::current_time();
     task.update_file(file_id, file_offset + task.get_buf_size());
+
+    ARCHIVE_LOG(INFO, "print send task stat", K(id), K(task), KP(&task),
+                "generate_to_submit_cost", task.submit_ts_ - task.generate_ts_,
+                "submit_to_consume_cost", task.consume_ts_ - task.submit_ts_,
+                "consume_to_finish_cost", task.finish_ts_ - task.consume_ts_,
+                "total_cost", task.finish_ts_ - task.generate_ts_);
+
+    (void) release_ref_file_id_(&task);
     if (task.finish_task()) {
       ARCHIVE_LOG(INFO, "finish task succ", K(id));
     } else {
@@ -723,7 +744,7 @@ int ObArchiveSender::push_log_(const ObLSID &id,
   if (OB_FAIL(archive_io.push_log(uri, storage_info, backup_dest_id, data, data_len, offset, is_full_file, is_can_seal))) {
     ARCHIVE_LOG(WARN, "push log failed", K(ret));
   } else {
-    ARCHIVE_LOG(INFO, "push log succ", K(id));
+    ARCHIVE_LOG(TRACE, "push log succ", K(id));
   }
   return ret;
 }
@@ -792,6 +813,13 @@ void ObArchiveSender::handle_archive_ret_code_(const ObLSID &id,
           "archive_dest_id", key.dest_id_,
           "archive_round", key.round_);
     }
+  } else if (OB_BACKUP_IO_PROHIBITED == ret_code) {
+    // archive dest io prohibited
+    if (REACH_TIME_INTERVAL(ARCHIVE_DBA_ERROR_LOG_PRINT_INTERVAL)) {
+      LOG_DBA_ERROR(OB_BACKUP_IO_PROHIBITED, "msg", "archive dest io prohibited", "ret", ret_code,
+          "archive_dest_id", key.dest_id_,
+          "archive_round", key.round_);
+    }
   } else if (OB_ERR_AES_DECRYPT == ret_code) {
     // archive desc decrypt failed
     if (REACH_TIME_INTERVAL(ARCHIVE_DBA_ERROR_LOG_PRINT_INTERVAL)) {
@@ -857,6 +885,7 @@ bool ObArchiveSender::is_retry_ret_code_(const int ret_code) const
     || OB_OBJECT_STORAGE_PERMISSION_DENIED == ret_code
     || OB_ERR_AES_ENCRYPT == ret_code
     || OB_ERR_AES_DECRYPT == ret_code
+    || OB_BACKUP_IO_PROHIBITED == ret_code
     || OB_TIMEOUT == ret_code
     || OB_FILE_OR_DIRECTORY_PERMISSION_DENIED == ret_code
     || OB_NO_SUCH_FILE_OR_DIRECTORY == ret_code
@@ -922,6 +951,23 @@ int ObArchiveSender::free_residual_task_()
       } else {
         ARCHIVE_LOG(INFO, "free task_status when sender destroy succ");
       }
+    }
+  }
+  return ret;
+}
+
+int ObArchiveSender::release_ref_file_id_(ObArchiveSendTask *task)
+{
+  int ret = OB_SUCCESS;
+  const ObLSID id = task->get_ls_id();
+  const LSN lsn = task->get_start_lsn();
+  const int64_t file_id = cal_archive_file_id(lsn, MAX_ARCHIVE_FILE_SIZE);
+  GET_LS_TASK_CTX(ls_mgr_, id) {
+    if (OB_FAIL(ls_archive_task->release_ref_file_id(file_id))) {
+      ARCHIVE_LOG(WARN, "failed to release file id ref", K(ret), K(id), K(file_id));
+    } else {
+      ARCHIVE_LOG(TRACE, "release_ref_file_id", K(id), K(file_id), K(lsn));
+      archive_fetcher_->signal();
     }
   }
   return ret;

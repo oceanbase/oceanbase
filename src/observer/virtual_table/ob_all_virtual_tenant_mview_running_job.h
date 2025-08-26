@@ -43,6 +43,7 @@ private:
     READ_SNAPSHOT,
     PARALLEL,
     JOB_START_TIME,
+    TARGET_DATA_SYNC_SCN,
   };
   class FillScanner
   {

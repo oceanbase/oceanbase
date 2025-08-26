@@ -317,6 +317,7 @@ private:
   DEF_SCHEMA_INFO_FETCHER(tablespace, ObTablespaceSchema); 
   DEF_SCHEMA_INFO_FETCHER(profile, ObProfileSchema);
   DEF_SCHEMA_INFO_FETCHER(mock_fk_parent_table, ObMockFKParentTableSchema);
+  DEF_SCHEMA_INFO_FETCHER(ccl_rule, ObCCLRuleSchema);
 #undef DEF_SCHEMA_INFO_FETCHER
 #endif
 

@@ -14,11 +14,24 @@
 #include "lib/allocator/page_arena.h"
 #include "share/ls/ob_ls_replica_filter.h"
 #include "share/ls/ob_ls_info.h" // ObLSReplica
+#include "share/ob_define.h"
 
 namespace oceanbase
 {
 namespace share
 {
+
+int ObSSLOGReplicaFilter::check(const ObLSReplica &replica, bool &pass) const
+{
+  int ret = OB_SUCCESS;
+  pass = true;
+  if (is_tenant_sslog_ls(replica.get_tenant_id(), replica.get_ls_id())
+   && replica.get_in_learner_list()) {
+    pass = false;
+  }
+  return ret;
+}
+
 int ObServerLSReplicaFilter::check(const ObLSReplica &replica, bool &pass) const
 {
   int ret = OB_SUCCESS;

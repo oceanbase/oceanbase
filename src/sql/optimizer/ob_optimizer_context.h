@@ -178,6 +178,36 @@ private:
   int64_t network_speed_;
 };
 
+struct DeducedExprInfo {
+  DeducedExprInfo() :
+  deduced_expr_(NULL),
+  deduced_from_expr_(NULL),
+  is_precise_(false),
+  const_param_constraints_() {}
+
+  ObRawExpr * deduced_expr_;
+  ObRawExpr * deduced_from_expr_;
+  bool is_precise_;
+  common::ObSEArray<ObPCConstParamInfo, 2, common::ModulePageAllocator, true> const_param_constraints_;
+
+  int assign(const DeducedExprInfo& other)
+  {
+    int ret = OB_SUCCESS;
+    deduced_expr_ = other.deduced_expr_;
+    deduced_from_expr_ = other.deduced_from_expr_;
+    is_precise_ = other.is_precise_;
+    ret = const_param_constraints_.assign(other.const_param_constraints_);
+    return ret;
+  }
+
+  TO_STRING_KV(
+    K_(deduced_expr),
+    K_(deduced_from_expr),
+    K_(is_precise)
+  );
+};
+
+
 class ObOptimizerContext
 {
 
@@ -248,6 +278,7 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     plan_notes_(512, allocator),
     aggregation_optimization_settings_(0),
     query_ctx_(query_ctx),
+    deduced_exprs_info_(),  // declared as auto free
     nested_sql_flags_(0),
     has_no_skip_for_update_(false),
     has_var_assign_(false),
@@ -275,7 +306,10 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     px_node_policy_(ObPxNodePolicy::INVALID),
     px_node_selection_mode_(ObPxNodeSelectionMode::DEFAULT),
     enable_distributed_das_scan_(true),
-    enable_topn_runtime_filter_(true)
+    enable_topn_runtime_filter_(true),
+    enable_index_merge_(false),
+    enable_runtime_filter_adaptive_apply_(true),
+    extend_sql_plan_monitor_metrics_(false)
   { }
   inline common::ObOptStatManager *get_opt_stat_manager() { return opt_stat_manager_; }
   inline void set_opt_stat_manager(common::ObOptStatManager *sm) { opt_stat_manager_ = sm; }
@@ -364,6 +398,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   void set_storage_estimation_enabled(bool storage_estimation_enabled) { storage_estimation_enabled_ = storage_estimation_enabled; }
   inline bool is_das_keep_order_enabled() const { return das_keep_order_enabled_; }
   void set_das_keep_order_enabled(bool das_keep_order_enabled) { das_keep_order_enabled_ = das_keep_order_enabled; }
+  inline bool is_enable_index_merge() const { return enable_index_merge_; }
+  void set_enable_index_merge(bool enable_index_merge) { enable_index_merge_ = enable_index_merge; }
   inline int64_t get_parallel() const { return parallel_; }
   inline int64_t get_max_parallel() const { return max_parallel_; }
   inline int64_t get_parallel_degree_limit(const int64_t server_cnt) const { return auto_dop_params_.get_parallel_degree_limit(server_cnt); }
@@ -661,6 +697,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   common::hash::ObHashMap<ObAddr, int64_t>& get_minimal_worker_map() { return minimal_worker_map_; }
   const common::hash::ObHashMap<ObAddr, int64_t>& get_expected_worker_map() const { return expected_worker_map_; }
   const common::hash::ObHashMap<ObAddr, int64_t>& get_minimal_worker_map() const { return minimal_worker_map_; }
+  const ObIArray<DeducedExprInfo> &get_deduce_info() const { return deduced_exprs_info_; }
+  ObIArray<DeducedExprInfo> &get_deduce_info() { return deduced_exprs_info_; }
   const ObRawExprUniqueSet &get_all_exprs() const { return all_exprs_; };
   ObRawExprUniqueSet &get_all_exprs() { return all_exprs_; };
   inline void set_cost_model_type(ObOptEstCost::MODEL_TYPE type) { model_type_ = type; }
@@ -775,6 +813,11 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline void set_enable_distributed_das_scan(bool enabled) { enable_distributed_das_scan_ = enabled; }
   inline bool enable_topn_runtime_filter() const { return enable_topn_runtime_filter_; }
   inline void set_enable_topn_runtime_filter(bool enabled) { enable_topn_runtime_filter_ = enabled; }
+  inline bool enable_runtime_filter_adaptive_apply() const { return enable_runtime_filter_adaptive_apply_; }
+  inline void set_enable_runtime_filter_adaptive_apply(bool enabled) { enable_runtime_filter_adaptive_apply_ = enabled; }
+  inline void set_extend_sql_plan_monitor_metrics(bool enabled) { extend_sql_plan_monitor_metrics_ = enabled; }
+  inline bool extend_sql_plan_monitor_metrics() { return extend_sql_plan_monitor_metrics_; }
+
 private:
   ObSQLSessionInfo *session_info_;
   ObExecContext *exec_ctx_;
@@ -855,6 +898,7 @@ private:
   //to record the related info about data table and local index id,
   //because the locations of data table and local index table are always bound together
   common::ObSEArray<TableLocRelInfo, 1, common::ModulePageAllocator, true> loc_rel_infos_;
+  common::ObArray<DeducedExprInfo, common::ModulePageAllocator, true> deduced_exprs_info_;
   union {
     //contain_nested_sql_: whether contain trigger, foreign key, PL UDF
     //or this sql is triggered by these object
@@ -898,6 +942,9 @@ private:
   ObPxNodeSelectionMode px_node_selection_mode_;
   bool enable_distributed_das_scan_;
   bool enable_topn_runtime_filter_;
+  bool enable_index_merge_;
+  bool enable_runtime_filter_adaptive_apply_;
+  bool extend_sql_plan_monitor_metrics_;
 };
 }
 }

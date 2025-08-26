@@ -46,28 +46,60 @@ public:
   int remove(const int64_t fd);
 
 public:
-  int aio_read(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info, ObTmpFileIOHandle &io_handle);
-  int aio_pread(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info,
-                const int64_t offset, ObTmpFileIOHandle &io_handle);
-  int read(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info, ObTmpFileIOHandle &io_handle);
-  int pread(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info,
-            const int64_t offset, ObTmpFileIOHandle &io_handle);
+  int aio_read(const uint64_t tenant_id,
+               const ObTmpFileIOInfo &io_info,
+               ObTmpFileIOHandle &io_handle,
+               ObITmpFileHandle* file_handle = nullptr);
+
+  int aio_pread(const uint64_t tenant_id,
+                const ObTmpFileIOInfo &io_info,
+                const int64_t offset,
+                ObTmpFileIOHandle &io_handle,
+                ObITmpFileHandle* file_handle = nullptr);
+
+  int read(const uint64_t tenant_id,
+           const ObTmpFileIOInfo &io_info,
+           ObTmpFileIOHandle &io_handle,
+           ObITmpFileHandle* file_handle = nullptr);
+
+  int pread(const uint64_t tenant_id,
+            const ObTmpFileIOInfo &io_info,
+            const int64_t offset,
+            ObTmpFileIOHandle &io_handle,
+            ObITmpFileHandle* file_handle = nullptr);
+
   // NOTE:
   //   only support append write.
-  int aio_write(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info, ObTmpFileIOHandle &io_handle);
-  // NOTE:
-  //   only support append write.
-  int write(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info);
-  int truncate(const int64_t fd, const int64_t offset);
-  int seal(const int64_t fd);
-  int get_tmp_file_size(const int64_t fd, int64_t &file_size);
+  int write(const uint64_t tenant_id,
+            const ObTmpFileIOInfo &io_info,
+            ObITmpFileHandle* file_handle = nullptr);
+
+  int truncate(const uint64_t tenant_id,
+               const int64_t fd,
+               const int64_t offset,
+               ObITmpFileHandle* file_handle = nullptr);
+
+  int seal(const uint64_t tenant_id,
+           const int64_t fd,
+           ObITmpFileHandle* file_handle = nullptr);
+
+  int get_tmp_file_size(const uint64_t tenant_id,
+                        const int64_t fd,
+                        int64_t &file_size,
+                        ObITmpFileHandle* file_handle = nullptr);
+
   int get_tmp_file(const int64_t fd, ObITmpFileHandle &handle);
   int get_tmp_file_disk_usage(int64_t &disk_data_size, int64_t &occupied_disk_size);
-
+  int get_suggested_max_tmp_file_num(int64_t& suggested_max_tmp_file_num,
+                                     const int64_t write_cache_size_expected_reside_in_memory = 0);
 public:
   //for virtual table to show
   int get_tmp_file_fds(ObIArray<int64_t> &fd_arr);
-  int get_tmp_file_info(const int64_t fd, ObTmpFileInfo *tmp_file_info);
+  int get_tmp_file_info(const int64_t fd, ObTmpFileBaseInfo *tmp_file_info);
+  void set_compressible_info(const int64_t fd,
+                             const OB_TMP_FILE_TYPE file_type,
+                             const int64_t compressible_fd,
+                             const void* compressible_file);
 private:
   bool is_inited_;
   ObSNTenantTmpFileManager sn_file_manager_;
@@ -89,25 +121,60 @@ public:
   int remove(const uint64_t tenant_id, const int64_t fd);
 
 public:
-  int aio_read(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info, ObTmpFileIOHandle &io_handle);
-  int aio_pread(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info, const int64_t offset, ObTmpFileIOHandle &io_handle);
-  int read(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info, ObTmpFileIOHandle &io_handle);
-  int pread(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info, const int64_t offset, ObTmpFileIOHandle &io_handle);
+  int aio_read(const uint64_t tenant_id,
+               const ObTmpFileIOInfo &io_info,
+               ObTmpFileIOHandle &io_handle,
+               ObITmpFileHandle* file_handle = nullptr);
+
+  int aio_pread(const uint64_t tenant_id,
+                const ObTmpFileIOInfo &io_info,
+                const int64_t offset,
+                ObTmpFileIOHandle &io_handle,
+                ObITmpFileHandle* file_handle = nullptr);
+
+  int read(const uint64_t tenant_id,
+           const ObTmpFileIOInfo &io_info,
+           ObTmpFileIOHandle &io_handle,
+           ObITmpFileHandle* file_handle = nullptr);
+
+  int pread(const uint64_t tenant_id,
+            const ObTmpFileIOInfo &io_info,
+            const int64_t offset,
+            ObTmpFileIOHandle &io_handle,
+            ObITmpFileHandle* file_handle = nullptr);
   // NOTE:
   //   only support append write.
-  int aio_write(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info, ObTmpFileIOHandle &io_handle);
-  // NOTE:
-  //   only support append write.
-  int write(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info);
-  int truncate(const uint64_t tenant_id, const int64_t fd, const int64_t offset);
-  int seal(const uint64_t tenant_id, const int64_t fd);
-  int get_tmp_file_size(const uint64_t tenant_id, const int64_t fd, int64_t &file_size);
+  int write(const uint64_t tenant_id,
+            const ObTmpFileIOInfo &io_info,
+            ObITmpFileHandle* file_handle = nullptr);
+
+  int truncate(const uint64_t tenant_id,
+               const int64_t fd,
+               const int64_t offset,
+               ObITmpFileHandle* file_handle = nullptr);
+
+  int seal(const uint64_t tenant_id,
+           const int64_t fd,
+           ObITmpFileHandle* file_handle = nullptr);
+
+  int get_tmp_file_size(const uint64_t tenant_id,
+                        const int64_t fd,
+                        int64_t &file_size,
+                        ObITmpFileHandle* file_handle = nullptr);
+
+  int get_tmp_file(const uint64_t tenant_id, const int64_t fd, ObITmpFileHandle &handle);
   int get_tmp_file_disk_usage(const uint64_t tenant_id, int64_t &disk_data_size, int64_t &occupied_disk_size);
   int get_tmp_file_fds(const uint64_t tenant_id, ObIArray<int64_t> &fd_arr);
-  int get_tmp_file_info(const uint64_t tenant_id, const int64_t fd, ObTmpFileInfo *tmp_file_info);
+  int get_tmp_file_info(const uint64_t tenant_id, const int64_t fd, ObTmpFileBaseInfo *tmp_file_info);
+  void set_compressible_info(const uint64_t tenant_id,
+                             const int64_t fd,
+                             const OB_TMP_FILE_TYPE file_type,
+                             const int64_t compressible_fd,
+                             const void* compressible_file);
 };
 
 #define FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH (::oceanbase::tmp_file::ObTenantTmpFileManagerWithMTLSwitch::get_instance())
+
 }  // end namespace tmp_file
 }  // end namespace oceanbase
 

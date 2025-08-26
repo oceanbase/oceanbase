@@ -468,19 +468,19 @@ int ObKVCacheInstMap::set_priority(const int64_t cache_id, const int64_t old_pri
   return ret;
 }
 
-int ObKVCacheInstMap::get_cache_info(const uint64_t tenant_id, ObIArray<ObKVCacheInstHandle> &inst_handles)
+int ObKVCacheInstMap::get_cache_info(ObIArray<ObKVCacheInstHandle> &inst_handles, const uint64_t* tenant_id)
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "The ObKVCacheInstMap has not been inited, ", K(ret));
-  } else if (0 == tenant_id) {
+  } else if (OB_NOT_NULL(tenant_id) && OB_INVALID_TENANT_ID == *tenant_id) {
     ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "Invalid argument, ", K(tenant_id), K(ret));
+    COMMON_LOG(WARN, "Invalid argument, ", K(*tenant_id), K(ret));
   } else {
     DRWLock::RDLockGuard rd_guard(lock_);
     for (KVCacheInstMap::iterator iter = inst_map_.begin(); OB_SUCC(ret) && iter != inst_map_.end(); ++iter) {
-      if (iter->first.tenant_id_ != tenant_id && OB_SYS_TENANT_ID != tenant_id) {
+      if (OB_NOT_NULL(tenant_id) && iter->first.tenant_id_ != *tenant_id) {
       } else if (OB_ISNULL(iter->second)) {
         ret = OB_ERR_UNEXPECTED;
         COMMON_LOG(WARN, "Unexpected null cache inst", K(ret));

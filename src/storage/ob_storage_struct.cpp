@@ -496,6 +496,9 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam()
       rebuild_seq_(-1),
       sstable_(NULL),
       allow_duplicate_sstable_(false),
+      allow_adjust_next_start_scn_(false),
+      update_tablet_ss_change_version_(),
+      tablet_ss_change_fully_applied_(false),
       upper_trans_param_()
 {
 }
@@ -515,6 +518,9 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     rebuild_seq_(rebuild_seq),
     sstable_(NULL),
     allow_duplicate_sstable_(false),
+    allow_adjust_next_start_scn_(false),
+    update_tablet_ss_change_version_(),
+    tablet_ss_change_fully_applied_(false),
     upper_trans_param_(upper_trans_param)
 {
 }
@@ -535,6 +541,9 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
       rebuild_seq_(rebuild_seq),
       sstable_(sstable),
       allow_duplicate_sstable_(allow_duplicate_sstable),
+      allow_adjust_next_start_scn_(false),
+      update_tablet_ss_change_version_(),
+      tablet_ss_change_fully_applied_(false),
       upper_trans_param_()
 {
 }
@@ -603,7 +612,8 @@ ObBatchUpdateTableStoreParam::ObBatchUpdateTableStoreParam()
     restore_status_(ObTabletRestoreStatus::FULL),
     tablet_split_param_(),
     need_replace_remote_sstable_(false),
-    release_mds_scn_()
+    release_mds_scn_(),
+    reorg_scn_()
 {
 }
 
@@ -618,13 +628,15 @@ void ObBatchUpdateTableStoreParam::reset()
   tablet_split_param_.reset();
   need_replace_remote_sstable_ = false;
   release_mds_scn_.reset();
+  reorg_scn_.reset();
 }
 
 bool ObBatchUpdateTableStoreParam::is_valid() const
 {
-  return rebuild_seq_ > OB_INVALID_VERSION
+  return ((rebuild_seq_ > OB_INVALID_VERSION
       && ObTabletRestoreStatus::is_valid(restore_status_)
-      && release_mds_scn_.is_valid();
+      && release_mds_scn_.is_valid())
+    || tablet_split_param_.is_valid()) && reorg_scn_.is_valid();
 }
 
 int ObBatchUpdateTableStoreParam::assign(
@@ -644,6 +656,7 @@ int ObBatchUpdateTableStoreParam::assign(
     restore_status_ = param.restore_status_;
     need_replace_remote_sstable_ = param.need_replace_remote_sstable_;
     release_mds_scn_ = param.release_mds_scn_;
+    reorg_scn_ = param.reorg_scn_;
 #ifdef ERRSIM
     errsim_point_info_ = param.errsim_point_info_;
 #endif

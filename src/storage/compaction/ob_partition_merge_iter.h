@@ -206,6 +206,7 @@ protected:
   bool is_rowkey_shadow_row_reused_;
   bool is_reserve_mode_;
   bool is_delete_insert_merge_;
+  bool is_ha_compeleted_;
 };
 
 class ObPartitionRowMergeIter : public ObPartitionMergeIter
@@ -338,9 +339,18 @@ protected:
                                         int &cmp_ret);
   bool need_recycle_mv_row()
   {
-    return curr_row_ != nullptr && !curr_row_->is_uncommitted_row() && !curr_row_->is_last_multi_version_row() &&
-                 -curr_row_->storage_datums_[schema_rowkey_column_cnt_].get_int() <=
-                      access_context_.trans_version_range_.multi_version_start_;
+    bool need_recycle = false;
+    const int64_t base_version = access_context_.trans_version_range_.base_version_;
+    const int64_t multi_version_start = access_context_.trans_version_range_.multi_version_start_;
+    if (nullptr != curr_row_ && !curr_row_->is_uncommitted_row() && !curr_row_->is_last_multi_version_row()) {
+      const int64_t commit_version = -curr_row_->storage_datums_[schema_rowkey_column_cnt_].get_int();
+      if (is_delete_insert_merge_ && (!is_ha_compeleted_ || base_version <= 0)) {
+        need_recycle = false;
+      } else if (commit_version <= multi_version_start) {
+        need_recycle = true;
+      }
+    }
+    return need_recycle;
   }
   int skip_ghost_row();
   int compact_old_row();

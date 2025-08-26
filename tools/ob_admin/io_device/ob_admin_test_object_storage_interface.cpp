@@ -164,7 +164,6 @@ bool adaptive_append_mode(const ObObjectStorageInfo &storage_info)
   const ObStorageType type = storage_info.get_type();
   const bool enable_worm = storage_info.is_enable_worm();
   return ObStorageType::OB_STORAGE_S3 == type
-      || (ObStorageType::OB_STORAGE_COS == type && is_use_obdal())
       || (ObStorageType::OB_STORAGE_OSS == type && enable_worm);
 }
 

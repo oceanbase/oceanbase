@@ -26,6 +26,7 @@
 #include "storage/shared_storage/ob_ss_object_access_util.h"
 #include "storage/shared_storage/macro_cache/ob_ss_macro_cache_mgr.h"
 #include "storage/shared_storage/macro_cache/ob_ss_macro_cache.h"
+#include "mittest/shared_storage/test_ss_macro_cache_mgr_util.h"
 #undef private
 #undef protected
 
@@ -98,7 +99,7 @@ public:
         ASSERT_TRUE(meta_handle.is_valid());
         ASSERT_TRUE(meta_handle.get_tmpfile_meta()->is_valid());
         ASSERT_EQ(2, meta_handle.get_tmpfile_meta()->ref_cnt_);
-        ASSERT_EQ((append_cnt + 1) * file_size_, meta_handle.get_target_length());
+        ASSERT_EQ((append_cnt + 1) * file_size_, meta_handle.get_target_valid_length());
         ASSERT_EQ((append_cnt + 1) * file_size_, meta_handle.get_valid_length());
         ASSERT_TRUE(meta_handle.is_in_local());
       }
@@ -123,6 +124,7 @@ void TestFlushUnsealedFile::SetUpTestCase()
   MTL(tmp_file::ObTenantTmpFileManager *)->stop();
   MTL(tmp_file::ObTenantTmpFileManager *)->wait();
   MTL(tmp_file::ObTenantTmpFileManager *)->destroy();
+  ASSERT_EQ(OB_SUCCESS, TestSSMacroCacheMgrUtil::wait_macro_cache_ckpt_replay());
 }
 
 void TestFlushUnsealedFile::TearDownTestCase()
@@ -239,7 +241,7 @@ TEST_F(TestFlushUnsealedFile, flush_seal_and_unseal_file_concurrently)
   {
     SpinWLockGuard guard(meta_handle.get_tmpfile_meta()->lock_);
     ASSERT_TRUE(meta_handle.get_tmpfile_meta()->is_flushed_seg_sealed_);
-    ASSERT_EQ(file_size_, meta_handle.get_tmpfile_meta()->flushed_length_);
+    ASSERT_EQ(file_size_, meta_handle.get_tmpfile_meta()->flushed_valid_length_);
   }
   bool is_file_exist = false;
   ASSERT_EQ(OB_SUCCESS, file_manager->is_exist_local_file(macro_id, 0/*ls_epoch_id*/, is_file_exist));
@@ -280,7 +282,7 @@ TEST_F(TestFlushUnsealedFile, flush_seal_and_unseal_file_concurrently)
   {
     SpinWLockGuard guard(meta_handle.get_tmpfile_meta()->lock_);
     ASSERT_TRUE(meta_handle.get_tmpfile_meta()->is_flushed_seg_sealed_);
-    ASSERT_EQ(file_size_, meta_handle.get_tmpfile_meta()->flushed_length_);
+    ASSERT_EQ(file_size_, meta_handle.get_tmpfile_meta()->flushed_valid_length_);
   }
   ASSERT_EQ(file_size_, meta_handle.get_valid_length());
   is_file_exist = true;

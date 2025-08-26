@@ -104,3 +104,22 @@ void delay_warn(const char* msg, int64_t start_us, int64_t warn_us)
     }
   }
 }
+typedef struct time_record_t
+{
+  int64_t  last_update_us;
+  uint64_t last_value;
+} time_record_t;
+
+inline int array_t_str(int8_t* array, int array_len, char* buf, int buf_len) {
+  int offset = 0;
+  for (int i = 0; i < array_len && buf_len - offset > 0; ++i) {
+    int written = snprintf(buf + offset, buf_len - offset, "%d ", array[i]);
+    if (written < 0) {
+      break;
+    }
+    offset += written;
+  }
+  return offset;
+}
+
+extern const char* trace_id_to_str_c(const uint64_t *uval, char *buf, int64_t buf_len);

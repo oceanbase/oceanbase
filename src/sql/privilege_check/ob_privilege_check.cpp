@@ -48,10 +48,13 @@
 #include "sql/resolver/ddl/ob_drop_routine_stmt.h"
 #include "sql/resolver/ddl/ob_trigger_stmt.h"
 #include "sql/resolver/dml/ob_merge_stmt.h"
+#include "sql/resolver/dml/ob_insert_all_stmt.h"
+#include "sql/resolver/ddl/ob_create_ccl_rule_stmt.h"
 #include "sql/privilege_check/ob_ora_priv_check.h"
 #include "sql/resolver/dcl/ob_alter_user_profile_stmt.h"
 #include "sql/optimizer/ob_optimizer_util.h"
 #include "sql/resolver/cmd/ob_event_stmt.h"
+#include "sql/resolver/cmd/ob_location_utils_stmt.h"
 
 namespace oceanbase {
 using namespace share;
@@ -266,19 +269,21 @@ int mock_table_item(
  * 从 basic_stmt 中解析出sql语句作用的列，并加入到 need_priv 中
  * 修改col_id_并不会影响到obj权限的检查，因为进行表级权限检查时，无需使用col_id_
  * @param  {const ObStmt*} basic_stmt  : basic_stmt
+ * @param  {const ObSqlSessionInfo *session_info} session_info : session_info
  * @param  {const uint64_t} table_id   : 当前处理的 table_id
  * @param  {ObOraNeedPriv &} need_priv : 视情况将need_priv由表级改为列级
  * @return {int}                       : ret
  */
 int add_col_id_array_to_need_priv(
     const ObStmt *basic_stmt,
+    const ObSQLSessionInfo *session_info,
     const uint64_t table_id,
     ObOraNeedPriv &need_priv)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(basic_stmt)) {
+  if (OB_ISNULL(basic_stmt) || OB_ISNULL(session_info)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("basic_stmt is NULL", K(ret));
+    LOG_WARN("invalid argument", K(ret), K(basic_stmt), K(session_info));
   } else {
     stmt::StmtType stmt_type = basic_stmt->get_stmt_type();
     switch (stmt_type) {
@@ -334,6 +339,44 @@ int add_col_id_array_to_need_priv(
         }
         if (need_priv.col_id_array_.count() > 0) {
           need_priv.obj_level_ = OBJ_LEVEL_FOR_COL_PRIV;
+        }
+        break;
+      }
+      case stmt::T_INSERT_ALL: {
+        bool need_check = false;
+        if (OB_FAIL(session_info->check_feature_enable(ObCompatFeatureType::ORACLE_INSERT_ALL_PRIV_CHECK,
+                                                       need_check))) {
+          LOG_WARN("failed to get priv need check", K(ret));
+        } else if (lib::is_oracle_mode() && need_check) {
+          need_priv.col_id_array_.reset();
+          const ObInsertAllStmt *insert_all_stmt = NULL;
+          insert_all_stmt = dynamic_cast<const ObInsertAllStmt*>(basic_stmt);
+          if (OB_ISNULL(insert_all_stmt)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("insert_all_stmt is NULL", K(ret));
+          } else {
+            for (int i = 0; OB_SUCC(ret) && i < insert_all_stmt->get_insert_all_table_info().count(); ++i) {
+              ObInsertAllTableInfo* insert_all_table_info = insert_all_stmt->get_insert_all_table_info().at(i);
+              if (OB_ISNULL(insert_all_table_info)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("get null table info", K(ret));
+              } else {
+                ObColumnRefRawExpr *value_desc = NULL;
+                for (int j = 0; OB_SUCC(ret) && j < insert_all_table_info->values_desc_.count(); ++j) {
+                  if (OB_ISNULL(value_desc = insert_all_table_info->values_desc_.at(j))) {
+                    ret = OB_ERR_UNEXPECTED;
+                    LOG_WARN("value_desc is null", K(ret));
+                  } else if (table_id == value_desc->get_table_id()) {
+                    OZ (need_priv.col_id_array_.push_back(value_desc->get_column_id()));
+                  }
+                }
+              }
+            }
+          }
+          if (OB_FAIL(ret)) {
+          } else if (need_priv.col_id_array_.count() > 0) {
+            need_priv.obj_level_ = OBJ_LEVEL_FOR_COL_PRIV;
+          }
         }
         break;
       }
@@ -566,7 +609,7 @@ int set_privs_by_table_item_recursively(
         need_priv.obj_privs_ = packed_privs;
         need_priv.check_flag_ = check_flag;
         // Add inserted column id
-        OZ (add_col_id_array_to_need_priv(basic_stmt, table_item->table_id_, need_priv));
+        OZ (add_col_id_array_to_need_priv(basic_stmt, ctx.session_info_, table_item->table_id_, need_priv));
         OZ (set_need_priv_owner_id(ctx, need_priv));
         OZ (add_need_priv(need_privs, need_priv));
       }
@@ -760,9 +803,65 @@ int add_proc_priv_in_expr(
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
       ObRawExpr *param_expr = expr->get_param_expr(i);
-      if (OB_FAIL(add_proc_priv_in_expr(ctx, param_expr, user_id, need_privs, check_flag))) {
+      if (OB_FAIL(SMART_CALL(add_proc_priv_in_expr(ctx, param_expr, user_id, need_privs, check_flag)))) {
         LOG_WARN("failed to add proc priv in expr", K(ret));
       }
+    }
+  }
+  return ret;
+}
+
+int add_nec_loc_priv_in_dml(
+    uint64_t user_id,
+    const ObSqlCtx &ctx,
+    const ObDMLStmt *dml_stmt,
+    ObIArray<ObOraNeedPriv> &need_privs,
+    uint64_t check_flag)
+{
+  int ret = OB_SUCCESS;
+  if (stmt::T_SELECT == dml_stmt->get_stmt_type()) {
+    ObPackedObjPriv packed_priv = 0;
+    OZ (ObPrivPacker::pack_raw_obj_priv(NO_OPTION, OBJ_PRIV_ID_READ, packed_priv));
+    for (int i = 0; i < dml_stmt->get_table_size() && OB_SUCC(ret); i++) {
+      const TableItem *table_item = dml_stmt->get_table_item(i);
+      if (OB_ISNULL(table_item)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table item is null");
+      } else if (ObTableType::EXTERNAL_TABLE == table_item->table_type_
+                 && common::OB_INVALID_ID != table_item->external_location_id_) {
+        CK (ctx.schema_guard_ != NULL);
+        CK (ctx.session_info_ != NULL);
+        // const ObTableSchema *table_schema =  NULL;
+        // LOG_INFO("table schema info", K(table_item->table_id_), K(table_item->ref_id_), K(table_item->database_name_), K(table_item->table_name_));
+        // if (OB_FAIL(ctx.schema_guard_->get_table_schema(ctx.session_info_->get_effective_tenant_id(),
+        //                                                 table_item->ref_id_,
+        //                                                 table_schema))) {
+        //   LOG_WARN("failed to get table schema");
+        // } else if (OB_ISNULL(table_schema)) {
+        //   ret = OB_ERR_UNEXPECTED;
+        //   LOG_WARN("table schema is null");
+        // } else if (OB_INVALID_ID != table_schema->get_external_location_id()) {
+          const ObLocationSchema *location_schema = NULL;
+          if (OB_FAIL(ctx.schema_guard_->get_location_schema_by_id(ctx.session_info_->get_effective_tenant_id(),
+                                                                   table_item->external_location_id_,
+                                                                   location_schema))) {
+            LOG_WARN("failed to get location schema");
+          } else if (OB_ISNULL(location_schema)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("location schema is null");
+          } else {
+            ObOraNeedPriv need_priv;
+            need_priv.grantee_id_ = user_id;
+            need_priv.obj_level_ = OBJ_LEVEL_FOR_TAB_PRIV;
+            need_priv.obj_type_ = static_cast<uint64_t>(ObObjectType::LOCATION);
+            need_priv.obj_privs_ = packed_priv;
+            need_priv.check_flag_ = check_flag;
+            need_priv.obj_id_ = location_schema->get_location_id();
+            need_priv.owner_id_ = common::OB_ORA_SYS_USER_ID;
+            OZ (add_need_priv(need_privs, need_priv));
+          }
+        }
+      //}
     }
   }
   return ret;
@@ -977,6 +1076,7 @@ int get_dml_stmt_ora_need_privs(
         }
       }//fall through for non-show select
       case stmt::T_INSERT :
+      case stmt::T_INSERT_ALL:
       case stmt::T_REPLACE :
       case stmt::T_DELETE :
       case stmt::T_UPDATE :
@@ -1000,6 +1100,9 @@ int get_dml_stmt_ora_need_privs(
             op_literal = ObString::make_string("INSERT, UPDATE");
           }
           op_literal = ObString::make_string("INSERT");
+        } else if (stmt::T_INSERT_ALL == stmt_type) {
+          OZ (ObPrivPacker::pack_raw_obj_priv(NO_OPTION, OBJ_PRIV_ID_INSERT, packed_privs));
+          op_literal = ObString::make_string("INSERT ALL");
         } else if (stmt::T_REPLACE == stmt_type) {
           OZ (ObPrivPacker::pack_raw_obj_priv(NO_OPTION, OBJ_PRIV_ID_DELETE, packed_privs));
           op_literal = ObString::make_string("INSERT, DELETE");
@@ -1015,6 +1118,7 @@ int get_dml_stmt_ora_need_privs(
         } else { } //do nothing
         const ObDMLStmt *dml_stmt = static_cast<const ObDMLStmt*>(basic_stmt);
         OZ (add_nec_sel_priv_in_dml(dml_stmt, packed_privs));
+        OZ (add_nec_loc_priv_in_dml(user_id, ctx, dml_stmt, need_privs, check_flag));
         OZ (add_procs_priv_in_dml(user_id, ctx, dml_stmt, need_privs, check_flag));
         OZ (add_seqs_priv_in_dml(user_id, ctx, dml_stmt, need_privs, check_flag));
         int64_t table_size = dml_stmt->get_table_size();
@@ -1296,7 +1400,37 @@ int get_dml_stmt_need_privs(
                 need_priv.priv_set_ &= ~OB_PRIV_SELECT;
               }
             }
-
+            if (OB_SUCC(ret)
+               && ObTableType::EXTERNAL_TABLE == table_item->table_type_
+               && common::OB_INVALID_ID != table_item->external_location_id_) {
+              ObSchemaGetterGuard schema_guard;
+              CK(GCTX.schema_service_ != NULL);
+              OZ(GCTX.schema_service_->get_tenant_schema_guard(session_priv.tenant_id_, schema_guard));
+              // const ObTableSchema *table_schema = NULL;
+              // LOG_INFO("table id", K(table_item->table_id_), K(table_item->ref_id_), K(table_item->database_name_), K(table_item->table_name_));
+              // if (OB_FAIL(schema_guard.get_table_schema(session_priv.tenant_id_, table_item->ref_id_, table_schema))) {
+              //   LOG_WARN("failed to get table schema", K(ret));
+              // } else if (OB_ISNULL(table_schema)) {
+              //   ret = OB_ERR_UNEXPECTED;
+              //   LOG_WARN("table schema is null", K(ret));
+              // } else if (OB_INVALID_ID != table_schema->get_external_location_id()) {
+                const ObLocationSchema *location_schema = NULL;
+                if (OB_FAIL(schema_guard.get_location_schema_by_id(session_priv.tenant_id_, table_item->external_location_id_, location_schema))) {
+                  LOG_WARN("failed to get location schema", K(ret));
+                } else if (OB_ISNULL(location_schema)) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("location schema is null", K(ret));
+                } else {
+                  ObNeedPriv tmp_need_priv;
+                  tmp_need_priv.db_ = table_item->database_name_;
+                  tmp_need_priv.table_ = location_schema->get_location_name();
+                  tmp_need_priv.priv_level_ = OB_PRIV_OBJECT_LEVEL;
+                  tmp_need_priv.priv_set_ = OB_PRIV_READ;
+                  tmp_need_priv.obj_type_ = ObObjectType::LOCATION;
+                  ADD_NEED_PRIV(tmp_need_priv);
+                }
+              // }
+            }
             if (OB_SUCC(ret)) {
               if (lib::is_mysql_mode()) {
                 if (OB_FAIL(add_col_priv_to_need_priv(basic_stmt, *table_item, need_privs))) {
@@ -1546,6 +1680,30 @@ int get_create_table_stmt_need_privs(
           }
         }
       }
+      // check location object
+      if (OB_SUCC(ret) && ObTableType::EXTERNAL_TABLE == stmt->get_table_type()
+          && OB_INVALID_ID != stmt->get_external_location_id()) {
+        ObSchemaGetterGuard schema_guard;
+        const ObLocationSchema *location_schema = NULL;
+        CK(GCTX.schema_service_ != NULL);
+        OZ(GCTX.schema_service_->get_tenant_schema_guard(session_priv.tenant_id_, schema_guard));
+        if (OB_FAIL(schema_guard.get_location_schema_by_id(session_priv.tenant_id_,
+                                                           stmt->get_external_location_id(),
+                                                           location_schema))) {
+          LOG_WARN("failed to get location schema");
+        } else if (OB_ISNULL(location_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("location schema is null");
+        } else {
+          ObNeedPriv tmp_need_priv;
+          tmp_need_priv.db_ = stmt->get_database_name();
+          tmp_need_priv.table_ = location_schema->get_location_name();
+          tmp_need_priv.priv_level_ = OB_PRIV_OBJECT_LEVEL;
+          tmp_need_priv.priv_set_ = OB_PRIV_READ;
+          tmp_need_priv.obj_type_ = ObObjectType::LOCATION;
+          ADD_NEED_PRIV(tmp_need_priv);
+        }
+      }
     }
   }
   return ret;
@@ -1713,15 +1871,10 @@ int get_create_outline_stmt_need_privs(
     LOG_WARN("failed to get priv need check", K(ret));
   } else if (lib::is_mysql_mode() && need_check) {
     const ObCreateOutlineStmt *stmt = static_cast<const ObCreateOutlineStmt*>(basic_stmt);
-    if (OB_FAIL(ObPrivilegeCheck::can_do_operation_on_db(session_priv,
-                                                         stmt->get_create_outline_arg().db_name_))) {
-      LOG_WARN("Can not create outline in current database", K(session_priv), K(ret));
-    } else {
-      need_priv.db_ = stmt->get_create_outline_arg().db_name_;
-      need_priv.priv_set_ = OB_PRIV_CREATE;
-      need_priv.priv_level_ = OB_PRIV_DB_LEVEL;
-      ADD_NEED_PRIV(need_priv);
-    }
+    need_priv.db_ = stmt->get_create_outline_arg().db_name_;
+    need_priv.priv_set_ = OB_PRIV_CREATE;
+    need_priv.priv_level_ = OB_PRIV_DB_LEVEL;
+    ADD_NEED_PRIV(need_priv);
   }
   return ret;
 }
@@ -1745,15 +1898,10 @@ int get_alter_outline_stmt_need_privs(
     LOG_WARN("failed to get priv need check", K(ret));
   } else if (lib::is_mysql_mode() && need_check) {
     const ObAlterOutlineStmt *stmt = static_cast<const ObAlterOutlineStmt*>(basic_stmt);
-    if (OB_FAIL(ObPrivilegeCheck::can_do_operation_on_db(session_priv,
-                                                         stmt->get_alter_outline_arg().db_name_))) {
-      LOG_WARN("Can not alter outline in current database", K(session_priv), K(ret));
-    } else {
-      need_priv.db_ = stmt->get_alter_outline_arg().db_name_;
-      need_priv.priv_set_ = OB_PRIV_ALTER;
-      need_priv.priv_level_ = OB_PRIV_DB_LEVEL;
-      ADD_NEED_PRIV(need_priv);
-    }
+    need_priv.db_ = stmt->get_alter_outline_arg().db_name_;
+    need_priv.priv_set_ = OB_PRIV_ALTER;
+    need_priv.priv_level_ = OB_PRIV_DB_LEVEL;
+    ADD_NEED_PRIV(need_priv);
   }
   return ret;
 }
@@ -1777,15 +1925,10 @@ int get_drop_outline_stmt_need_privs(
     LOG_WARN("failed to get priv need check", K(ret));
   } else if (lib::is_mysql_mode() && need_check) {
     const ObDropOutlineStmt *stmt = static_cast<const ObDropOutlineStmt*>(basic_stmt);
-    if (OB_FAIL(ObPrivilegeCheck::can_do_operation_on_db(session_priv,
-                                                         stmt->get_drop_outline_arg().db_name_))) {
-      LOG_WARN("Can not drop outline in current database", K(session_priv), K(ret));
-    } else {
-      need_priv.db_ = stmt->get_drop_outline_arg().db_name_;
-      need_priv.priv_set_ = OB_PRIV_DROP;
-      need_priv.priv_level_ = OB_PRIV_DB_LEVEL;
-      ADD_NEED_PRIV(need_priv);
-    }
+    need_priv.db_ = stmt->get_drop_outline_arg().db_name_;
+    need_priv.priv_set_ = OB_PRIV_DROP;
+    need_priv.priv_level_ = OB_PRIV_DB_LEVEL;
+    ADD_NEED_PRIV(need_priv);
   }
   return ret;
 }
@@ -2367,6 +2510,71 @@ int get_catalog_privs(
   return ret;
 }
 
+int get_location_privs(const ObSessionPrivInfo &session_priv,
+                       const ObStmt *basic_stmt,
+                       ObIArray<ObNeedPriv> &need_privs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(basic_stmt)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Basic stmt should be not be NULL", K(ret));
+  } else if (lib::is_oracle_mode()) {
+    ret = no_priv_needed(session_priv, basic_stmt, need_privs);
+  } else {
+    ObNeedPriv need_priv;
+    stmt::StmtType stmt_type = basic_stmt->get_stmt_type();
+    switch (stmt_type) {
+      case stmt::T_CREATE_LOCATION:
+      case stmt::T_DROP_LOCATION: {
+        need_priv.priv_set_ = OB_PRIV_CREATE_LOCATION;
+        need_priv.priv_level_ = OB_PRIV_USER_LEVEL;
+        ADD_NEED_PRIV(need_priv);
+        break;
+      }
+      default: {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("Stmt type not in types dealt in this function", K(ret), K(stmt_type));
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
+int get_location_util_privs(const ObSessionPrivInfo &session_priv,
+                            const ObStmt *basic_stmt,
+                            ObIArray<ObNeedPriv> &need_privs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(basic_stmt)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Basic stmt should be not be NULL", K(ret));
+  } else if (lib::is_oracle_mode()) {
+    ret = no_priv_needed(session_priv, basic_stmt, need_privs);
+  } else {
+    ObNeedPriv need_priv;
+    stmt::StmtType stmt_type = basic_stmt->get_stmt_type();
+    const ObLocationUtilsStmt *stmt = static_cast<const ObLocationUtilsStmt*>(basic_stmt);
+    switch (stmt_type) {
+      case stmt::T_LOCATION_UTILS: {
+        ObNeedPriv tmp_need_priv;
+        tmp_need_priv.table_ = stmt->get_location_name();
+        tmp_need_priv.priv_level_ = OB_PRIV_OBJECT_LEVEL;
+        tmp_need_priv.priv_set_ = OB_PRIV_WRITE;
+        tmp_need_priv.obj_type_ = ObObjectType::LOCATION;
+        ADD_NEED_PRIV(tmp_need_priv);
+        break;
+      }
+      default: {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("Stmt type not in types dealt in this function", K(ret), K(stmt_type));
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
 int get_variable_set_stmt_need_privs(
     const ObSessionPrivInfo &session_priv,
     const ObStmt *basic_stmt,
@@ -2811,8 +3019,10 @@ int get_sys_tenant_alter_system_priv(
              stmt::T_TRANSFER_PARTITION != basic_stmt->get_stmt_type() &&
              stmt::T_LOAD_TIME_ZONE_INFO != basic_stmt->get_stmt_type() &&
              stmt::T_SERVICE_NAME != basic_stmt->get_stmt_type() &&
+             stmt::T_ALTER_LS != basic_stmt->get_stmt_type() &&
              stmt::T_ALTER_LS_REPLICA != basic_stmt->get_stmt_type() &&
-             stmt::T_TRIGGER_STORAGE_CACHE != basic_stmt->get_stmt_type()) {
+             stmt::T_TRIGGER_STORAGE_CACHE != basic_stmt->get_stmt_type() &&
+             stmt::T_FLASHBACK_STANDBY_LOG != basic_stmt->get_stmt_type()) {
     ret = OB_ERR_NO_PRIVILEGE;
     LOG_WARN("Only sys tenant can do this operation",
              K(ret), "stmt type", basic_stmt->get_stmt_type());
@@ -3340,6 +3550,50 @@ int get_lock_table_priv(
   return ret;
 }
 
+int get_create_ccl_priv(
+    const ObSessionPrivInfo &session_priv,
+    const ObStmt *basic_stmt,
+    ObIArray<ObNeedPriv> &need_privs)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(session_priv);
+  ObNeedPriv need_priv;
+  if (OB_ISNULL(basic_stmt)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Basic stmt should be not be NULL", K(ret));
+  } else if (stmt::T_CREATE_CCL_RULE != basic_stmt->get_stmt_type()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected stmt type", K(basic_stmt->get_stmt_type()), K(ret));
+  } else {
+    need_priv.priv_set_ = OB_PRIV_CREATE;
+    need_priv.priv_level_ = OB_PRIV_USER_LEVEL;
+    ADD_NEED_PRIV(need_priv);
+  }
+  return ret;
+}
+
+int get_drop_ccl_priv(
+    const ObSessionPrivInfo &session_priv,
+    const ObStmt *basic_stmt,
+    ObIArray<ObNeedPriv> &need_privs)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(session_priv);
+  ObNeedPriv need_priv;
+  if (OB_ISNULL(basic_stmt)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Basic stmt should be not be NULL", K(ret));
+  } else if (stmt::T_DROP_CCL_RULE != basic_stmt->get_stmt_type()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected stmt type", K(basic_stmt->get_stmt_type()), K(ret));
+  } else {
+    need_priv.priv_set_ = OB_PRIV_DROP;
+    need_priv.priv_level_ = OB_PRIV_USER_LEVEL;
+    ADD_NEED_PRIV(need_priv);
+  }
+  return ret;
+}
+
 const ObGetStmtNeedPrivsFunc ObPrivilegeCheck::priv_check_funcs_[] =
 {
 #define OB_STMT_TYPE_DEF(stmt_type, priv_check_func, id, action_type) priv_check_func,
@@ -3602,6 +3856,7 @@ int ObPrivilegeCheck::get_stmt_ora_need_privs(
       } else if (sub_stmt->is_view_stmt()
                  && (stmt::T_SELECT == basic_stmt->get_stmt_type()
                    || stmt::T_INSERT == basic_stmt->get_stmt_type()
+                   || stmt::T_INSERT_ALL == basic_stmt->get_stmt_type()
                    || stmt::T_UPDATE == basic_stmt->get_stmt_type()
                    || stmt::T_DELETE == basic_stmt->get_stmt_type())) {
         //do not check privilege of view stmt, one level 已经递归处理了视图的情况
@@ -4072,6 +4327,7 @@ int ObPrivilegeCheck::one_level_stmt_ora_need_priv(
         case stmt::T_UPDATE:
         case stmt::T_MERGE:
         case stmt::T_INSERT:
+        case stmt::T_INSERT_ALL:
           OZ (get_dml_stmt_ora_need_privs(user_id, ctx, session_priv,
              basic_stmt, need_privs, check_flag));
           break;

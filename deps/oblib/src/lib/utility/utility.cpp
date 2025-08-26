@@ -1678,12 +1678,15 @@ int ob_strtoll(const char *str, char *&endptr, int64_t &res)
 {
   int ret = OB_SUCCESS;
   res = 0;
+  errno = 0;
   if (OB_ISNULL(str)) {
     ret = OB_INVALID_ARGUMENT;
   } else {
     res = strtoll(str, &endptr, 10);
-    if (INT64_MAX == res) {
+    if (ERANGE == errno) {
       ret = OB_SIZE_OVERFLOW;
+    } else if (errno != 0) {
+      ret = OB_INVALID_ARGUMENT;
     }
   }
   return ret;
@@ -1694,12 +1697,15 @@ int ob_strtoull(const char *str, char *&endptr, uint64_t &res)
   int ret = OB_SUCCESS;
   res = 0;
   int64_t tmp_res = 0;
+  errno = 0;
   if (OB_ISNULL(str)) {
     ret = OB_INVALID_ARGUMENT;
   } else {
     tmp_res = strtoull(str, &endptr, 10);
-    if (UINT64_MAX == tmp_res) {
+    if (ERANGE == errno) {
       ret = OB_SIZE_OVERFLOW;
+    } else if (errno != 0) {
+      ret = OB_INVALID_ARGUMENT;
     } else {
       res = tmp_res;
     }

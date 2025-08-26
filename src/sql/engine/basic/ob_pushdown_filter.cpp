@@ -302,6 +302,26 @@ int ObPushdownWhiteFilterNode::get_filter_val_meta(common::ObObjMeta &obj_meta) 
   return ret;
 }
 
+int ObPushdownWhiteFilterNode::get_filter_in_val_meta(int64_t arg_idx, common::ObObjMeta &obj_meta) const
+{
+  int ret = OB_SUCCESS;
+  const ObExpr *expr = nullptr;
+  if (OB_UNLIKELY(op_type_ != WHITE_OP_IN) || OB_UNLIKELY(nullptr == expr_ || 2 != expr_->arg_cnt_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected filter expr", K(ret), K_(op_type), KP_(expr));
+  } else if (OB_ISNULL(expr = expr_->args_[1])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null child expr", K(ret));
+  } else {
+    obj_meta = expr->args_[arg_idx]->obj_meta_;
+    if (obj_meta.is_decimal_int()) {
+      obj_meta.set_stored_precision(MIN(OB_MAX_DECIMAL_PRECISION,
+                                        expr->args_[arg_idx]->datum_meta_.precision_));
+    }
+  }
+  return ret;
+}
+
 bool ObPushdownFilterConstructor::can_pushdown_json_expr(const ObRawExpr &json_expr) const
 {
   bool res = false;
@@ -1171,19 +1191,14 @@ OB_DEF_SERIALIZE_SIZE(ObPushdownFilter)
 
 // filter on lob or topn filter with lob column output is not safe for delete_insert scan
 int ObPushdownFilterNode::check_filter_info(const storage::ObITableReadInfo &read_info,
-                                            const bool has_lob_column_out,
                                             bool &is_safe_filter_with_di)
 {
   int ret = OB_SUCCESS;
-  is_safe_filter_with_di = true;
   if (is_logic_op_node()) {
     for (uint32_t i = 0; OB_SUCC(ret) && is_safe_filter_with_di && i < n_child_; i++) {
-      if (OB_NOT_NULL(childs_[i])) {
-        if (childs_[i]->is_topn_filter() && has_lob_column_out) {
-          is_safe_filter_with_di = false;
-        } else if (OB_FAIL(childs_[i]->check_filter_info(read_info, has_lob_column_out, is_safe_filter_with_di))) {
-          LOG_WARN("Fail to check filter info", K(ret));
-        }
+      if (OB_NOT_NULL(childs_[i]) &&
+          OB_FAIL(childs_[i]->check_filter_info(read_info, is_safe_filter_with_di))) {
+        LOG_WARN("Fail to check filter info", K(ret));
       }
     }
   } else {
@@ -2837,7 +2852,8 @@ ObPushdownExprSpec::ObPushdownExprSpec(ObIAllocator &alloc)
     auto_split_params_(alloc),
     ext_tbl_filter_pd_level_(0),
     ext_mapping_column_exprs_(alloc),
-    ext_mapping_column_ids_(alloc)
+    ext_mapping_column_ids_(alloc),
+    ext_enable_late_materialization_(false)
 {
 }
 
@@ -2864,7 +2880,8 @@ OB_DEF_SERIALIZE(ObPushdownExprSpec)
               auto_split_params_,
               ext_tbl_filter_pd_level_,
               ext_mapping_column_exprs_,
-              ext_mapping_column_ids_);
+              ext_mapping_column_ids_,
+              ext_enable_late_materialization_);
   return ret;
 }
 
@@ -2891,7 +2908,8 @@ OB_DEF_DESERIALIZE(ObPushdownExprSpec)
               auto_split_params_,
               ext_tbl_filter_pd_level_,
               ext_mapping_column_exprs_,
-              ext_mapping_column_ids_);
+              ext_mapping_column_ids_,
+              ext_enable_late_materialization_);
   return ret;
 }
 
@@ -2918,7 +2936,8 @@ OB_DEF_SERIALIZE_SIZE(ObPushdownExprSpec)
               auto_split_params_,
               ext_tbl_filter_pd_level_,
               ext_mapping_column_exprs_,
-              ext_mapping_column_ids_);
+              ext_mapping_column_ids_,
+              ext_enable_late_materialization_);
   return len;
 }
 

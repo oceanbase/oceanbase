@@ -502,7 +502,7 @@ int ObDbmsStatsExecutor::split_gather_partition_stats(ObExecContext &ctx,
                                                    all_tstats,
                                                    all_cstats))) {
                   if (gather_param.sepcify_scn_ > 0 &&
-                      (ret == OB_TABLE_DEFINITION_CHANGED || ret == OB_SNAPSHOT_DISCARDED)) {
+                      (ret == OB_TABLE_DEFINITION_CHANGED || ret == OB_SNAPSHOT_DISCARDED || ret == OB_INVALID_QUERY_TIMESTAMP)) {
                     LOG_WARN("failed to specify snapshot to gather stats, try no specify snapshot to gather stats", K(ret));
                     gather_param.sepcify_scn_ = 0;
                     allocator.reuse();
@@ -753,7 +753,7 @@ int ObDbmsStatsExecutor::split_gather_global_stats(ObExecContext &ctx,
                                                all_tstats,
                                                all_cstats))) {
               if (gather_param.sepcify_scn_ > 0 &&
-                  (ret == OB_TABLE_DEFINITION_CHANGED || OB_SNAPSHOT_DISCARDED == ret)) {
+                  (ret == OB_TABLE_DEFINITION_CHANGED || OB_SNAPSHOT_DISCARDED == ret || OB_INVALID_QUERY_TIMESTAMP == ret)) {
                 LOG_WARN("failed to specify snapshot to gather stats, try no specify snapshot to gather stats", K(ret));
                 gather_param.sepcify_scn_ = 0;
                 allocator.reuse();
@@ -1210,6 +1210,7 @@ int ObDbmsStatsExecutor::do_set_column_stats(ObIAllocator &allocator,
         LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL,"Invalid or inconsistent input values");
       }
     }
+
     //6.set hist_param TODO @jiangxiu.wt
     //other options support later.
     LOG_TRACE("succeed to do set column stats", K(param), K(*column_stat));
@@ -1942,7 +1943,7 @@ int ObDbmsStatsExecutor::gather_system_stats(ObExecContext &ctx, int64_t tenant_
 {
   int ret = OB_SUCCESS;
   UNUSED(ctx);
-  int64_t cpu_mhz = OBSERVER.get_cpu_frequency_khz()/1000;
+  int64_t cpu_mhz = OBSERVER_FREQUENCE.get_cpu_frequency_khz()/1000;
   int64_t network_speed = OBSERVER.get_network_speed() / 1024.0 / 1024.0;
   int64_t disk_seq_read_speed = 0;
   int64_t disk_rnd_read_speed = 0;

@@ -139,7 +139,9 @@ struct ObTransformerCtx
     max_table_num_(0),
     inline_blacklist_(),
     materialize_blacklist_(),
-    disable_gtt_session_isolation_(false)
+    disable_gtt_session_isolation_(false),
+    force_subquery_unnest_(false),
+    nested_loop_join_enabled_(true)
   { }
   virtual ~ObTransformerCtx() {}
 
@@ -218,6 +220,10 @@ struct ObTransformerCtx
   ObSEArray<ObString, 8, common::ModulePageAllocator, true> materialize_blacklist_;
 
   bool disable_gtt_session_isolation_; //debug GTT, do not add session filters in transformer preprocessing for all GTTs
+  /* used to control subquery unnest behavior */
+  bool force_subquery_unnest_;
+  /* used for NLJ opportunity check */
+  bool nested_loop_join_enabled_;
 };
 
 enum TransMethod

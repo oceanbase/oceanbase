@@ -79,12 +79,25 @@ public:
   bool is_marker_scan() { return (op_flag_ == DOF_REG_WITH_MARKER) ? true : false; }
   int64_t get_scan_count() { return scan_count_; }
   const char *get_marker() const { return marker_; }
+  int set_dir(const char *dir)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_ISNULL(dir) || OB_UNLIKELY(strlen(dir) >= common::MAX_PATH_SIZE)) {
+      ret = OB_INVALID_ARGUMENT;
+      OB_LOG(WARN, "invalid argument", KR(ret), K(dir));
+    } else {
+      dir_ = dir;
+    }
+    return ret;
+  }
+  const char *get_dir() const { return dir_; }
   TO_STRING_KV(K_(op_flag), K_(size), K_(scan_count));
 private:
   int op_flag_;
   int64_t size_; // Always set 0 for directory.
   int64_t scan_count_; // Default value is INT64_MAX.
   const char *marker_;        // Default value is nullptr
+  const char *dir_;
 };
 
 /*ObStorageType and OB_STORAGE_TYPES_STR should be mapped one by one*/
@@ -92,11 +105,11 @@ enum ObStorageType : uint8_t
 {
   OB_STORAGE_OSS = 0,
   OB_STORAGE_FILE = 1,
-  OB_STORAGE_COS = 2,
-  OB_STORAGE_LOCAL = 3,
-  OB_STORAGE_S3 = 4,
-  OB_STORAGE_LOCAL_CACHE = 5,
-  OB_STORAGE_HDFS = 6,
+  OB_STORAGE_LOCAL = 2,
+  OB_STORAGE_S3 = 3,
+  OB_STORAGE_LOCAL_CACHE = 4,
+  OB_STORAGE_HDFS = 5,
+  OB_STORAGE_AZBLOB = 6,
   OB_STORAGE_MAX_TYPE
 };
 
@@ -169,7 +182,14 @@ struct ObStorageIdMod
     storage_used_mod_ = ObStorageUsedMod::STORAGE_USED_MAX;
   }
 
-  ObStorageInfoType get_category() const { return __storage_table_mapper[static_cast<uint8_t>(storage_used_mod_)]; }
+  ObStorageInfoType get_category() const {
+    ObStorageInfoType res = __storage_table_mapper[static_cast<uint8_t>(ObStorageUsedMod::STORAGE_USED_OTHER)];
+    if (storage_used_mod_ == ObStorageUsedMod::STORAGE_USED_MAX) {
+    } else if (storage_used_mod_ < ObStorageUsedMod::STORAGE_USED_MAX) {
+      res = __storage_table_mapper[static_cast<uint8_t>(storage_used_mod_)];
+    }
+    return res;
+  }
 
   static const ObStorageIdMod get_default_id_mod()
   {
@@ -195,6 +215,13 @@ struct ObStorageIdMod
     return storage_id_mod;
   }
 
+  static const ObStorageIdMod get_default_ddl_id_mod()
+  {
+    static const ObStorageIdMod storage_id_mod(
+        OB_STORAGE_ID_DDL, ObStorageUsedMod::STORAGE_USED_DDL);
+    return storage_id_mod;
+  }
+
   static const ObStorageIdMod get_default_external_id_mod()
   {
     static const ObStorageIdMod storage_id_mod(
@@ -202,12 +229,22 @@ struct ObStorageIdMod
     return storage_id_mod;
   }
 
+  static const ObStorageIdMod get_default_export_id_mod()
+  {
+    static const ObStorageIdMod storage_id_mod(
+        OB_STORAGE_ID_EXPORT, ObStorageUsedMod::STORAGE_USED_EXPORT);
+    return storage_id_mod;
+  }
+
   TO_STRING_KV(K_(storage_id), K_(storage_used_mod));
 
   uint64_t storage_id_;
   ObStorageUsedMod storage_used_mod_;
+
 public:
+  static const uint64_t OB_STORAGE_ID_DDL = 2000;
   static const uint64_t OB_STORAGE_ID_EXTERNAL = 2001;
+  static const uint64_t OB_STORAGE_ID_EXPORT = 2002;
 };
 
 }

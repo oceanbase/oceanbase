@@ -533,7 +533,7 @@ public:
   int prepare_ddl_merge_param(
       const ObTablet &tablet,
       ObDDLTableMergeDagParam &merge_param);
-  int prepare_major_merge_param(ObTablet &tablet, ObTabletDDLParam &param);
+  int prepare_major_merge_param(ObTabletDDLParam &param);
   void cleanup_slice_writer(const int64_t context_id);
   INHERIT_TO_STRING_KV("ObTabletDirectLoadMgr", ObTabletDirectLoadMgr, K_(start_scn), K_(commit_scn), K_(execution_id));
 private:
@@ -542,7 +542,7 @@ private:
   int cleanup_unlock();
   int init_ddl_table_store(const share::SCN &start_scn, const int64_t snapshot_version, const share::SCN &ddl_checkpoint_scn);
   int update_major_sstable();
-  int pre_process_cs_replica(const ObTabletID &tablet_id, bool &replay_normal_in_cs_replica);
+  int pre_process_cs_replica(const ObTabletID &tablet_id, ObArenaAllocator &arena, bool &replay_normal_in_cs_replica, ObStorageSchema *&storage_schema_on_tablet);
   int check_need_replay_column_store(const ObStorageSchema &storage_schema, const ObDirectLoadType &direct_load_type, bool &need_replay_column_store);
 
 private:

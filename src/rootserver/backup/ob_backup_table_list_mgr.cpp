@@ -360,7 +360,6 @@ int ObBackupTableListMgr::read_from_tmp_file_(const int64_t read_size, const int
   tmp_file::ObTmpFileIOInfo io_info;
   tmp_file::ObTmpFileIOHandle handle;
   io_info.fd_ = tmp_file_.get_fd();
-  io_info.dir_id_ = tmp_file_.get_dir();
   io_info.io_desc_.set_wait_event(2);
   io_info.size_ = read_size;
   common::ObArenaAllocator allocator;

@@ -66,6 +66,11 @@ void ObTransformerCtx::reset()
   cbqt_policy_ = TransPolicy::DISABLE_TRANS;
   complex_cbqt_table_num_ = 0;
   max_table_num_ = 0;
+  inline_blacklist_.reset();
+  materialize_blacklist_.reset();
+  disable_gtt_session_isolation_ = false;
+  force_subquery_unnest_ = false;
+  nested_loop_join_enabled_ = true;
 }
 
 int ObTransformerCtx::add_src_hash_val(const ObString &src_str)
@@ -840,6 +845,8 @@ int ObTransformRule::transform_self(common::ObIArray<ObParentDMLStmt> &parent_st
     LOG_WARN("failed to update implicit distinct", K(ret));
   } else if (OB_FAIL(update_max_table_num(stmt))) {
       LOG_WARN("failed to update max table num", K(ret));
+  } else if (OB_FAIL(stmt->check_stmt_valid())) {
+    LOG_WARN("failed to check stmt valid or stmt invalid", K(ret));
   } else if ((!stmt->is_delete_stmt() && !stmt->is_update_stmt())
               || stmt->has_instead_of_trigger()) {
     // do nothing

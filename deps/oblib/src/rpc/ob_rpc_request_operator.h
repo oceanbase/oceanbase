@@ -26,6 +26,7 @@ public:
   virtual void* alloc_response_buffer(ObRequest* req, int64_t size) = 0;
   virtual void response_result(ObRequest* req, obrpc::ObRpcPacket* pkt) = 0;
   virtual common::ObAddr get_peer(const ObRequest* req) = 0;
+  virtual void set_trace_point(const ObRequest* req, int32_t trace_point) {};
 };
 
 class ObRpcRequestOperator: public ObIRpcRequestOperator
@@ -39,6 +40,9 @@ public:
   virtual void response_result(ObRequest* req, obrpc::ObRpcPacket* pkt) override;
   virtual common::ObAddr get_peer(const ObRequest* req) override {
     return get_operator(req).get_peer(req);
+  }
+  virtual void set_trace_point(const ObRequest* req, int32_t trace_point) {
+    get_operator(req).set_trace_point(req, trace_point);
   }
 private:
   ObIRpcRequestOperator& get_operator(const ObRequest* req);

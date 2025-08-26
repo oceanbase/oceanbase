@@ -351,7 +351,7 @@ client* create_client(DestKeepAliveState *rs)
   } else if (connect(c->fd_, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
     if (errno != EINPROGRESS) {
       ret = OB_IO_ERROR;
-      _LOG_ERROR("connect failed: %d", errno);
+      _LOG_WARN("connect failed: %d", errno);
     } else {
       char addr_buf[OB_IP_PORT_STR_BUFF] = {'\0'};
       _LOG_DEBUG("connecting, addr: %s", addr_to_string(addr_buf, sizeof(addr_buf), rs->svr_addr_));

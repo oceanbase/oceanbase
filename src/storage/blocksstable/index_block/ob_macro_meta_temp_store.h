@@ -61,6 +61,7 @@ private:
   static int get_macro_block_header(const char *buf, const int64_t buf_size, ObSSTableMacroBlockHeader &macro_header);
 private:
   int64_t count_;
+  int64_t dir_id_;
   tmp_file::ObTmpFileIOInfo io_;
   tmp_file::ObTmpFileIOHandle io_handle_;
   ObSelfBufferWriter buffer_;

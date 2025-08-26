@@ -71,16 +71,36 @@ int ObOrcTableRowIterator::build_type_name_id_map(const orc::Type* type, ObIArra
   return ret;
 }
 
+int ObOrcTableRowIterator::compute_column_id_by_index_type(int64_t index, int64_t &orc_col_id)
+{
+  int ret = OB_SUCCESS;
+  switch (scan_param_->external_file_format_.orc_format_.column_index_type_) {
+    case sql::ColumnIndexType::NAME: {
+      ObString col_name;
+      ObDataAccessPathExtraInfo *data_access_info =
+        static_cast<ObDataAccessPathExtraInfo *>(file_column_exprs_.at(index)->extra_info_);
+      col_name = data_access_info->data_access_path_;
+      OZ (name_to_id_.get_refactored(col_name, orc_col_id));
+      break;
+    }
+    case sql::ColumnIndexType::POSITION: {
+      orc_col_id = file_column_exprs_.at(index)->extra_;
+      break;
+    }
+    default:
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("unknown orc column_index_type", K(ret), K(scan_param_->external_file_format_.orc_format_.column_index_type_));
+      break;
+  }
+  return ret;
+}
+
 int ObOrcTableRowIterator::prepare_read_orc_file()
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); i++) {
-    ObDataAccessPathExtraInfo *data_access_info =
-        static_cast<ObDataAccessPathExtraInfo *>(file_column_exprs_.at(i)->extra_info_);
     int64_t orc_col_id = -1;
-    OZ (name_to_id_.get_refactored(
-      ObString(data_access_info->data_access_path_.length(),
-               data_access_info->data_access_path_.ptr()), orc_col_id));
+    OZ(compute_column_id_by_index_type(i, orc_col_id));
     CK (orc_col_id != -1);
     const orc::Type *type = nullptr;
     OZ (id_to_type_.get_refactored(orc_col_id, type));
@@ -191,12 +211,18 @@ int ObOrcTableRowIterator::init(const storage::ObTableScanParam *scan_param)
     OZ (file_column_exprs_.assign(file_column_exprs));
     OZ (mapping_column_exprs_.assign(mapping_column_exprs));
     OZ (mapping_column_ids_.assign(mapping_column_ids));
-    for (int64_t i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); i++) {
-      ObDataAccessPathExtraInfo *data_access_info =
-        static_cast<ObDataAccessPathExtraInfo *>(file_column_exprs_.at(i)->extra_info_);
-      CK (data_access_info != nullptr);
-      CK (data_access_info->data_access_path_.ptr() != nullptr);
-      CK (data_access_info->data_access_path_.length() != 0);
+    const sql::ColumnIndexType index_type =
+                                  scan_param_->external_file_format_.orc_format_.column_index_type_;
+    if (OB_SUCC(ret) && index_type == sql::ColumnIndexType::NAME) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); i++) {
+        ObDataAccessPathExtraInfo *data_access_info =
+          static_cast<ObDataAccessPathExtraInfo *>(file_column_exprs_.at(i)->extra_info_);
+        if (data_access_info == nullptr ||
+            data_access_info->data_access_path_.ptr() == nullptr ||
+            data_access_info->data_access_path_.length() == 0) {
+          ret = OB_EXTERNAL_ACCESS_PATH_ERROR;
+        }
+      }
     }
     OZ (file_meta_column_exprs_.assign(file_meta_column_exprs));
 
@@ -311,17 +337,13 @@ int ObOrcTableRowIterator::select_row_ranges(const int64_t stripe_idx)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("orc stripe info is null", K(ret));
     } else {
-      const int64_t row_index_stride = reader_->getRowIndexStride();
       const int64_t stripe_num_rows = stripe->getNumberOfRows();
-      const int64_t groups_in_stripe = (stripe_num_rows + row_index_stride - 1) / row_index_stride;
       const int64_t first_row_id = state_.next_stripe_first_row_id_;
       state_.next_stripe_first_row_id_ += stripe_num_rows;
       bool build_whole_stripe_range = true;
       if (has_pushdown_filter()) {
         if (OB_FAIL(select_row_ranges_by_pushdown_filter(*stripe,
                                                          stripe_idx,
-                                                         row_index_stride,
-                                                         groups_in_stripe,
                                                          first_row_id,
                                                          stripe_num_rows,
                                                          build_whole_stripe_range))) {
@@ -334,7 +356,7 @@ int ObOrcTableRowIterator::select_row_ranges(const int64_t stripe_idx)
         } else {
           SelectedRowRange whole_stripe_range;
           whole_stripe_range.start_row_group_idx = 0;
-          whole_stripe_range.end_row_group_idx = groups_in_stripe - 1;
+          whole_stripe_range.end_row_group_idx = 0;
           whole_stripe_range.first_row_id = first_row_id;
           whole_stripe_range.num_rows = stripe_num_rows;
           row_ranges_.at(0) = whole_stripe_range;
@@ -342,7 +364,8 @@ int ObOrcTableRowIterator::select_row_ranges(const int64_t stripe_idx)
           state_.end_row_range_idx_ = 0;
         }
       }
-      if (state_.has_row_range() && options_.enable_prebuffer_ && file_column_exprs_.count() > 0) {
+      if (OB_SUCC(ret) && state_.has_row_range() && options_.enable_prebuffer_ &&
+          file_column_exprs_.count() > 0) {
         if (OB_FAIL(pre_buffer_data(*stripe))) {
           LOG_WARN("fail to pre buffer date", K(ret));
         }
@@ -355,8 +378,6 @@ int ObOrcTableRowIterator::select_row_ranges(const int64_t stripe_idx)
 int ObOrcTableRowIterator::select_row_ranges_by_pushdown_filter(
     const orc::StripeInformation &stripe,
     const int64_t stripe_idx,
-    const int64_t row_index_stride,
-    const int64_t groups_in_stripe,
     const int64_t stripe_first_row_id,
     const int64_t stripe_num_rows,
     bool &build_whole_stripe_range)
@@ -369,6 +390,7 @@ int ObOrcTableRowIterator::select_row_ranges_by_pushdown_filter(
   } else {
     bool is_stripe_filtered = false;
     int64_t groups_filtered = 0;
+    int64_t groups_in_stripe = 0;
     // filter stripe by stripe statistic.
     std::unique_ptr<orc::StripeStatistics> stripe_stat = reader_->getStripeStatistics(stripe_idx);
     if (OB_UNLIKELY(!stripe_stat)) {
@@ -378,80 +400,87 @@ int ObOrcTableRowIterator::select_row_ranges_by_pushdown_filter(
       LOG_WARN("fail to apply skipping index filter", K(ret), K(stripe_idx));
     } else if (!is_stripe_filtered) {
       // filter row groups by row index.
-      if (OB_FAIL(ensure_row_range_array(groups_in_stripe))) {
-        LOG_WARN("fail to ensure row range array", K(ret));
+      const int64_t row_index_stride = reader_->getRowIndexStride();
+      if (OB_UNLIKELY(row_index_stride <= 0)) {
+        // row index is disabled, need to build whole stripe range.
+        build_whole_stripe_range = true;
       } else {
-        try {
-          RowIndexStatisticsWrapper row_index_stat_wrapper = RowIndexStatisticsWrapper(*stripe_stat);
-          SelectedRowRange last_row_range;
-          int64_t row_range_idx = 0;
-          int64_t first_row_id = stripe_first_row_id;
-          for (int64_t idx = 0; OB_SUCC(ret) && idx < groups_in_stripe; ++idx) {
-            bool is_filtered = false;
-            row_index_stat_wrapper.set_row_index(idx);
-            if (OB_FAIL(filter_by_statistic(ROW_INDEX_LEVEL, &row_index_stat_wrapper,
-                is_filtered))) {
-              LOG_WARN("fail to apply skipping index filter", K(ret), K(idx));
-            } else if (is_filtered) {
-              ++groups_filtered;
-              if (!last_row_range.is_empty()) {
-                // store and reset the last row range
-                row_ranges_.at(row_range_idx++) = last_row_range;
-                last_row_range.reset();
+        groups_in_stripe = (stripe_num_rows + row_index_stride - 1) / row_index_stride;
+        if (OB_FAIL(ensure_row_range_array(groups_in_stripe))) {
+          LOG_WARN("fail to ensure row range array", K(ret));
+        } else {
+          try {
+            RowIndexStatisticsWrapper row_index_stat_wrapper = RowIndexStatisticsWrapper(*stripe_stat);
+            SelectedRowRange last_row_range;
+            int64_t row_range_idx = 0;
+            int64_t first_row_id = stripe_first_row_id;
+            for (int64_t idx = 0; OB_SUCC(ret) && idx < groups_in_stripe; ++idx) {
+              bool is_filtered = false;
+              row_index_stat_wrapper.set_row_index(idx);
+              if (OB_FAIL(filter_by_statistic(ROW_INDEX_LEVEL, &row_index_stat_wrapper,
+                  is_filtered))) {
+                LOG_WARN("fail to apply skipping index filter", K(ret), K(idx));
+              } else if (is_filtered) {
+                ++groups_filtered;
+                if (!last_row_range.is_empty()) {
+                  // store and reset the last row range
+                  row_ranges_.at(row_range_idx++) = last_row_range;
+                  last_row_range.reset();
+                }
+              } else if (last_row_range.is_empty()) {
+                // init last_row_range as first range
+                last_row_range.start_row_group_idx = idx;
+                last_row_range.end_row_group_idx = idx;
+                last_row_range.first_row_id = first_row_id;
+                last_row_range.num_rows = row_index_stride;
+              } else {
+                // merge this range to last_row_range
+                last_row_range.end_row_group_idx = idx;
+                last_row_range.num_rows += row_index_stride;
               }
-            } else if (last_row_range.is_empty()) {
-              // init last_row_range as first range
-              last_row_range.start_row_group_idx = idx;
-              last_row_range.end_row_group_idx = idx;
-              last_row_range.first_row_id = first_row_id;
-              last_row_range.num_rows = row_index_stride;
-            } else {
-              // merge this range to last_row_range
-              last_row_range.end_row_group_idx = idx;
-              last_row_range.num_rows += row_index_stride;
+              first_row_id += row_index_stride;
             }
-            first_row_id += row_index_stride;
-          }
-          if (OB_SUCC(ret)) {
-            if (!last_row_range.is_empty()) {
-              const int64_t skipped_rows_count = last_row_range.first_row_id - stripe_first_row_id;
-              const int64_t remain_rows_in_stripe = stripe_num_rows - skipped_rows_count;
-              last_row_range.num_rows = remain_rows_in_stripe;
-              row_ranges_.at(row_range_idx++) = last_row_range;
+            if (OB_SUCC(ret)) {
+              if (!last_row_range.is_empty()) {
+                const int64_t skipped_rows_count = last_row_range.first_row_id - stripe_first_row_id;
+                const int64_t remain_rows_in_stripe = stripe_num_rows - skipped_rows_count;
+                last_row_range.num_rows = remain_rows_in_stripe;
+                row_ranges_.at(row_range_idx++) = last_row_range;
+              }
+              state_.cur_row_range_idx_ = 0;
+              state_.end_row_range_idx_ = row_range_idx - 1;
+              LOG_TRACE("orc iterator state after row group", K_(state));
             }
-            state_.cur_row_range_idx_ = 0;
-            state_.end_row_range_idx_ = row_range_idx - 1;
-            LOG_TRACE("orc iterator state after row group", K_(state));
-          }
-        } catch(const ObErrorCodeException &ob_error) {
-          if (OB_SUCC(ret)) {
-            ret = ob_error.get_error_code();
-            LOG_WARN("fail to read orc file", K(ret));
-          }
-        } catch(const std::exception& e) {
-          if (OB_SUCC(ret)) {
-            // exception when get orc row index statistics, select all row group to read
-            build_whole_stripe_range = true;
-          }
-        } catch(...) {
-          if (OB_SUCC(ret)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected error", K(ret));
+          } catch(const ObErrorCodeException &ob_error) {
+            if (OB_SUCC(ret)) {
+              ret = ob_error.get_error_code();
+              LOG_WARN("fail to read orc file", K(ret));
+            }
+          } catch(const std::exception& e) {
+            if (OB_SUCC(ret)) {
+              // exception when get orc row index statistics, select all row group to read
+              build_whole_stripe_range = true;
+            }
+          } catch(...) {
+            if (OB_SUCC(ret)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected error", K(ret));
+            }
           }
         }
       }
-      if (OB_SUCC(ret)) {
-        // update reader metrics
-        if (build_whole_stripe_range) {  // no statistic or read orc exception
-          ++reader_metrics_.selected_stripe_count;
-          reader_metrics_.selected_row_group_count += groups_in_stripe;
-        } else if (is_stripe_filtered) {
-          ++reader_metrics_.skipped_stripe_count;
-        } else {
-          ++reader_metrics_.selected_stripe_count;
-          reader_metrics_.selected_row_group_count += groups_in_stripe - groups_filtered;
-          reader_metrics_.skipped_row_group_count += groups_filtered;
-        }
+    }
+    if (OB_SUCC(ret)) {
+      // update reader metrics
+      if (build_whole_stripe_range) {  // no statistic or read orc exception
+        ++reader_metrics_.selected_stripe_count;
+        reader_metrics_.selected_row_group_count += groups_in_stripe;
+      } else if (is_stripe_filtered) {
+        ++reader_metrics_.skipped_stripe_count;
+      } else {
+        ++reader_metrics_.selected_stripe_count;
+        reader_metrics_.selected_row_group_count += (groups_in_stripe - groups_filtered);
+        reader_metrics_.skipped_row_group_count += groups_filtered;
       }
     }
   }
@@ -509,7 +538,7 @@ int ObOrcTableRowIterator::next_file()
                                                    options_.enable_disk_cache_);
           file_size = 0;
           if (OB_FAIL(data_access_driver_.open(file_info, cache_options))) {
-            if (OB_OBJECT_NOT_EXIST == ret) {
+            if (OB_OBJECT_NOT_EXIST == ret || OB_HDFS_PATH_NOT_FOUND == ret) {
               ret = OB_SUCCESS;
               file_size = 0;
             } else {
@@ -565,25 +594,49 @@ int ObOrcTableRowIterator::next_file()
           LOG_WARN("orc create reader failed", K(ret));
           throw std::bad_exception();
         }
-        std::list<std::string> include_names_list;
-        for (int64_t i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); i++) {
-          ObDataAccessPathExtraInfo *data_access_info =
-              static_cast<ObDataAccessPathExtraInfo *>(file_column_exprs_.at(i)->extra_info_);
-          if (OB_SUCC(ret) && (data_access_info == nullptr ||
-                              data_access_info->data_access_path_.ptr() == nullptr ||
-                              data_access_info->data_access_path_.length() == 0))
-          {
-            ret = OB_EXTERNAL_ACCESS_PATH_ERROR;
-          }
-          if (OB_SUCC(ret)) {
-            include_names_list.push_front(std::string(data_access_info->data_access_path_.ptr(),
-                                                      data_access_info->data_access_path_.length())); //x.y.z -> column_id
-          }
-        }
         orc::RowReaderOptions rowReaderOptions;
-        rowReaderOptions.include(include_names_list);
+        std::list<std::string> include_names_list;
+        std::list<uint64_t> include_ids_list;
+        switch (scan_param_->external_file_format_.orc_format_.column_index_type_) {
+          case sql::ColumnIndexType::NAME: {
+            for (int64_t i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); i++) {
+              ObDataAccessPathExtraInfo *data_access_info =
+                  static_cast<ObDataAccessPathExtraInfo *>(file_column_exprs_.at(i)->extra_info_);
+              include_names_list.push_front(std::string(data_access_info->data_access_path_.ptr(),
+                                                  data_access_info->data_access_path_.length()));
+            }
+            rowReaderOptions.include(include_names_list);
+            break;
+          }
+          case sql::ColumnIndexType::POSITION: {
+            for (uint64_t i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); i++) {
+              include_ids_list.push_back(file_column_exprs_.at(i)->extra_ - 1);
+            }
+            rowReaderOptions.include(include_ids_list);
+            break;
+          }
+          default:
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("unknown orc column_index_type",
+                    K(ret), K(scan_param_->external_file_format_.orc_format_.column_index_type_));
+            break;
+        }
+
         if (OB_SUCC(ret)) {
-          row_reader_ = reader_->createRowReader(rowReaderOptions);
+          try {
+            row_reader_ = reader_->createRowReader(rowReaderOptions);
+          } catch(const std::exception& e) {
+            if (OB_SUCC(ret)) {
+              ret = OB_ORC_READ_ERROR;
+              LOG_USER_ERROR(OB_ORC_READ_ERROR, e.what());
+              LOG_WARN("unexpected error", K(ret), "Info", e.what());
+            }
+          } catch(...) {
+            if (OB_SUCC(ret)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected error", K(ret));
+            }
+          }
         }
         if (OB_FAIL(ret)) {
         } else if (!row_reader_) {
@@ -1198,7 +1251,8 @@ static OB_INLINE int convert_string_type_statistics(
     const ObDatumMeta &col_meta,
     const bool has_lob_header,
     ObIAllocator &allocator,
-    blocksstable::ObMinMaxFilterParam &param)
+    blocksstable::ObMinMaxFilterParam &param,
+    bool &has_null)
 {
   int ret = OB_SUCCESS;
   const orc::StringColumnStatistics *string_col_stat =
@@ -1223,6 +1277,10 @@ static OB_INLINE int convert_string_type_statistics(
         LOG_WARN("fail to string to templob result", K(ret));
       }
     }
+    if (OB_SUCC(ret) && lib::is_oracle_mode() && min_str.empty()) {
+      // oracle empty string is equivalent to null
+      has_null = true;
+    }
   }
   return ret;
 }
@@ -1236,6 +1294,7 @@ int ObOrcTableRowIterator::convert_orc_statistics(const orc::ColumnStatistics *o
   int ret = OB_SUCCESS;
   param.set_uncertain();
   const orc::TypeKind type_kind = orc_type->getKind();
+  bool has_null = orc_stat->hasNull();
   switch (ob_obj_type_class(col_meta.type_)) {
     case ObIntTC: {
       ret = convert_integer_type_statistics(orc_stat, orc_type, col_meta, param);
@@ -1288,11 +1347,12 @@ int ObOrcTableRowIterator::convert_orc_statistics(const orc::ColumnStatistics *o
     }
     case ObStringTC:
     case ObTextTC: {
-      if (CS_TYPE_UTF8MB4_BIN == col_meta.cs_type_ && (
+      if (ObCharset::is_bin_sort(col_meta.cs_type_) && (
           orc::TypeKind::STRING == type_kind ||
           orc::TypeKind::VARCHAR == type_kind ||
           orc::TypeKind::CHAR == type_kind)) {
-        ret = convert_string_type_statistics(orc_stat, col_meta, has_lob_header, temp_allocator_, param);
+        ret = convert_string_type_statistics(orc_stat, col_meta, has_lob_header, temp_allocator_,
+                                             param, has_null);
       }
       break;
     }
@@ -1302,7 +1362,6 @@ int ObOrcTableRowIterator::convert_orc_statistics(const orc::ColumnStatistics *o
   }
   if (OB_SUCC(ret) && !param.min_datum_.is_null() && !param.max_datum_.is_null()) {
     // set null count
-    const bool has_null = orc_stat->hasNull();
     const bool all_null = (orc_stat->getNumberOfValues() == 0);
     int64_t null_count = 0;
     if (all_null) {
@@ -1587,12 +1646,8 @@ int ObOrcTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
         int idx = -1;
         int64_t col_id = -1;
         const orc::Type *col_type = nullptr;
-        ObDataAccessPathExtraInfo *data_access_info =
-        static_cast<ObDataAccessPathExtraInfo *>(file_column_exprs_.at(i)->extra_info_);
-        CK (data_access_info != nullptr);
-        CK (data_access_info->data_access_path_.ptr() != nullptr);
-        CK (data_access_info->data_access_path_.length() != 0);
-        OZ (name_to_id_.get_refactored(ObString(data_access_info->data_access_path_.length(), data_access_info->data_access_path_.ptr()), col_id));
+        ObString col_name;
+        OZ(compute_column_id_by_index_type(i, col_id));
 
         OZ (id_to_type_.get_refactored(col_id, col_type));
         ObArray<int> idxs;

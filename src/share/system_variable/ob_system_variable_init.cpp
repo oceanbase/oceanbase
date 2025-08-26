@@ -3306,7 +3306,7 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[234].default_value_ = "4.4.0.0" ;
+      ObSysVars[234].default_value_ = "4.4.1.0" ;
       ObSysVars[234].info_ = "enabling a series of optimizer features based on an OceanBase release number" ;
       ObSysVars[234].name_ = "optimizer_features_enable" ;
       ObSysVars[234].data_type_ = ObVarcharType ;
@@ -6669,7 +6669,7 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[477].default_value_ = "2" ;
+      ObSysVars[477].default_value_ = "0" ;
       ObSysVars[477].info_ = "PLSQL_OPTIMIZE_LEVEL specifies the optimization level that will be used to compile PL/SQL library units. The higher the setting of this parameter, the more effort the compiler makes to optimize PL/SQL library units." ;
       ObSysVars[477].name_ = "plsql_optimize_level" ;
       ObSysVars[477].data_type_ = ObIntType ;

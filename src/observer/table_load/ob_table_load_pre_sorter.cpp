@@ -76,12 +76,9 @@ int ObTableLoadPreSorter::ChunkSorter::work()
     LOG_WARN("chunk mgr is nullptr", KR(ret));
   } else if (OB_FAIL(chunk_mgr_->close_chunk(chunk_node_id_))) {
     LOG_WARN("fail to sort chunk", KR(ret), K(chunk_node_id_));
-  } else {
-    bool all_trans_finished = ATOMIC_LOAD(&pre_sorter_->all_trans_finished_);
-    int64_t cur_sort_chunk_task_cnt = pre_sorter_->dec_sort_chunk_task_cnt();
-    if (all_trans_finished && 0 == cur_sort_chunk_task_cnt) {
-      mem_ctx_->load_thread_cnt_ = 0; // 用于让sample线程退出
-    }
+  } else if (0 == pre_sorter_->dec_sort_chunk_task_cnt()
+             && ATOMIC_LOAD(&pre_sorter_->all_trans_finished_)) {
+    mem_ctx_->load_thread_cnt_ = 0; // 用于让sample线程退出
   }
   return ret;
 }
@@ -175,6 +172,8 @@ int ObTableLoadPreSorter::init_mem_ctx()
   mem_ctx_.load_thread_cnt_ = mem_ctx_.total_thread_cnt_;
   if (OB_FAIL(mem_ctx_.init())) {
     LOG_WARN("fail to init mem ctx", KR(ret));
+  } else if (OB_FAIL(mem_ctx_.init_enc_params(store_ctx_->ctx_->param_.dup_action_, store_ctx_->write_ctx_.schema_->column_descs_))) {
+    LOG_WARN("fail to init enc params", KR(ret));
   }
   return ret;
 }
@@ -231,15 +230,14 @@ int ObTableLoadPreSorter::close()
   } else if (OB_FAIL(chunks_manager_->get_unclosed_chunks(unclosed_chunk_ids))) {
     LOG_WARN("fail to get unclosed chunks", KR(ret));
   } else {
+    inc_sort_chunk_task_cnt();
+    ATOMIC_SET(&all_trans_finished_, true);
     for (int64_t i = 0; OB_SUCC(ret) && i < unclosed_chunk_ids.count(); i++) {
       if (OB_FAIL(close_chunk(unclosed_chunk_ids.at(i)))) {
         LOG_WARN("fail to close chunk", KR(ret), K(i),K(unclosed_chunk_ids.at(i)));
       }
     }
-  }
-  if (OB_SUCC(ret)) {
-    all_trans_finished_ = true;
-    if (0 == get_sort_chunk_task_cnt()) {
+    if (0 == dec_sort_chunk_task_cnt()) {
       mem_ctx_.load_thread_cnt_ = 0;
     }
   }

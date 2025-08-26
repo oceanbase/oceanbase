@@ -86,10 +86,10 @@ public:
                K_(scan_physical_row_cnt), K_(scan_micro_block_cnt), K_(pushdown_micro_block_cnt),
                K_(exist_row_total_table_cnt), K_(exist_row_read_table_cnt), K_(insert_row_cnt),
                K_(update_row_cnt), K_(delete_row_cnt));
-
 public:
-  static constexpr int64_t QUERY_REPORT_INEFFICIENT_THRESHOLD = 3;
-  static constexpr int64_t MERGE_REPORT_MIN_ROW_CNT = 1000;
+  static constexpr int64_t MERGE_MIN_ROW_CNT = 1000;
+  static constexpr int64_t QUERY_MIN_SCAN_ROW_CNT = 10000;
+  static constexpr int64_t QUERY_MIN_BLOCK_SCAN_CNT = 10;
 public:
   int64_t ls_id_;
   uint64_t tablet_id_;
@@ -141,17 +141,13 @@ public:
   bool is_hot_tablet() const;
   bool is_insert_mostly() const;
   bool is_update_or_delete_mostly() const;
-  bool has_slow_query() const;
+  bool has_frequent_slow_query() const;
   bool has_accumnulated_delete() const;
   TO_STRING_KV(K_(tablet_stat), K_(total_tablet_stat), K_(is_small_tenant), K_(boost_factor));
 public:
-  static constexpr int64_t ACCESS_FREQUENCY = 5;
   static constexpr int64_t BASE_FACTOR = 10;
   static constexpr int64_t LOAD_THRESHOLD = 7;
   static constexpr int64_t TOMBSTONE_THRESHOLD = 3;
-  static constexpr int64_t QUERY_BASIC_ROW_CNT = 1000;
-  static constexpr int64_t QUERY_BASIC_MICRO_BLOCK_CNT = 10;
-  static constexpr int64_t QUERY_BASIC_ITER_TABLE_CNT = 5;
   static constexpr int64_t MERGE_BASIC_ROW_CNT = 10000;
 public:
   ObTabletStat tablet_stat_;       // tablet statistics recently

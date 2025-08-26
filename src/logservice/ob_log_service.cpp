@@ -104,7 +104,11 @@ int ObLogService::mtl_init(ObLogService* &logservice)
                                       net_keepalive_adapter,
                                       locality_manager))) {
     CLOG_LOG(ERROR, "init ObLogService failed", K(ret), K(tenant_clog_dir));
-  } else if (OB_FAIL(FileDirectoryUtils::fsync_dir(clog_dir))) {
+  } else if (
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+    !GCONF.enable_logservice &&
+#endif
+    OB_FAIL(FileDirectoryUtils::fsync_dir(clog_dir))) {
     CLOG_LOG(ERROR, "fsync_dir failed", K(ret), K(clog_dir));
   } else {
     CLOG_LOG(INFO, "ObLogService mtl_init success");
@@ -282,6 +286,7 @@ int ObLogService::create_palf_env_(const PalfOptions &options,
       .io_manager_ = &OB_IO_MANAGER,
     };
     palf::PalfEnv *palf_env = NULL;
+    // whether tenant_clog_dir is null is checked in check_and_prepare_dir
     if (OB_FAIL(check_and_prepare_dir(base_dir))) {
       CLOG_LOG(WARN, "check_and_prepare_dir failed", K(ret), K(base_dir));
     } else if (false == options.is_valid() || OB_ISNULL(base_dir) || OB_UNLIKELY(!self.is_valid())
@@ -528,6 +533,8 @@ int ObLogService::add_ls(const ObLSID &id,
     CLOG_LOG(WARN, "ObLogRestoreHandler init failed", K(ret), K(id), KP(palf_env_));
   } else if (OB_FAIL(log_handler_palf_handle->register_role_change_cb(rc_cb))) {
     CLOG_LOG(WARN, "register_role_change_cb failed", K(ret));
+  } else if (OB_FAIL(log_handler_palf_handle->set_location_cache_cb(loc_cache_cb))) {
+    CLOG_LOG(WARN, "set_location_cache_cb failed", K(ret), K(id));
   } else if (!enable_logservice_ && OB_FAIL(do_set_shared_nothing_cbs_(id, log_handler_palf_handle))) {
     CLOG_LOG(WARN, "do_set_shared_nothing_cbs_ failed", K(ret), K(id));
   } else {
@@ -546,7 +553,6 @@ int ObLogService::do_set_shared_nothing_cbs_(const ObLSID &id, ipalf::IPalfHandl
 {
   int ret = OB_SUCCESS;
   palf::PalfHandle *sn_palf_handle = static_cast<palf::PalfHandle*>(palf_handle);
-  PalfLocationCacheCb *loc_cache_cb = &location_adapter_;
   PalfLocalityInfoCb *locality_cb = &locality_adapter_;
   if (enable_logservice_) {
     ret = OB_ERR_UNEXPECTED;
@@ -554,8 +560,6 @@ int ObLogService::do_set_shared_nothing_cbs_(const ObLSID &id, ipalf::IPalfHandl
   } else if (OB_ISNULL(sn_palf_handle)) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "palf_handle is null", K(ret));
-  } else if (OB_FAIL(sn_palf_handle->set_location_cache_cb(loc_cache_cb))) {
-    CLOG_LOG(WARN, "set_location_cache_cb failed", K(ret), K(id));
   } else if (OB_FAIL(sn_palf_handle->set_locality_cb(locality_cb))) {
     CLOG_LOG(WARN, "set_locality_cb failed", K(ret), K(id));
   } else {
@@ -852,6 +856,8 @@ int ObLogService::create_ls_(const share::ObLSID &id,
       CLOG_LOG(WARN, "ObLogRestoreHandler init failed", K(ret), K(id), KP(palf_env_));
     } else if (OB_FAIL(log_handler_palf_handle->register_role_change_cb(rc_cb))) {
       CLOG_LOG(WARN, "register_role_change_cb failed", K(ret), K(id));
+    } else if (OB_FAIL(log_handler_palf_handle->set_location_cache_cb(loc_cache_cb))) {
+      CLOG_LOG(WARN, "set_location_cache_cb failed", K(ret), K(id));
     } else if (!enable_logservice_ && OB_FAIL(do_set_shared_nothing_cbs_(id, log_handler_palf_handle))) {
       CLOG_LOG(WARN, "do_set_shared_nothing_cbs_ failed", K(ret), K(id));
     } else {

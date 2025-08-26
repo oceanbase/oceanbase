@@ -21,6 +21,8 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/privilege_check/ob_ora_priv_check.h"
 #include "share/catalog/ob_catalog_utils.h"
+
+#include "ob_external_resource_schema_getter_guard.ipp"
 namespace oceanbase
 {
 using namespace common;
@@ -1245,7 +1247,6 @@ int ObSchemaGetterGuard::get_directory_schema_by_id(const uint64_t tenant_id,
   }
   return ret;
 }
-
 
 int ObSchemaGetterGuard::get_rls_policy_schema_by_name(const uint64_t tenant_id,
                                                        const uint64_t table_id,
@@ -2568,6 +2569,12 @@ int ObSchemaGetterGuard::verify_read_only(const uint64_t tenant_id,
           }
           break;
         }
+        case OB_PRIV_OBJECT_LEVEL: {
+          if (OB_FAIL(verify_db_read_only(tenant_id, need_priv))) {
+            LOG_WARN("db is read only, can't not execute this statement", KR(ret));
+          }
+          break;
+        }
         default:{
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unknown privilege level", K(need_priv), KR(ret));
@@ -2823,10 +2830,6 @@ int ObSchemaGetterGuard::check_user_access(
                    "client_ip_", login_info.client_ip_, KR(ret));
         } else if (OB_FAIL(check_ssl_access(*user_info, ssl_st))) {
           LOG_WARN("check_ssl_access failed", "tenant_name", login_info.tenant_name_,
-                   "user_name", login_info.user_name_,
-                   "client_ip_", login_info.client_ip_, KR(ret));
-        } else if (OB_FAIL(check_ssl_invited_cn(user_info->get_tenant_id(), ssl_st))) {
-          LOG_WARN("check_ssl_invited_cn failed", "tenant_name", login_info.tenant_name_,
                    "user_name", login_info.user_name_,
                    "client_ip_", login_info.client_ip_, KR(ret));
         }
@@ -3088,60 +3091,6 @@ int ObSchemaGetterGuard::check_ssl_access(const ObUserInfo &user_info, SSL *ssl_
   }
   return ret;
 }
-
-
-int ObSchemaGetterGuard::check_ssl_invited_cn(const uint64_t tenant_id, SSL *ssl_st)
-{
-  int ret = OB_SUCCESS;
-  if (NULL == ssl_st) {
-    LOG_TRACE("not use ssl, no need check invited_cn", K(tenant_id));
-  } else {
-    X509 *cert = NULL;
-    X509_name_st *x509Name = NULL;
-    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-    if (OB_UNLIKELY(!tenant_config.is_valid())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("fail get tenant_config", KR(ret));
-    } else {
-      ObString ob_ssl_invited_common_names(tenant_config->ob_ssl_invited_common_names.str());
-      if (ob_ssl_invited_common_names.empty()) {
-        ret = OB_PASSWORD_WRONG;
-        LOG_WARN("ob_ssl_invited_common_names not match", "expect", ob_ssl_invited_common_names, KR(ret));
-      } else if (NULL == (cert = SSL_get_peer_certificate(ssl_st))) {
-        LOG_TRACE("use ssl, but without peer_certificate", K(tenant_id));
-      } else if (OB_ISNULL(x509Name = X509_get_subject_name(cert))) {
-        ret = OB_PASSWORD_WRONG;
-        LOG_WARN("X509 check failed", KR(ret));
-      } else {
-        unsigned int count = X509_NAME_entry_count(x509Name);
-        char name[1024] = {0};
-        char *cn_used = NULL;
-        for (unsigned int i = 0; i < count && NULL == cn_used; i++) {
-          X509_NAME_ENTRY *entry = X509_NAME_get_entry(x509Name, i);
-          OBJ_obj2txt(name, sizeof(name), X509_NAME_ENTRY_get_object(entry), 0);
-          if (strcmp(name, "commonName") == 0) {
-            ASN1_STRING_to_UTF8((unsigned char **)&cn_used, X509_NAME_ENTRY_get_data(entry));
-          }
-        }
-        if (OB_ISNULL(cn_used)) {
-          ret = OB_PASSWORD_WRONG;
-          LOG_WARN("failed to found cn", KR(ret));
-        } else if (NULL == strstr(ob_ssl_invited_common_names.ptr(), cn_used)) {
-          ret = OB_PASSWORD_WRONG;
-          LOG_WARN("ob_ssl_invited_common_names not match", "expect",ob_ssl_invited_common_names, "curr", cn_used,  KR(ret));
-        } else {
-          LOG_TRACE("ob_ssl_invited_common_names match", "expect",ob_ssl_invited_common_names, "curr", cn_used,  KR(ret));
-        }
-      }
-    }
-
-    if (cert != NULL) {
-      X509_free(cert);
-    }
-  }
-  return ret;
-}
-
 
 int ObSchemaGetterGuard::check_db_access(ObSessionPrivInfo &s_priv,
                                          const common::ObIArray<uint64_t> &enable_role_id_array,
@@ -4582,6 +4531,7 @@ GET_SCHEMAS_WITH_MGR_IN_TENANT_FUNC_DEFINE(udt_mgr_, udt, ObUDTTypeInfo, ObSimpl
 GET_SCHEMAS_WITH_MGR_IN_TENANT_FUNC_DEFINE(tablespace_mgr_, tablespace, ObTablespaceSchema, ObTablespaceSchema, TABLESPACE_SCHEMA);
 GET_SCHEMAS_WITH_MGR_IN_TENANT_FUNC_DEFINE(synonym_mgr_, synonym, ObSynonymInfo, ObSimpleSynonymSchema, SYNONYM_SCHEMA);
 GET_SCHEMAS_WITH_MGR_IN_TENANT_FUNC_DEFINE(directory_mgr_, directory, ObDirectorySchema, ObDirectorySchema, DIRECTORY_SCHEMA);
+GET_SCHEMAS_WITH_MGR_IN_TENANT_FUNC_DEFINE(location_mgr_, location, ObLocationSchema, ObLocationSchema, LOCATION_SCHEMA);
 #undef GET_SCHEMAS_WITH_MGR_IN_TENANT_FUNC_DEFINE
 
 int ObSchemaGetterGuard::get_outline_infos_in_tenant(const uint64_t tenant_id,
@@ -5102,6 +5052,29 @@ int ObSchemaGetterGuard::get_tenant_ids(ObIArray<uint64_t> &tenant_ids) const
     LOG_WARN("fail to check lazy guard", KR(ret));
   } else {
     ret = mgr->get_tenant_ids(tenant_ids);
+  }
+  return ret;
+}
+
+int ObSchemaGetterGuard::get_user_tenant_count(int64_t &count) const
+{
+  int ret = OB_SUCCESS;
+  count = 0;
+  const ObSchemaMgr *mgr = NULL;
+  ObSEArray<uint64_t, 5> tenant_ids;
+
+  if (!check_inner_stat()) {
+    ret = OB_INNER_STAT_ERROR;
+    LOG_WARN("inner stat error", KR(ret));
+  } else if (OB_FAIL(check_lazy_guard(OB_SYS_TENANT_ID, mgr))) {
+    LOG_WARN("fail to check lazy guard", KR(ret));
+  } else {
+    ret = mgr->get_tenant_ids(tenant_ids);
+    for (int64_t i = 0; i < tenant_ids.count(); i ++) {
+      if (is_user_tenant(tenant_ids[i])) {
+        count ++;
+      }
+    }
   }
   return ret;
 }
@@ -8794,6 +8767,10 @@ int ObSchemaGetterGuard::deep_copy_index_name_map(
   return ret;
 }
 
+template int ObSchemaGetterGuard::get_schema<ObCCLRuleSchema>(
+    const ObSchemaType, const uint64_t, const uint64_t,
+    const ObCCLRuleSchema *&, int64_t specified_version);
+
 #define GET_SIMPLE_SCHEMAS_IN_DATABASE_FUNC_DEFINE(SCHEMA, SIMPLE_SCHEMA_TYPE)                       \
   int ObSchemaGetterGuard::get_simple_##SCHEMA##_schemas_in_database(                                \
       const uint64_t tenant_id,                                                                      \
@@ -8826,6 +8803,7 @@ GET_SIMPLE_SCHEMAS_IN_DATABASE_FUNC_DEFINE(synonym, ObSimpleSynonymSchema);
 GET_SIMPLE_SCHEMAS_IN_DATABASE_FUNC_DEFINE(package, ObSimplePackageSchema);
 GET_SIMPLE_SCHEMAS_IN_DATABASE_FUNC_DEFINE(routine, ObSimpleRoutineSchema);
 GET_SIMPLE_SCHEMAS_IN_DATABASE_FUNC_DEFINE(mock_fk_parent_table, ObSimpleMockFKParentTableSchema);
+GET_SIMPLE_SCHEMAS_IN_DATABASE_FUNC_DEFINE(external_resource, ObSimpleExternalResourceSchema);
 
 } //end of namespace schema
 } //end of namespace share

@@ -75,6 +75,12 @@ public:
                                   const uint64_t tenant_id,
                                   int32_t &offset_sec);
 
+  static int parse_next_date(
+      const sql::ObSQLSessionInfo *session,
+      const common::ObString &next_date_str,
+      int32_t &offset_sec,
+      int64_t &next_date_ts);
+
 private:
   static int get_window_job_info(const int64_t current_time,
                                  const int64_t nth_window,
@@ -94,6 +100,7 @@ private:
   static int get_stats_history_manager_job_info(const bool is_oracle_mode,
                                                const uint64_t tenant_id,
                                                const int64_t job_id,
+                                               const int64_t offset_sec,
                                                const ObString &exec_env,
                                                dbms_scheduler::ObDBMSSchedJobInfo &job_info);
   static int get_spm_stats_job_info(const bool is_oracle_mode,

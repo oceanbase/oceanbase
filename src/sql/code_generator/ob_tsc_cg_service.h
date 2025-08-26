@@ -94,6 +94,12 @@ private:
     {
       is_merge_fts_index_ = true;
     }
+
+    void incre_merge_fts_idx()
+    {
+      is_merge_fts_index_ = true;
+      curr_merge_fts_idx_++;
+    }
     bool is_rowkey_doc_scan_in_func_lookup() const
     {
       return is_func_lookup_ && OB_INVALID_ID == curr_func_lookup_idx_;
@@ -278,6 +284,7 @@ private:
   int generate_mr_mv_scan_flag(const ObLogTableScan &op, ObQueryFlag &query_flag) const;
   int generate_index_merge_ctdef(const ObLogTableScan &op, ObTableScanCtDef &tsc_ctdef, ObDASIndexMergeCtDef *&root_ctdef);
   int generate_index_merge_node_ctdef(const ObLogTableScan &op,
+                                      DASScanCGCtx &cg_ctx,
                                       ObTableScanCtDef &tsc_ctdef,
                                       ObIndexMergeNode *node,
                                       common::ObIAllocator &alloc,

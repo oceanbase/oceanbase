@@ -633,15 +633,19 @@ int ObTempRowStoreBase<RA>::init(const ObExprPtrIArray &exprs,
                          uint32_t row_extra_size,
                          const common::ObCompressorType compressor_type,
                          const bool reorder_fixed_expr /*true*/,
-                         const bool enable_trunc /*false*/)
+                         const bool enable_trunc /*false*/,
+                         int64_t tempstore_read_alignment_size /*0*/)
 {
   int ret = OB_SUCCESS;
   mem_attr_ = mem_attr;
   col_cnt_ = exprs.count();
   max_batch_size_ = max_batch_size;
   ObTempBlockStore::set_inner_allocator_attr(mem_attr);
-  OZ(ObTempBlockStore::init(mem_limit, enable_dump, mem_attr.tenant_id_, mem_attr.ctx_id_, mem_attr_.label_,
-                            compressor_type, enable_trunc));
+  bool sequential_read = false;
+  if (RA) { tempstore_read_alignment_size = 0; }
+  OZ(ObTempBlockStore::init(mem_limit, enable_dump, mem_attr.tenant_id_, mem_attr.ctx_id_,
+                            mem_attr_.label_, compressor_type, enable_trunc, sequential_read,
+                            tempstore_read_alignment_size));
   OZ(row_meta_.init(exprs, row_extra_size, reorder_fixed_expr));
   inited_ = true;
   return ret;
@@ -654,7 +658,8 @@ int ObTempRowStoreBase<RA>::init(const RowMeta &row_meta,
                          const int64_t mem_limit,
                          bool enable_dump,
                          const common::ObCompressorType compressor_type,
-                         const bool enable_trunc /*false*/)
+                         const bool enable_trunc /*false*/,
+                         int64_t tempstore_read_alignment_size /*0*/)
 {
   int ret = OB_SUCCESS;
   mem_attr_ = mem_attr;
@@ -668,8 +673,11 @@ int ObTempRowStoreBase<RA>::init(const RowMeta &row_meta,
   } else if (OB_FAIL(row_meta_.deep_copy(row_meta, allocator_))) {
     LOG_WARN("deep copy row meta failed", K(ret));
   }
-  OZ(ObTempBlockStore::init(mem_limit, enable_dump, mem_attr.tenant_id_, mem_attr.ctx_id_, mem_attr_.label_,
-                            compressor_type, enable_trunc));
+  bool sequential_read = false;
+  if (RA) { tempstore_read_alignment_size = 0; }
+  OZ(ObTempBlockStore::init(mem_limit, enable_dump, mem_attr.tenant_id_, mem_attr.ctx_id_,
+                            mem_attr_.label_, compressor_type, enable_trunc, sequential_read,
+                            tempstore_read_alignment_size));
   inited_ = true;
   return ret;
 }

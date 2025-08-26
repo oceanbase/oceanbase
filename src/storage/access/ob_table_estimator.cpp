@@ -97,6 +97,7 @@ int ObTableEstimator::estimate_row_count_for_scan(
         continue;
       } else if (OB_FAIL(estimate_multi_scan_row_count(base_input, table, ranges, table_est))) {
         LOG_WARN("failed to estimate cost", K(ret), K(ranges), K(table->get_key()), K(i));
+      } else if (FALSE_IT(fix_invalid_logic_row(part_estimate, table_est))) {
       } else if (OB_FAIL(part_estimate.add(table_est))) {
         LOG_WARN("failed to add table estimation", K(ret), K(i), K(table_est), K(table->get_key()));
       } else {
@@ -269,6 +270,21 @@ int ObTableEstimator::estimate_memtable_scan_row_count(
   }
 
   return ret;
+}
+
+void ObTableEstimator::fix_invalid_logic_row(
+    const ObPartitionEst &part_estimate,
+    ObPartitionEst &table_est)
+{
+  if (table_est.logical_row_count_ < 0) {
+    if (part_estimate.logical_row_count_ <= 0) {
+      LOG_TRACE("[STORAGE ESTIMATE ROW] the result logical row count is already 0", K(part_estimate), K(table_est));
+      table_est.logical_row_count_ = 0;
+    } else if (table_est.logical_row_count_ < -part_estimate.logical_row_count_) {
+      LOG_TRACE("[STORAGE ESTIMATE ROW] the deleted row count is greater than result logical row count", K(part_estimate), K(table_est));
+      table_est.logical_row_count_ = -0.5 * part_estimate.logical_row_count_;
+    }
+  }
 }
 
 

@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "share/redolog/ob_log_file_reader.h"
 #include "storage/blocksstable/ob_data_file_prepare.h"
 
 #define private public
@@ -58,8 +57,6 @@ void TestLogFileHandler::SetUp()
   TestDataFilePrepare::SetUp(); // init dir and io device
   FileDirectoryUtils::create_full_path("./data_TestLogFileHandler/clog/");
 
-  ASSERT_EQ(OB_SUCCESS, OB_LOG_FILE_READER.init());
-
 #ifdef ERRSIM
   TP_SET_EVENT(EventTable::EN_IO_GETEVENTS, OB_SUCCESS, 0, 1);
   TP_SET_EVENT(EventTable::EN_IO_SUBMIT, OB_SUCCESS, 0, 1);
@@ -71,7 +68,6 @@ void TestLogFileHandler::TearDown()
 {
   //system("rm -rf ./log_file_test");
   LOCAL_DEVICE_INSTANCE.destroy();
-  OB_LOG_FILE_READER.destroy();
   TestDataFilePrepare::TearDown();
 #ifdef ERRSIM
   TP_SET_EVENT(EventTable::EN_IO_GETEVENTS, OB_SUCCESS, 0, 1);
@@ -306,16 +302,18 @@ TEST_F(TestLogFileHandler, write_file_fd_read)
 
   char *rd_buf;
   ret = posix_memalign((void **) &rd_buf, TestLogFileHandler::DIO_WRITE_ALIGN_SIZE, count);
-  ObLogReadFdHandle fd_handle;
-  ret = OB_LOG_FILE_READER.get_fd(util_.get_storage_env().log_spec_.log_dir_, file_id, fd_handle);
+  ObLogFileHandler read_handle;
+  ret = read_handle.init(util_.get_storage_env().log_spec_.log_dir_, TestLogFileHandler::LOG_FILE_SIZE, OB_SERVER_TENANT_ID);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ret = OB_LOG_FILE_READER.pread(fd_handle, (void *) rd_buf, count, 0, read_size);
+  ret = read_handle.open(file_id, ObLogDefinition::LOG_READ_FLAG);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = read_handle.read((void *) rd_buf, count, 0, read_size);
   OB_LOG(INFO, "buf value", K(buf), K(rd_buf), KP(buf), KP(rd_buf), K(count), K(read_size));
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(count, read_size);
   ASSERT_EQ(len, strlen(rd_buf));
   ASSERT_EQ(0, strcmp(buf, rd_buf));
-  //ret = OB_LOG_FILE_READER.close_fd(log_fd);
+  ASSERT_EQ(OB_SUCCESS, read_handle.close());
   //ASSERT_EQ(OB_SUCCESS, ret);
 
   ret = file_handler.close();
@@ -360,11 +358,13 @@ TEST_F(TestLogFileHandler, log_file_reader2)
   char *rd_buf;
   ret = posix_memalign((void **) &rd_buf, TestLogFileHandler::DIO_WRITE_ALIGN_SIZE, count);
   for (int64_t i = 0; i < 10; ++i) {
-    ObLogReadFdHandle log_fd;
+    ObLogFileHandler reader;
     MEMSET(rd_buf, 0, TestLogFileHandler::DIO_WRITE_ALIGN_SIZE);
-    ret = OB_LOG_FILE_READER.get_fd(util_.get_storage_env().log_spec_.log_dir_, file_id, log_fd);
+    ret = reader.init(util_.get_storage_env().log_spec_.log_dir_, TestLogFileHandler::LOG_FILE_SIZE, OB_SERVER_TENANT_ID);
     ASSERT_EQ(OB_SUCCESS, ret);
-    ret = OB_LOG_FILE_READER.pread(log_fd, (void *) rd_buf, count, 0, read_size);
+    ret = reader.open(file_id, ObLogDefinition::LOG_READ_FLAG);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ret = reader.read((void *) rd_buf, count, 0, read_size);
     ASSERT_EQ(OB_SUCCESS, ret);
     ASSERT_EQ(count, read_size);
     ASSERT_EQ(len, STRLEN(rd_buf));
@@ -375,11 +375,11 @@ TEST_F(TestLogFileHandler, log_file_reader2)
   //ret = FileDirectoryUtils::delete_file(file_path);
   ret = file_handler.delete_file(file_id);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ret = OB_LOG_FILE_READER.evict_fd(util_.get_storage_env().log_spec_.log_dir_, file_id);
-  ASSERT_EQ(OB_SUCCESS, ret);
 
-  ObLogReadFdHandle log_fd;
-  ret = OB_LOG_FILE_READER.get_fd(util_.get_storage_env().log_spec_.log_dir_, file_id, log_fd);
+  ObLogFileHandler reader;
+  ret = reader.init(util_.get_storage_env().log_spec_.log_dir_, TestLogFileHandler::LOG_FILE_SIZE, OB_SERVER_TENANT_ID);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = reader.open(file_id, ObLogDefinition::LOG_READ_FLAG);
   ASSERT_EQ(OB_NO_SUCH_FILE_OR_DIRECTORY, ret); // file does not exist
 
   ret = file_handler.close();

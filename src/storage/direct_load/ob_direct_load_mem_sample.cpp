@@ -153,7 +153,7 @@ int ObDirectLoadMemSample::do_sample()
       }
       if (OB_SUCC(ret)) {
         while (mem_ctx_->running_dump_task_cnt_ > 0 && OB_LIKELY(!mem_ctx_->has_error_)) { //等待所有的merge做完
-          usleep(100000);
+          ob_usleep(100000);
         }
       }
       break;
@@ -165,7 +165,7 @@ int ObDirectLoadMemSample::do_sample()
     }
     if (OB_SUCC(ret)) {
       if (mem_ctx_->mem_chunk_queue_.size() < mem_chunk_dump_count) {
-        usleep(100000);
+        ob_usleep(100000);
         continue;
       }
       if (OB_FAIL(do_work())) {

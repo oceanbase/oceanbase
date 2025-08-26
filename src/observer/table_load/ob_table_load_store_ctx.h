@@ -48,6 +48,7 @@ class ObTableLoadTransStore;
 class ObITableLoadTaskScheduler;
 class ObTableLoadMerger;
 class ObTableLoadErrorRowHandler;
+class ObTableLoadSchema;
 class ObTableLoadStoreDataTableCtx;
 class ObTableLoadStoreIndexTableCtx;
 class ObTableLoadMergerManager;
@@ -61,49 +62,53 @@ public:
   ObTableLoadStoreWriteCtx()
     : table_data_desc_(),
       dml_row_handler_(nullptr),
+      schema_(nullptr),
       is_fast_heap_table_(false),
       is_multiple_mode_(false),
-      px_need_project_(false),
+      is_single_part_(false),
       enable_pre_sort_(false),
       pre_sorter_(nullptr),
       px_writer_cnt_(0),
       px_column_descs_(),
       px_column_project_idxs_(),
-      px_null_vectors_(),
-      px_null_vector_project_idxs_()
+      single_tablet_id_(),
+      single_tablet_id_vector_(nullptr),
+      tablet_idx_map_()
   {
   }
   TO_STRING_KV(K_(table_data_desc),
                K_(trans_param),
                KP_(dml_row_handler),
+               KP_(schema),
                K_(is_fast_heap_table),
                K_(is_multiple_mode),
-               K_(px_need_project),
+               K_(is_single_part),
                K_(enable_pre_sort),
                KP_(pre_sorter),
                K_(px_writer_cnt),
                K_(px_column_descs),
                K_(px_column_project_idxs),
-               K_(px_null_vectors),
-               K_(px_null_vector_project_idxs));
+               K_(single_tablet_id),
+               KP_(single_tablet_id_vector));
 public:
+  typedef hash::ObHashMap<uint64_t, int64_t, hash::NoPthreadDefendMode> TabletIdxMap;
   storage::ObDirectLoadTableDataDesc table_data_desc_;
   storage::ObDirectLoadTransParam trans_param_;
   ObDirectLoadDMLRowHandler *dml_row_handler_;
+  ObTableLoadSchema *schema_;
   bool is_fast_heap_table_;
   bool is_multiple_mode_;
-  bool px_need_project_;
+  bool is_single_part_; // for px mode
   bool enable_pre_sort_;
   ObTableLoadPreSorter *pre_sorter_;
   int64_t px_writer_cnt_;
   // px写入的列(包含隐藏主键列)
   ObArray<share::schema::ObColDesc> px_column_descs_;
-  // px写入的列到写入旁路导入列的映射(写入旁路的列不包含隐藏主键列)
+  // px写入的列到写入旁路导入列的映射
   ObArray<int64_t> px_column_project_idxs_;
-  // px不写的列, 需要补null列, 目前只有xmltype列
-  ObArray<ObIVector *> px_null_vectors_;
-  // px不写的列到写入旁路导入列的映射
-  ObArray<int64_t> px_null_vector_project_idxs_;
+  ObTabletID single_tablet_id_;
+  ObIVector *single_tablet_id_vector_;
+  TabletIdxMap tablet_idx_map_;
 };
 
 class ObTableLoadStoreCtx
@@ -126,18 +131,18 @@ public:
   }
   OB_INLINE table::ObTableLoadStatusType get_status() const
   {
-    obsys::ObRLockGuard guard(status_lock_);
+    obsys::ObRLockGuard<> guard(status_lock_);
     return status_;
   }
   OB_INLINE void get_status(table::ObTableLoadStatusType &status, int &error_code) const
   {
-    obsys::ObRLockGuard guard(status_lock_);
+    obsys::ObRLockGuard<> guard(status_lock_);
     status = status_;
     error_code = error_code_;
   }
   OB_INLINE int get_error_code() const
   {
-    obsys::ObRLockGuard guard(status_lock_);
+    obsys::ObRLockGuard<> guard(status_lock_);
     return error_code_;
   }
   OB_INLINE int set_status_inited()
@@ -262,10 +267,10 @@ private:
 private:
   ObTableLoadObjectAllocator<ObTableLoadStoreTrans> trans_allocator_; // 多线程安全
   lib::ObMutex op_lock_;
-  mutable obsys::ObRWLock status_lock_;
+  mutable obsys::ObRWLock<> status_lock_;
   table::ObTableLoadStatusType status_;
   int error_code_;
-  mutable obsys::ObRWLock rwlock_;
+  mutable obsys::ObRWLock<> rwlock_;
   TransMap trans_map_;
   TransCtxMap trans_ctx_map_;
   SegmentCtxMap segment_ctx_map_;

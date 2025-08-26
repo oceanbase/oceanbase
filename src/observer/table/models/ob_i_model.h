@@ -40,6 +40,7 @@ public:
     new_reqs_.set_attr(ObMemAttr(MTL_ID(), "ModNewReqs"));
     new_results_.set_attr(ObMemAttr(MTL_ID(), "ModNewRes"));
     is_alloc_from_pool_ = true;
+    is_alloc_req_res_ = true;
   }
   virtual ~ObIModel() {}
   virtual int prepare(ObTableExecCtx &ctx,
@@ -330,6 +331,7 @@ protected:
   common::ObSEArray<ObTableLSOpRequest*, 8> new_reqs_;
   common::ObSEArray<ObTableLSOpResult*, 8> new_results_;
   bool is_alloc_from_pool_;
+  bool is_alloc_req_res_;
 private:
   common::ObArenaAllocator allocator_;
   table::ObTableNewQueryAsyncSession *query_session_;

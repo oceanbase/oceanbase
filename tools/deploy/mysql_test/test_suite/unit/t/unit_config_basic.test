@@ -505,3 +505,14 @@ alter resource unit box_for_unit_config_test NET_BANDWIDTH_WEIGHT=100.90;
 
 drop resource unit if exists box_for_unit_config_test;
 --enable_warnings
+
+###############
+--echo ============================ 验证sys租户的unit内存规格:sn模式下为1G,ss模式下为1.5G ============================
+if($startup_mode=="shared_storage")
+{
+select memory_size from __all_unit_config where name = 'sys_unit_config';
+}
+if($startup_mode!="shared_storage")
+{
+select memory_size from __all_unit_config where name = 'sys_unit_config';
+}

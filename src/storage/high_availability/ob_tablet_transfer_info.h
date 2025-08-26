@@ -32,20 +32,23 @@ public:
   int init(
       const share::ObLSID &ls_id,
       const share::SCN &transfer_start_scn,
-      const int64_t transfer_seq);
+      const int64_t transfer_seq,
+      const share::SCN &src_reorganization_scn);
   void reset();
   bool is_valid() const;
   bool has_transfer_table() const;
   void reset_transfer_table();
   bool is_transfer_out_deleted() const;
 
-  TO_STRING_KV(K_(ls_id), K_(transfer_start_scn), K_(transfer_seq), K_(has_transfer_table), K_(is_transfer_out_deleted));
+  TO_STRING_KV(K_(ls_id), K_(transfer_start_scn), K_(transfer_seq), K_(has_transfer_table),
+    K_(unused_is_transfer_out_deleted), K_(src_reorganization_scn));
 public:
   share::ObLSID ls_id_;
   share::SCN transfer_start_scn_;
   int64_t transfer_seq_;
   bool has_transfer_table_;
-  bool is_transfer_out_deleted_;
+  bool unused_is_transfer_out_deleted_; // ATTENTION: this field is no longer used
+  share::SCN src_reorganization_scn_;
   static const int64_t TRANSFER_INIT_SEQ = 0;
 private:
   static const int64_t TRANSFER_INIT_LS_ID = 0;

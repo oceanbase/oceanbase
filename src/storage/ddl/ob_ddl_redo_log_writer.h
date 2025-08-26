@@ -343,7 +343,8 @@ public:
   const ObTabletID &get_tablet_id() const { return tablet_id_; }
 
 #ifdef OB_BUILD_SHARED_STORAGE
-  static int write_gc_flag(ObTabletHandle &tablet_handle,
+  static int write_gc_flag(const share::ObLSID &ls_id,
+                           ObTabletHandle &tablet_handle,
                            const ObITable::TableKey &table_key,
                            const int64_t parallel_cnt,
                            const int64_t cg_cnt);
@@ -413,9 +414,6 @@ private:
 
   int remote_write_ddl_finish_log(
       const obrpc::ObRpcRemoteWriteDDLFinishLogArg &arg);
-  /* TODO @zhuoran.zzr wait to upload & update tablet meta in one func, use deep copy to avoid lock problem*/
-  int upload_tablet(const ObDDLFinishLog &finish_log, ObTablet &shared_tablet,
-                    ObArenaAllocator &allocator, const bool is_remote_write);
 #endif
 private:
   bool is_inited_;

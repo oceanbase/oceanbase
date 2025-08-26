@@ -81,6 +81,12 @@ int ObTransformTempTable::transform_one_stmt(common::ObIArray<ObParentDMLStmt> &
         LOG_TRACE("succeed to do project pruning for temp table", K(temp_table_infos),  K(is_happened));
       }
     }
+    if (OB_SUCC(ret) && trans_happened) {
+      temp_table_infos.reuse();
+      if (OB_FAIL(stmt->collect_temp_table_infos(temp_table_infos))) {
+        LOG_WARN("failed to collect temp table infos", K(ret));
+      }
+    }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(try_inline_temp_table(stmt, temp_table_infos, is_happened))) {
         LOG_WARN("failed to inline temp table", K(ret));
@@ -3190,7 +3196,7 @@ int ObTransformTempTable::prepare_inline_materialize_stmts(ObDMLStmt *root_stmt,
     LOG_WARN("unexpect stmt", K(ret));
   } else if (OB_FALSE_IT(temp_view = static_cast<ObSelectStmt *>(copied_temp_stmt))) {
     // 在 temp table query 上封一层视图（用以获取 temp table access 的代价）
-  } else if (ObTransformUtils::pack_stmt(ctx_, temp_view)) {
+  } else if (OB_FAIL(ObTransformUtils::pack_stmt(ctx_, temp_view))) {
     LOG_WARN("failed to create simple view", K(ret));
   } else if (1 != temp_view->get_table_size()) {
     ret = OB_ERR_UNEXPECTED;

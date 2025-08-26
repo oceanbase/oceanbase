@@ -361,13 +361,14 @@ int ObMPStmtPrexecute::before_process()
         }
       }
     }
-    session->set_last_trace_id(ObCurTraceId::get_trace_id());
+    if (OB_NOT_NULL(session)) {
+      session->set_last_trace_id(ObCurTraceId::get_trace_id());
+    }
     //对于tracelog的处理，不影响正常逻辑，错误码无须赋值给ret
-    if (session != NULL && OB_FAIL(ret)) {
+    if (OB_NOT_NULL(session) && OB_FAIL(ret)) {
       int tmp_ret = OB_SUCCESS;
       //清空WARNING BUFFER
-      ObSqlCtx sql_ctx; // sql_ctx do nothing in do_after_process
-      tmp_ret = do_after_process(*session, sql_ctx, false/*no asyn response*/);
+      tmp_ret = do_after_process(*session, false/*no asyn response*/);
       UNUSED(tmp_ret);
     }
   }
@@ -381,7 +382,7 @@ int ObMPStmtPrexecute::before_process()
     OZ (flush_buffer(true));
   }
 
-  if (session != NULL) {
+  if (OB_NOT_NULL(session)) {
     revert_session(session);
   }
 

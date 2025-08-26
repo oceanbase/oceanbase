@@ -245,6 +245,7 @@ public:
                               const share::SCN &new_data_version_barrier_scn);
  bool need_refresh(const int64_t refresh_time_interval_us);
  int get_max_ls_id(uint64_t &tenant_id, ObLSID &max_ls_id);
+ int get_switchover_epoch(int64_t &switchover_epoch);
  /**
   * @description:
   *    check if service_status of the given service_name is STOPPED or STOPPING
@@ -264,8 +265,6 @@ public:
   return service_names_cache_.get_service_name(service_name_id, service_name);
  }
 
-
-protected:
  /**
   * @description:
   *    get tenant info

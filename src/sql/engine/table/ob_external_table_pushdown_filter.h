@@ -58,7 +58,7 @@ public:
   int apply_skipping_index_filter(const PushdownLevel filter_level,
                                   MinMaxFilterParamBuilder &param_builder,
                                   bool &skipped);
-  OB_INLINE bool has_pushdown_filter() const { return !skipping_filter_nodes_.empty(); }
+  OB_INLINE bool has_pushdown_filter() const { return filter_enabled_ && !skipping_filter_nodes_.empty(); }
 
 private:
   int build_skipping_filter_nodes(sql::ObPushdownFilterExecutor &filter);

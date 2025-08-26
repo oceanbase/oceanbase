@@ -19,6 +19,7 @@
 #include "storage/shared_storage/prewarm/ob_mc_prewarm_struct.h"
 #include "mittest/shared_storage/clean_residual_data.h"
 #include "storage/shared_storage/ob_file_helper.h"
+#include "mittest/shared_storage/test_ss_macro_cache_mgr_util.h"
 #undef private
 #undef protected
 
@@ -90,6 +91,7 @@ void TestSSMCPrewarmStruct::SetUpTestCase()
 {
   GCTX.startup_mode_ = observer::ObServerMode::SHARED_STORAGE_MODE;
   EXPECT_EQ(OB_SUCCESS, MockTenantModuleEnv::get_instance().init());
+  ASSERT_EQ(OB_SUCCESS, TestSSMacroCacheMgrUtil::wait_macro_cache_ckpt_replay());
 }
 
 void TestSSMCPrewarmStruct::TearDownTestCase()
@@ -239,7 +241,8 @@ TEST_F(TestSSMCPrewarmStruct, parallel_append_hot_macro_infos)
   generate_shared_major_data_macro(tablet_id);
 
   const int64_t compaction_scn = 1711086717622000;
-  ObHotTabletInfoDataWriter hot_tablet_info_writer(tablet_id, compaction_scn);
+  const SCN reorganization_scn = SCN::base_scn();
+  ObHotTabletInfoDataWriter hot_tablet_info_writer(tablet_id, compaction_scn, reorganization_scn);
 
   TestSSMCPrewarmStruct::TestHotTabletInfoWriterThread threads(ObTenantEnv::get_tenant(),
                                                                &hot_tablet_info_writer);
@@ -250,7 +253,7 @@ TEST_F(TestSSMCPrewarmStruct, parallel_append_hot_macro_infos)
 
   ASSERT_EQ(OB_SUCCESS, hot_tablet_info_writer.complete());
 
-  ObHotTabletInfoReader hot_tablet_info_reader(tablet_id, compaction_scn, 100/*prewarm_percent*/);
+  ObHotTabletInfoReader hot_tablet_info_reader(tablet_id, compaction_scn, reorganization_scn);
   ASSERT_EQ(OB_SUCCESS, hot_tablet_info_reader.load_hot_macro_infos());
 
   int64_t total_micro_cnt = 0;
@@ -264,42 +267,12 @@ TEST_F(TestSSMCPrewarmStruct, parallel_append_hot_macro_infos)
   ASSERT_EQ(total_micro_cnt, prewarm_stat.major_compaction_add_cnt_);
 }
 
-TEST_F(TestSSMCPrewarmStruct, prewarm_50_percent_data)
-{
-  const int64_t tablet_id = 200002;
-  generate_shared_major_data_macro(tablet_id);
-
-  const int64_t compaction_scn = 1711086717622000;
-  ObHotTabletInfoDataWriter hot_tablet_info_writer(tablet_id, compaction_scn);
-
-  TestSSMCPrewarmStruct::TestHotTabletInfoWriterThread threads(ObTenantEnv::get_tenant(),
-                                                               &hot_tablet_info_writer);
-  threads.set_thread_count(THREAD_CNT);
-  threads.start();
-  threads.wait();
-  threads.destroy();
-
-  ASSERT_EQ(OB_SUCCESS, hot_tablet_info_writer.complete());
-
-  ObHotTabletInfoReader hot_tablet_info_reader(tablet_id, compaction_scn, 50/*prewarm_percent*/);
-  ASSERT_EQ(OB_SUCCESS, hot_tablet_info_reader.load_hot_macro_infos());
-
-  int64_t total_micro_cnt = 0;
-  for (int64_t i = 0; i < THREAD_CNT; ++i) {
-    total_micro_cnt += (ObHotTabletInfoReader::AGGREGATED_READ_THRESHOLD - 1 + i);
-  }
-  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
-  ASSERT_NE(nullptr, micro_cache);
-  ObSSMicroCacheStat &micro_cache_stat = micro_cache->get_micro_cache_stat();
-  ObSSMicroCachePrewarmStat &prewarm_stat = micro_cache_stat.prewarm_stat_;
-  ASSERT_EQ(total_micro_cnt / 2, prewarm_stat.major_compaction_add_cnt_);
-}
-
 TEST_F(TestSSMCPrewarmStruct, empty_hot_macro_infos)
 {
   const int64_t tablet_id = 200003;
   const int64_t compaction_scn = 1711086717622000;
-  ObHotTabletInfoDataWriter hot_tablet_info_writer(tablet_id, compaction_scn);
+  const SCN reorganization_scn = SCN::base_scn();
+  ObHotTabletInfoDataWriter hot_tablet_info_writer(tablet_id, compaction_scn, reorganization_scn);
   ASSERT_EQ(OB_SUCCESS, hot_tablet_info_writer.complete());
 
   ObBackupIoAdapter io_adapter;
@@ -310,14 +283,15 @@ TEST_F(TestSSMCPrewarmStruct, empty_hot_macro_infos)
             ObStorageUsedType::TYPE::USED_TYPE_DATA, device_config));
   ASSERT_EQ(OB_SUCCESS, get_storage_type_from_path(device_config.path_, type));
   ASSERT_EQ(OB_SUCCESS, storage_info.set(type, device_config.endpoint_, device_config.access_info_,
-                                         device_config.extension_));
+                                         device_config.extension_, OB_INVALID_DEST_ID));
 
   // expect there is no prewarm data and index file
   ObTenantFileManager *file_manager = nullptr;
   ASSERT_NE(nullptr, file_manager = MTL(ObTenantFileManager *));
   ObStorageObjectHandle data_object_handle;
   ObStorageObjectOpt data_storage_opt;
-  data_storage_opt.set_ss_major_prewarm_opt(ObStorageObjectType::MAJOR_PREWARM_DATA, tablet_id, compaction_scn);
+  data_storage_opt.set_ss_major_prewarm_opt(ObStorageObjectType::MAJOR_PREWARM_DATA, tablet_id,
+                                            compaction_scn, reorganization_scn.get_val_for_sql());
   ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.alloc_object(data_storage_opt, data_object_handle));
   ObPathContext ctx;
   ASSERT_EQ(OB_SUCCESS, ctx.set_file_ctx(data_object_handle.get_macro_id(), 0/*ls_epoch_id*/, false/*is_local_cache*/));
@@ -329,14 +303,15 @@ TEST_F(TestSSMCPrewarmStruct, empty_hot_macro_infos)
   index_file_path[0] = '\0';
   ObStorageObjectHandle index_object_handle;
   ObStorageObjectOpt index_storage_opt;
-  index_storage_opt.set_ss_major_prewarm_opt(ObStorageObjectType::MAJOR_PREWARM_DATA, tablet_id, compaction_scn);
+  index_storage_opt.set_ss_major_prewarm_opt(ObStorageObjectType::MAJOR_PREWARM_DATA, tablet_id,
+                                             compaction_scn, reorganization_scn.get_val_for_sql());
   ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.alloc_object(index_storage_opt, index_object_handle));
   ASSERT_EQ(OB_SUCCESS, ctx.set_file_ctx(index_object_handle.get_macro_id(), 0/*ls_epoch_id*/, false/*is_local_cache*/));
   bool is_index_file_exist = false;
   ASSERT_EQ(OB_SUCCESS, io_adapter.is_exist(ctx.get_path(), &storage_info, is_index_file_exist));
   ASSERT_FALSE(is_index_file_exist);
 
-  ObHotTabletInfoReader hot_tablet_info_reader(tablet_id, compaction_scn, 100/*prewarm_percent*/);
+  ObHotTabletInfoReader hot_tablet_info_reader(tablet_id, compaction_scn, reorganization_scn);
   ASSERT_EQ(OB_SUCCESS, hot_tablet_info_reader.load_hot_macro_infos());
 
   ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);

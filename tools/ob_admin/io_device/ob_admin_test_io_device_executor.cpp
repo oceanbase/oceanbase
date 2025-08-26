@@ -35,41 +35,43 @@ ObAdminTestIODeviceExecutor::~ObAdminTestIODeviceExecutor()
 int ObAdminTestIODeviceExecutor::execute(int argc, char *argv[])
 {
   int ret = OB_SUCCESS;
-  lib::set_memory_limit(4 * 1024 * 1024 * 1024LL);
-  lib::set_tenant_memory_limit(500, 4 * 1024 * 1024 * 1024LL);
-
-  ObTenantBase *tenant_base = new ObTenantBase(OB_SERVER_TENANT_ID);
-  ObMallocAllocator *malloc = ObMallocAllocator::get_instance();
-  if (OB_ISNULL(malloc->get_tenant_ctx_allocator(OB_SERVER_TENANT_ID, 0))) {
-    if (OB_FAIL(malloc->create_and_add_tenant_allocator(OB_SERVER_TENANT_ID))) {
-      STORAGE_LOG(WARN, "failed to create_and_add_tenant_allocator", K(ret));
-    }
-  }
-
-  if (FAILEDx(tenant_base->init())) {
-    STORAGE_LOG(WARN, "failed to init tenant base", K(ret));
-  } else if (FALSE_IT(ObTenantEnv::set_tenant(tenant_base))) {
-  } else if (OB_FAIL(ObDeviceManager::get_instance().init_devices_env())) {
-    STORAGE_LOG(WARN, "init device manager failed", KR(ret));
-  } else if (OB_FAIL(ObIOManager::get_instance().init())) {
-    STORAGE_LOG(WARN, "failed to init io manager", K(ret));
-  } else if (OB_FAIL(ObIOManager::get_instance().start())) {
-    STORAGE_LOG(WARN, "failed to start io manager", K(ret));
-  }  else if (OB_FAIL(ObObjectStorageInfo::register_cluster_version_mgr(&ObClusterVersionBaseMgr::get_instance()))) {
-    STORAGE_LOG(WARN, "fail to register cluster version mgr", KR(ret));
-  }
-
-  if (FAILEDx(parse_cmd_(argc, argv))) {
-    STORAGE_LOG_FILTER(ERROR, "failed to parse cmd", K(ret), K(argc), K(argv));
-  } else if (is_quiet_) {
-    OB_LOGGER.set_log_level("WARN");
+  if (OB_FAIL(parse_cmd_(argc, argv))) {
+    OB_LOG(WARN, "failed to parse cmd", K(ret), K(argc), K(argv));
   } else {
-    OB_LOGGER.set_log_level("INFO");
-  }
+    lib::set_memory_limit(4 * 1024 * 1024 * 1024LL);
+    lib::set_tenant_memory_limit(500, 4 * 1024 * 1024 * 1024LL);
 
-  if(OB_FAIL(ret)) {
-  } else if (OB_FAIL(run_all_tests_())) {
-    STORAGE_LOG(ERROR, "failed to pass all tests", K(ret), K_(backup_path));
+    ObTenantBase *tenant_base = new ObTenantBase(OB_SERVER_TENANT_ID);
+    ObMallocAllocator *malloc = ObMallocAllocator::get_instance();
+    if (OB_ISNULL(malloc->get_tenant_ctx_allocator(OB_SERVER_TENANT_ID, 0))) {
+      if (FAILEDx(malloc->create_and_add_tenant_allocator(OB_SERVER_TENANT_ID))) {
+        STORAGE_LOG(WARN, "failed to create_and_add_tenant_allocator", K(ret));
+      }
+    }
+
+    if (FAILEDx(tenant_base->init())) {
+      STORAGE_LOG(WARN, "failed to init tenant base", K(ret));
+    } else if (FALSE_IT(ObTenantEnv::set_tenant(tenant_base))) {
+    } else if (OB_FAIL(ObDeviceManager::get_instance().init_devices_env())) {
+      STORAGE_LOG(WARN, "init device manager failed", KR(ret));
+    } else if (OB_FAIL(ObIOManager::get_instance().init())) {
+      STORAGE_LOG(WARN, "failed to init io manager", K(ret));
+    } else if (OB_FAIL(ObIOManager::get_instance().start())) {
+      STORAGE_LOG(WARN, "failed to start io manager", K(ret));
+    }  else if (OB_FAIL(ObObjectStorageInfo::register_cluster_state_mgr(&ObClusterStateBaseMgr::get_instance()))) {
+      STORAGE_LOG(WARN, "fail to register cluster version mgr", KR(ret));
+    }
+
+    if (is_quiet_) {
+      OB_LOGGER.set_log_level("WARN");
+    } else {
+      OB_LOGGER.set_log_level("INFO");
+    }
+
+    if(OB_FAIL(ret)) {
+    } else if (OB_FAIL(run_all_tests_())) {
+      STORAGE_LOG(ERROR, "failed to pass all tests", K(ret), K_(backup_path));
+    }
   }
   return ret;
 }
@@ -79,7 +81,7 @@ int ObAdminTestIODeviceExecutor::parse_cmd_(int argc, char *argv[])
   int ret = OB_SUCCESS;
   int opt = 0;
   int index = -1;
-  const char *opt_str = "h:d:s:q:e:f:i:a";
+  const char *opt_str = "hd:s:q:e:f:i:a";
   struct option longopts[] = {{"help", 0, NULL, 'h'},
       {"backup_path", 1, NULL, 'd'},
       {"storage_info", 1, NULL, 's'},
@@ -92,8 +94,9 @@ int ObAdminTestIODeviceExecutor::parse_cmd_(int argc, char *argv[])
   while (OB_SUCC(ret) && -1 != (opt = getopt_long(argc, argv, opt_str, longopts, &index))) {
     switch (opt) {
       case 'h': {
+        ret = OB_INVALID_ARGUMENT;
         print_usage_();
-        exit(1);
+        break;
       }
       case 'd': {
         time_t timestamp = time(NULL);
@@ -146,8 +149,9 @@ int ObAdminTestIODeviceExecutor::parse_cmd_(int argc, char *argv[])
         break;
       }
       default: {
+        ret = OB_INVALID_ARGUMENT;
         print_usage_();
-        exit(1);
+        break;
       }
     }
   }

@@ -37,10 +37,15 @@ class ObTxDirectLoadIncBatchInfo
   OB_UNIS_VERSION(1);
 
 public:
-  ObTxDirectLoadIncBatchInfo() : batch_key_(), start_scn_(), tmp_start_scn_(), tmp_end_scn_() {}
+  ObTxDirectLoadIncBatchInfo() : batch_key_(), start_scn_(), tmp_start_scn_(), tmp_end_scn_()
+  {
+    flag_.reset();
+  }
   ObTxDirectLoadIncBatchInfo(const ObDDLIncLogBasic &ddl_inc_basic)
       : batch_key_(ddl_inc_basic), start_scn_(), tmp_start_scn_(), tmp_end_scn_()
-  {}
+  {
+    flag_.reset();
+  }
 
 public:
   uint64_t hash() const { return batch_key_.hash(); }
@@ -73,17 +78,20 @@ public:
   bool is_ddl_end_logging() const { return tmp_end_scn_.is_valid_and_not_min(); }
 
 private:
-  // union Flag
-  // {
-  //   int64_t val_;
-  //   struct BitFlag
-  //   {
-  //     bool start_log_sync_succ_ : 1;
-  //
-  //     TO_STRING_KV(K(start_log_sync_succ_));
-  //   } bit_;
-  // };
-  //
+  union Flag
+  {
+    void reset() { val_ = 0; }
+
+    int64_t val_;
+    struct BitFlag
+    {
+      bool is_major_ : 1;
+
+      void reset() { is_major_ = false; }
+      TO_STRING_KV(K(is_major_));
+    } bit_;
+  };
+
 public:
   int set_start_log_synced(); // void clear_start_log_synced() { start_scn_.set_invalid(); }
   bool is_start_log_synced() const { return start_scn_.is_valid_and_not_min(); }
@@ -93,7 +101,7 @@ public:
 private:
   ObDDLIncLogBasic batch_key_;
   share::SCN start_scn_;
-  // Flag flag_;
+  Flag flag_;
 
   /*in memory*/
   share::SCN tmp_start_scn_;

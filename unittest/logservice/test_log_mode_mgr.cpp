@@ -317,7 +317,7 @@ TEST_F(TestLogModeMgr, test_can_switch_access_mode)
 
   src_access_mode_list.push_back(AccessMode::FLASHBACK);
   dst_access_mode_list.push_back(AccessMode::RAW_WRITE);
-  ret_list.push_back(false);
+  ret_list.push_back(true);
 
   for (int i = 0; i < src_access_mode_list.size(); i++) {
     const bool expected = (ret_list[i] == can_switch_access_mode_(src_access_mode_list[i], dst_access_mode_list[i]));

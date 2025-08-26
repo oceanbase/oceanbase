@@ -438,6 +438,10 @@ int ObPartitionExchange::check_table_conditions_in_common_(
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("table is physical or logical split can not split", K(ret), K(base_table_schema), K(inc_table_schema));
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "table is in physial or logical split, ddl operation");
+  } else if (base_table_schema.is_delete_insert_merge_engine() != inc_table_schema.is_delete_insert_merge_engine()) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("merge engine type of exchanging partition and table is not equal", K(ret), K(base_table_schema), K(inc_table_schema));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "merge engine type of exchanging partition and table is not equal");
   } else if (OB_UNLIKELY(share::ObDuplicateScope::DUPLICATE_SCOPE_NONE != base_table_schema.get_duplicate_scope() || share::ObDuplicateScope::DUPLICATE_SCOPE_NONE != inc_table_schema.get_duplicate_scope())) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("can't support exchanging parition between duplicate tables", K(ret), K(base_table_schema.get_duplicate_scope()), K(inc_table_schema.get_duplicate_scope()));

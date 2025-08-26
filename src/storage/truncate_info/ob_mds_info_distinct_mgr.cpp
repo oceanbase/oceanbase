@@ -53,7 +53,7 @@ int ObMdsInfoDistinctMgr::init(
   } else {
     if (!distinct_array_.empty()
         && read_version_range.base_version_ <= tablet.get_last_major_snapshot_version()
-        && TRUN_SRC_KV_CACHE != array_.src_) { // try to put into kv cache
+        && TRUN_SRC_KV_CACHE != array_.get_src()) { // try to put into kv cache
       const ObTabletID &tablet_id = tablet.get_tablet_id();
       int tmp_ret = OB_SUCCESS;
       const ObTruncateInfoCacheKey cache_key(
@@ -66,6 +66,7 @@ int ObMdsInfoDistinctMgr::init(
           LOG_WARN("failed to put truncate info array into kv cache", KR(tmp_ret), K(tablet_id), K(distinct_array_));
         }
       }
+      LOG_DEBUG("put truncate info array into kv cache", K(tmp_ret), K(tablet.get_tablet_id()), K(cache_key), K(distinct_array_), K(read_version_range));
     }
     is_inited_ = true;
   }
@@ -96,7 +97,7 @@ int ObMdsInfoDistinctMgr::read_split_truncate_info_array(
       } else {
         for (int64_t i = 0; OB_SUCC(ret) && i < tmp_array.count(); i++) {
           const ObTruncateInfo &info = *tmp_array.at(i);
-          if (OB_FAIL(array_.append(info))) {
+          if (OB_FAIL(array_.append_with_deep_copy(info))) {
             LOG_WARN("failed to append", K(ret), K(info));
           }
         }
@@ -159,6 +160,7 @@ int ObMdsInfoDistinctMgr::build_distinct_array(
     }
   } // for
   if (OB_SUCC(ret)) {
+    lib::ob_sort(distinct_array_.begin(), distinct_array_.end(), ObTruncateInfoArray::compare);
     LOG_INFO("[TRUNCATE INFO] success to build distinct array", KR(ret), "distinct_array_cnt", distinct_array_.count(),
       K_(distinct_array), K(input_array));
   }
@@ -239,7 +241,7 @@ int ObMdsInfoDistinctMgr::get_distinct_truncate_info_array(
       if (OB_UNLIKELY(nullptr == distinct_array_.at(idx) || !distinct_array_.at(idx)->is_valid())) {
         ret = OB_INVALID_DATA;
         LOG_WARN("invalid ptr in distinct array", KR(ret), K(idx), KPC(distinct_array_.at(idx)));
-      } else if (OB_FAIL(input_distinct_array.append(*distinct_array_.at(idx)))) {
+      } else if (OB_FAIL(input_distinct_array.append_with_deep_copy(*distinct_array_.at(idx)))) {
         LOG_WARN("failed to append truncate info", KR(ret), K(idx), KPC(distinct_array_.at(idx)));
       }
     } // for

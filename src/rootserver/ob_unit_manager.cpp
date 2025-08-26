@@ -1861,11 +1861,7 @@ int ObUnitManager::register_alter_resource_tenant_unit_num_rs_job(
   } else { // tenant_data_version >= DATA_VERSION_4_2_1_0
     // step 1: cancel rs job if exists
     int64_t job_id = 0;
-    if (!ObShareUtil::is_tenant_enable_rebalance(tenant_id)) {
-      ret = OB_OP_NOT_ALLOW;
-      LOG_WARN("enable_rebalance is disabled, modify tenant unit num not allowed", KR(ret), K(tenant_id));
-      (void) print_user_error_(tenant_id);
-    } else if(OB_FAIL(cancel_alter_resource_tenant_unit_num_rs_job(tenant_id, trans))) {
+    if (OB_FAIL(cancel_alter_resource_tenant_unit_num_rs_job(tenant_id, trans))) {
       LOG_WARN("fail to execute cancel_alter_resource_tenant_unit_num_rs_job",
           KR(ret), K(tenant_id), K(sql_text));
     } else {
@@ -1909,12 +1905,7 @@ int ObUnitManager::register_shrink_tenant_pool_unit_num_rs_job(
   int ret = OB_SUCCESS;
   int64_t pos = 0;
   int64_t job_id = 0;
-  if (!ObShareUtil::is_tenant_enable_rebalance(tenant_id)) {
-    ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("enable_rebalance is disabled, modify tenant unit num not allowed", KR(ret), K(tenant_id));
-    (void) print_user_error_(tenant_id);
-  } else {
-    ret = create_alter_resource_tenant_unit_num_rs_job(
+  ret = create_alter_resource_tenant_unit_num_rs_job(
         tenant_id,
         new_unit_num,
         old_unit_num,
@@ -1922,28 +1913,9 @@ int ObUnitManager::register_shrink_tenant_pool_unit_num_rs_job(
         sql_text,
         trans,
         JOB_TYPE_SHRINK_RESOURCE_TENANT_UNIT_NUM);
-    FLOG_INFO("[ALTER_RESOURCE_TENANT_UNIT_NUM NOTICE] create a new rs job in Version < 4.2",
-        KR(ret), K(tenant_id), K(job_id), K(sql_text));
-  }
+  FLOG_INFO("[ALTER_RESOURCE_TENANT_UNIT_NUM NOTICE] create a new rs job in Version < 4.2",
+      KR(ret), K(tenant_id), K(job_id), K(sql_text));
   return ret ;
-}
-
-void ObUnitManager::print_user_error_(const uint64_t tenant_id)
-{
-  const int64_t ERR_MSG_LEN = 256;
-  char err_msg[ERR_MSG_LEN] = {'\0'};
-  int ret = OB_SUCCESS;
-  int64_t pos = 0;
-  if (OB_FAIL(databuff_printf(err_msg, ERR_MSG_LEN, pos,
-      "Tenant (%lu) 'enable_rebalance' is disabled, alter tenant unit num", tenant_id))) {
-    if (OB_SIZE_OVERFLOW == ret) {
-      LOG_WARN("format to buff size overflow", KR(ret));
-    } else {
-      LOG_WARN("format new unit num failed", KR(ret));
-    }
-  } else {
-    LOG_USER_ERROR(OB_OP_NOT_ALLOW, err_msg);
-  }
 }
 
 int ObUnitManager::cancel_alter_resource_tenant_unit_num_rs_job(
@@ -2035,10 +2007,6 @@ int ObUnitManager::rollback_alter_resource_tenant_unit_num_rs_job(
     if (OB_FAIL(cancel_alter_resource_tenant_unit_num_rs_job(tenant_id, trans))) {
       LOG_WARN("fail to execute cancel_alter_resource_tenant_unit_num_rs_job in v4.1", KR(ret), K(tenant_id));
     }
-  } else if (!ObShareUtil::is_tenant_enable_rebalance(tenant_id)) {
-    ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("enable_rebalance is disabled, modify tenant unit num not allowed", KR(ret), K(tenant_id));
-    (void) print_user_error_(tenant_id);
   } else if (OB_FAIL(cancel_alter_resource_tenant_unit_num_rs_job(tenant_id, trans))) {
     LOG_WARN("fail to execute cancel_alter_resource_tenant_unit_num_rs_job", KR(ret), K(tenant_id));
   } else if (OB_FAIL(create_alter_resource_tenant_unit_num_rs_job(tenant_id,
@@ -2610,8 +2578,6 @@ int ObUnitManager::alter_resource_tenant(
           K(new_unit_num), K(sql_text), K(old_unit_num));
     }
   } else if (AUN_EXPAND == alter_unit_num_type) {
-    // in 4.1, if enable_rebalance is false, this op can be executed successfully
-    // in 4.2, it will return OB_OP_NOT_ALLOW
     if (delete_unit_group_id_array.count() > 0) {
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "expand pool unit num combined with deleting unit");
@@ -2621,7 +2587,6 @@ int ObUnitManager::alter_resource_tenant(
           KPC(pools), K(sql_text), K(old_unit_num));
     }
   } else if (AUN_SHRINK == alter_unit_num_type) {
-    // both 4.1 and 4.2 do not allow this op when enable_rebalance is false.
     if (OB_FAIL(shrink_tenant_pools_unit_num(tenant_id, *pools, new_unit_num,
             old_unit_num, delete_unit_group_id_array, sql_text))) {
       LOG_WARN("fail to shrink pool unit num", K(ret), K(new_unit_num), K(sql_text), K(old_unit_num));
@@ -5172,11 +5137,13 @@ int ObUnitManager::try_notify_tenant_server_unit_resource_(
     obrpc::TenantServerUnitConfig tenant_unit_server_config;
     if (!is_delete) {
       const bool should_check_data_version = check_data_version && is_user_tenant(tenant_id);
+      const bool fill_data_version = should_check_data_version && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_0_0;
       if (OB_FAIL(build_notify_create_unit_resource_rpc_arg_(
                     tenant_id, unit, compat_mode, unit_config_id, if_not_grant,
-                    tenant_unit_server_config))) {
+                    fill_data_version, tenant_unit_server_config))) {
         LOG_WARN("fail to init tenant_unit_server_config", KR(ret), K(tenant_id), K(is_delete));
       } else if (should_check_data_version
+                 && !fill_data_version
                  && OB_FAIL(check_dest_data_version_is_loaded_(tenant_id, unit.server_))) {
         LOG_WARN("fail to check dest data_version is loaded", KR(ret), K(tenant_id), "dst", unit.server_);
       }
@@ -5285,6 +5252,7 @@ int ObUnitManager::build_notify_create_unit_resource_rpc_arg_(
     const lib::Worker::CompatMode compat_mode,
     const uint64_t unit_config_id,
     const bool if_not_grant,
+    const bool fill_data_version,
     obrpc::TenantServerUnitConfig &rpc_arg) const
 {
   int ret = OB_SUCCESS;
@@ -5315,20 +5283,65 @@ int ObUnitManager::build_notify_create_unit_resource_rpc_arg_(
 
   // init rpc_arg
   const bool is_delete = false;
+  uint64_t data_version = 0;
+  uint64_t meta_tenant_data_version = 0;
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(rpc_arg.init(tenant_id,
-                                  unit.unit_id_,
-                                  compat_mode,
-                                  *unit_config,
-                                  ObReplicaType::REPLICA_TYPE_FULL,
-                                  if_not_grant,
-                                  is_delete
+  } else if (!fill_data_version) {
+    // init rpc arg without data version
+    if (OB_FAIL(rpc_arg.init(tenant_id,
+                             unit.unit_id_,
+                             compat_mode,
+                             *unit_config,
+                             ObReplicaType::REPLICA_TYPE_FULL,
+                             if_not_grant,
+                             is_delete
 #ifdef OB_BUILD_TDE_SECURITY
-                                  , root_key
+                             , root_key
 #endif
-                                  ))) {
-    LOG_WARN("fail to init rpc_arg", KR(ret), K(tenant_id), K(is_delete));
+                             ))) {
+      LOG_WARN("fail to init rpc_arg", KR(ret), K(tenant_id), K(is_delete));
+    }
+  } else if (is_sys_tenant(tenant_id)) {
+    // init rpc arg for sys tenant with data version
+    if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+      LOG_WARN("fail to get tenant data version", KR(ret), K(tenant_id), K(is_delete));
+    } else if (OB_FAIL(rpc_arg.init(tenant_id,
+                                    unit.unit_id_,
+                                    compat_mode,
+                                    *unit_config,
+                                    ObReplicaType::REPLICA_TYPE_FULL,
+                                    if_not_grant,
+                                    is_delete
+#ifdef OB_BUILD_TDE_SECURITY
+                                    , root_key
+#endif
+                                    , data_version
+                                    ))) {
+      LOG_WARN("fail to init rpc_arg", KR(ret), K(tenant_id), K(is_delete));
+    }
+  } else {
+    // init rpc arg for user tenant with data version
+    if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+      LOG_WARN("fail to get tenant data version", KR(ret), K(tenant_id), K(is_delete));
+    } else if (OB_FAIL(GET_MIN_DATA_VERSION(gen_meta_tenant_id(tenant_id), meta_tenant_data_version))) {
+      LOG_WARN("fail to get meta tenant data version", KR(ret), K(tenant_id), K(is_delete));
+    } else if (OB_FAIL(rpc_arg.init(tenant_id,
+                                    unit.unit_id_,
+                                    compat_mode,
+                                    *unit_config,
+                                    ObReplicaType::REPLICA_TYPE_FULL,
+                                    if_not_grant,
+                                    is_delete
+#ifdef OB_BUILD_TDE_SECURITY
+                                    , root_key
+#endif
+                                    , data_version
+                                    , meta_tenant_data_version
+                                    ))) {
+      LOG_WARN("fail to init rpc_arg", KR(ret), K(tenant_id), K(is_delete));
+    }
   }
+
   return ret;
 }
 

@@ -76,8 +76,10 @@
 #include "storage/incremental/ob_sswriter_lease_mgr.h"
 #include "storage/incremental/ob_ss_checkpoint_executor.h"
 #include "storage/incremental/ob_ss_inc_meta_checkpoint.h"
+#include "storage/incremental/sslog/ob_sslog_gts_service.h"
+#include "storage/incremental/sslog/ob_sslog_uid_service.h"
 #endif
-#include "storage/member_table/ob_member_table.h"
+#include "storage/reorganization_info_table/ob_tablet_reorg_info_table.h"
 
 namespace oceanbase
 {
@@ -320,6 +322,7 @@ public:
   ObSSWriterLSHandler& get_primary_sswriter_ls_handler() { return primary_sswriter_ls_handler_; }
   ObSSWriterLSHandler& get_restore_sswriter_ls_handler() { return restore_sswriter_ls_handler_; }
   ObSSCheckpointExecutor &get_ss_checkpoint_executor() { return ss_checkpoint_executor_; }
+  DELEGATE_WITH_RET(ls_migration_handler_, notify_switch_to_leader_and_wait_replace_complete, int);
 #endif
 
   // get ls info
@@ -463,7 +466,18 @@ public:
   // ObLSMeta interface:
   int update_ls_meta(const bool update_restore_status,
                      const ObLSMeta &src_ls_meta);
-
+#ifdef OB_BUILD_SHARED_STORAGE
+  int update_ls_meta(const ObSSLSMeta &src_ss_meta);
+  // advance notify ss change version
+  // @param [in] tablet_id
+  // @param [in] transfer_scn
+  // @param [in] change_version
+  // int advance_notify_ss_change_version(
+  //     const ObTabletID &tablet_id,
+  //     const share::SCN &transfer_scn,
+  //     const share::SCN &change_version);
+  DELEGATE_WITH_RET(ls_tablet_svr_, advance_notify_ss_change_version, int);
+#endif
   int get_transfer_scn(share::SCN &scn);
   int update_id_meta(const int64_t service_type,
                      const int64_t limited_id,
@@ -569,11 +583,21 @@ public:
       const ObLSTabletService::HandleTabletMetaFunc &handle_tablet_meta_f);
 
   // ObLSTabletService interface:
-  // update tablet by checkpoint
-  // @param [in] key, key of tablet that will be updated
-  // @param [in] new_addr, new addr of the tablet
-  // @param [out] new_handle, new tablet handle
-  DELEGATE_WITH_RET(ls_tablet_svr_, update_tablet_checkpoint, int);
+  // apply defragment tablet(used for slog checkpoint)
+  // @param [in] t3m: the target that tablet will be applied to.
+  // @param [in] tablet_key: key of specified tablet
+  // @param [in] old_addr: tablet's original address
+  // @param [out] new_handle: handle of specified tablet
+  // @param [in] tsms: used for write slog(if not null).
+  DELEGATE_WITH_RET(ls_tablet_svr_, apply_defragment_tablet, int);
+
+  // ObLSTabletService interface:
+  // handle empty shell when doing slog truncate(only used for slog checkpoint)
+  // @param [in] t3m: used for empty shell cas
+  // @param [in] tablet_key: key of specified empty shell
+  // @param [in] old_addr: empty shell's original address
+  // @return: return OB_NOT_SUPPORTED in SS mode.
+  DELEGATE_WITH_RET(ls_tablet_svr_, refresh_empty_shell_for_slog_ckpt, int);
   // get a tablet handle
   // @param [in] tablet_id, the tablet needed
   // @param [out] handle, store the tablet and inc ref.
@@ -594,13 +618,6 @@ public:
   DELEGATE_WITH_RET(ls_tablet_svr_, build_tablet_iter, int);
   // update medium compaction info for tablet
   DELEGATE_WITH_RET(ls_tablet_svr_, update_medium_compaction_info, int);
-  // trim rebuild tablet
-  // @param [in] tablet_id ObTabletID, is_rollback bool
-  // @param [out] null
-  // int trim_rebuild_tablet(
-  //    const ObTabletID &tablet_id,
-  //    const bool is_rollback = false);
-  DELEGATE_WITH_RET(ls_tablet_svr_, trim_rebuild_tablet, int);
   // remove tablets
   // @param [in] tbalet_ids ObIArray<ObTabletId>
   // @param [out] null
@@ -926,6 +943,11 @@ public:
   // ObReplayHandler interface:
   DELEGATE_WITH_RET(replay_handler_, replay, int);
 
+  DELEGATE_WITH_RET(ls_freezer_, disable_flush, void);
+  DELEGATE_WITH_RET(ls_freezer_, enable_flush, void);
+  DELEGATE_WITH_RET(ls_freezer_, flush_is_disabled, bool);
+
+
   /**
    * @brief freeze this logstream
    *
@@ -976,6 +998,7 @@ public:
 
   // ObTxTable interface
   DELEGATE_WITH_RET(tx_table_, get_tx_table_guard, int);
+  DELEGATE_WITH_RET(tx_table_, get_recycle_scn, int);
   DELEGATE_WITH_RET(tx_table_, get_upper_trans_version_before_given_scn, int);
   DELEGATE_WITH_RET(tx_table_, generate_virtual_tx_data_row, int);
   DELEGATE_WITH_RET(tx_table_, get_uncommitted_tx_min_start_scn, int);
@@ -1046,6 +1069,8 @@ public:
   {
     return ls_meta_.cleanup_transfer_meta_info(replay_scn);
   }
+  CONST_DELEGATE_WITH_RET(ls_meta_, get_transfer_meta, int);
+
 
   int set_ls_migration_gc(bool &allow_gc);
   int inner_check_allow_read_(
@@ -1055,19 +1080,16 @@ public:
   int set_ls_allow_to_read();
 
 #ifdef OB_BUILD_SHARED_STORAGE
-  int upload_major_compaction_tablet_meta(
-    const common::ObTabletID &tablet_id,
-    const ObUpdateTableStoreParam &param,
-    const int64_t start_macro_seq);
-
   // write tablet_id_set to pending_free_array when ls replica remove for shared storage
   DELEGATE_WITH_RET(ls_tablet_svr_, write_tablet_id_set_to_pending_free, int);
   DELEGATE_WITH_RET(inc_sstable_uploader_, prepare_register_sstable_upload, int);
-  ObLSIncSSTableUploader &get_inc_sstable_upload_handler() { return inc_sstable_uploader_; }
+  DELEGATE_WITH_RET(inc_sstable_uploader_, register_all_sstables_upload, int);
+  ObLSIncSSTableUploader &get_inc_sstable_uploader() { return inc_sstable_uploader_; }
+  DELEGATE_WITH_RET(ls_tablet_svr_, create_or_update_with_ss_tablet, int);
 #endif
 
   // ObMemberTable interface
-  ObMemberTable *get_member_table() { return &member_table_; }
+  ObTabletReorgInfoTable *get_reorg_info_table() { return &reorg_info_table_; }
 private:
   void record_async_freeze_tablets_(const ObIArray<ObTabletID> &tablet_ids, const int64_t epoch);
   void record_async_freeze_tablet_(const ObTabletID &tablet_id, const int64_t epoch);
@@ -1177,7 +1199,7 @@ private:
   // for delaying the resource recycle after correctness issue
   bool need_delay_resource_recycle_;
   //for member table
-  ObMemberTable member_table_;
+  ObTabletReorgInfoTable reorg_info_table_;
 #ifdef OB_BUILD_SHARED_STORAGE
   ObSSIncMetaCheckpoint inc_meta_ckpt_;
   // upload shared-storage sstable list

@@ -57,7 +57,9 @@
 #include "rootserver/mview/ob_mview_maintenance_service.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
 #ifdef OB_BUILD_SHARED_STORAGE
-#include "close_modules/shared_storage/storage/shared_storage/ob_public_block_gc_service.h"
+#include "close_modules/shared_storage/storage/incremental/sslog/notify/ob_sslog_notify_service.h"
+#include "close_modules/shared_storage/storage/incremental/sslog/notify/ob_sslog_notify_adapter.h"
+#include "close_modules/shared_storage/storage/incremental/share/ob_shared_ls_meta.h"
 #endif
 
 namespace oceanbase
@@ -79,7 +81,7 @@ const uint64_t ObLS::INNER_TABLET_ID_LIST[TOTAL_INNER_TABLET_NUM] = {
     common::ObTabletID::LS_TX_CTX_TABLET_ID,
     common::ObTabletID::LS_TX_DATA_TABLET_ID,
     common::ObTabletID::LS_LOCK_TABLET_ID,
-    common::ObTabletID::LS_MEMBER_TABLET_ID,
+    common::ObTabletID::LS_REORG_INFO_TABLET_ID,
 };
 
 ObLS::ObLS()
@@ -101,7 +103,7 @@ ObLS::ObLS()
     rs_reporter_(nullptr),
     startup_transfer_info_(),
     need_delay_resource_recycle_(false),
-    member_table_()
+    reorg_info_table_()
 #ifdef OB_BUILD_SHARED_STORAGE
     ,
     inc_meta_ckpt_(*this),
@@ -232,8 +234,8 @@ int ObLS::init(const share::ObLSID &ls_id,
                OB_FAIL(ss_checkpoint_executor_.init())) {
       LOG_WARN("fail to init prewarm handler", K(ret));
 #endif
-    } else if (OB_FAIL(member_table_.init(this))) {
-      LOG_WARN("failed to init member table", K(ret));
+    } else if (OB_FAIL(reorg_info_table_.init(this))) {
+      LOG_WARN("failed to init reorg info table", K(ret));
     } else if (OB_FAIL(register_to_service_())) {
       LOG_WARN("register to service failed", K(ret));
     } else {
@@ -275,7 +277,7 @@ int ObLS::create_ls_inner_tablet(const lib::Worker::CompatMode compat_mode,
     LOG_WARN("tx table create tablet failed", K(ret), K_(ls_meta), K(compat_mode), K(create_scn));
   } else if (OB_FAIL(lock_table_.create_tablet(compat_mode, create_scn))) {
     LOG_WARN("lock table create tablet failed", K(ret), K_(ls_meta), K(compat_mode), K(create_scn));
-  } else if (OB_FAIL(member_table_.create_tablet(create_scn))) {
+  } else if (OB_FAIL(reorg_info_table_.create_tablet(create_scn))) {
     LOG_WARN("failed to create tablet", K(ret), K_(ls_meta), K(compat_mode), K(create_scn));
   }
   if (OB_FAIL(ret)) {
@@ -295,8 +297,8 @@ int ObLS::remove_ls_inner_tablet()
     LOG_WARN("tx table remove tablet failed", K(ret), K_(ls_meta));
   } else if (OB_FAIL(lock_table_.remove_tablet())) {
     LOG_WARN("lock table remove tablet failed", K(ret), K_(ls_meta));
-  } else if (OB_FAIL(member_table_.remove_tablet())) {
-    LOG_WARN("failed to remove member table tablet", K(ret), K_(ls_meta));
+  } else if (OB_FAIL(reorg_info_table_.remove_tablet())) {
+    LOG_WARN("failed to remove reorg info tablet", K(ret), K_(ls_meta));
   }
   return ret;
 }
@@ -582,7 +584,7 @@ int ObLS::stop_()
   ls_migration_handler_.stop();
   ls_tablet_svr_.stop();
   tablet_ttl_mgr_.stop();
-  member_table_.stop();
+  reorg_info_table_.stop();
 
 #ifdef OB_BUILD_SHARED_STORAGE
   if (GCTX.is_shared_storage_mode()) {
@@ -822,7 +824,7 @@ void ObLS::destroy()
   startup_transfer_info_.reset();
   ls_transfer_status_.reset();
   need_delay_resource_recycle_ = false;
-  member_table_.destroy();
+  reorg_info_table_.destroy();
 }
 
 int ObLS::offline_tx_(const int64_t start_ts)
@@ -909,8 +911,8 @@ int ObLS::offline_(const int64_t start_ts)
     LOG_WARN("offline dup table ls handler failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(lock_table_.offline())) {
     LOG_WARN("lock table offline failed", K(ret), K(ls_meta_));
-  } else if (OB_FAIL(member_table_.offline())) {
-    LOG_WARN("failed to offline member table", K(ret), K(ls_meta_));
+  } else if (OB_FAIL(reorg_info_table_.offline())) {
+    LOG_WARN("failed to offline reorg info table", K(ret), K(ls_meta_));
   // force release memtables created by tablet_freeze_with_rewrite_meta called during major
   } else if (OB_FAIL(ls_tablet_svr_.offline())) {
     LOG_WARN("tablet service offline failed", K(ret), K(ls_meta_));
@@ -1057,11 +1059,22 @@ int ObLS::register_common_service()
     REGISTER_SS_INC_CKPT(SSIncCheckpointType::SS_INC_SSTABLE, &inc_sstable_uploader_);
   }
 #endif
-  if (GCTX.is_shared_storage_mode() && is_meta_tenant(MTL_ID())) {
+  if (is_tenant_has_sslog(MTL_ID())) {
+#ifdef OB_BUILD_SHARED_STORAGE
     if (SSLOG_LS == ls_id) {
+      // for sslog gts service and unique id servcie
+      MTL(ObSSLogGTSService *)->set_ls(this);
+      REGISTER_TO_LOGSERVICE(SSLOG_GTS_LOG_BASE_TYPE, MTL(ObSSLogGTSService *));
+      MTL(ObSSLogUIDService *)->set_ls(this);
+      REGISTER_TO_LOGSERVICE(SSLOG_UID_LOG_BASE_TYPE, MTL(ObSSLogUIDService *));
+      // register for ckpt
+      REGISTER_SS_INC_META_CKPT(SSIncMetaType::SSLOG_GTS, MTL(ObSSLogGTSService *));
+      REGISTER_SS_INC_META_CKPT(SSIncMetaType::SSLOG_UID, MTL(ObSSLogUIDService *));
+    } else {
       REGISTER_TO_LOGSERVICE(TRANS_ID_LOG_BASE_TYPE, MTL(ObTransIDService *));
       REGISTER_TO_LOGSERVICE(TIMESTAMP_LOG_BASE_TYPE, MTL(ObTimestampService *));
     }
+#endif
   } else if (ls_id == IDS_LS) {
     REGISTER_TO_LOGSERVICE(TIMESTAMP_LOG_BASE_TYPE, MTL(ObTimestampService *));
     REGISTER_TO_LOGSERVICE(TRANS_ID_LOG_BASE_TYPE, MTL(ObTransIDService *));
@@ -1095,7 +1108,7 @@ int ObLS::register_sys_service()
   const ObLSID &ls_id = ls_meta_.ls_id_;
   const uint64_t tenant_id = MTL_ID();
 
-  if (ls_id == IDS_LS || (is_meta_tenant(MTL_ID()) && SSLOG_LS == ls_id)) {
+  if (ls_id == IDS_LS) {
     REGISTER_TO_LOGSERVICE(DAS_ID_LOG_BASE_TYPE, MTL(sql::ObDASIDService *));
 #ifdef OB_BUILD_SHARED_STORAGE
     if (GCTX.is_shared_storage_mode()) {
@@ -1128,12 +1141,25 @@ int ObLS::register_sys_service()
       REGISTER_TO_LOGSERVICE(DBMS_SCHEDULER_LOG_BASE_TYPE, MTL(rootserver::ObDBMSSchedService *));
       REGISTER_TO_LOGSERVICE(SYS_DDL_SCHEDULER_LOG_BASE_TYPE, MTL(rootserver::ObDDLScheduler *));
       REGISTER_TO_LOGSERVICE(DDL_SERVICE_LAUNCHER_LOG_BASE_TYPE, MTL(rootserver::ObDDLServiceLauncher *));
+#ifdef OB_BUILD_SYS_VEC_IDX
+      REGISTER_TO_LOGSERVICE(VEC_INDEX_LOG_BASE_TYPE, MTL(ObPluginVectorIndexService *));
+
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(tablet_ttl_mgr_.init(this))) {
+          LOG_WARN("fail to init tablet ttl manager", KR(ret));
+        } else {
+          REGISTER_TO_LOGSERVICE(TTL_LOG_BASE_TYPE, &tablet_ttl_mgr_);
+          REGISTER_TO_LOGSERVICE(VEC_INDEX_LOG_BASE_TYPE, &tablet_ttl_mgr_.get_vector_idx_scheduler());
+        }
+      }
+#endif
     }
     if (is_meta_tenant(tenant_id)) {
       REGISTER_TO_LOGSERVICE(DBMS_SCHEDULER_LOG_BASE_TYPE, MTL(rootserver::ObDBMSSchedService *));
       REGISTER_TO_LOGSERVICE(SNAPSHOT_SCHEDULER_LOG_BASE_TYPE, MTL(ObTenantSnapshotScheduler *));
     }
   }
+
   return ret;
 }
 
@@ -1215,13 +1241,24 @@ void ObLS::unregister_common_service_()
     UNREGISTER_SS_INC_CKPT(SSIncCheckpointType::SS_INC_SSTABLE, &inc_sstable_uploader_);
   }
 #endif
-  if (GCTX.is_shared_storage_mode() && is_meta_tenant(MTL_ID())) {
+  if (is_tenant_has_sslog(MTL_ID())) {
+#ifdef OB_BUILD_SHARED_STORAGE
     if (SSLOG_LS == ls_meta_.ls_id_) {
+      // unregister for ckpt
+      UNREGISTER_SS_INC_META_CKPT(SSIncMetaType::SSLOG_GTS, MTL(ObSSLogGTSService *));
+      UNREGISTER_SS_INC_META_CKPT(SSIncMetaType::SSLOG_UID, MTL(ObSSLogUIDService *));
+      // for sslog gts service and unique id service
+      MTL(ObSSLogGTSService *)->reset_ls();
+      UNREGISTER_FROM_LOGSERVICE(SSLOG_GTS_LOG_BASE_TYPE, MTL(ObSSLogGTSService *));
+      MTL(ObSSLogUIDService *)->reset_ls();
+      UNREGISTER_FROM_LOGSERVICE(SSLOG_UID_LOG_BASE_TYPE, MTL(ObSSLogUIDService *));
+    } else {
       MTL(ObTimestampService *)->reset_ls();
       UNREGISTER_FROM_LOGSERVICE(TIMESTAMP_LOG_BASE_TYPE, MTL(ObTimestampService *));
       MTL(ObTransIDService *)->reset_ls();
       UNREGISTER_FROM_LOGSERVICE(TRANS_ID_LOG_BASE_TYPE, MTL(ObTransIDService *));
     }
+#endif
   } else if (ls_meta_.ls_id_ == IDS_LS) {
     MTL(ObTimestampService *)->reset_ls();
     UNREGISTER_FROM_LOGSERVICE(TIMESTAMP_LOG_BASE_TYPE, MTL(ObTimestampService *));
@@ -1254,7 +1291,7 @@ void ObLS::unregister_common_service_()
 
 void ObLS::unregister_sys_service_()
 {
-  if (ls_meta_.ls_id_ == IDS_LS || (is_meta_tenant(MTL_ID()) && SSLOG_LS == ls_meta_.ls_id_)) {
+  if (ls_meta_.ls_id_ == IDS_LS) {
     MTL(sql::ObDASIDService *)->reset_ls();
     UNREGISTER_FROM_LOGSERVICE(DAS_ID_LOG_BASE_TYPE, MTL(sql::ObDASIDService *));
 #ifdef OB_BUILD_SHARED_STORAGE
@@ -1297,6 +1334,13 @@ void ObLS::unregister_sys_service_()
       UNREGISTER_FROM_LOGSERVICE(DBMS_SCHEDULER_LOG_BASE_TYPE, MTL(rootserver::ObDBMSSchedService *));
       UNREGISTER_FROM_LOGSERVICE(SYS_DDL_SCHEDULER_LOG_BASE_TYPE, MTL(rootserver::ObDDLScheduler*));
       UNREGISTER_FROM_LOGSERVICE(DDL_SERVICE_LAUNCHER_LOG_BASE_TYPE, MTL(rootserver::ObDDLServiceLauncher*));
+#ifdef OB_BUILD_SYS_VEC_IDX
+      UNREGISTER_FROM_LOGSERVICE(VEC_INDEX_LOG_BASE_TYPE, MTL(ObPluginVectorIndexService *));
+
+      UNREGISTER_FROM_LOGSERVICE(VEC_INDEX_LOG_BASE_TYPE, &tablet_ttl_mgr_.get_vector_idx_scheduler());
+      UNREGISTER_FROM_LOGSERVICE(TTL_LOG_BASE_TYPE, tablet_ttl_mgr_);
+      tablet_ttl_mgr_.destroy();
+#endif
     }
     if (is_meta_tenant(MTL_ID())) {
       ObTenantSnapshotScheduler * snapshot_scheduler = MTL(ObTenantSnapshotScheduler*);
@@ -1371,8 +1415,8 @@ int ObLS::online_without_lock()
   } else if (OB_FAIL(lock_table_.online())) {
     LOG_WARN("lock table online failed", K(ret), K(ls_meta_));
     // TODO: weixiaoxian remove this start
-  } else if (OB_FAIL(member_table_.online())) {
-    LOG_WARN("failed to online member table", K(ret), K(ls_meta_));
+  } else if (OB_FAIL(reorg_info_table_.online())) {
+    LOG_WARN("failed to online reorg info table", K(ret), K(ls_meta_));
   } else if (FALSE_IT(dup_table_ls_handler_.start())) {
   } else if (OB_FAIL(dup_table_ls_handler_.online())) {
     LOG_WARN("dup table ls handler online failed", K(ret), K(ls_meta_));
@@ -1417,9 +1461,15 @@ int ObLS::online_without_lock()
   } else if (OB_FAIL(online_advance_epoch_())) {
   } else if (OB_FAIL(running_state_.online(ls_meta_.ls_id_))) {
     LOG_WARN("ls online failed", KR(ret), K(ls_meta_));
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (OB_FAIL(ObSSLogNotifyAdapter::commit_scan_generate_task_to_notify_service(ls_meta_.ls_id_,
+                                                                                       sslog::NotifyPath::LS_ONLINE))) {
+    LOG_WARN("generate online notify tasks failed", KR(ret), K(ls_meta_));
+#endif
   } else {
     update_state_seq_();
   }
+
 
   FLOG_INFO("ls online end", KR(ret), "ls_id", get_ls_id());
   return ret;
@@ -1508,6 +1558,16 @@ int ObLS::set_ls_meta(const ObLSMeta &ls_meta)
         LOG_WARN("get all id meta failed", K(ret), K(ls_meta_));
       } else if (OB_FAIL(ObIDService::update_id_service(all_id_meta))) {
         LOG_WARN("update id service fail", K(ret), K(all_id_meta), K(*this));
+      }
+    }
+    if (is_tenant_sslog_ls(ls_meta_.tenant_id_, ls_meta_.ls_id_)) {
+      ObAllIDMeta all_id_meta;
+      if (OB_FAIL(ls_meta_.get_all_id_meta(all_id_meta))) {
+        LOG_WARN("get all id meta failed", K(ret), K(ls_meta_));
+      } else if (OB_FAIL(ObIDService::update_id_service_for_sslog(all_id_meta))) {
+        LOG_WARN("update id service for sslog fail", K(ret), K(all_id_meta), K(*this));
+      } else {
+        LOG_INFO("update id service for sslog success", K(ret), K(all_id_meta));
       }
     }
   }
@@ -1839,29 +1899,6 @@ int ObLS::update_tablet_table_store_without_lock_(
   return ret;
 }
 
-#ifdef OB_BUILD_SHARED_STORAGE
-
-int ObLS::upload_major_compaction_tablet_meta(
-    const common::ObTabletID &tablet_id,
-    const ObUpdateTableStoreParam &param,
-    const int64_t start_macro_seq)
-{
-  int ret = OB_SUCCESS;
-  // not change local tablet when upload tablet meta to shared storage, no need lock
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ls is not inited", K(ret));
-  } else if (OB_UNLIKELY(!tablet_id.is_valid() || !param.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("update tablet table store get invalid argument", K(ret), K(tablet_id), K(param));
-  } else if (OB_FAIL(ls_tablet_svr_.upload_major_compaction_tablet_meta(tablet_id, param, start_macro_seq))) {
-    LOG_WARN("failed to upload major compaction tablet meta", K(ret), K(tablet_id), K(param));
-  }
-  return ret;
-}
-
-#endif
-
 int ObLS::update_tablet_table_store(
     const int64_t ls_rebuild_seq,
     const ObTabletHandle &old_tablet_handle,
@@ -2014,7 +2051,8 @@ int ObLS::finish_storage_meta_replay()
   } else if (ls_meta_.get_persistent_state().can_update_ls_meta() &&
              OB_FAIL(ls_meta_.set_migration_status(new_migration_status, false /*no need write slog*/))) {
     LOG_WARN("failed to set migration status", K(ret), K(new_migration_status));
-  } else if (OB_FAIL(member_table_.init_tablet_for_compat())) {
+  } else if (ls_meta_.get_persistent_state().is_normal_state()
+      && OB_FAIL(reorg_info_table_.init_tablet_for_compat())) {
     LOG_WARN("failed to init tablet for compact", K(ret));
   } else if (OB_FAIL(running_state_.create_finish(ls_meta_.ls_id_))) {
     LOG_WARN("create finish failed", KR(ret), K(ls_meta_));
@@ -2111,7 +2149,7 @@ int ObLS::replay_get_tablet(
     LOG_WARN("tablet should not be NULL", K(ret), KP(tablet), K(ls_id), K(tablet_id), K(scn));
   } else if (tablet->is_empty_shell()) {
     ObTabletStatus::Status tablet_status = ObTabletStatus::MAX;
-    if (OB_FAIL(tablet->get_latest(data, writer, trans_stat, trans_version))) {
+    if (OB_FAIL(tablet->get_latest_tablet_status(data, writer, trans_stat, trans_version))) {
       LOG_WARN("failed to get latest tablet status", K(ret), K(ls_id), K(tablet_id));
     } else if (OB_UNLIKELY(mds::TwoPhaseCommitState::ON_COMMIT != trans_stat)) {
       ret = OB_ERR_UNEXPECTED;
@@ -2125,7 +2163,7 @@ int ObLS::replay_get_tablet(
     }
   } else if ((!is_update_mds_table && scn > tablet->get_clog_checkpoint_scn())
       || (is_update_mds_table && scn > tablet->get_mds_checkpoint_scn())) {
-    if (OB_FAIL(tablet->get_latest(data, writer, trans_stat, trans_version))) {
+    if (OB_FAIL(tablet->get_latest_tablet_status(data, writer, trans_stat, trans_version))) {
       if (OB_EMPTY_RESULT == ret) {
         ret = OB_EAGAIN;
         LOG_INFO("read empty mds data, should retry", KR(ret), K(ls_id), K(tablet_id), K(scn));
@@ -2637,12 +2675,46 @@ int ObLS::update_ls_meta(const bool update_restore_status,
     } else if (OB_FAIL(ObIDService::update_id_service(all_id_meta))) {
       LOG_WARN("update id service fail", K(ret), K(all_id_meta), K(*this));
     }
+  } else if (is_tenant_sslog_ls(ls_meta_.tenant_id_, ls_meta_.ls_id_)) {
+    ObAllIDMeta all_id_meta;
+    if (OB_FAIL(ls_meta_.get_all_id_meta(all_id_meta))) {
+      LOG_WARN("get all id meta failed", K(ret), K(ls_meta_));
+    } else if (OB_FAIL(ObIDService::update_id_service_for_sslog(all_id_meta))) {
+      LOG_WARN("update id service for sslog fail", K(ret), K(all_id_meta), K(*this));
+    } else {
+      LOG_INFO("update id service for sslog success", K(ret), K(all_id_meta));
+    }
   } else {
     // do nothing
   }
 
   return ret;
 }
+
+#ifdef OB_BUILD_SHARED_STORAGE
+int ObLS::update_ls_meta(const ObSSLSMeta &src_ss_meta)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls is not inited", K(ret), K(ls_meta_));
+  } else if (OB_UNLIKELY(is_stopped())) {
+    ret = OB_NOT_RUNNING;
+    LOG_WARN("ls stopped", K(ret), K_(ls_meta));
+  } else if (!src_ss_meta.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid src ss meta", K(ret), K(src_ss_meta));
+  } else {
+    ObSSLSMeta tmp_ss_meta(src_ss_meta);
+    if (OB_FAIL(tmp_ss_meta.convert_local_ls_meta())) {
+      LOG_WARN("fail to convert_sn_ls_meta", K(ret), K(tmp_ss_meta), K(src_ss_meta));
+    } else if (OB_FAIL(update_ls_meta(true /*update restore status*/, tmp_ss_meta))) {
+      LOG_WARN("fail to update ls meta", K(ret), K(tmp_ss_meta), K(src_ss_meta));
+    }
+  }
+  return ret;
+}
+#endif
 
 int ObLS::diagnose(DiagnoseInfo &info) const
 {
@@ -2911,8 +2983,9 @@ int ObLS::inner_check_allow_read_(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("inner check allow read get invalid argument", K(ret), K(migration_status), K(restore_status));
   }  else if ((ObMigrationStatus::OB_MIGRATION_STATUS_NONE == migration_status
-          || ObMigrationStatus::OB_MIGRATION_STATUS_HOLD == migration_status)
-              && (restore_status.check_allow_read() || is_sys_ls())) {
+              || ObMigrationStatus::OB_MIGRATION_STATUS_HOLD == migration_status
+              || ObMigrationStatus::OB_MIGRATION_STATUS_REPLACE_HOLD == migration_status)
+                && (restore_status.check_allow_read() || is_sys_ls())) {
     allow_read = true;
   } else {
     allow_read = false;

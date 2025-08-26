@@ -536,7 +536,9 @@ int ObGranulePump::fetch_pw_granule_from_shared_pool(ObIArray<ObGranuleTaskInfo>
 
     // 防御性代码：检查full partition wise的情况下，每一个op对应的GI task是否被同时消费完毕
     if (OB_FAIL(ret)) {
-      set_fetch_task_ret(ret);
+      if (ret != OB_ITER_END) {
+        set_fetch_task_ret(ret);
+      }
     } else if (OB_FAIL(check_pw_end(end_op_count, op_ids.count(), infos.count()))) {
       if (OB_ITER_END != ret) {
         LOG_WARN("incorrect state", K(ret));
@@ -621,8 +623,8 @@ int ObGranulePump::add_new_gi_task(ObGranulePumpArgs &args, bool check_task_exis
     if (OB_UNLIKELY(check_task_exist)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected value", K(ret));
-    } else if (OB_FAIL(splitter.partitions_info_.assign(args.partitions_info_))) {
-      LOG_WARN("Failed to assign partitions info", K(ret));
+    } else if (OB_FAIL(splitter.px_tablets_info_.assign(args.px_tablets_info_))) {
+      LOG_WARN("Failed to assign tablets info", K(ret));
     } else if (OB_FAIL(splitter.split_granule(args,
                                               scan_ops,
                                               gi_task_array_map_,
@@ -634,8 +636,8 @@ int ObGranulePump::add_new_gi_task(ObGranulePumpArgs &args, bool check_task_exis
     if (OB_UNLIKELY(check_task_exist)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected value", K(ret));
-    } else if (OB_FAIL(splitter.partitions_info_.assign(args.partitions_info_))) {
-      LOG_WARN("Failed to assign partitions info", K(ret));
+    } else if (OB_FAIL(splitter.px_tablets_info_.assign(args.px_tablets_info_))) {
+      LOG_WARN("Failed to assign tablets info", K(ret));
     } else if (OB_FAIL(splitter.split_granule(args,
                                               scan_ops,
                                               gi_task_array_map_,
@@ -698,7 +700,7 @@ int ObGranulePump::init_external_odps_table_downloader(ObGranulePumpArgs &args)
     }
     if (OB_SUCC(ret)) {
       if (!GCONF._use_odps_jni_connector) {
-#if defined(OB_BUILD_CPP_ODPS)
+#if defined (OB_BUILD_CPP_ODPS)
         if (OB_FAIL(odps_partition_downloader_mgr_.init_downloader(args.external_table_files_.count()))) {
           LOG_WARN("init odps_partition_downloader_mgr_ failed", K(ret), K(args.external_table_files_.count()));
         } else {
@@ -1101,6 +1103,7 @@ int ObRandomGranuleSplitter::split_granule(ObGranulePumpArgs &args,
       uint64_t op_id = tsc->get_id();
       ObGITaskSet total_task_set;
       ObGITaskArray &taskset_array = gi_task_array_result.at(idx + task_idx).taskset_array_;
+      taskset_array.reuse();
       partition_granule = is_virtual_table(scan_key_id) || partition_granule;
       if (OB_FAIL(split_gi_task(args,
                                 tsc,
@@ -1213,7 +1216,7 @@ int ObAffinitizeGranuleSplitter::split_tasks_affinity(ObExecContext &ctx,
   ObPxAffinityByRandom affinitize_rule(qc_order_gi_tasks, partition_random_affinitize);
   ARRAY_FOREACH_X(taskset.gi_task_set_, idx, cnt, OB_SUCC(ret)) {
     if (cur_idx != taskset.gi_task_set_.at(idx).idx_) {
-      cur_idx = taskset.gi_task_set_.at(idx).idx_; // get all different parition key in Affinitize
+      cur_idx = taskset.gi_task_set_.at(idx).idx_; // get all different partition key in Affinitize
       const ObDASTabletLoc &tablet_loc = *taskset.gi_task_set_.at(idx).tablet_loc_;
       int64_t tablet_idx = -1;
       if (NULL == table_schema || table_schema->get_table_id() != tablet_loc.loc_meta_->ref_table_id_) {
@@ -1248,7 +1251,7 @@ int ObAffinitizeGranuleSplitter::split_tasks_affinity(ObExecContext &ctx,
       }
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(ObPxAffinityByRandom::get_tablet_info(tablet_loc.tablet_id_.id(),
-                                                               partitions_info_,
+                                                               px_tablets_info_,
                                                                partition_row_info))) {
         LOG_WARN("Failed to get tablet info", K(ret));
       } else if (OB_FAIL(affinitize_rule.add_partition(tablet_loc.tablet_id_.id(),
@@ -1261,7 +1264,7 @@ int ObAffinitizeGranuleSplitter::split_tasks_affinity(ObExecContext &ctx,
     }
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(affinitize_rule.do_random(!partitions_info_.empty(),
+  } else if (OB_FAIL(affinitize_rule.do_random(!px_tablets_info_.empty(),
                                                my_session->get_effective_tenant_id()))) {
     LOG_WARN("failed to do random", K(ret));
   } else {
@@ -1678,7 +1681,7 @@ int ObGranulePump::find_taskset_by_tsc_id(uint64_t op_id, GITaskArrayItem *&task
 int ObGranulePump::init_pump_args_inner(ObExecContext *ctx,
     ObIArray<const ObTableScanSpec*> &scan_ops,
     const common::ObIArray<DASTabletLocArray> &tablet_arrays,
-    common::ObIArray<ObPxTabletInfo> &partitions_info,
+    common::ObIArray<ObPxTabletInfo> &tablets_info,
     common::ObIArray<ObExternalFileInfo> &external_table_files,
     const ObTableModifySpec* modify_op,
     int64_t parallelism,
@@ -1696,7 +1699,7 @@ int ObGranulePump::init_pump_args_inner(ObExecContext *ctx,
     if (OB_FAIL(pump_args_.push_back(new_arg))) {
       LOG_WARN("fail to push back new arg", K(ret));
     } else if (OB_FAIL(init_arg(pump_args_.at(pump_args_.count() - 1), ctx, scan_ops,
-          tablet_arrays, partitions_info, external_table_files, modify_op, parallelism,
+          tablet_arrays, tablets_info, external_table_files, modify_op, parallelism,
           tablet_size, gi_attri_flag, locations_order, gi_op_id))) {
       LOG_WARN("fail to init arg", K(ret));
     } else if (OB_FAIL(add_new_gi_task(pump_args_.at(pump_args_.count() - 1), false))) {
@@ -1709,7 +1712,7 @@ int ObGranulePump::init_pump_args_inner(ObExecContext *ctx,
 int ObGranulePump::init_pump_args(ObExecContext *ctx,
     ObIArray<const ObTableScanSpec*> &scan_ops,
     const common::ObIArray<DASTabletLocArray> &tablet_arrays,
-    common::ObIArray<ObPxTabletInfo> &partitions_info,
+    common::ObIArray<ObPxTabletInfo> &tablets_info,
     common::ObIArray<share::ObExternalFileInfo> &external_table_files,
     const ObTableModifySpec* modify_op,
     int64_t parallelism,
@@ -1718,7 +1721,7 @@ int ObGranulePump::init_pump_args(ObExecContext *ctx,
     const ObIArray<std::pair<int64_t, bool>> &locations_order,
     int64_t gi_op_id)
 {
-  return init_pump_args_inner(ctx, scan_ops, tablet_arrays, partitions_info,
+  return init_pump_args_inner(ctx, scan_ops, tablet_arrays, tablets_info,
                               external_table_files, modify_op, parallelism,
                               tablet_size, gi_attri_flag, locations_order, gi_op_id);
 }
@@ -1728,7 +1731,7 @@ int ObGranulePump::init_arg(
     ObExecContext *ctx,
     ObIArray<const ObTableScanSpec*> &scan_ops,
     const common::ObIArray<DASTabletLocArray> &tablet_arrays,
-    common::ObIArray<ObPxTabletInfo> &partitions_info,
+    common::ObIArray<ObPxTabletInfo> &tablets_info,
     const common::ObIArray<ObExternalFileInfo> &external_table_files,
     const ObTableModifySpec* modify_op,
     int64_t parallelism,
@@ -1747,8 +1750,8 @@ int ObGranulePump::init_arg(
   for (int i = 0; OB_SUCC(ret) && i < tablet_arrays.count(); ++i) {
     OZ(arg.tablet_arrays_.push_back(tablet_arrays.at(i)));
   }
-  for (int i = 0; OB_SUCC(ret) && i < partitions_info.count(); ++i) {
-    OZ(arg.partitions_info_.push_back(partitions_info.at(i)));
+  for (int i = 0; OB_SUCC(ret) && i < tablets_info.count(); ++i) {
+    OZ(arg.px_tablets_info_.push_back(tablets_info.at(i)));
   }
   LOG_TRACE("gi pump init arg", K(scan_ops), K(tablet_arrays), K(arg.tablet_arrays_));
   OZ(arg.external_table_files_.assign(external_table_files));
@@ -1859,8 +1862,8 @@ int ObGranulePumpArgs::assign(const ObGranulePumpArgs &rhs)
     LOG_WARN("Failed to assign tablet_arrays", K(ret));
   } else if (OB_FAIL(run_time_pruning_flags_.assign(rhs.run_time_pruning_flags_))) {
     LOG_WARN("Failed to assign run_time_pruning_flags", K(ret));
-  } else if (OB_FAIL(partitions_info_.assign(rhs.partitions_info_))) {
-    LOG_WARN("Failed to assign partitions_info", K(ret));
+  } else if (OB_FAIL(px_tablets_info_.assign(rhs.px_tablets_info_))) {
+    LOG_WARN("Failed to assign tablets_info", K(ret));
   } else if (OB_FAIL(external_table_files_.assign(rhs.external_table_files_))) {
     LOG_WARN("Failed to assign external_table_files", K(ret));
   } else if (OB_FAIL(query_range_by_runtime_filter_.assign(rhs.query_range_by_runtime_filter_))) {

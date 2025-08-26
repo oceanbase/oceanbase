@@ -283,12 +283,16 @@ int ObTableQueryP::new_try_process()
   int ret = OB_SUCCESS;
   ObModelGuard model_guard;
   ObIModel *model = nullptr;
-  exec_ctx_.set_table_name(arg_.table_name_);
-  exec_ctx_.set_table_id(arg_.table_id_);
-  exec_ctx_.set_timeout_ts(get_timeout_ts());
-  exec_ctx_.set_audit_ctx(audit_ctx_);
-  if (OB_FAIL(init_schema_info(arg_.table_name_))) {
+  if (OB_FAIL(init_table_schema_info(arg_.table_name_))) {
     LOG_WARN("fail to init schema info", K(ret), K(arg_.table_name_));
+  } else {
+    exec_ctx_.set_table_name(arg_.table_name_);
+    exec_ctx_.set_table_id(arg_.table_id_);
+    exec_ctx_.set_timeout_ts(get_timeout_ts());
+    exec_ctx_.set_audit_ctx(audit_ctx_);
+    exec_ctx_.set_table_schema(table_schema_);
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ObModelFactory::get_model_guard(allocator_, arg_.entity_type_, model_guard))) {
     LOG_WARN("fail to get model guard", K(ret), K(arg_.entity_type_));
   } else if (FALSE_IT(model = model_guard.get_model())) {

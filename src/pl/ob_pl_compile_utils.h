@@ -67,19 +67,19 @@ enum CompileType {
 
   static inline CompileType get_compile_type(ObString &object_type) {
     CompileType type = COMPILE_INVALID;
-    if (0 == object_type.compare("PROCEDURE")) {
+    if (object_type.compare_equal("PROCEDURE")) {
       type = COMPILE_PROCEDURE;
-    } else if (0 == object_type.compare("FUNCTION")) {
+    } else if (object_type.compare_equal("FUNCTION")) {
       type = COMPILE_FUNCTION;
-    } else if (0 == object_type.compare("TRIGGER")) {
+    } else if (object_type.compare_equal("TRIGGER")) {
       type = COMPILE_TRIGGER;
-    } else if (0 == object_type.compare("PACKAGE")) {
+    } else if (object_type.compare_equal("PACKAGE")) {
       type = COMPILE_PACKAGE_SPEC;
-    } else if (0 == object_type.compare("PACKAGE BODY")) {
+    } else if (object_type.compare_equal("PACKAGE BODY")) {
       type = COMPILE_PACKAGE_BODY;
     }
 #ifdef OB_BUILD_ORACLE_PL
-    else if (0 == object_type.compare("TYPE")) {
+    else if (object_type.compare_equal("TYPE")) {
       type = COMPILE_UDT;
     }
 #endif

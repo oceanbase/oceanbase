@@ -44,10 +44,6 @@ public:
       const bool force_alloc_new,
       ObITabletFilterOp *op);
   int try_get_in_memory_meta_obj(const ObTabletMapKey &key, bool &success, ObTabletHandle &guard);
-  int try_get_in_memory_meta_obj_and_addr(
-      const ObTabletMapKey &key,
-      ObMetaDiskAddr &addr,
-      ObTabletHandle &guard);
   int get_meta_addr(const ObTabletMapKey &key, ObMetaDiskAddr &addr);
   int get_attr_for_obj(const ObTabletMapKey &key, ObTabletHandle &guard);
   int get_tablet_pointer_initial_state(const ObTabletMapKey &key, bool &initial_state);
@@ -70,6 +66,9 @@ public:
   int wash_meta_obj(const ObTabletMapKey &key, ObTabletHandle &guard, void *&free_obj);
   int64_t count() const { return ResourceMap::map_.size(); }
   OB_INLINE int64_t max_count() const { return ATOMIC_LOAD(&max_count_); }
+  int advance_notify_ss_change_version(
+      const ObTabletMapKey &key,
+      const share::SCN &change_version);
 
 private:
   static int read_from_disk(
@@ -82,18 +81,24 @@ private:
   // used when tablet object and memory is hold by external allocator
   int load_meta_obj(
       const ObTabletMapKey &key,
-      ObTabletBasePointer *meta_pointer,
+      ObTabletPointer *meta_pointer,
       common::ObArenaAllocator &allocator,
       ObMetaDiskAddr &load_addr,
       ObTablet *t);
   // used when tablet object and memory is hold by t3m
   int load_meta_obj(
       const ObTabletMapKey &key,
-      ObTabletBasePointer *meta_pointer,
+      ObTabletPointer *meta_pointer,
       ObMetaDiskAddr &load_addr,
       ObTablet *&t);
   int load_and_hook_meta_obj_(const ObTabletMapKey &key, ObTabletPointerHandle &ptr_hdl, ObTabletHandle &guard);
   int try_get_in_memory_meta_obj_(
+      const ObTabletMapKey &key,
+      ObTabletPointerHandle &ptr_hdl,
+      ObTabletHandle &guard,
+      bool &is_in_memory);
+
+  int try_get_in_memory_meta_obj_without_lock_(
       const ObTabletMapKey &key,
       ObTabletPointerHandle &ptr_hdl,
       ObTabletHandle &guard,

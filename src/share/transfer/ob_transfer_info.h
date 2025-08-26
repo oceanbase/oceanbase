@@ -234,6 +234,7 @@ struct ObTransferPartInfo final : public ObDisplayType
   int to_display_str(char *buf, const int64_t len, int64_t &pos) const;
 
   bool operator==(const ObTransferPartInfo &other) const;
+  int hash(uint64_t &hash_val) const;
 
   TO_STRING_KV(K_(table_id), K_(part_object_id));
 private:
@@ -505,6 +506,7 @@ public:
     return src_ls_id_ == other.src_ls_id_ && dest_ls_id_ == other.dest_ls_id_;
   }
   bool operator !=(const ObTransferTaskKey &other) const { return !(operator ==(other)); }
+  bool is_valid() const { return src_ls_id_.is_valid() && dest_ls_id_.is_valid(); }
   ObLSID get_src_ls_id() const { return src_ls_id_; }
   ObLSID get_dest_ls_id() const { return dest_ls_id_; }
   TO_STRING_KV(K_(src_ls_id), K_(dest_ls_id));

@@ -91,6 +91,9 @@ int ObDiagnosticInfos::allocate_diagnostic_info(int64_t tenant_id, int64_t group
 {
   int ret = OB_SUCCESS;
   SessionID sess_id(session_id);
+  if (is_rpc_request(session_id)) {
+    ATOMIC_INC(&rpc_size_);
+  }
   if (OB_FAIL(di_infos_.create(sess_id, di_info))) {
     LOG_WARN("failed to create di info", K(ret), K(session_id), K(tenant_id), K(group_id));
   } else {
@@ -102,6 +105,9 @@ int ObDiagnosticInfos::allocate_diagnostic_info(int64_t tenant_id, int64_t group
 int ObDiagnosticInfos::delete_diagnostic_info(const ObDiagnosticInfo *di_info)
 {
   int ret = OB_SUCCESS;
+  if (is_rpc_request(di_info->get_session_id())) {
+    ATOMIC_DEC(&rpc_size_);
+  }
   if (OB_NOT_NULL(di_info)) {
     if (di_info->get_uref() - INT32_MAX / 2 < 0) {
       LOG_ERROR_RET(OB_ERR_UNEXPECTED, "di session leak", KPC(di_info), K(di_info));
@@ -122,7 +128,8 @@ int ObDiagnosticInfos::inc_ref(const ObDiagnosticInfo *di_info)
       LOG_WARN("failed to inc di ref", K(ret));
     } else {
 #ifdef ENABLE_DEBUG_LOG
-      if (!(*di_info == *tmp_di)) {
+      // using cache would change group id.
+      if (!di_info->is_using_cache() && !(*di_info == *tmp_di)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("inc ref wrongly", K(di_info->get_session_id()), K(tmp_di->get_session_id()),
             KPC(di_info), KPC(tmp_di));
@@ -350,6 +357,19 @@ int64_t ObRunningDiagnosticInfoContainer::size() const
   } else {
     for (int i = 0; i < slot_count_; i++) {
       size += buffer_[i].size();
+    }
+  }
+  return size;
+}
+
+int64_t ObRunningDiagnosticInfoContainer::get_rpc_size() const
+{
+  int64_t size = 0;
+  if (!is_inited_) {
+    LOG_WARN_RET(OB_SUCCESS, "get session diagnostic info size before init!", K(ret));
+  } else {
+    for (int i = 0; i < slot_count_; i++) {
+      size += buffer_[i].get_rpc_size();
     }
   }
   return size;
@@ -711,13 +731,13 @@ int ObDiagnosticInfoContainer::for_each_and_delay_release_ref(
             ret = tmp_ret;
           }
         } else if (OB_FAIL(fn(id, di))) {
-          LOG_DEBUG("faield to exec fn", K(ret));
+          LOG_WARN("faield to exec fn", K(ret));
         }
         return ret;
       };
 
   if (OB_FAIL(for_each_running_di(fn_wrapper))) {
-    LOG_ERROR("failed to for each running di", K(ret));
+    LOG_WARN("failed to for each running di", K(ret));
   }
 
   for (int i = 0; i < di_array.count(); i++) {

@@ -157,9 +157,12 @@ int ObExprSubstr::calc_result_length_oracle(const ObExprResType *types_array,
   }
   if (OB_SUCC(ret) && 3 == param_num && !types_array[2].get_param().is_null()) {
     const ObObj len_obj = types_array[2].get_param();
-    if (OB_FAIL(ObExprUtil::get_trunc_int64(len_obj, expr_ctx, substr_len))) {
+    int64_t tmp_len = 0;
+    if (OB_FAIL(ObExprUtil::get_trunc_int64(len_obj, expr_ctx, tmp_len))) {
       ret = OB_SUCCESS;
       LOG_WARN("ignore failure when calc result type length oracle mode", K(ret));
+    } else {
+      substr_len = tmp_len;
     }
   }
   if (OB_SUCC(ret)) {
@@ -464,7 +467,7 @@ int ObExprSubstr::substr(common::ObString &varchar,
       } else {
         if (do_ascii_optimize_check) { // ObCharsetType is CHARSET_UTF8MB4 or CHARSET_GBK
           res_len = min(length, varchar.length() - start);
-          is_ascii = storage::is_ascii_str(varchar.ptr() + start, res_len);
+          is_ascii = storage::is_ascii_str(varchar.ptr(), start + res_len);
         }
         if (is_ascii) {
           varchar.assign_ptr(varchar.ptr() + start, static_cast<int32_t>(res_len));

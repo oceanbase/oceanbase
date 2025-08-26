@@ -275,10 +275,11 @@ TEST_F(TestSharedBlockRWriter, test_cb_single_write)
 
   ObSSTable empty_sstable;
   create_empty_sstable(empty_sstable);
-  const int64_t sstable_size = empty_sstable.get_serialize_size();
+  const uint64_t data_version = DATA_CURRENT_VERSION;
+  const int64_t sstable_size = empty_sstable.get_serialize_size(data_version);
   char *sstable_buf = static_cast<char *>(allocator_.alloc(sstable_size));
   int64_t pos = 0;
-  OK(empty_sstable.serialize(sstable_buf, sstable_size, pos));
+  OK(empty_sstable.serialize(data_version, sstable_buf, sstable_size, pos));
 
   ObSharedObjectWriteInfo write_info;
   ObSharedObjectWriteHandle write_handle;
@@ -349,10 +350,11 @@ TEST_F(TestSharedBlockRWriter, test_cb_batch_write)
 
   ObSSTable empty_sstable;
   create_empty_sstable(empty_sstable);
-  const int64_t sstable_size = empty_sstable.get_serialize_size();
+  const uint64_t data_version = DATA_CURRENT_VERSION;
+  const int64_t sstable_size = empty_sstable.get_serialize_size(data_version);
   char *sstable_buf = static_cast<char *>(allocator_.alloc(sstable_size));
   int64_t pos = 0;
-  OK(empty_sstable.serialize(sstable_buf, sstable_size, pos));
+  OK(empty_sstable.serialize(data_version, sstable_buf, sstable_size, pos));
   write_info.buffer_ = sstable_buf;
   write_info.offset_ = 0;
   write_info.size_ = sstable_size;

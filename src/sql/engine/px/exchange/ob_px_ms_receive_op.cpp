@@ -723,6 +723,9 @@ int ObPxMSReceiveOp::new_local_order_input(MergeSortInput *&out_msi)
       LOG_WARN("failed to allocate dir id for chunk datum store", K(ret));
     } else if (OB_FAIL(merge_inputs_.push_back(local_input))) {
       LOG_WARN("fail push back MergeSortInput", K(ret));
+      local_input->clean_row_store(ctx_);
+      local_input->destroy();
+      mem_context_->get_malloc_allocator().free(local_input);
     } else {
       out_msi = local_input;
     }

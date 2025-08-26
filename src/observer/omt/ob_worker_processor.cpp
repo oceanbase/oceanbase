@@ -82,6 +82,9 @@ inline int ObWorkerProcessor::process_one(rpc::ObRequest &req)
       LOG_WARN("process request fail", K(ret));
     }
     translator_.release(processor);
+    if (ObQueryRetryAshGuard::get_info_ptr() != nullptr) {
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "retry info ptr is not null, maybe crash", K(ObLocalDiagnosticInfo::get()->get_ash_stat()));
+    }
   }
 
   return ret;

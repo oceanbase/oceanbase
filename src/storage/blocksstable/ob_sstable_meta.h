@@ -151,8 +151,8 @@ public:
       K(ddl_scn_), K(filled_tx_scn_),
       K(contain_uncommitted_row_), K(status_), K_(root_row_store_type), K_(compressor_type),
       K_(encrypt_id), K_(master_key_id), K_(sstable_logic_seq), KPHEX_(encrypt_key, sizeof(encrypt_key_)),
-      K_(latest_row_store_type), K_(table_backup_flag), K_(table_shared_flag), K_(root_macro_seq), K_(co_base_snapshot_version),
-      K_(rec_scn));
+      K_(latest_row_store_type), K_(table_backup_flag), K_(table_shared_flag), K_(root_macro_seq),
+      K_(co_base_snapshot_version), K_(rec_scn));
 
 public:
   int32_t version_;
@@ -303,13 +303,17 @@ public:
   {
     return data_root_info_.transform_root_block_extra_buf(allocator);
   }
-  int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
+  int serialize(
+      const uint64_t data_version,
+      char *buf,
+      const int64_t buf_len,
+      int64_t &pos) const;
   int deserialize(
       common::ObArenaAllocator &allocator,
       const char *buf,
       const int64_t data_len,
       int64_t &pos);
-  int64_t get_serialize_size() const;
+  int64_t get_serialize_size(const uint64_t data_version) const;
   int64_t get_variable_size() const;
   inline int64_t get_deep_copy_size() const
   {
@@ -322,7 +326,8 @@ public:
       ObSSTableMeta *&dest) const;
   int get_column_checksums(common::ObIArray<int64_t> &column_checksums) const;
   bool is_shared_table() const;
-  TO_STRING_KV(K_(basic_meta), K_(column_ckm_struct), K_(data_root_info), K_(macro_info), K_(cg_sstables), K_(tx_ctx), K_(is_inited));
+  bool is_split_table() const;
+  int64_t to_string(char *buf, const int64_t buf_len) const;
 private:
   bool check_meta() const;
   int init_base_meta(const ObTabletCreateSSTableParam &param, common::ObArenaAllocator &allocator);
@@ -332,13 +337,13 @@ private:
   int prepare_tx_context(
     const ObTxContext::ObTxDesc &tx_desc,
     common::ObArenaAllocator &allocator);
-  int serialize_(char *buf, const int64_t buf_len, int64_t &pos) const;
+  int serialize_(const uint64_t data_verion, char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize_(
       common::ObArenaAllocator &allocator,
       const char *buf,
       const int64_t data_len,
       int64_t &pos);
-  int64_t get_serialize_size_() const;
+  int64_t get_serialize_size_(const uint64_t data_version) const;
 private:
   friend class ObSSTable;
   static const int64_t MAX_PROGRESSIVE_MERGE_STEP = 100;

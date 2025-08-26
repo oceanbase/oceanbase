@@ -103,6 +103,10 @@ private:
       bool &need_cleanning,
       ObDRTaskRetComment &ret_comment);
 
+  int check_cleanup_tasks_for_cross_az_dr_(
+      const ObDRTask &task,
+      bool &need_cleanning,
+      ObDRTaskRetComment &ret_comment);
   // check if migration task need be canceled
   // @params[in]  task, task to check
   // @params[out] need_cancel, if task need be canceled

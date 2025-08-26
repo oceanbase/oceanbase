@@ -26,11 +26,13 @@ namespace storage
   class ObSSPreReadTask;
   class ObSSMicroCacheHandler;
   class ObSSMicroCache;
-  class ObSSMicroCache;
   class ObTenantFileManager;
   class ObServerFileManager;
   class ObSSBaseReader;
   class ObSSTableMacroPrewarmer;
+  class ObServerSlogFlushTask;
+  class ObSSObjectAccessUtil;
+  class ObStorageCachePolicyPrewarmer;
 #endif
 }
 namespace blocksstable
@@ -51,11 +53,13 @@ class ObStorageObjectHandle final
   friend class storage::ObSSPreReadTask;
   friend class storage::ObSSMicroCacheHandler;
   friend class storage::ObSSMicroCache;
-  friend class storage::ObSSMicroCache;
   friend class storage::ObTenantFileManager;
   friend class storage::ObServerFileManager;
   friend class storage::ObSSBaseReader;
   friend class storage::ObSSTableMacroPrewarmer;
+  friend class storage::ObServerSlogFlushTask;
+  friend class storage::ObSSObjectAccessUtil;
+  friend class storage::ObStorageCachePolicyPrewarmer;
   #endif
 public:
   ObStorageObjectHandle() = default;
@@ -72,6 +76,7 @@ public:
   const MacroBlockId& get_macro_id() const { return macro_id_; }
   common::ObIOHandle &get_io_handle() { return io_handle_; }
   int64_t get_data_size() const { return io_handle_.get_data_size(); }
+  int64_t get_user_io_size() const { return io_handle_.get_user_io_size(); }
   int async_read(const ObStorageObjectReadInfo &read_info);
   int async_write(const ObStorageObjectWriteInfo &write_info);
   int wait();

@@ -28,7 +28,7 @@ using namespace common;
 using namespace sql;
 namespace share
 {
-const char *ObCatalogProperties::CATALOG_TYPE_STR[] = {"ODPS"};
+const char *ObCatalogProperties::CATALOG_TYPE_STR[] = {"ODPS", "FILESYSTEM", "HMS"};
 static_assert(array_elements(ObCatalogProperties::CATALOG_TYPE_STR) == static_cast<size_t>(ObCatalogProperties::CatalogType::MAX_TYPE), "Not enough initializer for ObCatalogProperties");
 static_assert(array_elements(ObODPSCatalogProperties::OPTION_NAMES) == static_cast<size_t>(ObODPSCatalogProperties::ObOdpsCatalogOptions::MAX_OPTIONS), "Not enough initializer for ObODPSCatalogProperties");
 
@@ -265,77 +265,77 @@ int ObODPSCatalogProperties::decrypt(ObIAllocator &allocator)
 int ObODPSCatalogProperties::to_json_kv_string(char *buf, const int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
-
+  ObCStringHelper helper;
   OZ(J_COMMA());
   OZ(databuff_printf(buf,
                      buf_len,
                      pos,
                      R"("%s":"%s")",
                      OPTION_NAMES[static_cast<size_t>(ObOdpsCatalogOptions::ACCESSTYPE)],
-                     to_cstring(ObHexStringWrap(access_type_))));
+                     helper.convert(ObHexStringWrap(access_type_))));
   OZ(J_COMMA());
   OZ(databuff_printf(buf,
                      buf_len,
                      pos,
                      R"("%s":"%s")",
                      OPTION_NAMES[static_cast<size_t>(ObOdpsCatalogOptions::ACCESSID)],
-                     to_cstring(ObHexStringWrap(access_id_))));
+                     helper.convert(ObHexStringWrap(access_id_))));
   OZ(J_COMMA());
   OZ(databuff_printf(buf,
                      buf_len,
                      pos,
                      R"("%s":"%s")",
                      OPTION_NAMES[static_cast<size_t>(ObOdpsCatalogOptions::ACCESSKEY)],
-                     to_cstring(ObHexStringWrap(access_key_))));
+                     helper.convert(ObHexStringWrap(access_key_))));
   OZ(J_COMMA());
   OZ(databuff_printf(buf,
                      buf_len,
                      pos,
                      R"("%s":"%s")",
                      OPTION_NAMES[static_cast<size_t>(ObOdpsCatalogOptions::STSTOKEN)],
-                     to_cstring(ObHexStringWrap(sts_token_))));
+                     helper.convert(ObHexStringWrap(sts_token_))));
   OZ(J_COMMA());
   OZ(databuff_printf(buf,
                      buf_len,
                      pos,
                      R"("%s":"%s")",
                      OPTION_NAMES[static_cast<size_t>(ObOdpsCatalogOptions::ENDPOINT)],
-                     to_cstring(ObHexStringWrap(endpoint_))));
+                     helper.convert(ObHexStringWrap(endpoint_))));
   OZ(J_COMMA());
   OZ(databuff_printf(buf,
                      buf_len,
                      pos,
                      R"("%s":"%s")",
                      OPTION_NAMES[static_cast<size_t>(ObOdpsCatalogOptions::TUNNEL_ENDPOINT)],
-                     to_cstring(ObHexStringWrap(tunnel_endpoint_))));
+                     helper.convert(ObHexStringWrap(tunnel_endpoint_))));
   OZ(J_COMMA());
   OZ(databuff_printf(buf,
                      buf_len,
                      pos,
                      R"("%s":"%s")",
                      OPTION_NAMES[static_cast<size_t>(ObOdpsCatalogOptions::PROJECT_NAME)],
-                     to_cstring(ObHexStringWrap(project_))));
+                     helper.convert(ObHexStringWrap(project_))));
   OZ(J_COMMA());
   OZ(databuff_printf(buf,
                      buf_len,
                      pos,
                      R"("%s":"%s")",
                      OPTION_NAMES[static_cast<size_t>(ObOdpsCatalogOptions::QUOTA_NAME)],
-                     to_cstring(ObHexStringWrap(quota_))));
+                     helper.convert(ObHexStringWrap(quota_))));
   OZ(J_COMMA());
   OZ(databuff_printf(buf,
                      buf_len,
                      pos,
                      R"("%s":"%s")",
                      OPTION_NAMES[static_cast<size_t>(ObOdpsCatalogOptions::COMPRESSION_CODE)],
-                     to_cstring(ObHexStringWrap(compression_code_))));
+                     helper.convert(ObHexStringWrap(compression_code_))));
   OZ(J_COMMA());
   OZ(databuff_printf(buf,
                      buf_len,
                      pos,
                      R"("%s":"%s")",
                      OPTION_NAMES[static_cast<size_t>(ObOdpsCatalogOptions::REGION)],
-                     to_cstring(ObHexStringWrap(region_))));
+                     helper.convert(ObHexStringWrap(region_))));
 
   return ret;
 }

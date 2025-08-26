@@ -43,283 +43,752 @@ class ObSSTableSecMetaIterator;
 namespace storage
 {
 
-struct ObMacroEndkey
+struct ObRangePrecision
 {
-  ObMacroEndkey() : rowkey_(nullptr), iter_idx_(-1) {}
-  ~ObMacroEndkey() = default;
-  OB_INLINE bool is_valid() const { return OB_NOT_NULL(rowkey_) && iter_idx_ >= 0; }
-  OB_INLINE void reset()
-  {
-    rowkey_ = nullptr;
-    iter_idx_ = -1;
-  }
-  TO_STRING_KV(K_(rowkey), K_(iter_idx));
-  ObStoreRowkey *rowkey_;
-  int64_t iter_idx_;
-};
+  static constexpr int64_t DEFAULT_DYNAMIC_RANGE_PRECISION_HINT = 0;
 
-struct ObMacroEndkeyComparor
-{
-  ObMacroEndkeyComparor() : ret_(OB_SUCCESS) {}
-  ~ObMacroEndkeyComparor() = default;
-  OB_INLINE void reset() { ret_ = OB_SUCCESS; }
-  OB_INLINE int get_error_code() const { return ret_; }
-  OB_INLINE bool operator()(const ObMacroEndkey &left, const ObMacroEndkey &right)
+  ObRangePrecision() : range_precision_(DEFAULT_DYNAMIC_RANGE_PRECISION_HINT) {}
+  ObRangePrecision(const int64_t range_precision) : range_precision_(range_precision) {}
+
+  OB_INLINE bool is_valid() const
   {
-    bool bret = false;
-    int cmp = 0;
-    if (OB_UNLIKELY(OB_SUCCESS != ret_)) {
-    } else if (OB_ISNULL(left.rowkey_) || OB_ISNULL(right.rowkey_)
-        || OB_UNLIKELY(!left.rowkey_->is_valid() || !right.rowkey_->is_valid())) {
-      ret_ = OB_INVALID_ARGUMENT;
-      STORAGE_LOG_RET(WARN, ret_, "Invalid argument to compare macro endkey", K_(ret), K(left), K(right));
+    return (range_precision_ > 0 && range_precision_ <= 10000)
+           || range_precision_ == DEFAULT_DYNAMIC_RANGE_PRECISION_HINT;
+  }
+
+  OB_INLINE int recalc_range_precision(const int64_t range_count)
+  {
+    int ret = OB_SUCCESS;
+
+    if (OB_UNLIKELY(!is_valid() || range_count <= 0)) {
+      ret = OB_INVALID_ARGUMENT;
+      STORAGE_LOG(WARN, "Invalid range precision", KR(ret), K(range_precision_), K(range_count));
     } else {
-      ret_ = left.rowkey_->compare(*right.rowkey_, cmp);
+      if (range_precision_ == DEFAULT_DYNAMIC_RANGE_PRECISION_HINT) {
+        const int64_t need_sample_range_limit = 20;
+        range_precision_ = range_count > need_sample_range_limit
+                               ? need_sample_range_limit * 10000 / range_count
+                               : 10000;
+      }
+
+      if (range_precision_ <= 0) {
+        range_precision_ = 1;
+      }
+
+      if (range_precision_ > 10000) {
+        range_precision_ = 10000;
+      }
     }
-    return cmp > 0;
+
+    return ret;
   }
-  TO_STRING_KV(K_(ret));
-  int ret_;
+
+  OB_INLINE int64_t get_sample_step() const { return max(1, 10000 / max(1, range_precision_)); }
+
+  TO_STRING_KV(K_(range_precision));
+
+  int64_t range_precision_;
 };
 
-struct ObRangeSplitInfo
+class ObIMultiRangeEstimateContext
 {
-  ObRangeSplitInfo();
-  ~ObRangeSplitInfo();
-  void reset();
-  OB_INLINE bool is_valid() const
+public:
+  /**
+   * @brief Operation types that can be performed during the traversal of an index block tree.
+   */
+  enum ObTraverserOperationType : uint8_t
   {
-    return OB_NOT_NULL(store_range_)
-        && OB_NOT_NULL(index_read_info_)
-        && OB_NOT_NULL(tables_)
-        && store_range_->is_valid()
-        && parallel_target_count_ > 0
-        && (tables_->count() > 0 || parallel_target_count_ == 1) ;
-  }
-  OB_INLINE void set_parallel_target(const int64_t parallel_target_count)
+    NOTHING,          ///< No operation is needed
+    GOTO_NEXT_LEVEL,  ///< Continue traversal by going to next level
+  };
+
+  virtual ~ObIMultiRangeEstimateContext() = default;
+
+  virtual bool is_valid() const = 0;
+
+  virtual bool is_ended() const = 0;
+
+  virtual const ObDatumRange &get_curr_range() const = 0;
+
+  virtual int64_t get_curr_range_idx() const = 0;
+
+  virtual int64_t get_ranges_count() const = 0;
+
+  /**
+   * @brief Switch to next range. This method is called by tree traverser.
+   */
+  virtual int next_range() = 0;
+
+  /**
+   * @brief Callback function when a leaf node is during traversal
+   */
+  virtual int on_leaf_node(const ObMicroIndexInfo &index_row, const ObPartitionEst &est) = 0;
+
+  /**
+   * @brief Callback function when a inner node is during traversal
+   */
+  virtual int on_inner_node(const ObMicroIndexInfo &index_row,
+                            const bool is_coverd_by_range,
+                            ObTraverserOperationType &opertion) = 0;
+
+  /**
+   * @brief Callback function when we cann't goto next level because of performance
+   */
+  virtual int on_node_estimate(const ObMicroIndexInfo &index_row, const bool is_coverd_by_range) = 0;
+
+  DECLARE_PURE_VIRTUAL_TO_STRING;
+};
+
+class ObIndexBlockTreeTraverser
+{
+public:
+  // If the row count of data micro block is larger than below limit,
+  // we should open this micro block to get more precise estimate result
+  static constexpr int64_t OPEN_DATA_MICRO_BLOCK_ROW_LIMIT = 65536;
+
+  static constexpr int64_t OPEN_INDEX_MICRO_BLOCK_LIMIT = 100;
+
+  ObIndexBlockTreeTraverser() : is_inited_(false) {}
+
+  int init(ObSSTable &sstable, const ObITableReadInfo &index_read_info);
+
+  void reuse();
+
+  int traverse(ObIMultiRangeEstimateContext &context,
+               const int64_t open_index_micro_block_limit = OPEN_INDEX_MICRO_BLOCK_LIMIT);
+
+  OB_INLINE bool is_inited() const { return is_inited_; }
+
+  OB_INLINE const ObSSTable *get_sstable() const { return sstable_; }
+
+  OB_INLINE const ObITableReadInfo *get_read_info() const { return read_info_; }
+
+  OB_INLINE ObIAllocator &get_allocator() { return allocator_; }
+
+  TO_STRING_KV(KPC_(read_info), KPC_(context), KPC_(sstable));
+
+private:
+  class TreeNodeContext
   {
-    parallel_target_count_ = parallel_target_count;
+  public:
+    int init(const ObMicroBlockData &block_data,
+             const ObMicroIndexInfo *micro_index_info,
+             ObIndexBlockTreeTraverser &traverser);
+
+    int open(const ObMicroBlockData &block_data, const ObMicroIndexInfo *micro_index_info);
+
+    void reuse();
+
+    int locate_range(const ObDatumRange &range, int64_t &index_row_count);
+
+    int get_next_index_row(ObMicroIndexInfo &idx_block_row);
+  private:
+    ObArenaAllocator allocator_;
+    ObIndexBlockRowScanner scanner_;
+  };
+
+  struct PathInfo
+  {
+    PathInfo() : path_count_(0), left_most_(false), right_most_(false), in_middle_(false) {}
+    PathInfo(const int64_t path_count, const int64_t path_idx, const PathInfo &father_path_info)
+        : path_count_(path_count), left_most_(path_idx == 0 && (!father_path_info.valid() || father_path_info.left_most_)),
+          right_most_(path_idx == path_count - 1 && (!father_path_info.valid() || father_path_info.right_most_)),
+          in_middle_(!left_most_ && !right_most_)
+    {
+    }
+
+    OB_INLINE bool valid() const { return path_count_ != 0; }
+    OB_INLINE void reset() { *this = PathInfo(); }
+
+    TO_STRING_KV(K_(path_count), K_(left_most), K_(right_most), K_(in_middle));
+
+    int64_t path_count_;
+    bool left_most_;
+    bool right_most_;
+    bool in_middle_;
+  };
+
+  class PathNodeCaches
+  {
+  public:
+    constexpr static int64_t MAX_CACHE_LEVEL = 8;
+
+    struct CacheNode
+    {
+      CacheNode() : is_inited_(false) {}
+
+      void reuse()
+      {
+        context_.reuse();
+      }
+
+      TO_STRING_KV(K_(key), K_(micro_handle), K_(micro_data), K_(is_inited));
+
+      ObMicroBlockCacheKey key_;
+      ObMicroBlockDataHandle micro_handle_;
+      ObMicroBlockData micro_data_;
+      TreeNodeContext context_;
+      bool is_inited_;
+    };
+
+    int load_root(const ObMicroBlockData &block_data, ObIndexBlockTreeTraverser &traverser);
+
+    int find(const int64_t level,
+            const ObMicroIndexInfo *micro_index_info,
+            bool &is_in_cache);
+
+    int get(const int64_t level,
+            const ObMicroIndexInfo *micro_index_info,
+            ObIndexBlockTreeTraverser &traverser,
+            CacheNode *&cache_node,
+            bool &is_in_cache);
+
+    int prefetch(const ObMicroIndexInfo &micro_index_info, ObMicroBlockDataHandle &micro_handle);
+
+  private:
+    ObArenaAllocator allocator_;
+    CacheNode caches_[MAX_CACHE_LEVEL];
+  };
+
+  int inner_node_traverse(const ObMicroIndexInfo *micro_index_info,
+                          const PathInfo &path_info,
+                          const int64_t level,
+                          const double open_index_micro_block_limit);
+
+  int leaf_node_traverse(const ObMicroIndexInfo &micro_index_info,
+                         const PathInfo &path_info,
+                         const int64_t level);
+
+  int goto_next_level_node(const ObMicroIndexInfo &micro_index_info,
+                           const PathInfo &path_info,
+                           const int64_t level,
+                           double open_index_micro_block_limit);
+
+  int handle_overflow_ranges();
+
+  int is_range_cover_node_end_key(const ObDatumRange &range,
+                                  const ObMicroIndexInfo &micro_index_info,
+                                  bool &is_over);
+
+  ObArenaAllocator allocator_;
+  ObSSTable *sstable_;
+  const ObITableReadInfo *read_info_;
+  ObIMultiRangeEstimateContext *context_;
+
+  PathNodeCaches path_caches_;
+
+  // statistics
+  int64_t visited_node_count_;
+  int64_t visited_macro_node_count_;
+  double avg_range_visited_node_cnt_;
+  double remain_can_visited_node_cnt_;
+
+  bool is_inited_;
+};
+
+/**
+ * @brief Pair the origin store range and datum range.
+ * used for sort and find corresponding store range
+ */
+struct ObPairStoreAndDatumRange
+{
+  ObPairStoreAndDatumRange() : origin_store_range_(nullptr) {}
+
+  TO_STRING_KV(KPC_(origin_store_range), K_(datum_range));
+
+  const ObStoreRange *origin_store_range_;
+  ObDatumRange datum_range_;
+};
+
+/**
+ * @brief Pair the datum_range and row_count.
+ */
+struct ObRangeInfo
+{
+  ObRangeInfo() = default;
+  ObRangeInfo(const ObDatumRange *range) : range_(range), row_count_(0) {}
+
+  TO_STRING_KV(KPC_(range), K_(row_count));
+
+  const ObDatumRange *range_;
+  int64_t row_count_;
+};
+
+/**
+ * @brief Compare range with only startkey.
+ * The ranges do not overlap.
+ * Therefore, sorting the ranges from smallest to largest only requires sorting by the start key.
+ */
+struct ObRangeCompartor
+{
+  ObRangeCompartor(const ObITableReadInfo &read_info)
+      : read_info_(&read_info), sort_ret_(OB_SUCCESS)
+  {
   }
-  OB_INLINE bool is_sstable() const { return is_sstable_; }
-  OB_INLINE bool empty() const { return OB_NOT_NULL(tables_) && tables_->empty(); }
-  TO_STRING_KV(K_(store_range), KPC_(tables), K_(total_size), K_(max_macro_block_count),
-               K_(max_estimate_micro_block_cnt), K_(parallel_target_count), K_(is_sstable));
-  const common::ObStoreRange *store_range_;
-  const ObITableReadInfo *index_read_info_;
-  common::ObIArray<ObITable *> *tables_;
+
+  bool operator()(const ObDatumRange &a, const ObDatumRange &b) const
+  {
+    int ret = 0, cmp_ret = 0;
+    if (OB_FAIL(
+            a.get_start_key().compare(b.get_start_key(), read_info_->get_datum_utils(), cmp_ret))) {
+      sort_ret_ = ret;
+      STORAGE_LOG(WARN, "Fail to compare range start key", KR(ret));
+    }
+    return cmp_ret < 0;
+  }
+
+  bool operator()(const ObRangeInfo &a, const ObRangeInfo &b) const
+  {
+    return operator()(*a.range_, *b.range_);
+  }
+
+  bool operator()(const ObPairStoreAndDatumRange &a, const ObPairStoreAndDatumRange &b) const
+  {
+    return operator()(a.datum_range_, b.datum_range_);
+  }
+
+  const ObITableReadInfo *read_info_;
+  mutable int sort_ret_;
+};
+
+/**
+ * @brief The context for multi range row estimate
+ */
+class ObMultiRangeRowEstimateContext : public ObIMultiRangeEstimateContext
+{
+public:
+  // if a node row count is less than 1/8 of the current range row count
+  // we can just estimate the node row count instead of open the next level index micro block
+  static constexpr int64_t SHOULD_ESTIMATE_RATIO = 8;
+
+  ObMultiRangeRowEstimateContext() : curr_range_idx_(0), is_inited_(false) {}
+
+  virtual ~ObMultiRangeRowEstimateContext() = default;
+
+  // it will create an new array which reference ranges and sort it by start key
+  int init(const ObIArray<ObPairStoreAndDatumRange> &ranges,
+           const ObITableReadInfo &read_info,
+           const bool need_sort = true,
+           const ObRangePrecision &range_precision = ObRangePrecision(10000));
+
+  bool is_valid() const override { return is_inited_; }
+
+  bool is_ended() const override { return curr_range_idx_ >= ranges_.count(); }
+
+  const ObDatumRange &get_curr_range() const override
+  {
+    return *ranges_.at(curr_range_idx_).range_;
+  }
+
+  int64_t get_curr_range_idx() const override { return curr_range_idx_; }
+
+  int64_t get_ranges_count() const override { return ranges_.count(); };
+
+  int next_range() override;
+
+  int on_node_estimate(const ObMicroIndexInfo &index_row, const bool is_coverd_by_range) override;
+
+  int on_leaf_node(const ObMicroIndexInfo &index_row, const ObPartitionEst &est) override;
+
+  int on_inner_node(const ObMicroIndexInfo &index_row,
+                    const bool is_coverd_by_range,
+                    ObTraverserOperationType &operation) override;
+
+  int64_t get_row_count_sum() const;
+
+  const ObIArray<ObRangeInfo> &get_ranges() const { return ranges_; }
+
+  void reuse();
+
+  VIRTUAL_TO_STRING_KV(K_(ranges), K_(curr_range_idx), K_(is_inited));
+
+protected:
+  ObSEArray<ObRangeInfo, 4> ranges_;
+  uint64_t curr_range_idx_;
+  ObRangePrecision range_precision_;
+  int64_t sample_step_;
+  bool is_inited_;
+};
+
+/**
+ * @brief The context for multi range split
+ */
+struct ObSplitRangeInfo
+{
+  ObSplitRangeInfo() : origin_range_(nullptr), row_count_(0), is_range_end_split_(false) {}
+
+  const ObDatumRange *origin_range_;
+  ObDatumRowkey split_rowkey_;
+  int64_t row_count_;
+  bool is_range_end_split_;
+
+  TO_STRING_KV(KPC_(origin_range), K_(split_rowkey), K_(row_count), K(is_range_end_split_));
+};
+
+class ObMultiRangeSplitContext : public ObMultiRangeRowEstimateContext
+{
+public:
+  static constexpr double SPLIT_ROW_UPPER_RATIO = 1.25;
+
+  ObMultiRangeSplitContext()
+      : ObMultiRangeRowEstimateContext(), allocator_(nullptr), split_ranges_(nullptr),
+        read_info_(nullptr), split_row_limit_(0), split_row_upper_limit_(0)
+  {
+  }
+
+  int init(const ObIArray<ObPairStoreAndDatumRange> &ranges,
+           const ObITableReadInfo &read_info,
+           const int64_t split_row_limit,
+           ObIAllocator &allocator,
+           const ObIArray<ObRangeInfo> &range_infos,
+           ObIArray<ObSplitRangeInfo> &split_ranges,
+           const bool need_sort = true,
+           const ObRangePrecision &range_precision = ObRangePrecision(10000));
+
+  virtual ~ObMultiRangeSplitContext() = default;
+
+  int on_node_estimate(const ObMicroIndexInfo &index_row, const bool is_coverd_by_range) override;
+
+  int on_leaf_node(const ObMicroIndexInfo &index_row, const ObPartitionEst &est) override;
+
+  int on_inner_node(const ObMicroIndexInfo &index_row,
+                    const bool is_coverd_by_range,
+                    ObTraverserOperationType &operation) override;
+
+  int next_range() override;
+
+  VIRTUAL_TO_STRING_KV(K_(ranges), K_(curr_range_idx), K_(split_row_limit), KPC_(split_ranges));
+
+private:
+  int try_to_add_new_split_range(int64_t &curr_row_count,
+                                 const int64_t add_row_count,
+                                 const ObCommonDatumRowkey &rowkey);
+
+protected:
+  ObIAllocator *allocator_;
+  const ObIArray<ObRangeInfo> *range_infos_;
+  ObIArray<ObSplitRangeInfo> *split_ranges_;
+  const ObITableReadInfo *read_info_;
+  int64_t split_row_limit_;
+  int64_t split_row_upper_limit_;
+};
+
+class ObMultiRangeInfoEstimateContext : public ObMultiRangeRowEstimateContext
+{
+public:
+  ObMultiRangeInfoEstimateContext()
+      : ObMultiRangeRowEstimateContext(), last_macro_block_id_(),
+        last_index_row_in_block_offset_(0), total_row_count_(0), total_macro_block_count_(0),
+        total_size_(0), avg_micro_block_size_(0)
+  {
+  }
+
+  virtual ~ObMultiRangeInfoEstimateContext() = default;
+
+  int on_node_estimate(const ObMicroIndexInfo &index_row, const bool is_coverd_by_range) override;
+
+  int on_leaf_node(const ObMicroIndexInfo &index_row, const ObPartitionEst &est) override;
+
+  int on_inner_node(const ObMicroIndexInfo &index_row,
+                    const bool is_coverd_by_range,
+                    ObTraverserOperationType &operation) override;
+
+  int64_t get_total_row_count() const { return total_row_count_; }
+  int64_t get_total_macro_block_count() const { return total_macro_block_count_; }
+  int64_t get_total_size() const { return total_size_; }
+
+  VIRTUAL_TO_STRING_KV(K_(ranges), K_(curr_range_idx), K_(avg_micro_block_size));
+
+private:
+  OB_INLINE int64_t calc_estimate_size(const ObMicroIndexInfo &index_row,
+                                       const bool is_coverd_by_range)
+  {
+    const int64_t divisor = is_coverd_by_range ? 1 : 2;
+    return index_row.get_macro_block_count() >= 1
+               ? index_row.get_macro_block_count() * OB_DEFAULT_MACRO_BLOCK_SIZE / divisor
+               : index_row.get_micro_block_count() * avg_micro_block_size_ / divisor;
+  }
+
+  MacroBlockId last_macro_block_id_;
+  int64_t last_index_row_in_block_offset_;
+  int64_t total_row_count_;
+  int64_t total_macro_block_count_;
   int64_t total_size_;
-  int64_t parallel_target_count_;
-  int64_t max_macro_block_count_;
-  int64_t max_estimate_micro_block_cnt_;
-  ObIAllocator *key_allocator_;
-  bool is_sstable_;
+  int64_t avg_micro_block_size_;
 };
 
-class ObEndkeyIterator
+// =============================== Heap Related ====================================
+
+class ObISplitRangeHeapElementIter;
+class ObSplitRangeHeapElement
 {
 public:
-  ObEndkeyIterator();
-  virtual ~ObEndkeyIterator() = default;
-  OB_INLINE bool is_valid() const
+  TO_STRING_KV(KPC_(split_range_info), KPC_(iter));
+
+  const ObSplitRangeInfo *split_range_info_;
+  ObISplitRangeHeapElementIter *iter_;
+};
+
+class ObISplitRangeHeapElementIter
+{
+public:
+  virtual ~ObISplitRangeHeapElementIter() = default;
+  virtual int get_next(ObSplitRangeHeapElement &element) = 0;
+
+  DECLARE_PURE_VIRTUAL_TO_STRING;
+};
+
+class ObSplitRangeHeapElementCompator
+{
+public:
+  ObSplitRangeHeapElementCompator(const ObITableReadInfo &index_read_info)
+      : index_read_info_(index_read_info), error_ret_(OB_SUCCESS)
   {
-    return is_inited_;
   }
-  void reset();
-  int open(
-      const int64_t skip_cnt,
-      const int64_t iter_idx,
-      blocksstable::ObSSTable &sstable,
-      ObRangeSplitInfo &range_info);
-  bool is_empty() { return endkeys_.empty(); }
-  int get_endkey_cnt(int64_t &endkey_cnt) const;
-  int get_next_macro_block_endkey(ObMacroEndkey &endkey);
-  int push_rowkey(
-      const int64_t rowkey_col_cnt,
-      const common::ObIArray<share::schema::ObColDesc> &col_descs,
-      const blocksstable::ObDatumRowkey &end_key,
-      ObIAllocator &allocator);
-  VIRTUAL_TO_STRING_KV(K_(endkeys), K_(cur_idx), K_(iter_idx), K_(is_inited));
-private:
-  virtual int init_endkeys(
-        const int64_t skip_cnt,
-        const ObRangeSplitInfo &range_info,
-        const blocksstable::ObDatumRange &datum_range,
-        blocksstable::ObSSTable &sstable) = 0;
 
+  OB_INLINE void reset() { error_ret_ = OB_SUCCESS; }
+
+  OB_INLINE int get_error_code() const { return error_ret_; }
+
+  bool operator()(const ObSplitRangeHeapElement &a, const ObSplitRangeHeapElement &b) const
+  {
+    int ret = OB_SUCCESS, cmp_ret = 0;
+
+    if (OB_ISNULL(a.split_range_info_) || OB_ISNULL(b.split_range_info_)) {
+      error_ret_ = ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "Fail to compare range split key", KR(ret));
+    } else if (OB_FAIL(a.split_range_info_->split_rowkey_.compare(
+            b.split_range_info_->split_rowkey_, index_read_info_.get_datum_utils(), cmp_ret))) {
+      error_ret_ = ret;
+      STORAGE_LOG(WARN, "Fail to compare range split key", KR(ret));
+    }
+
+    return cmp_ret > 0;
+  }
+
+private:
+  const ObITableReadInfo &index_read_info_;
+  mutable int error_ret_;
+};
+
+class ObSplitRangeHeapElementIter : public ObISplitRangeHeapElementIter
+{
 public:
-  static const int64_t DEFAULT_ENDKEY_ARRAY_COUNT = 16;
-  ObSEArray<ObStoreRowkey, DEFAULT_ENDKEY_ARRAY_COUNT> endkeys_;
-  int64_t cur_idx_;
-  int64_t iter_idx_;
+  ObSplitRangeHeapElementIter() : cursor_(0) {}
+
+  ObArray<ObSplitRangeInfo> &get_split_ranges() { return ranges_; }
+
+  virtual int get_next(ObSplitRangeHeapElement &element) override
+  {
+    int ret = OB_SUCCESS;
+
+    if (cursor_ >= ranges_.count()) {
+      ret = OB_ITER_END;
+    } else {
+      element.split_range_info_ = &ranges_.at(cursor_);
+      element.iter_ = this;
+      cursor_++;
+    }
+
+    return ret;
+  }
+
+  TO_STRING_KV(K(ranges_.count()), K_(ranges), K_(cursor));
+
+private:
+  ObArray<ObSplitRangeInfo> ranges_;
+  int64_t cursor_;
+};
+
+class ObPartitionMultiRangeSpliterHelper
+{
+public:
+  ObPartitionMultiRangeSpliterHelper()
+      : allocator_(nullptr), read_info_(nullptr), table_id_(0), is_inited_(false)
+  {
+  }
+
+  int init(ObIAllocator &allocator,
+           const ObITableReadInfo &read_info,
+           const ObIArray<ObStoreRange> &ranges);
+
+  template <typename ObRange>
+  int construct_range(const ObDatumRowkey &start_key,
+                      const ObDatumRowkey &end_key,
+                      const ObBorderFlag &flag,
+                      const bool for_compaction,
+                      ObRange &range);
+
+  template <typename ObRange>
+  int construct_and_push_range(const ObDatumRowkey *start_key,
+                               const ObDatumRowkey *end_key,
+                               const ObBorderFlag &flag,
+                               const bool for_compaction,
+                               ObIArray<ObRange> &ranges);
+
+private:
+  template <typename ObTemplateRowkey>
+  int deepcopy_rowkey(const ObDatumRowkey &rowkey,
+                      const bool for_compaction,
+                      ObTemplateRowkey &target);
+
+  ObIAllocator *allocator_;
+  const ObITableReadInfo *read_info_;
+  int64_t table_id_;
+
   bool is_inited_;
-};
-
-class ObMacroEndkeyIterator : public ObEndkeyIterator
-{
-public:
-  ObMacroEndkeyIterator() {}
-  virtual ~ObMacroEndkeyIterator() = default;
-  INHERIT_TO_STRING_KV("ObEndkeyIterator", ObEndkeyIterator, "cur_iter", "ObMacroEndkeyIterator");
-
-private:
-  virtual int init_endkeys(
-        const int64_t skip_cnt,
-        const ObRangeSplitInfo &range_info,
-        const blocksstable::ObDatumRange &datum_range,
-        blocksstable::ObSSTable &sstable) override;
-};
-
-class ObMicroEndkeyIterator : public ObEndkeyIterator
-{
-public:
-  ObMicroEndkeyIterator() {}
-  virtual ~ObMicroEndkeyIterator() = default;
-  INHERIT_TO_STRING_KV("ObEndkeyIterator", ObEndkeyIterator, "cur_iter", "ObMicroEndkeyIterator");
-
-private:
-  virtual int init_endkeys(
-        const int64_t skip_cnt,
-        const ObRangeSplitInfo &range_info,
-        const blocksstable::ObDatumRange &datum_range,
-        blocksstable::ObSSTable &sstable) override;
-};
-
-class ObPartitionParallelRanger
-{
-public:
-  explicit ObPartitionParallelRanger(common::ObArenaAllocator &allocator);
-  ~ObPartitionParallelRanger();
-  ObPartitionParallelRanger() = delete;
-  void reset();
-  int init(ObRangeSplitInfo &range_info, const bool for_compaction);
-  int split_ranges(const bool for_compaction,
-                   common::ObIAllocator &allocator,
-                   common::ObIArray<common::ObStoreRange> &range_array);
-  int construct_single_range(common::ObIAllocator &allocator,
-                             const common::ObStoreRowkey &start_key,
-                             const common::ObStoreRowkey &end_key,
-                             const common::ObBorderFlag  &border_flag,
-                             const bool for_compaction,
-                             ObStoreRange &range);
-  void set_col_cnt(int64_t col_cnt) { col_cnt_ = col_cnt; }
-  TO_STRING_KV(KPC(store_range_), K_(endkey_iters), KP_(last_macro_endkey), K_(total_endkey_cnt),
-               K_(sample_cnt), K_(parallel_target_count), K_(is_inited));
-private:
-  int calc_sample_count(const bool for_compaction, ObRangeSplitInfo &range_info);
-  int init_macro_iters(ObRangeSplitInfo &range_info);
-  int build_parallel_range_heap();
-  int get_next_macro_endkey(ObStoreRowkey &rowkey);
-  int build_new_rowkey(const common::ObStoreRowkey &rowkey,
-                       const bool for_compaction,
-                       common::ObIAllocator &allocator,
-                       common::ObStoreRowkey &new_rowkey);
-  int build_bound_rowkey(const bool is_max, common::ObIAllocator &allocator, common::ObStoreRowkey &new_rowkey);
-  int check_rowkey_equal(const common::ObStoreRowkey &rowkey1, const common::ObStoreRowkey &rowkey2, bool &equal);
-  int check_continuous(common::ObIArray<common::ObStoreRange> &range_array);
-private:
-  const common::ObStoreRange *store_range_;
-  common::ObSEArray<ObEndkeyIterator *, DEFAULT_STORE_CNT_IN_STORAGE> endkey_iters_;
-  common::ObArenaAllocator &allocator_;
-  ObMacroEndkeyComparor comparor_;
-  common::ObBinaryHeap<ObMacroEndkey, ObMacroEndkeyComparor> range_heap_;
-  //Since merge ctx keep the sstable handle, safe to keep the pointer to the endkey in macro meta
-  const ObMacroEndkey *last_macro_endkey_;
-  int64_t total_endkey_cnt_;
-  int64_t sample_cnt_;
-  int64_t parallel_target_count_;
-  bool is_micro_level_;
-  int64_t col_cnt_;
-  bool is_inited_;
-};
-
-class ObPartitionRangeSpliter
-{
-public:
-  ObPartitionRangeSpliter();
-  ~ObPartitionRangeSpliter();
-  void reset();
-  int get_range_split_info(common::ObIArray<ObITable *> &tables,
-                           const ObITableReadInfo &index_read_info,
-                           const common::ObStoreRange &store_range,
-                           ObRangeSplitInfo &range_info);
-  int split_ranges(ObRangeSplitInfo &range_info,
-                   common::ObIAllocator &allocator,
-                   const bool for_compaction,
-                   common::ObIArray<ObStoreRange> &range_array);
-  TO_STRING_KV(K_(parallel_ranger));
-private:
-  int build_single_range(const bool for_compaction,
-                         ObRangeSplitInfo &range_info,
-                         common::ObIAllocator &allocator,
-                         common::ObIArray<ObStoreRange> &range_array);
-  int get_single_range_info(ObIndexBlockScanEstimator &scan_estimator,
-                            ObIAllocator &allocator,
-                            const ObStoreRange &store_range,
-                            const ObITableReadInfo &index_read_info,
-                            ObITable *table,
-                            int64_t &total_size,
-                            int64_t &macro_block_cnt,
-                            int64_t &estimate_micro_block_cnt);
-  int split_ranges_memtable(ObRangeSplitInfo &range_info,
-                            common::ObIAllocator &allocator,
-                            common::ObIArray<ObStoreRange> &range_array);
-private:
-  common::ObArenaAllocator allocator_;
-  ObPartitionParallelRanger parallel_ranger_;
 };
 
 class ObPartitionMultiRangeSpliter
 {
 public:
-  // return total size(byte) of all sstables in read_tables
-  int get_multi_range_size(
-      const common::ObIArray<common::ObStoreRange> &range_array,
-      const ObITableReadInfo &index_read_info,
-      ObTableStoreIterator &table_iter,
-      int64_t &total_size);
-  int get_split_multi_ranges(
-      const common::ObIArray<common::ObStoreRange> &range_array,
-      const int64_t expected_task_count,
-      const ObITableReadInfo &index_read_info,
-      ObTableStoreIterator &table_iter,
-      common::ObIAllocator &allocator,
-      common::ObArrayArray<common::ObStoreRange> &multi_range_split_array);
-private:
-  static const int64_t MIN_SPLIT_TARGET_SSTABLE_SIZE = 16 << 10; //16kb
-  static const int64_t SPLIT_TASK_SIZE_HIGH_WATER_MARK_FACTOR = 125;
-  static const int64_t SPLIT_TASK_SIZE_LOW_WATER_MARK_FACTOR = 75;
-  static const int64_t DEFAULT_STORE_RANGE_ARRAY_SIZE = 8;
-  static const int64_t MEMTABLE_SIZE_AMPLIFICATION_FACTOR = 3;
-  typedef common::ObSEArray<common::ObStoreRange, DEFAULT_STORE_RANGE_ARRAY_SIZE> RangeSplitArray;
-  typedef common::ObSEArray<ObRangeSplitInfo, DEFAULT_STORE_RANGE_ARRAY_SIZE> RangeSplitInfoArray;
-private:
-  int try_estimate_range_size(const common::ObIArray<common::ObStoreRange> &range_array,
-                              ObIArray<ObITable *> &tables,
-                              int64_t &total_size);
-  int get_split_tables(ObTableStoreIterator &table_iter, common::ObIArray<ObITable *> &tables);
-  int split_multi_ranges(RangeSplitInfoArray &range_info_array,
-                         const int64_t expected_task_count,
-                         const int64_t total_size,
-                         common::ObIAllocator &allocator,
-                         common::ObArrayArray<common::ObStoreRange> &multi_range_split_array);
-  int get_range_split_infos(common::ObIArray<ObITable *> &tables,
-                            const ObITableReadInfo &index_read_info,
-                            const common::ObIArray<common::ObStoreRange> &range_array,
-                            RangeSplitInfoArray &range_info_array,
-                            int64_t &total_size,
-                            bool &all_single_rowkey);
-  int merge_and_push_range_array(const RangeSplitArray &src_range_split_array,
-                                 common::ObIAllocator &allocator,
-                                 common::ObArrayArray<common::ObStoreRange> &multi_range_split_array);
-  int fast_build_range_array(const common::ObIArray<common::ObStoreRange> &range_array,
-                             const int64_t expected_task_cnt,
-                             common::ObIAllocator &allocator,
-                             common::ObArrayArray<common::ObStoreRange> &multi_range_split_array);
-private:
-  ObPartitionRangeSpliter range_spliter_;
+  static constexpr int64_t MIN_SPLIT_TABLE_SIZE = 16 << 10; // 16KB
+  static constexpr int64_t MIN_SPLIT_TABLE_ROW_COUNT = 65535; // 64K rows
+  static constexpr int64_t TOO_MARY_RANGES_THRESHOLD = 20;
+  static constexpr int64_t SPLIT_RANGE_FACTOR = 2;
+  static constexpr int64_t DEFAULT_MAX_SPLIT_TIME_COST = 10; // ms
+  static constexpr int64_t INDEX_BLOCK_PER_TIME = 3; // access 3 index block / ms
 
-  static const int64_t RANGE_COUNT_THRESOLD = 20;
-  static const int64_t FAST_ESTIMATE_THRESOLD = 80;
+  /**
+   * @brief Get the multi ranges row count
+   *
+   * @param ranges
+   * @param index_read_info
+   * @param table_iter
+   * @param row_count the row count of the multi ranges
+   * @param macro_block_count the different macro block count of the multi ranges, if all ranges is
+   *                          in the same macro block, the macro block count will be set to 1
+   * @param max_time
+   * @param range_precision
+   * @return int
+   */
+  int get_multi_ranges_row_count(const ObIArray<ObStoreRange> &ranges,
+                                 const ObITableReadInfo &index_read_info,
+                                 ObTableStoreIterator &table_iter,
+                                 int64_t &row_count,
+                                 int64_t &macro_block_count,
+                                 const int64_t max_time = DEFAULT_MAX_SPLIT_TIME_COST,
+                                 const int64_t range_precision = ObRangePrecision::DEFAULT_DYNAMIC_RANGE_PRECISION_HINT);
+
+  int get_multi_range_size(const ObIArray<ObStoreRange> &ranges,
+                           const ObITableReadInfo &index_read_info,
+                           ObTableStoreIterator &table_iter,
+                           int64_t &total_size,
+                           const int64_t max_time = DEFAULT_MAX_SPLIT_TIME_COST,
+                           const int64_t range_precision = ObRangePrecision::DEFAULT_DYNAMIC_RANGE_PRECISION_HINT);
+
+  int get_multi_range_size(const ObIArray<ObStoreRange> &ranges,
+                           const ObITableReadInfo &index_read_info,
+                           const ObIArray<ObITable *> &tables,
+                           int64_t &total_size,
+                           const int64_t max_time = DEFAULT_MAX_SPLIT_TIME_COST,
+                           const int64_t range_precision = ObRangePrecision::DEFAULT_DYNAMIC_RANGE_PRECISION_HINT);
+
+  template <typename ObRange>
+  int get_split_multi_ranges(const ObIArray<ObStoreRange> &ranges,
+                             const int64_t expected_task_count,
+                             const ObITableReadInfo &index_read_info,
+                             ObTableStoreIterator &table_iter,
+                             ObIAllocator &allocator,
+                             ObArrayArray<ObRange> &multi_range_split_array,
+                             const bool for_compaction = false,
+                             const int64_t max_time = DEFAULT_MAX_SPLIT_TIME_COST,
+                             const int64_t range_precision = ObRangePrecision::DEFAULT_DYNAMIC_RANGE_PRECISION_HINT);
+
+  template <typename ObRange>
+  int get_split_multi_ranges(const ObIArray<ObStoreRange> &ranges,
+                             const int64_t expected_task_count,
+                             const ObITableReadInfo &index_read_info,
+                             const ObIArray<ObITable *> &tables,
+                             ObIAllocator &allocator,
+                             ObArrayArray<ObRange> &multi_range_split_array,
+                             const bool for_compaction = false,
+                             const int64_t max_time = DEFAULT_MAX_SPLIT_TIME_COST,
+                             const int64_t range_precision = ObRangePrecision::DEFAULT_DYNAMIC_RANGE_PRECISION_HINT);
+
+private:
+  int estimate_ranges_info(const ObIArray<ObStoreRange> &ranges,
+                           const ObITableReadInfo &read_info,
+                           const ObIArray<ObITable *> &tables,
+                           int64_t &total_size,
+                           int64_t &total_row_count,
+                           int64_t &total_macro_block_count,
+                           const int64_t max_time = DEFAULT_MAX_SPLIT_TIME_COST,
+                           const ObRangePrecision &range_precision = ObRangePrecision());
+
+  bool all_range_is_single_rowkey(const ObIArray<ObStoreRange> &ranges);
+
+  template <typename ObRange>
+  int fast_build_range_array(const ObIArray<ObStoreRange> &ranges,
+                             const int64_t expected_task_cnt,
+                             ObIAllocator &allocator,
+                             ObArrayArray<ObRange> &multi_range_split_array);
+
+  template <typename ObRange>
+  int build_range_array(const ObIArray<ObStoreRange> &ranges,
+                        const int64_t expected_task_count,
+                        const ObITableReadInfo &index_read_info,
+                        const ObIArray<ObITable *> &tables,
+                        ObIAllocator &allocator,
+                        ObArrayArray<ObRange> &multi_range_split_array,
+                        const bool for_compaction = false,
+                        const int64_t max_time = DEFAULT_MAX_SPLIT_TIME_COST,
+                        const ObRangePrecision &range_precision = ObRangePrecision());
+
+  int get_tables(ObTableStoreIterator &table_iter, ObIArray<ObITable *> &tables);
+
+  int transform_to_datum_range_and_sort(const ObIArray<ObStoreRange> &ranges,
+                                        const ObITableReadInfo &read_info,
+                                        ObIAllocator &allocator,
+                                        ObIArray<ObPairStoreAndDatumRange> &sorted_ranges);
+
+  int64_t calc_row_split_limit(const int64_t total_row_count, const int64_t expected_task_count, const int64_t ranges_count)
+  {
+    const int64_t factor = (ranges_count > TOO_MARY_RANGES_THRESHOLD ? 1 : SPLIT_RANGE_FACTOR);
+    return max(1, total_row_count / expected_task_count / factor);
+  }
+
+  int estimate_ranges_row_and_split(const ObIArray<ObPairStoreAndDatumRange> &ranges,
+                                    const int64_t expected_task_count,
+                                    const ObITableReadInfo &read_info,
+                                    const ObIArray<ObITable *> &tables,
+                                    ObIAllocator &allocator,
+                                    ObIArray<ObSplitRangeHeapElementIter> &heap_element_iters,
+                                    int64_t &estimate_rows_sum,
+                                    const int64_t max_time,
+                                    const ObRangePrecision &range_precision);
+
+  int split_ranges_for_memtable(const ObIArray<ObPairStoreAndDatumRange> &ranges,
+                                const int64_t expected_task_count,
+                                memtable::ObMemtable &memtable,
+                                ObIAllocator &allocator,
+                                ObIArray<ObSplitRangeHeapElementIter> &heap_element_iters,
+                                int64_t &estimate_rows_sum,
+                                const ObRangePrecision &range_precision);
+
+  int split_ranges_for_sstable(const ObIArray<ObPairStoreAndDatumRange> &sorted_ranges,
+                               const ObITableReadInfo &read_info,
+                               const int64_t expected_task_count,
+                               const int64_t open_index_block_limit,
+                               ObSSTable &sstable,
+                               ObIAllocator &allocator,
+                               ObIArray<ObSplitRangeHeapElementIter> &heap_element_iters,
+                               int64_t &estimate_rows_sum,
+                               const ObRangePrecision &range_precision);
+
+  int build_heap(ObIArray<ObSplitRangeHeapElementIter> &heap_element_iters,
+                 ObBinaryHeap<ObSplitRangeHeapElement, ObSplitRangeHeapElementCompator> &heap);
+
+  template <typename ObRange>
+  int do_task_split_algorithm(
+      const ObIArray<ObStoreRange> &ranges,
+      const ObITableReadInfo &read_info,
+      const int64_t expected_task_count,
+      const int64_t avg_task_row_count,
+      ObIAllocator &allocator,
+      ObBinaryHeap<ObSplitRangeHeapElement, ObSplitRangeHeapElementCompator> &heap,
+      ObArrayArray<ObRange> &multi_range_split_array,
+      const bool for_compaction);
 };
 
 class ObPartitionMajorSSTableRangeSpliter

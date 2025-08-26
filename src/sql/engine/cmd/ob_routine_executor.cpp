@@ -240,6 +240,7 @@ int ObCallProcedureExecutor::execute(ObExecContext &ctx, ObCallProcedureStmt &st
                ? share::schema::ObUDTObjectType::mask_object_id(package_id) : package_id;
       const ObRoutineInfo *dblink_routine_info = NULL;
       uint64_t dblink_id = OB_INVALID_ID;
+      ObCacheObjGuard cacheobj_guard(PL_ROUTINE_HANDLE);
       if (OB_NOT_NULL(stmt.get_dblink_routine_info())) {
         dblink_routine_info = stmt.get_dblink_routine_info();
         pkg_id = dblink_routine_info->get_package_id();
@@ -254,6 +255,7 @@ int ObCallProcedureExecutor::execute(ObExecContext &ctx, ObCallProcedureStmt &st
                                               params,
                                               nocopy_params,
                                               result,
+                                              cacheobj_guard,
                                               NULL,
                                               false,
                                               false,

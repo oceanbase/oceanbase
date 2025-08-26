@@ -39,7 +39,8 @@ ObTxLogTypeChecker::need_replay_barrier(const ObTxLogType log_type,
         || data_source_type == ObTxDataSourceType::TABLET_SPLIT
         || data_source_type == ObTxDataSourceType::TABLET_BINDING
         || data_source_type == ObTxDataSourceType::MV_NOTICE_SAFE
-        || data_source_type == ObTxDataSourceType::UNBIND_LOB_TABLET) {
+        || data_source_type == ObTxDataSourceType::UNBIND_LOB_TABLET
+        || data_source_type == ObTxDataSourceType::TABLET_SPLIT_INFO) {
       barrier_flag = logservice::ObReplayBarrierType::PRE_BARRIER;
 
     } else if (data_source_type == ObTxDataSourceType::FINISH_TRANSFER_IN
@@ -902,7 +903,7 @@ int ObTxRedoLog::format_row_data_(const memtable::ObRowData &row_data, ObAdminMu
   int ret = OB_SUCCESS;
 
   blocksstable::ObDatumRow datum_row;
-  blocksstable::ObRowReader row_reader;
+  blocksstable::ObCompatRowReader row_reader;
   const blocksstable::ObRowHeader *row_header = nullptr;
   if (row_data.size_ > 0) {
     if (OB_FAIL(row_reader.read_row(row_data.data_, row_data.size_, nullptr, datum_row))) {

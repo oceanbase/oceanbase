@@ -59,6 +59,27 @@ static constexpr const char* ARCH_TYPE_DEF[ARCH_TYPE_IDX_NUM] =
 #undef ARCH_DEF
 };
 
+static constexpr const int64_t dep_obj_ids_md5_len = common::OB_MAX_SQL_ID_LENGTH + 1;
+
+struct ObPLExtraInfo {
+  ObPLExtraInfo() {
+    MEMSET(dep_obj_ids_md5_, '\0', dep_obj_ids_md5_len);
+  }
+
+  ObPLExtraInfo(const char* dep_obj_ids_md5)
+  {
+    if (OB_NOT_NULL(dep_obj_ids_md5)) {
+      MEMCPY(dep_obj_ids_md5_, dep_obj_ids_md5, dep_obj_ids_md5_len);
+    }
+  }
+
+  static int64_t get_extra_info_length() {
+    return dep_obj_ids_md5_len;
+  }
+
+  char dep_obj_ids_md5_[dep_obj_ids_md5_len];
+};
+
 class ObRoutinePersistentInfo
 {
 public:
@@ -128,13 +149,15 @@ public:
                               ObDMLSqlSplicer &dml,
                               int64_t merge_version,
                               const ObString &binary,
-                              const ObString &stack_sizes);
+                              const ObString &stack_sizes,
+                              const ObString &extra_info_str);
 
   template<typename DependencyTable>
   static int check_dep_schema(ObSchemaGetterGuard &schema_guard,
                               const DependencyTable &dep_schema_objs,
                               int64_t merge_version,
-                              bool &match);
+                              bool &match,
+                              bool is_check_package_state = false);
 
   int read_dll_from_disk(ObSQLSessionInfo *session_info,
                           schema::ObSchemaGetterGuard &schema_guard,
@@ -146,6 +169,7 @@ public:
   int insert_or_update_dll_to_disk(schema::ObSchemaGetterGuard &schema_guard,
                                    const ObString &binary,
                                    const ObString &stack_sizes,
+                                   const ObString &extra_info_str,
                                    const ObRoutinePersistentInfo::ObPLOperation op);
 
   int process_storage_dll(ObIAllocator &alloc,
@@ -167,6 +191,25 @@ public:
   static int get_stack_size_length(const ObPLCompileUnit &unit, int64_t &stack_size_length);
   static int encode_stack_sizes(char *buf, const int64_t len, int64_t &pos, const ObPLCompileUnit &unit);
   static int decode_stack_sizes(ObPLCompileUnit &unit, char *buf, const int64_t len, int64_t &pos);
+
+  static int encode_pl_extra_info(char *buf,
+                               const int64_t len,
+                               int64_t &pos,
+                               const sql::DependenyTableStore &dep_table,
+                               schema::ObSchemaGetterGuard &schema_guard);
+
+  static int decode_and_check_extra_info(char *buf,
+                                         const int64_t len,
+                                         const ObPLDependencyTable &dep_table,
+                                         bool &match,
+                                         schema::ObSchemaGetterGuard &schema_guard);
+
+  template<typename DependencyTable>
+  static int get_pl_extra_info(const DependencyTable &dep_table,
+                               ObPLExtraInfo& extra_info,
+                               schema::ObSchemaGetterGuard &schema_guard);
+  static bool is_extra_info_column_exist(const uint64_t data_version);
+  static bool is_stack_size_column_exist(const uint64_t data_version);
 
 private:
   uint64_t tenant_id_;

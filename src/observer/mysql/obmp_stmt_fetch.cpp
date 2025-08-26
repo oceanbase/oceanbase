@@ -243,6 +243,7 @@ int ObMPStmtFetch::do_process(ObSQLSessionInfo &session,
       audit_record.return_rows_ = true_row_num;
       audit_record.ps_stmt_id_ = cursor_id_;
       audit_record.is_perf_event_closed_ = !lib::is_diagnose_info_enabled();
+      audit_record.status_ = fetch_ret;
       if (OB_NOT_NULL(cursor)
           && cursor->is_ps_cursor()) {
         ObPsStmtInfoGuard guard;
@@ -626,8 +627,7 @@ int ObMPStmtFetch::process_fetch_stmt(ObSQLSessionInfo &session,
   {
     int tmp_ret = OB_SUCCESS;
     //清空WARNING BUFFER
-    ObSqlCtx sql_ctx; // sql_ctx do nothing in do_after_process
-    tmp_ret = do_after_process(session, sql_ctx, false/*no asyn response*/);
+    tmp_ret = do_after_process(session, false/*no asyn response*/);
     UNUSED(tmp_ret);
   }
   return ret;

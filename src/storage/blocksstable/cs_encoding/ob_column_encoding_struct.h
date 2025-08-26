@@ -59,6 +59,8 @@ struct ObCSColumnHeader
     IS_FIXED_LENGTH = 0x01,
     HAS_NULL_BITMAP = 0x02,
     OUT_ROW = 0x04,
+    HAS_NOP_BITMAP = 0x08,
+    HAS_NOP = 0x10,
     MAX_ATTRIBUTE,
   };
 
@@ -258,6 +260,10 @@ struct ObPreviousColumnEncoding
     return ObCSColumnHeader::MAX_TYPE != identifier_.column_encoding_type_;
   }
 
+  bool column_encoding_type_can_be_reused() const
+  {
+    return is_column_encoding_type_valid() && !column_need_redetect_;
+  }
   ObColumnEncodingIdentifier identifier_;
   int32_t column_idx_;
   int64_t cur_block_count_;
@@ -349,6 +355,7 @@ struct ObColumnCSEncodingCtx
   bool is_wide_int_;
   bool is_semistruct_sub_col_;
   bool has_stored_meta_;
+
   uint64_t integer_min_;
   uint64_t integer_max_;
 

@@ -1267,7 +1267,7 @@ int ObLogReplayService::handle_submit_task_(ObReplayServiceSubmitTask *submit_ta
 #ifdef ERRSIM
         int tmp_ret = OB_E(EventTable::EN_REPLAY_SERVICE_SUBMIT_TASK_SLEEP) OB_SUCCESS;
         if (OB_SUCCESS != tmp_ret) {
-          usleep(300 * 1000);
+          ob_usleep(300 * 1000);
           CLOG_LOG(INFO, "sleep 300ms before read log", KPC(submit_task), KPC(replay_status), KR(tmp_ret));
         }
 #endif

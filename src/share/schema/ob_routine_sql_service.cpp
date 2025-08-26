@@ -503,6 +503,22 @@ int ObRoutineSqlService::gen_routine_dml(
       || OB_FAIL(dml.add_column("route_sql", ObHexEscapeSqlStr(routine_info.get_route_sql())))) {
     LOG_WARN("add column failed", K(ret));
   }
+
+  if (OB_SUCC(ret)) {
+    uint64_t data_version = 0;
+
+    if (OB_FAIL(GET_MIN_DATA_VERSION(exec_tenant_id, data_version))) {
+      LOG_WARN("failed to GET_MIN_DATA_VERSION", K(ret), K(exec_tenant_id));
+    } else if (data_version < DATA_VERSION_4_4_0_0) {
+      // do nothing
+    } else if (OB_FAIL(dml.add_column("external_routine_type", static_cast<int64_t>(routine_info.get_external_routine_type())))
+        || OB_FAIL(dml.add_column("external_routine_entry", ObHexEscapeSqlStr(routine_info.get_external_routine_entry())))
+        || OB_FAIL(dml.add_column("external_routine_url", ObHexEscapeSqlStr(routine_info.get_external_routine_url())))
+        || OB_FAIL(dml.add_column("external_routine_resource", ObHexEscapeSqlStr(routine_info.get_external_routine_resource())))) {
+      LOG_WARN("add column failed", K(ret));
+    }
+  }
+
   if (OB_FAIL(ret)) {
   } else if (is_sys_tenant(pl::get_tenant_id_by_object_id(routine_info.get_type_id()))) {
     if (OB_FAIL(dml.add_column("type_id", routine_info.get_type_id()))) {

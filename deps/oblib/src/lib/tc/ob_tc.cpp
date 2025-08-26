@@ -95,7 +95,7 @@ public:
   void print_limiters_per_sec(StrFormat& f) {
     char b[256];
     for (int i = 0; i < MAX_LIMITER_COUNT && limiter_[i]; i++) {
-      f.append(" %s:%s", limiter_[i]->get_name(), format_bytes(b, sizeof(b), limiter_[i]->get_limit_per_sec()));
+      f.append(" %llu,%s:%s", limiter_[i]->get_storage_key(), limiter_[i]->get_name(), format_bytes(b, sizeof(b), limiter_[i]->get_limit_per_sec()));
     }
   }
   void add_limit(Limiter* limiter) {

@@ -21,7 +21,7 @@ namespace observer
 {
 
 ObAllVirtualTenantParameterInfo::ObAllVirtualTenantParameterInfo()
-  : all_config_(), config_iter_()
+  : all_tenant_(), tenant_iter_(), tenant_config_cache_(), config_iter_()
 {
 }
 
@@ -34,13 +34,13 @@ int ObAllVirtualTenantParameterInfo::inner_open()
 {
   int ret = OB_SUCCESS;
   const ObAddr &addr = GCTX.self_addr();
-  if (OB_FAIL(OTC_MGR.get_all_tenant_config_info(all_config_, allocator_))) {
-    SERVER_LOG(WARN, "fail to get all tenant config info", K(ret));
+  if (OB_FAIL(OTC_MGR.get_all_tenant_id(all_tenant_))) {
+    SERVER_LOG(WARN, "fail to get all tenant info", K(ret));
   } else if (!addr.ip_to_string(ip_buf_, sizeof(ip_buf_))) {
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "ip to string failed", K(ret));
   } else {
-    config_iter_ = all_config_.begin();
+    tenant_iter_ = all_tenant_.begin();
   }
   return ret;
 }
@@ -48,15 +48,27 @@ int ObAllVirtualTenantParameterInfo::inner_open()
 void ObAllVirtualTenantParameterInfo::reset()
 {
   ObVirtualTableIterator::reset();
-  config_iter_ = all_config_.begin();
+  tenant_iter_ = all_tenant_.begin();
+  tenant_config_cache_.reset();
 }
 
 int ObAllVirtualTenantParameterInfo::inner_get_next_row(ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
-  if (config_iter_ == all_config_.end()) {
-    ret = OB_ITER_END;
-  } else {
+  if (tenant_config_cache_.empty() || config_iter_ == tenant_config_cache_.end()) {
+    if (tenant_iter_ == all_tenant_.end()) {
+      ret = OB_ITER_END;
+    } else {
+      tenant_config_cache_.reset();
+      if (OB_FAIL(OTC_MGR.get_tenant_config_info(tenant_config_cache_, allocator_, tenant_iter_->tenant_id_))) {
+        SERVER_LOG(WARN, "fail to get tenant config info", K(ret));
+      } else {
+        config_iter_ = tenant_config_cache_.begin();
+      }
+      tenant_iter_ ++;
+    }
+  }
+  if (OB_SUCC(ret)) {
     ObObj *cells = cur_row_.cells_;
     if (OB_UNLIKELY(nullptr == cells)) {
       ret = OB_ERR_UNEXPECTED;

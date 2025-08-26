@@ -776,7 +776,8 @@ int ObRawExprUtils::resolve_udf_common_info(const ObString &db_name,
                                             int64_t type_id,
                                             ObUDFInfo &udf_info,
                                             uint64_t dblink_id,
-                                            const ObString &dblink_name)
+                                            const ObString &dblink_name,
+                                            ObExternalRoutineType external_routine_type)
 {
   int ret = OB_SUCCESS;
   ObUDFRawExpr *udf_raw_expr = udf_info.ref_expr_;
@@ -795,6 +796,7 @@ int ObRawExprUtils::resolve_udf_common_info(const ObString &db_name,
   OX (udf_raw_expr->set_is_aggregate_udf(is_pl_agg));
   OX (udf_raw_expr->set_dblink_id(dblink_id));
   OX (udf_raw_expr->set_dblink_name(dblink_name));
+  OX (udf_raw_expr->set_external_routine_type(external_routine_type));
   return ret;
 }
 
@@ -805,7 +807,8 @@ int ObRawExprUtils::resolve_udf_param_types(const ObIRoutineInfo* func_info,
                                             common::ObMySQLProxy &sql_proxy,
                                             ObUDFInfo &udf_info,
                                             pl::ObPLDbLinkGuard &dblink_guard,
-                                            pl::ObPLEnumSetCtx &enum_set_ctx)
+                                            pl::ObPLEnumSetCtx &enum_set_ctx,
+                                            pl::ObPLResolveCache *resolve_cache)
 {
   int ret = OB_SUCCESS;
 
@@ -849,7 +852,8 @@ int ObRawExprUtils::resolve_udf_param_types(const ObIRoutineInfo* func_info,
                                                   sql_proxy,
                                                   ret_pl_type,
                                                   NULL,
-                                                  &dblink_guard));
+                                                  &dblink_guard,
+                                                  resolve_cache));
     } else {
       OX (ret_pl_type = ret_param->get_pl_data_type());
     }
@@ -902,7 +906,8 @@ int ObRawExprUtils::resolve_udf_param_types(const ObIRoutineInfo* func_info,
                                                   sql_proxy,
                                                   param_pl_type,
                                                   NULL,
-                                                  &dblink_guard));
+                                                  &dblink_guard,
+                                                  resolve_cache));
     } else {
       OX (param_pl_type = iparam->get_pl_data_type());
     }
@@ -928,7 +933,8 @@ int ObRawExprUtils::resolve_udf_param_exprs(const ObIRoutineInfo* func_info,
                                             ExternalParams *extern_param_info,
                                             ObUDFInfo &udf_info,
                                             pl::ObPLEnumSetCtx &enum_set_ctx,
-                                            pl::ObPLDependencyTable &deps)
+                                            pl::ObPLDependencyTable &deps,
+                                            pl::ObPLResolveCache *resolve_cache)
 {
   int ret = OB_SUCCESS;
   ObResolverParams params;
@@ -942,7 +948,7 @@ int ObRawExprUtils::resolve_udf_param_exprs(const ObIRoutineInfo* func_info,
   if (OB_NOT_NULL(extern_param_info)) {
     params.external_param_info_.assign(*extern_param_info);
   }
-  if (OB_FAIL(resolve_udf_param_exprs(params, func_info, udf_info, enum_set_ctx, deps))) {
+  if (OB_FAIL(resolve_udf_param_exprs(params, func_info, udf_info, enum_set_ctx, deps, resolve_cache))) {
     SQL_LOG(WARN, "failed to exec resovle udf exprs", K(ret), K(udf_info));
   }
   return ret;
@@ -961,7 +967,8 @@ int ObRawExprUtils::resolve_udf_param_exprs(ObResolverParams &params,
                                             const ObIRoutineInfo *func_info,
                                             ObUDFInfo &udf_info,
                                             pl::ObPLEnumSetCtx &enum_set_ctx,
-                                            pl::ObPLDependencyTable &deps)
+                                            pl::ObPLDependencyTable &deps,
+                                            pl::ObPLResolveCache *resolve_cache)
 {
   int ret = OB_SUCCESS;
   ObArray<ObRawExpr*> param_exprs;
@@ -1088,7 +1095,8 @@ int ObRawExprUtils::resolve_udf_param_exprs(ObResolverParams &params,
       OZ (ObRawExprUtils::need_wrap_to_string(udf_raw_expr->get_param_expr(i)->get_result_type(),
                                               iparam->get_pl_data_type().get_obj_type(),
                                               true,
-                                              need_wrap));
+                                              need_wrap,
+                                              false));
       if (OB_SUCC(ret) && need_wrap) {
         ObSysFunRawExpr *out_expr = NULL;
         OZ (ObRawExprUtils::create_type_to_str_expr(*(params.expr_factory_),
@@ -1217,11 +1225,19 @@ do {                                                                            
                                                           *(params.session_info_),
                                                           *(params.allocator_),
                                                           *(params.sql_proxy_),
-                                                          param_type));
+                                                          param_type,
+                                                          nullptr,
+                                                          nullptr,
+                                                          resolve_cache));
               } else {
                 param_type = iparam->get_pl_data_type();
               }
-              OZ (pl::ObPLResolver::set_question_mark_type(*(params.schema_checker_->get_schema_guard()), iexpr, params.secondary_namespace_, &param_type, deps));
+              OZ (pl::ObPLResolver::set_question_mark_type(*(params.schema_checker_->get_schema_guard()),
+                                                            iexpr,
+                                                            params.secondary_namespace_,
+                                                            &param_type,
+                                                            deps,
+                                                            *(params.session_info_)));
             }
           } else if (T_OP_GET_PACKAGE_VAR == iexpr->get_expr_type()) {
             const ObSysFunRawExpr *f_expr = static_cast<const ObSysFunRawExpr *>(iexpr);
@@ -9582,6 +9598,62 @@ int ObRawExprUtils::extract_params(const common::ObIArray<ObRawExpr*> &exprs,
   for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
     if (OB_FAIL(extract_params(exprs.at(i), params))) {
       LOG_WARN("failed to extract params", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObRawExprUtils::extract_dynamic_params(ObRawExpr* expr,
+                                           common::ObIArray<ObRawExpr*> &params,
+                                           const bool without_const_expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("expr passed in is NULL", K(ret));
+  } else if (expr->is_param_expr() &&
+             expr->has_flag(CNT_DYNAMIC_PARAM) &&
+             !expr->has_flag(CNT_ONETIME)) {
+    if (OB_FAIL(params.push_back(expr))) {
+      LOG_WARN("failed to push back param", K(ret));
+    }
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+      ObRawExpr *param_expr = expr->get_param_expr(i);
+      if (OB_ISNULL(param_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("param expr is null", K(ret));
+      } else if ((expr->get_expr_type() == T_OP_OR ||
+                  expr->get_expr_type() == T_OP_AND) &&
+                  without_const_expr &&
+                  param_expr->is_const_expr()) {
+        //do nothing
+      } else if (OB_FAIL(SMART_CALL(extract_dynamic_params(expr->get_param_expr(i),
+                                                    params,
+                                                    without_const_expr)))) {
+        LOG_WARN("failed to extract dynamic params", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRawExprUtils::extract_dynamic_params(const common::ObIArray<ObRawExpr*> &exprs,
+                                            common::ObIArray<ObRawExpr*> &params,
+                                            const bool without_const_expr)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
+    ObRawExpr *expr = exprs.at(i);
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("expr is null", K(ret));
+    } else if (expr->is_const_expr() && without_const_expr) {
+      // do nothing
+    } else if (OB_FAIL(extract_dynamic_params(expr,
+                                              params,
+                                              without_const_expr))) {
+      LOG_WARN("failed to extract dynamic params", K(ret));
     }
   }
   return ret;

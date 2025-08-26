@@ -61,6 +61,10 @@
 #include "ob_log_trace_id.h"
 #include "share/ob_simple_mem_limit_getter.h"
 
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+#include "close_modules/shared_log_service/logservice/libpalf/libpalf_logger.h" // libpalf logger
+#endif
+
 #define INIT(v, type, args...) \
     do {\
       if (OB_SUCC(ret)) { \
@@ -390,12 +394,39 @@ int ObLogInstance::set_start_global_trans_version(const int64_t start_global_tra
   return ret;
 }
 
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+// TODO by qingxia: impl config item for log service in cdc
+int init_max_syslog_file_count_with_libpalf_()
+{
+  int ret = OB_SUCCESS;
+  const bool enable_logservice = false;
+  int64_t libpalf_max_syslog_file_count = 0;
+  int64_t max_log_file_count = 0;
+  int64_t max_syslog_disk_size = 0;
+  if (enable_logservice && OB_FAIL(libpalf::LibPalfLogger::cal_libpalf_shared_syslog_capacity(
+    TCONF.max_log_file_count, 0, libpalf::LibPalfLogger::LIBPALF_SHARED_MAX_SYSLOG_CAPACITY_PERCENTAGE,
+    OB_LOGGER.DEFAULT_MAX_FILE_SIZE, libpalf_max_syslog_file_count, max_log_file_count, max_syslog_disk_size))) {
+    LOG_ERROR("cal_libpalf_shared_syslog_capacity fail", KR(ret), K(TCONF.max_log_file_count.get()),
+      K(libpalf::LibPalfLogger::LIBPALF_SHARED_MAX_SYSLOG_CAPACITY_PERCENTAGE), K(OB_LOGGER.DEFAULT_MAX_FILE_SIZE));
+  } else if (enable_logservice && OB_FAIL(libpalf::LibPalfLogger::set_max_syslog_file_count(libpalf_max_syslog_file_count))) {
+    LOG_ERROR("set libpalf_max_syslog_file_count fail", KR(ret), KR(libpalf_max_syslog_file_count));
+  } else if (!enable_logservice && FALSE_IT(max_log_file_count = TCONF.max_log_file_count)) { // do nothing
+  } else {
+    OB_LOGGER.set_max_file_index(max_log_file_count);
+  }
+  return ret;
+}
+#endif
+
+#define MPRINT(format, ...) fprintf(stderr, format "\n", ##__VA_ARGS__)
+
 int ObLogInstance::init_logger_()
 {
   int ret = OB_SUCCESS;
   char log_dir[OB_MAX_FILE_NAME_LENGTH];
   char log_file[OB_MAX_FILE_NAME_LENGTH];
   char stderr_log_file[OB_MAX_FILE_NAME_LENGTH];
+  ObPLogWriterCfg log_cfg;
 
   if (is_assign_log_dir_valid_) {
     (void)snprintf(log_dir, sizeof(log_dir), "%s", assign_log_dir_);
@@ -409,6 +440,8 @@ int ObLogInstance::init_logger_()
 
   if (OB_FAIL(common::FileDirectoryUtils::create_full_path(log_dir))) {
     LOG_ERROR("FileDirectoryUtils create_full_path fail", KR(ret), K(log_dir));
+  } else if (!OB_LOGGER.is_inited() && OB_FAIL(OB_LOGGER.init(log_cfg, false/*is_arb_replica*/))) {
+    MPRINT("init logger failed, ret: %d", ret);
   } else {
     const int64_t max_log_file_count = TCONF.max_log_file_count;
     const bool enable_log_limit = (1 == TCONF.enable_log_limit);
@@ -458,8 +491,6 @@ int ObLogInstance::init_logger_()
 
   return ret;
 }
-
-#define MPRINT(format, ...) fprintf(stderr, format "\n", ##__VA_ARGS__)
 
 void ObLogInstance::print_version()
 {
@@ -743,7 +774,6 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
   const char *rs_list = TCONF.rootserver_list.str();
   const char *tg_white_list = TCONF.tablegroup_white_list.str();
   const char *tg_black_list = TCONF.tablegroup_black_list.str();
-  int64_t max_cached_trans_ctx_count = MAX_CACHED_TRANS_CTX_COUNT;
   const char *ob_trace_id_ptr = TCONF.ob_trace_id.str();
   const char *drc_message_factory_binlog_record_type_str = TCONF.drc_message_factory_binlog_record_type.str();
   // The starting schema version of the SYS tenant
@@ -904,7 +934,7 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
 
   INIT(br_pool_, ObLogBRPool, TCONF.binlog_record_prealloc_count);
 
-  INIT(trans_ctx_mgr_, ObLogTransCtxMgr, max_cached_trans_ctx_count, TCONF.sort_trans_participants);
+  INIT(trans_ctx_mgr_, ObLogTransCtxMgr, TCONF.sort_trans_participants);
 
   INIT(meta_manager_, ObLogMetaManager, &obj2str_helper_, enable_output_hidden_primary_key);
 
@@ -1057,7 +1087,7 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
   }
   if (OB_SUCC(ret)) {
     LOG_INFO("init all components done", KR(ret), K(start_tstamp_ns), K_(sys_start_schema_version),
-        K(max_cached_trans_ctx_count), K_(is_schema_split_mode), K_(enable_filter_sys_tenant));
+        K_(is_schema_split_mode), K_(enable_filter_sys_tenant));
   } else {
     do_destroy_(true/*force_destroy*/);
   }
@@ -1915,6 +1945,7 @@ int ObLogInstance::verify_dml_unique_id_(IBinlogRecord *br)
             dml_unique_id.assign_ptr(buf, static_cast<int32_t>(pos));
 
             if (0 == br_unique_id.compare(dml_unique_id)) {
+              LOG_INFO("verify_dml_unique_id_ succ", KP(br), K(br_unique_id), K(dml_unique_id));
               // succ
             } else {
               LOG_ERROR("verify_dml_unique_id_ fail", K(br_unique_id), K(dml_unique_id), KPC(task));
@@ -1949,6 +1980,15 @@ int ObLogInstance::verify_dml_unique_id_(IBinlogRecord *br)
           }
         }
       }
+    } else if (EBEGIN == record_type || EDDL == record_type) {
+      ObString br_unique_id;
+      if (OB_FAIL(get_br_filter_value_(*br, 1, br_unique_id))) {
+        LOG_ERROR("get_br_filter_value_ fail", KR(ret), K(br_unique_id));
+      } else {
+        LOG_INFO("verify_dml_unique_id_ succ", KP(br), K(record_type), K(br_unique_id));
+      }
+    } else {
+      LOG_INFO("verify_dml_unique_id_ skip", KP(br), K(record_type));
     }
   }
 

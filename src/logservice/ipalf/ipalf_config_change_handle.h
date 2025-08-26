@@ -86,6 +86,10 @@ public:
   // - other: bug
   virtual int force_set_member_list(const common::ObMemberList &new_member_list, const int64_t new_replica_num) = 0;
 
+  // increment member info config version
+  // update proposer_id if proposer_id in member info is not latest, otherwise inc config_seq in member_info
+  virtual int inc_config_version(int64_t timeout_us) = 0;
+
   // @brief, add a member to paxos group, can be called only in leader
   // @param[in] common::ObMember &member: member which will be added
   // @param[in] const int64_t new_replica_num: replica number of paxos group after adding 'member'

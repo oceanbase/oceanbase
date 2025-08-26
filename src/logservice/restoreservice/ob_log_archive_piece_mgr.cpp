@@ -37,8 +37,9 @@ void ObLogArchivePieceContext::RoundContext::reset()
 
 bool ObLogArchivePieceContext::RoundContext::is_valid() const
 {
-  return ((RoundContext::State::ACTIVE == state_ && min_piece_id_ > 0 && start_scn_ != SCN::max_scn())
-      || (RoundContext::State::STOP == state_ && end_scn_ != SCN::max_scn() && end_scn_ > start_scn_))
+  return (((RoundContext::State::ACTIVE == state_ || RoundContext::State::FORCE_STOP == state_)
+    && min_piece_id_ > 0 && start_scn_ != SCN::max_scn())
+    || (RoundContext::State::STOP == state_ && end_scn_ != SCN::max_scn() && end_scn_ > start_scn_))
     && round_id_ > 0
     && start_scn_.is_valid()
     && base_piece_id_ > 0
@@ -61,6 +62,11 @@ bool ObLogArchivePieceContext::RoundContext::is_in_active_state() const
   return RoundContext::State::ACTIVE == state_;
 }
 
+bool ObLogArchivePieceContext::RoundContext::is_in_force_stop_state() const
+{
+  return RoundContext::State::FORCE_STOP == state_;
+}
+
 ObLogArchivePieceContext::RoundContext &ObLogArchivePieceContext::RoundContext::operator=(const RoundContext &other)
 {
   state_ = other.state_;
@@ -80,6 +86,9 @@ bool ObLogArchivePieceContext::RoundContext::check_round_continuous_(const Round
   bool bret = false;
   if (!pre_round.is_valid() || !is_valid()) {
     bret = false;
+  } else if (pre_round.is_in_force_stop_state()) {
+    bret = false;
+    CLOG_LOG(INFO, "check_round_continuous_ meet force stop round");
   } else if (pre_round.end_scn_ >= start_scn_) {
     bret = true;
   }
@@ -457,7 +466,7 @@ int ObLogArchivePieceContext::load_archive_meta_()
   return ret;
 }
 
-// 此处假设stop状态的round, 一定都包含round end file
+// 此处假设stop状态的round, 一定都包含round end file, force stop round不会包含round end file
 // 反之仅round end file持久化成功的轮次, 才可以确认是stop状态, 与归档集群状态无关
 int ObLogArchivePieceContext::load_round_(const int64_t round_id, RoundContext &round_context, bool &exist)
 {
@@ -496,6 +505,11 @@ int ObLogArchivePieceContext::load_round_(const int64_t round_id, RoundContext &
       round_context.state_ = RoundContext::State::STOP;
       round_context.end_scn_ = end_desc.checkpoint_scn_;
       round_context.max_piece_id_ = cal_piece_id_(round_context.end_scn_);
+    } else if (round_id < max_round_id_) {
+      // if round_id < max_round_id and round end file doesn't exist, should be force stop round
+      round_context.state_ = RoundContext::State::FORCE_STOP;
+      round_context.end_scn_.set_max();
+      CLOG_LOG(INFO, "load_round_ force stop", K(round_id), K(round_context));
     } else {
       round_context.state_ = RoundContext::State::ACTIVE;
       round_context.end_scn_.set_max();
@@ -587,7 +601,7 @@ void ObLogArchivePieceContext::check_if_switch_round_(const share::SCN &scn, con
     op = RoundOp::LOCATE;
   } else if (need_backward_round_(lsn)/*确定当前round日志全部大于需要消费日志, 并且当前round大于最小round id*/) {
     op = RoundOp::BACKWARD;
-  } else if (need_forward_round_(lsn)/*确定当前round日志全部小于需要消费日志, 并且当前round小于最大round id*/) {
+  } else if (need_forward_round_(scn, lsn)/*确定当前round日志全部小于需要消费日志, 并且当前round小于最大round id*/) {
     op = RoundOp::FORWARD;
   } else if (need_load_round_info_(scn, lsn)/*当前round能访问到的最大piece已经STOP, 并且当前round还是ACTIVE的*/) {
     op = RoundOp::LOAD;
@@ -640,7 +654,7 @@ bool ObLogArchivePieceContext::need_backward_round_(const palf::LSN &lsn) const
 // Note: 对于空round, 默认一定是与下一个round是不连续的; 因此遇到空round, 默认只能前向查询, 不支持后向查找
 //  bad case round 1、2、3, 当前为3，需要切到round 1, 中间round 2为空, 只依赖round 2信息无法判断需要切到round 1
 //  遇到前向切round, 由调用者处理
-bool ObLogArchivePieceContext::need_forward_round_(const palf::LSN &lsn) const
+bool ObLogArchivePieceContext::need_forward_round_(const share::SCN &scn, const palf::LSN &lsn) const
 {
   bool bret = false;
   if (max_round_id_ <= 0) {
@@ -648,6 +662,25 @@ bool ObLogArchivePieceContext::need_forward_round_(const palf::LSN &lsn) const
   } else if (round_context_.is_in_empty_state()) {
     bret = true;
     CLOG_LOG(INFO, "empty round, only forward round supported", K(round_context_));
+  } else if (round_context_.is_valid()
+      && round_context_.is_in_force_stop_state()
+      && inner_piece_context_.round_id_ == round_context_.round_id_
+      && inner_piece_context_.round_id_ < max_round_id_
+      && inner_piece_context_.is_valid()) {
+    if (cal_piece_id_(scn) > round_context_.max_piece_id_) {
+      bret = true;
+    } else {
+      if (inner_piece_context_.is_low_bound_()) {
+        // 当前piece状态为LOW_BOUND, 在当前piece内日志流仍未产生
+        bret = true;
+      } else if ((inner_piece_context_.is_frozen_() || inner_piece_context_.is_empty_())
+          && inner_piece_context_.max_lsn_in_piece_ <= lsn) {
+        // 同时当前piece状态为FROZEN/EMPTY
+        // 并且需要日志LSN大于当前piece下最大值
+        bret = true;
+      }
+    }
+    CLOG_LOG(INFO, "this piece may be force stop", K_(inner_piece_context), K(lsn), K(scn));
   } else if (round_context_.is_valid()
       && round_context_.is_in_stop_state()
       && round_context_.round_id_ < max_round_id_
@@ -665,7 +698,7 @@ bool ObLogArchivePieceContext::need_forward_round_(const palf::LSN &lsn) const
       bret = true;
     }
   }
-  CLOG_LOG(INFO, "need_forward_round_", K(inner_piece_context_), K(lsn));
+  CLOG_LOG(TRACE, "need_forward_round_", K(inner_piece_context_), K(lsn), K(scn), KPC(this), K(bret));
   return bret;
 }
 
@@ -675,7 +708,7 @@ bool ObLogArchivePieceContext::need_forward_round_(const palf::LSN &lsn) const
 bool ObLogArchivePieceContext::need_load_round_info_(const share::SCN &scn, const palf::LSN &lsn) const
 {
   bool bret = false;
-  if (round_context_.is_in_stop_state()) {
+  if (round_context_.is_in_stop_state() || round_context_.is_in_force_stop_state()) {
     bret = false;
   } else if (round_context_.round_id_ > max_round_id_ || round_context_.round_id_ < min_round_id_ || round_context_.round_id_ <= 0) {
     bret = false;
@@ -876,7 +909,7 @@ void ObLogArchivePieceContext::check_if_switch_piece_(const int64_t file_id,
       op = PieceOp::NONE;
     }
   }
-  // 当前piece仍然为ACTIVE
+  // 当前piece仍然为ACTIVE/FORCE_STOP
   else {
     // 1. min_lsn > lsn --> backward
     // 2. max_file_id not bigger than file_id --> advance
@@ -886,7 +919,10 @@ void ObLogArchivePieceContext::check_if_switch_piece_(const int64_t file_id,
     } else if (inner_piece_context_.max_file_id_ <= file_id) {
       // if piece context is stale, load piece meta fully
       // else just advance piece simply
-      if (inner_piece_context_.max_file_id_ + 1 < file_id) {
+      if (round_context_.is_in_force_stop_state()) {
+        CLOG_LOG(INFO, "round_context is in force stop state, no need to load or advance", K(file_id), K(lsn), KPC(this), K(op));
+        op = PieceOp::NONE;
+      } else if (inner_piece_context_.max_file_id_ + 1 < file_id) {
         op = PieceOp::LOAD;
       } else {
         op = PieceOp::ADVANCE;
@@ -1220,7 +1256,22 @@ int ObLogArchivePieceContext::get_(const palf::LSN &lsn,
       done = true;
     }
   } else {
-    if (inner_piece_context_.min_lsn_in_piece_ <= lsn && file_id <= inner_piece_context_.max_file_id_) {
+    // force stop piece in not max round
+    if (round_context_.is_in_force_stop_state()
+        && round_context_.round_id_ < max_round_id_
+        && inner_piece_context_.round_id_ == round_context_.round_id_
+        && inner_piece_context_.piece_id_ == round_context_.max_piece_id_
+        && lsn >= inner_piece_context_.min_lsn_in_piece_
+        && file_id <= inner_piece_context_.max_file_id_) {
+      CLOG_LOG(WARN, "force stop piece when get_", K(lsn), K(file_id), KPC(this));
+      done = true;
+    }
+    // active piece
+    else if (round_context_.round_id_ == max_round_id_
+             && inner_piece_context_.round_id_ == round_context_.round_id_
+             && inner_piece_context_.piece_id_ == round_context_.max_piece_id_
+             && inner_piece_context_.min_lsn_in_piece_ <= lsn
+             && file_id <= inner_piece_context_.max_file_id_) {
       done = true;
     }
   }
@@ -1236,8 +1287,32 @@ int ObLogArchivePieceContext::get_(const palf::LSN &lsn,
       offset = 0;
     }
 
+    // check if force stop round's max_lsn < lsn
+    if (round_context_.is_in_force_stop_state()
+        && round_context_.round_id_ < max_round_id_
+        && inner_piece_context_.round_id_ == round_context_.round_id_
+        && inner_piece_context_.piece_id_ == round_context_.max_piece_id_
+        && inner_piece_context_.is_active()
+        && inner_piece_context_.max_file_id_ == file_id) {
+      ObLogArchivePieceContext origin_ctx;
+      palf::LSN max_lsn_in_file;
+      SCN max_scn_in_file;
+      bool exist;
+      if (OB_FAIL(deep_copy_to(origin_ctx))) {
+        CLOG_LOG(WARN, "piece context deep copy failed", KPC(this));
+      } else if (OB_FAIL(get_max_log_in_file_(origin_ctx, round_id, piece_id, file_id,
+                                                max_lsn_in_file, max_scn_in_file, exist))) {
+        CLOG_LOG(WARN, "fail to get_max_log_in_file_", K(ret), K(lsn));
+      } else if (max_lsn_in_file <= lsn) {
+        ret = OB_ARCHIVE_ROUND_NOT_CONTINUOUS;
+        CLOG_LOG(WARN, "lsn is bigger than max_lsn in force stop round", K(ret), K(lsn), K(max_lsn_in_file), K(max_scn_in_file), K(exist));
+      }
+      CLOG_LOG(INFO, "meet force stop round", K(ret), K(file_id), K(lsn), K(max_lsn_in_file), KPC(this), K(origin_ctx));
+    }
+
     // check if to the newest file, if file_id is temporary the max file, advance piece and check
-    if (round_context_.round_id_ == max_round_id_
+    if (round_context_.is_in_active_state()
+        && round_context_.round_id_ == max_round_id_
         && inner_piece_context_.round_id_ == round_context_.round_id_
         && inner_piece_context_.piece_id_ == round_context_.max_piece_id_
         && inner_piece_context_.is_active()
@@ -1248,6 +1323,18 @@ int ObLogArchivePieceContext::get_(const palf::LSN &lsn,
     }
     if (inner_piece_context_.is_active() && inner_piece_context_.max_file_id_ == file_id) {
       to_newest = true;
+    }
+  }
+
+  if (OB_SUCC(ret) && ! done) {
+    if (round_context_.is_in_force_stop_state()
+      && round_context_.round_id_ < max_round_id_
+      && inner_piece_context_.round_id_ == round_context_.round_id_
+      && inner_piece_context_.piece_id_ == round_context_.max_piece_id_
+      && inner_piece_context_.is_active()
+      && inner_piece_context_.max_file_id_ < file_id) {
+      ret = OB_ARCHIVE_ROUND_NOT_CONTINUOUS;
+      CLOG_LOG(INFO, "file id is bigger than max file id in force stop round", K(ret), K(lsn), KPC(this));
     }
   }
 

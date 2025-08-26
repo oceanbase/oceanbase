@@ -83,7 +83,7 @@ public:
   ObBarrierPieceMsgCtx(uint64_t op_id, int64_t task_cnt, int64_t timeout_ts)
     : ObPieceMsgCtx(op_id, task_cnt, timeout_ts), received_(0) {}
   ~ObBarrierPieceMsgCtx() = default;
-  virtual int send_whole_msg(common::ObIArray<ObPxSqcMeta *> &sqcs) override;
+  virtual int send_whole_msg(common::ObIArray<ObPxSqcMeta> &sqcs) override;
   virtual void reset_resource() override;
   static int alloc_piece_msg_ctx(const ObBarrierPieceMsg &pkt,
                                  ObPxCoordInfo &coord_info,
@@ -103,7 +103,7 @@ public:
   ~ObBarrierPieceMsgListener() = default;
   static int on_message(
       ObBarrierPieceMsgCtx &ctx,
-      common::ObIArray<ObPxSqcMeta *> &sqcs,
+      common::ObIArray<ObPxSqcMeta> &sqcs,
       const ObBarrierPieceMsg &pkt);
 private:
   /* functions */

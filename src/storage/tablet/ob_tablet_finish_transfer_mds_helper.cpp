@@ -103,9 +103,10 @@ int ObTabletFinishTransferUtil::can_skip_check_transfer_tablets(
     LOG_WARN("failed to get migration status", K(ret), KPC(ls));
   } else if (ObMigrationStatus::OB_MIGRATION_STATUS_ADD == migration_status
       || ObMigrationStatus::OB_MIGRATION_STATUS_MIGRATE == migration_status
+      || ObMigrationStatus::OB_MIGRATION_STATUS_REPLACE == migration_status
       || ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD == migration_status) {
     can_skip_check = true;
-    LOG_INFO("ls is in add or migrate or rebuild status, skip check local finish transfer in tablet ready",
+    LOG_INFO("ls migration status is in add/migrate/rebuild/replace, skip check local finish transfer in tablet ready",
         K(migration_status));
   }
   return ret;
@@ -212,7 +213,7 @@ int ObTabletFinishTransferOutReplayExecutor::do_replay_(ObTabletHandle &tablet_h
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), KP(tablet), K(tablet_handle));
-  } else if (OB_FAIL(tablet->get_latest(user_data, writer, trans_stat, trans_version))) {
+  } else if (OB_FAIL(tablet->get_latest_tablet_status(user_data, writer, trans_stat, trans_version))) {
     LOG_WARN("failed to get tablet status", K(ret), KPC(tablet), K(user_data));
   } else if (trans_stat != mds::TwoPhaseCommitState::ON_COMMIT) {
     ret = OB_EAGAIN;
@@ -249,7 +250,7 @@ int ObTabletFinishTransferOutReplayExecutor::check_src_transfer_tablet_(
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), KP(tablet), K(tablet_info_), K(src_ls_id_), K(dest_ls_id_));
-  } else if (OB_FAIL(tablet->get_latest_committed(user_data))) {
+  } else if (OB_FAIL(tablet->get_latest_committed_tablet_status(user_data))) {
     LOG_WARN("failed to get tx data", K(ret), KPC(tablet), K(tablet_info_));
   } else if (ObTabletStatus::TRANSFER_OUT != user_data.tablet_status_
       || transfer_seq != tablet->get_tablet_meta().transfer_info_.transfer_seq_) {
@@ -276,7 +277,6 @@ int ObTabletFinishTransferOutHelper::on_register(
   ObTransferUtils::set_transfer_module();
   const int64_t start_ts = ObTimeUtility::current_time();
   share::ObStorageHACostItemName diagnose_result_msg = share::ObStorageHACostItemName::MAX_NAME;
-  const bool is_shared_storage = GCTX.is_shared_storage_mode();
   if (OB_ISNULL(buf) || len < 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("on register finish transfer out get invalid argument", K(ret), KP(buf), K(len));
@@ -285,7 +285,7 @@ int ObTabletFinishTransferOutHelper::on_register(
   } else if (!tx_finish_transfer_out_info.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tx finish transfer out info is unexpected", K(ret), K(tx_finish_transfer_out_info));
-  } else if (!is_shared_storage && CLICK_FAIL(on_register_success_(tx_finish_transfer_out_info, ctx))) {
+  } else if (CLICK_FAIL(on_register_success_(tx_finish_transfer_out_info, ctx))) {
     diagnose_result_msg = share::ObStorageHACostItemName::ON_REGISTER_SUCCESS;
     LOG_WARN("failed to on register", K(ret), K(tx_finish_transfer_out_info));
   } else if (CLICK_FAIL(ObTabletCreateDeleteMdsUserData::set_tablet_empty_shell_trigger(tx_finish_transfer_out_info.src_ls_id_))) {
@@ -398,7 +398,7 @@ int ObTabletFinishTransferOutHelper::inner_check_transfer_out_tablet_validity_(
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), K(tablet_info), KP(tablet));
-  }  else if (CLICK_FAIL(tablet->get_latest_committed(user_data))) {
+  }  else if (CLICK_FAIL(tablet->get_latest_committed_tablet_status(user_data))) {
     LOG_WARN("failed to get tablet data", K(ret), KPC(tablet));
   } else if (ObTabletStatus::TRANSFER_OUT != user_data.tablet_status_
       || transfer_seq != tablet->get_tablet_meta().transfer_info_.transfer_seq_) {
@@ -447,7 +447,7 @@ int ObTabletFinishTransferOutHelper::update_transfer_tablet_deleted_(
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), K(tablet_info));
-  } else if (CLICK_FAIL(tablet->get_latest_committed(user_data))) {
+  } else if (CLICK_FAIL(tablet->get_latest_committed_tablet_status(user_data))) {
     LOG_WARN("failed to get tablet data", K(ret), KPC(tablet));
   } else if (ObTabletStatus::TRANSFER_OUT != user_data.tablet_status_
       || tablet_info.transfer_seq() != tablet->get_tablet_meta().transfer_info_.transfer_seq_) {
@@ -483,7 +483,6 @@ int ObTabletFinishTransferOutHelper::on_replay(
   ObTransferUtils::set_transfer_module();
   const int64_t start_ts = ObTimeUtility::current_time();
   share::ObStorageHACostItemName diagnose_result_msg = share::ObStorageHACostItemName::MAX_NAME;
-  const bool is_shared_storage = GCTX.is_shared_storage_mode();
   if (OB_ISNULL(buf) || len < 0 || !scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("on replay finish transfer out get invalid argument", K(ret), KP(buf), K(len), K(scn));
@@ -492,7 +491,7 @@ int ObTabletFinishTransferOutHelper::on_replay(
   } else if (!tx_finish_transfer_out_info.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tx finish transfer out info is unexpected", K(ret), K(tx_finish_transfer_out_info));
-  } else if (!is_shared_storage && CLICK_FAIL(on_replay_success_(scn, tx_finish_transfer_out_info, ctx))) {
+  } else if (CLICK_FAIL(on_replay_success_(scn, tx_finish_transfer_out_info, ctx))) {
     diagnose_result_msg = share::ObStorageHACostItemName::ON_REPLAY_SUCCESS;
     LOG_WARN("failed to do on_replay_success_", K(ret), K(tx_finish_transfer_out_info));
   } else if (CLICK_FAIL(ObTabletCreateDeleteMdsUserData::set_tablet_empty_shell_trigger(tx_finish_transfer_out_info.src_ls_id_))) {
@@ -724,7 +723,7 @@ int ObTabletFinishTransferInReplayExecutor::do_replay_(ObTabletHandle &tablet_ha
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), KP(tablet), K(tablet_info_));
-  } else if (OB_FAIL(tablet->get_latest_committed(user_data))) {
+  } else if (OB_FAIL(tablet->get_latest_committed_tablet_status(user_data))) {
     LOG_WARN("failed to get tablet data", K(ret), KPC(tablet));
   } else {
     user_data.tablet_status_ = ObTabletStatus::NORMAL;
@@ -759,7 +758,7 @@ int ObTabletFinishTransferInReplayExecutor::check_dest_transfer_tablet_(
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), KP(tablet), K(tablet_info_), K(src_ls_id_), K(dest_ls_id_));
-  } else if (OB_FAIL(tablet->get_latest_committed(user_data))) {
+  } else if (OB_FAIL(tablet->get_latest_committed_tablet_status(user_data))) {
     LOG_WARN("failed to get tablet data", K(ret), KPC(tablet));
   } else if (ObTabletStatus::TRANSFER_IN != user_data.tablet_status_
       || transfer_seq + 1 != tablet->get_tablet_meta().transfer_info_.transfer_seq_) {
@@ -1070,7 +1069,7 @@ int ObTabletFinishTransferInHelper::inner_check_transfer_in_tablet_validity_(
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), K(tablet_info));
-  } else if (CLICK_FAIL(tablet->get_latest_committed(data))) {
+  } else if (CLICK_FAIL(tablet->get_latest_committed_tablet_status(data))) {
     LOG_WARN("failed to get tablet data", K(ret), KPC(tablet));
   } else if (ObTabletStatus::TRANSFER_IN != data.tablet_status_
       || transfer_seq + 1 != tablet->get_tablet_meta().transfer_info_.transfer_seq_) {
@@ -1121,7 +1120,7 @@ int ObTabletFinishTransferInHelper::update_transfer_tablet_normal_(
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), K(tablet_info));
-  } else if (CLICK_FAIL(tablet->get_latest_committed(data))) {
+  } else if (CLICK_FAIL(tablet->get_latest_committed_tablet_status(data))) {
     LOG_WARN("failed to get tx data", K(ret), KPC(tablet), K(tablet_info));
   } else if (ObTabletStatus::TRANSFER_IN != data.tablet_status_
       || tablet_info.transfer_seq() + 1 != tablet->get_tablet_meta().transfer_info_.transfer_seq_) {

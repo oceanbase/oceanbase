@@ -101,8 +101,8 @@ public:
                                     ObEvalCtx &ctx,
                                     const ObLobLocatorV2 *lob_locator,
                                     ObDatum &res_datum,
-                                    ObObjType &in_type,
-                                    ObCollationType &in_cs_type);
+                                    const ObObjType &in_type,
+                                    const ObCollationType &in_cs_type);
   static int common_check_convert_string(const ObExpr &expr,
                                         ObEvalCtx &ctx,
                                         const ObString &in_str,
@@ -689,7 +689,8 @@ public:
               const common::ObCastMode &cm,
               common::ObDatum *&res,
               int64_t batch_idx = 0,
-              const uint16_t subschema_id = 0);
+              const uint16_t subschema_id = 0,
+              const int32_t max_length = LENGTH_UNKNOWN_YET);
   // for xxx -> enumset.
   int to_type(const ObDatumMeta &dst_type,
               const common::ObIArray<common::ObString> &str_values,
@@ -709,7 +710,8 @@ private:
                       const ObExpr &src_expr,
                       const common::ObCastMode cm,
                       ObExpr &cast_expr,
-                      const uint16_t subschema_id = 0);
+                      const uint16_t subschema_id = 0,
+                      const int32_t max_length = LENGTH_UNKNOWN_YET);
   bool inited_;
   ObEvalCtx *eval_ctx_;
   ObExpr *cast_expr_;

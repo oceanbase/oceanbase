@@ -185,23 +185,6 @@ using ObCreateLSAbortSLog = ObLSIDLog;
 using ObCreateLSCommitSLog = ObLSIDLog;
 using ObDeleteLSLog = ObLSIDLog;
 
-struct ObCreateTabletLog : public ObIBaseStorageLogEntry
-{
-public:
-  ObCreateTabletLog() {}
-  explicit ObCreateTabletLog(ObTablet *tablet);
-  virtual ~ObCreateTabletLog() {}
-  virtual int serialize(char *buf, const int64_t buf_len, int64_t &pos) const override;
-  virtual int deserialize(const char *buf, const int64_t data_len, int64_t &pos) override;
-  virtual int64_t get_serialize_size() const override;
-  virtual bool is_valid() const override;
-
-  DECLARE_TO_STRING;
-
-public:
-  ObTablet *tablet_;
-};
-
 struct ObDeleteTabletLog : public ObIBaseStorageLogEntry
 {
 public:
@@ -215,7 +198,8 @@ public:
       const ObPendingFreeTabletStatus &status,
       const int64_t free_time,
       const GCTabletType &gc_type,
-      const int64_t tablet_transfer_seq);
+      const int64_t tablet_transfer_seq,
+      const int64_t last_gc_version = -1);
   virtual ~ObDeleteTabletLog() {}
   virtual bool is_valid() const override;
 
@@ -236,6 +220,7 @@ public:
   int64_t free_time_;
   GCTabletType gc_type_;
   int64_t tablet_transfer_seq_;
+  int64_t last_gc_version_;
 };
 
 class ObGCTabletLog : public ObIBaseStorageLogEntry
@@ -299,6 +284,7 @@ public:
 public:
   ObEmptyShellTabletLog();
   ObEmptyShellTabletLog(
+      const uint64_t data_version,
       const ObLSID &ls_id_,
       const ObTabletID &tablet_id,
       const int64_t ls_epoch,
@@ -326,6 +312,7 @@ public:
   common::ObTabletID tablet_id_;
   ObTablet *tablet_;
   int64_t ls_epoch_;
+  uint64_t data_version_;
 };
 
 }

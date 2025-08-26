@@ -153,6 +153,8 @@ int ObSplitPartitionHelper::check_allow_split(
   }
 
   if (OB_FAIL(ret)) {
+  } else if (table_schema.is_global_index_table()) {
+    // global index table doesn't have columnstore replica
   } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_schema))) {
     LOG_WARN("failed to get tenant schema", K(ret));
   } else if (OB_FAIL(tenant_schema->get_zone_replica_attr_array(zone_locality))) {
@@ -178,13 +180,6 @@ int ObSplitPartitionHelper::check_allow_split(
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not support spliting of a table in a group with multiple tables", K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "spliting of a table in a group with multiple tables");
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (OB_UNLIKELY(GCTX.is_shared_storage_mode())) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("split in shared storage mode not supported", K(ret));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "split in shared storage mode");
   }
 
   return ret;
@@ -295,11 +290,8 @@ int ObSplitPartitionHelper::check_enable_global_index_auto_split(
   int ret = OB_SUCCESS;
   enable_auto_split = false;
   auto_part_size = -1;
-  if (data_table_schema.is_mysql_tmp_table() || data_table_schema.is_sys_table() || GCTX.is_shared_storage_mode()) {
+  if (data_table_schema.is_mysql_tmp_table() || data_table_schema.is_sys_table()) {
     // not supported table type
-  } else if (data_table_schema.is_auto_partitioned_table()) {
-    enable_auto_split = true;
-    auto_part_size = data_table_schema.get_part_option().get_auto_part_size();
   } else {
     const uint64_t tenant_id = data_table_schema.get_tenant_id();
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
@@ -320,8 +312,13 @@ int ObSplitPartitionHelper::check_enable_global_index_auto_split(
       }
       if (OB_SUCC(ret) && enable_auto_split) {
         const int64_t data_auto_part_size = data_table_schema.get_part_option().get_auto_part_size();
-        auto_part_size = data_table_schema.get_part_option().is_valid_auto_part_size() ? data_auto_part_size : tenant_config->auto_split_tablet_size;
-        LOG_INFO("enable global index auto split by tenant config", K(auto_part_size), K(data_auto_part_size), K(policy_str));
+        int64_t tenant_auto_part_size = tenant_config->auto_split_tablet_size;
+        const int64_t errsim_auto_part_size = OB_E(common::EventTable::EN_AUTO_SPLIT_TABLET_SIZE) 0;
+        if (0 != errsim_auto_part_size) {
+          tenant_auto_part_size = std::abs(errsim_auto_part_size);
+        }
+        auto_part_size = data_table_schema.get_part_option().is_valid_auto_part_size() ? data_auto_part_size : tenant_auto_part_size;
+        LOG_INFO("enable global index auto split by tenant config", K(auto_part_size), K(data_auto_part_size), K(tenant_auto_part_size), K(errsim_auto_part_size), K(policy_str));
       }
     }
   }

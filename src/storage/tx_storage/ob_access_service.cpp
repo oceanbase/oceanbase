@@ -509,7 +509,7 @@ int ObAccessService::get_source_ls_tx_table_guard_(
     LOG_WARN("tablet should not be NULL", K(ret), KPC(tablet), K(tablet_handle));
   } else if (OB_LIKELY(!tablet->get_tablet_meta().has_transfer_table())) {
     // do nothing
-  } else if (OB_FAIL(tablet->get_latest(user_data,
+  } else if (OB_FAIL(tablet->get_latest_tablet_status(user_data,
       unused_writer, trans_stat, unused_trans_version))) {
     LOG_WARN("failed to get tablet status", K(ret), KPC(tablet), K(user_data));
   } else if (mds::TwoPhaseCommitState::ON_COMMIT != trans_stat && ctx.is_write()) {

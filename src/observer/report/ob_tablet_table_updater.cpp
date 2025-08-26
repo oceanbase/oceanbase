@@ -399,8 +399,8 @@ int ObTabletTableUpdater::check_tenant_status_(
   } else if (OB_FAIL(guard.check_if_tenant_has_been_dropped(tenant_id, tenant_dropped))) {
     LOG_WARN("fail to check if tenant has been dropped", KR(ret), K(tenant_id));
   } else if (!tenant_dropped) {
-    if (OB_FAIL(guard.get_tenant_info(tenant_id_, tenant_info))) {
-      LOG_WARN("fail to get tenant info", K(ret), K(tenant_id_));
+    if (OB_FAIL(guard.get_tenant_info(tenant_id, tenant_info))) {
+      LOG_WARN("fail to get tenant info", K(ret), K(tenant_id));
     } else if (OB_NOT_NULL(tenant_info) && tenant_info->is_normal()) {
       tenant_not_ready = !schema_service->is_tenant_full_schema(tenant_id);
     }
@@ -531,32 +531,7 @@ void ObTabletTableUpdater::check_remove_task_(
     bool &is_remove_task)
 {
   int ret = OB_SUCCESS;
-  is_remove_task = false;
-
-  if (!GCTX.is_shared_storage_mode()) {
-    is_remove_task = true;
-  } else {
-#ifdef OB_BUILD_SHARED_STORAGE
-    share::ObLSInfo ls_info;
-    const ObLSReplica *replica = nullptr;
-
-    if (!locality_is_valid) {
-      // locality cache not valid, ignore to check the remove task temporarily
-    } else if (OB_FAIL(locality_cache.get_ls_info(ls_id, ls_info))) {
-      if (OB_HASH_NOT_EXIST == ret) {
-        is_remove_task = true;
-      } else {
-        LOG_WARN("failed to get ls info", K(ret), K(ls_id));
-      }
-    } else if (is_ls_not_exist) {
-      // no need to check whether ls is leader
-    } else if (OB_FAIL(ls_info.find_leader(replica))) {
-      LOG_WARN("failed to find leader", K(ret), K(ls_id), K(ls_info));
-    } else if (replica->get_server() == GCTX.self_addr()) {
-      is_remove_task = true; // ls leader is on cur server
-    }
-#endif
-  }
+  is_remove_task = true;
 }
 
 int ObTabletTableUpdater::push_task_info_(
@@ -672,8 +647,7 @@ int ObTabletTableUpdater::generate_tasks_(
   if (OB_FAIL(ret)) {
   } else if (update_tablet_tasks.count() != update_tablet_replicas.count()
           || update_tablet_tasks.count() != update_tablet_checksums.count()
-          || (!GCTX.is_shared_storage_mode() &&
-              (update_tablet_tasks.count() + remove_tablet_tasks.count() + retry_tablet_replica_count != batch_tasks.count()))) {
+          || (update_tablet_tasks.count() + remove_tablet_tasks.count() + retry_tablet_replica_count != batch_tasks.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet task count and replica count not match", KR(ret),
              "tablet_update_tasks count", update_tablet_tasks.count(),
@@ -880,16 +854,6 @@ int ObTabletTableUpdater::do_batch_update_(
     common::ObMySQLTransaction trans;
     const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id_);
     if (OB_FAIL(ret)) {
-    } else if (GCTX.is_shared_storage_mode()) {
-#ifdef OB_BUILD_SHARED_STORAGE
-      if (OB_FAIL(ObTabletReplicaChecksumOperator::batch_select_and_update_with_trans(tenant_id_, checksums))) {
-        LOG_WARN("do tablet table checksum update failed, try to reput to queue", KR(ret),
-             "escape time", ObTimeUtility::current_time() - start_time);
-      }
-#else
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("not support shared storage mode", KR(ret));
-#endif
     } else {
       if (OB_FAIL(trans.start(GCTX.sql_proxy_, meta_tenant_id))) {
         LOG_WARN("fail to start transaction", KR(ret), K_(tenant_id), K(meta_tenant_id));

@@ -41,7 +41,7 @@ const int64_t OB_MAX_BACKUP_ENCRYPTKEY_LENGTH = OB_MAX_BACKUP_ACCESSKEY_LENGTH +
 const int64_t OB_MAX_BACKUP_SERIALIZEKEY_LENGTH = OB_MAX_BACKUP_ENCRYPTKEY_LENGTH * 2;
 // We have agreed with OCP that the maximum role_arn length shall not exceed 256
 static constexpr int64_t OB_MAX_ROLE_ARN_LENGTH = 256;
-// The limit on the maximum length of external_id in obs/cos/oss/s3 is 128
+// The limit on the maximum length of external_id in obs/oss/s3 is 128
 static constexpr int64_t OB_MAX_EXTERNAL_ID_LENGTH = 128;
 static constexpr int64_t OB_MAX_ASSUME_ROLE_JSON_DATA_LENGTH = 1024;
 // STS_AK and STS_SK are used to connect to STS service of OCP.
@@ -70,6 +70,7 @@ const char *const HOST = "host=";
 const char *const APPID = "appid=";
 const char *const DELETE_MODE = "delete_mode=";
 const char *const REGION = "s3_region=";
+const char* const SEPERATE_SYMBOL = "&";
 const char *const MAX_IOPS = "max_iops=";
 const char *const MAX_BANDWIDTH = "max_bandwidth=";
 const char *const ENABLE_WORM = "enable_worm=";
@@ -113,9 +114,8 @@ enum ObStorageChecksumType : uint8_t
 };
 
 bool is_oss_supported_checksum(const ObStorageChecksumType checksum_type);
-bool is_cos_supported_checksum(const ObStorageChecksumType checksum_type);
 bool is_s3_supported_checksum(const ObStorageChecksumType checksum_type);
-bool is_obdal_supported_checksum(const ObStorageChecksumType checksum_type);
+bool is_obdal_supported_checksum(const ObStorageType storage_type, const ObStorageChecksumType checksum_type);
 const char *get_storage_checksum_type_str(const ObStorageChecksumType &type);
 bool is_use_obdal();
 // [Extensions]
@@ -172,11 +172,11 @@ struct ObObjectStorageCredential
   int64_t born_time_us_;
 };
 
-class ObClusterVersionBaseMgr
+class ObClusterStateBaseMgr
 {
 public:
-  ObClusterVersionBaseMgr() {}
-  virtual ~ObClusterVersionBaseMgr() {}
+  ObClusterStateBaseMgr() {}
+  virtual ~ObClusterStateBaseMgr() {}
   virtual int is_supported_assume_version() const
   {
     return OB_SUCCESS;
@@ -185,9 +185,18 @@ public:
   {
     return OB_SUCCESS;
   };
-  static ObClusterVersionBaseMgr &get_instance()
+  virtual int is_supported_azblob_version() const
   {
-    static ObClusterVersionBaseMgr mgr;
+    return OB_SUCCESS;
+  }
+  virtual bool is_shared_storage_mode() const
+  {
+    return false;
+  }
+  virtual bool is_write_with_if_match() const { return false; }
+  static ObClusterStateBaseMgr &get_instance()
+  {
+    static ObClusterStateBaseMgr mgr;
     return mgr;
   }
 };
@@ -236,8 +245,9 @@ public:
   virtual int set(const common::ObStorageType device_type, const char *storage_info);
   virtual int set(const char *uri, const char *storage_info);
   virtual int assign(const ObObjectStorageInfo &storage_info);
+  virtual int clone(common::ObIAllocator &allocator, ObObjectStorageInfo *&storage_info) const;
   int reset_access_id_and_access_key(const char *access_id, const char *access_key);
-  static int register_cluster_version_mgr(ObClusterVersionBaseMgr *cluster_version_mgr);
+  static int register_cluster_state_mgr(ObClusterStateBaseMgr *cluster_version_mgr);
 
 public:
   int64_t hash() const;
@@ -250,8 +260,10 @@ public:
   const char *get_type_str() const;
   ObStorageChecksumType get_checksum_type() const;
   const char *get_checksum_type_str() const;
+  const char *get_extension() const { return extension_; }
 
   bool is_hdfs_storage() const { return OB_STORAGE_HDFS == device_type_; }
+  virtual bool is_backup_storage_info() const { return false; }
   bool is_enable_worm() const;
   bool is_assume_role_mode() const;
   virtual bool is_valid() const;
@@ -269,6 +281,7 @@ public:
 
   virtual int get_storage_info_str(char *storage_info, const int64_t info_len) const;
   virtual int to_account(ObStorageAccount &account) const;
+  bool is_write_with_if_match() const;
 
   TO_STRING_KV(K_(endpoint), K_(access_id), K_(extension), "type", get_type_str(),
       K_(checksum_type), K_(max_iops), K_(max_bandwidth), KP_(role_arn), KP_(external_id), K_(enable_worm));
@@ -290,7 +303,7 @@ public:
   // to be an optional parameter
   common::ObStorageType device_type_;
   // Optional parameter. If not provided, the default value OB_MD5_ALGO will be used.
-  // For OSS/COS, OB_NO_CHECKSUM_ALGO indicates that no checksum algorithm will be used.
+  // For OSS, OB_NO_CHECKSUM_ALGO indicates that no checksum algorithm will be used.
   // For Object Storage Services accessed via the S3 protocol,
   // OB_NO_CHECKSUM_ALGO is not supported.
   ObStorageChecksumType checksum_type_;                                 // Repeated in extension_
@@ -307,7 +320,7 @@ public:
   char external_id_[OB_MAX_EXTERNAL_ID_LENGTH];                         // supported for assume role
   bool is_assume_role_mode_;
   bool enable_worm_;
-  static ObClusterVersionBaseMgr *cluster_version_mgr_;
+  static ObClusterStateBaseMgr *cluster_state_mgr_;
 };
 
 class ObTenantStsCredentialBaseMgr

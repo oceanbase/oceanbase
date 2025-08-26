@@ -125,7 +125,15 @@ bool ObSelectStmt::has_distinct_or_concat_agg() const
     const ObAggFunRawExpr *aggr = get_aggr_item(i);
     if (NULL != aggr) {
       has = aggr->is_param_distinct() ||
-            T_FUN_GROUP_CONCAT == aggr->get_expr_type();
+            // Consistent with the has_group_concat_ flag in ObAggregateProcessor.
+            T_FUN_GROUP_CONCAT == aggr->get_expr_type() ||
+            T_FUN_KEEP_WM_CONCAT == aggr->get_expr_type() ||
+            T_FUN_WM_CONCAT == aggr->get_expr_type() ||
+            T_FUN_JSON_ARRAYAGG == aggr->get_expr_type() ||
+            T_FUN_ORA_JSON_ARRAYAGG == aggr->get_expr_type() ||
+            T_FUN_JSON_OBJECTAGG == aggr->get_expr_type() ||
+            T_FUN_ORA_JSON_OBJECTAGG == aggr->get_expr_type() ||
+            T_FUN_ORA_XMLAGG == aggr->get_expr_type();
     }
   }
   return has;
@@ -256,6 +264,8 @@ int ObSelectStmt::assign(const ObSelectStmt &other)
     is_expanded_mview_ = other.is_expanded_mview_;
     is_select_straight_join_ = other.is_select_straight_join_;
     is_implicit_distinct_ = false; // it is a property from upper stmt, do not copy
+    is_oracle_compat_groupby_ = other.is_oracle_compat_groupby_;
+    is_recursive_union_branch_ = other.is_recursive_union_branch_;
     for_update_cursor_table_id_ = other.for_update_cursor_table_id_;
   }
   return ret;
@@ -354,6 +364,8 @@ int ObSelectStmt::deep_copy_stmt_struct(ObIAllocator &allocator,
     is_expanded_mview_ = other.is_expanded_mview_;
     is_select_straight_join_ = other.is_select_straight_join_;
     is_implicit_distinct_ = false; // it is a property from upper stmt, do not copy
+    is_oracle_compat_groupby_ = other.is_oracle_compat_groupby_;
+    is_recursive_union_branch_ = other.is_recursive_union_branch_;
     // copy insert into statement
     if (OB_SUCC(ret) && NULL != other.into_item_) {
       ObSelectIntoItem *temp_into_item = NULL;
@@ -572,6 +584,7 @@ ObSelectStmt::ObSelectStmt()
   is_select_straight_join_ = false;
   is_implicit_distinct_ = false;
   is_oracle_compat_groupby_ = false;
+  is_recursive_union_branch_ = false;
   for_update_cursor_table_id_ = OB_INVALID_ID;
 }
 
@@ -967,7 +980,8 @@ bool ObSelectStmt::is_spj() const
            || is_contains_assignment()
            || has_window_function()
            || has_sequence()
-           || is_hierarchical_query());
+           || is_hierarchical_query()
+           || is_unpivot_select());
   if (!bret) {
     // do nothing
   } else if (OB_FAIL(has_rownum(has_rownum_expr))) {
@@ -994,7 +1008,8 @@ bool ObSelectStmt::is_spjg() const
            || is_contains_assignment()
            || has_window_function()
            || has_sequence()
-           || is_hierarchical_query());
+           || is_hierarchical_query()
+           || is_unpivot_select());
   if (!bret) {
     // do nothing
   } else if (OB_FAIL(has_rownum(has_rownum_expr))) {
@@ -1525,7 +1540,8 @@ int ObSelectStmt::check_is_simple_lock_stmt(bool &is_valid) const
       !is_contains_assignment() &&
       !has_window_function() &&
       !has_sequence() &&
-      !is_hierarchical_query()) {
+      !is_hierarchical_query() &&
+      !is_unpivot_select()) {
     bool contain_lock_expr = false;
     for (int64_t i = 0; !contain_lock_expr && i < select_items_.count(); i ++) {
       if (OB_FAIL(ObRawExprUtils::check_contain_lock_exprs(select_items_.at(i).expr_, contain_lock_expr))) {
@@ -1574,7 +1590,7 @@ int ObSelectStmt::check_from_dup_insensitive(bool &is_from_dup_insens) const
   bool is_dup_insens_aggr = false;
   is_from_dup_insens = false;
   // basic validity check
-  if (is_set_stmt() || is_hierarchical_query()) {
+  if (is_set_stmt() || is_hierarchical_query() || is_unpivot_select()) {
     is_valid = false;
   } else if (OB_FAIL(check_relation_exprs_deterministic(is_valid))) {
     LOG_WARN("failed to check relation exprs deterministic", K(ret));

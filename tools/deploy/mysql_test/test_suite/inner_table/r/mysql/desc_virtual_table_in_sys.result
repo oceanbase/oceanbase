@@ -398,6 +398,7 @@ plan_status	bigint(20)	NO		NULL
 adaptive_feedback_times	bigint(20)	NO		NULL	
 first_get_plan_time	bigint(20)	NO		NULL	
 first_exe_usec	bigint(20)	NO		NULL	
+format_sql_id	varchar(32)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_plan_stat;
 IF(count(*) >= 0, 1, 0)
 1
@@ -908,6 +909,9 @@ plsql_compile_time	bigint(20)	NO		NULL
 ccl_rule_id	bigint(20)	YES		NULL	
 ccl_match_time	bigint(20)	YES		NULL	
 insert_duplicate_row_count	bigint(20)	YES		NULL	
+commit_time	bigint(20)	NO		NULL	
+tx_table_read_cnt	bigint(20)	YES		NULL	
+outrow_lob_cnt	bigint(20)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_sql_audit;
 IF(count(*) >= 0, 1, 0)
 1
@@ -1014,6 +1018,7 @@ dynamic_partition_policy	varchar(4096)	NO
 external_location_id	bigint(20)	NO		-1	
 external_sub_path	varbinary(1048576)	YES		NULL	
 micro_block_format_version	bigint(20)	NO		1	
+semistruct_properties	longtext	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_core_all_table;
 IF(count(*) >= 0, 1, 0)
 1
@@ -2133,7 +2138,6 @@ ls_id	bigint(20)	NO	PRI	NULL
 meta_version	bigint(20)	NO		NULL	
 ss_checkpoint_scn	bigint(20)	NO		NULL	
 ss_checkpoint_lsn	bigint(20)	NO		NULL	
-sslog_checkpoint_scn	bigint(20)	NO		NULL	
 ss_clog_accum_checksum	bigint(20)	NO		NULL	
 desc oceanbase.__all_virtual_ss_sstable_mgr;
 Field	Type	Null	Key	Default	Extra
@@ -2156,10 +2160,6 @@ cg_idx	bigint(20)	NO		NULL
 data_checksum	bigint(20)	NO		NULL	
 table_flag	bigint(20)	NO		NULL	
 rec_scn	bigint(20)	NO		NULL	
-select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ss_sstable_mgr;
-IF(count(*) >= 0, 1, 0)
-1
-select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_ss_sstable_mgr limit 1;
 desc oceanbase.__all_virtual_ss_ls_tablet_reorganization_info;
 Field	Type	Null	Key	Default	Extra
 svr_ip	varchar(46)	NO	PRI	NULL	
@@ -2178,6 +2178,46 @@ IF(count(*) >= 0, 1, 0)
 IF(count(*) >= 0, 1, 0)
 1
 select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_ss_ls_tablet_reorganization_info limit 1;
+desc oceanbase.__all_virtual_ss_existing_tablet_meta;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+ls_id	bigint(20)	NO	PRI	NULL	
+tablet_id	bigint(20)	NO	PRI	NULL	
+transfer_scn	bigint(20)	NO	PRI	NULL	
+meta_version	bigint(20)	NO	PRI	NULL	
+data_tablet_id	bigint(20)	NO		NULL	
+create_scn	bigint(20)	NO		NULL	
+start_scn	bigint(20)	NO		NULL	
+create_schema_version	bigint(20)	NO		NULL	
+data_checkpoint_scn	bigint(20)	NO		NULL	
+mds_checkpoint_scn	bigint(20)	NO		NULL	
+ddl_checkpoint_scn	bigint(20)	NO		NULL	
+multi_version_start	bigint(20)	NO		NULL	
+tablet_snapshot_version	bigint(20)	NO		NULL	
+sstable_op_id	bigint(20)	NO		NULL	
+update_reason	varchar(64)	NO		NULL	
+desc oceanbase.__all_virtual_ss_existing_sstable_mgr;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+ls_id	bigint(20)	NO	PRI	NULL	
+tablet_id	bigint(20)	NO	PRI	NULL	
+transfer_scn	bigint(20)	NO	PRI	NULL	
+meta_version	bigint(20)	NO	PRI	NULL	
+table_type	bigint(20)	NO	PRI	NULL	
+start_log_scn	bigint(20)	NO	PRI	NULL	
+end_log_scn	bigint(20)	NO	PRI	NULL	
+upper_trans_version	bigint(20)	NO		NULL	
+size	bigint(20)	NO		NULL	
+data_block_count	bigint(20)	NO		NULL	
+index_block_count	bigint(20)	NO		NULL	
+linked_block_count	bigint(20)	NO		NULL	
+contain_uncommitted_row	varchar(3)	NO		NULL	
+nested_offset	bigint(20)	NO		NULL	
+nested_size	bigint(20)	NO		NULL	
+cg_idx	bigint(20)	NO		NULL	
+data_checksum	bigint(20)	NO		NULL	
+table_flag	bigint(20)	NO		NULL	
+rec_scn	bigint(20)	NO		NULL	
 desc information_schema.SESSION_VARIABLES;
 Field	Type	Null	Key	Default	Extra
 VARIABLE_NAME	varchar(128)	NO			
@@ -2390,7 +2430,7 @@ cg_idx	bigint(20)	NO		NULL
 data_checksum	bigint(20)	NO		NULL	
 table_flag	bigint(20)	NO		NULL	
 rec_scn	bigint(20)	NO		NULL	
-ss_tablet_version	bigint(20) unsigned	NO		NULL	
+row_count	bigint(20)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_table_mgr;
 IF(count(*) >= 0, 1, 0)
 1
@@ -2923,6 +2963,7 @@ dynamic_partition_policy	varchar(4096)	NO
 external_location_id	bigint(20)	NO		-1	
 external_sub_path	varbinary(1048576)	YES		NULL	
 micro_block_format_version	bigint(20)	NO		1	
+semistruct_properties	longtext	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_table;
 IF(count(*) >= 0, 1, 0)
 1
@@ -3029,6 +3070,7 @@ dynamic_partition_policy	varchar(4096)	YES
 external_location_id	bigint(20)	YES		-1	
 external_sub_path	varbinary(1048576)	YES		NULL	
 micro_block_format_version	bigint(20)	YES		1	
+semistruct_properties	longtext	YES			
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_table_history;
 IF(count(*) >= 0, 1, 0)
 1
@@ -3492,6 +3534,7 @@ Field	Type	Null	Key	Default	Extra
 tenant_id	bigint(20)	NO	PRI	NULL	
 table_id	bigint(20)	NO	PRI	NULL	
 create_host	varchar(128)	NO			
+table_session_id	bigint(20) unsigned	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_temp_table;
 IF(count(*) >= 0, 1, 0)
 1
@@ -5004,6 +5047,7 @@ WORKAREA_TEMPSEG	bigint(20)	NO		NULL
 WORKAREA_MAX_TEMPSEG	bigint(20)	NO		NULL	
 SQL_ID	varchar(32)	NO		NULL	
 PLAN_HASH_VALUE	bigint(20) unsigned	NO		NULL	
+RAW_PROFILE	varbinary(65536)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_sql_plan_monitor;
 IF(count(*) >= 0, 1, 0)
 1
@@ -5407,6 +5451,7 @@ spare4	varchar(4096)	YES		NULL
 spare5	varchar(4096)	YES		NULL	
 spare6	varchar(4096)	YES		NULL	
 index_type	tinyint(4)	NO		NULL	
+internal_stat	bigint(20)	YES		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_table_stat;
 IF(count(*) >= 0, 1, 0)
 1
@@ -5445,6 +5490,7 @@ spare6	varchar(4096)	YES		NULL
 cg_macro_blk_cnt	bigint(20)	NO		0	
 cg_micro_blk_cnt	bigint(20)	NO		0	
 cg_skip_rate	double	YES		NULL	
+internal_stat	bigint(20)	YES		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_column_stat;
 IF(count(*) >= 0, 1, 0)
 1
@@ -6400,6 +6446,8 @@ data_source_svr_port	bigint(20)	YES		NULL
 is_manual	tinyint(4)	YES		0	
 config_version	varchar(128)	YES			
 bconfig_version	varchar(1024)	YES			
+member_timestamp	bigint(20)	YES		-1	
+member_flag	bigint(20)	YES		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ls_replica_task;
 IF(count(*) >= 0, 1, 0)
 1
@@ -6612,6 +6660,7 @@ region	varchar(128)	NO		NULL
 data_disk_size	bigint(20)	YES		NULL	
 max_net_bandwidth	bigint(20)	YES		NULL	
 net_bandwidth_weight	bigint(20)	YES		NULL	
+replica_type	bigint(20)	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_unit;
 IF(count(*) >= 0, 1, 0)
 1
@@ -8441,6 +8490,8 @@ file_url	varbinary(16384)	NO		NULL
 create_version	bigint(20)	NO		NULL	
 delete_version	bigint(20)	NO		NULL	
 file_size	bigint(20)	NO		NULL	
+last_modify_time	bigint(20)	NO		-1	
+content_digest	varchar(128)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_external_table_file;
 IF(count(*) >= 0, 1, 0)
 1
@@ -9093,6 +9144,8 @@ last_refresh_trace_id	varchar(64)	YES		NULL
 schema_version	bigint(20)	NO		NULL	
 refresh_dop	bigint(20)	NO		0	
 data_sync_scn	bigint(20) unsigned	NO		0	
+is_synced	tinyint(4)	NO		0	
+nested_refresh_mode	bigint(20)	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_mview;
 IF(count(*) >= 0, 1, 0)
 1
@@ -10370,6 +10423,8 @@ execute_result	varchar(2048)	YES		NULL
 comment	varchar(2048)	YES		NULL	
 config_version	varchar(128)	YES			
 bconfig_version	varchar(1024)	YES			
+member_timestamp	bigint(20)	YES		-1	
+member_flag	bigint(20)	YES		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ls_replica_task_history;
 IF(count(*) >= 0, 1, 0)
 1
@@ -10817,6 +10872,7 @@ snapshot_index_tablet_id	bigint(20)	NO		NULL
 data_tablet_id	bigint(20)	NO		NULL	
 statistics	varchar(2048)	NO		NULL	
 sync_info	varchar(1024)	NO		NULL	
+index_type	bigint(20)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_vector_index_info;
 IF(count(*) >= 0, 1, 0)
 1
@@ -11080,10 +11136,24 @@ gmt_modified	timestamp(6)	NO		NULL
 merge_version	bigint(20)	NO		NULL	
 dll	longblob	NO		NULL	
 stack_size	longblob	YES		NULL	
+extra_info	longblob	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ncomp_dll_v2;
 IF(count(*) >= 0, 1, 0)
 1
 select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_ncomp_dll_v2 limit 1;
+desc oceanbase.__all_virtual_object_balance_weight;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+table_id	bigint(20)	NO	PRI	NULL	
+partition_id	bigint(20)	NO	PRI	NULL	
+subpartition_id	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+weight	bigint(20)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_object_balance_weight;
+IF(count(*) >= 0, 1, 0)
+1
+select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_object_balance_weight limit 1;
 desc oceanbase.__all_virtual_wr_sql_plan_aux_key2snapshot;
 Field	Type	Null	Key	Default	Extra
 tenant_id	bigint(20)	NO	PRI	NULL	
@@ -11249,6 +11319,18 @@ IF(count(*) >= 0, 1, 0)
 IF(count(*) >= 0, 1, 0)
 1
 select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_sswriter_lease_mgr limit 1;
+desc oceanbase.__all_virtual_tenant_flashback_log_scn;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+switchover_epoch	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+op_type	varchar(64)	NO		NULL	
+flashback_log_scn	bigint(20) unsigned	NO		0	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_tenant_flashback_log_scn;
+IF(count(*) >= 0, 1, 0)
+1
+select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_tenant_flashback_log_scn limit 1;
 desc oceanbase.__all_virtual_pl_recompile_objinfo;
 Field	Type	Null	Key	Default	Extra
 tenant_id	bigint(20)	NO	PRI	NULL	
@@ -11276,6 +11358,7 @@ status	bigint(20)	NO		NULL
 target_scn	bigint(20)	NO		NULL	
 ret_code	bigint(20)	NO		NULL	
 trace_id	varchar(512)	NO		NULL	
+progress_info	varchar(512)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_vector_index_task;
 IF(count(*) >= 0, 1, 0)
 1
@@ -11346,6 +11429,43 @@ IF(count(*) >= 0, 1, 0)
 IF(count(*) >= 0, 1, 0)
 1
 select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_tablet_local_cache limit 1;
+desc oceanbase.__all_virtual_ccl_rule;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+ccl_rule_id	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+ccl_rule_name	varchar(128)	NO		NULL	
+affect_user_name	varchar(64)	NO		NULL	
+affect_host	varchar(128)	NO		NULL	
+affect_for_all_databases	tinyint(4)	NO		1	
+affect_for_all_tables	tinyint(4)	NO		1	
+affect_database	varchar(128)	YES		NULL	
+affect_table	varchar(256)	YES		NULL	
+affect_dml	bigint(20)	NO		0	
+affect_scope	bigint(20)	NO		0	
+ccl_keywords	varchar(1048576)	NO		NULL	
+max_concurrency	bigint(20)	NO		0	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ccl_rule;
+IF(count(*) >= 0, 1, 0)
+1
+select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_ccl_rule limit 1;
+desc oceanbase.__all_virtual_ccl_status;
+Field	Type	Null	Key	Default	Extra
+svr_ip	varchar(46)	NO	PRI	NULL	
+svr_port	bigint(20)	NO	PRI	NULL	
+tenant_id	bigint(20)	NO	PRI	NULL	
+ccl_rule_id	bigint(20)	NO	PRI	NULL	
+format_sqlid	varchar(32)	NO	PRI	NULL	
+current_concurrency	bigint(20)	NO		NULL	
+max_concurrency	bigint(20)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ccl_status;
+IF(count(*) >= 0, 1, 0)
+1
+"oceanbase.__all_virtual_ccl_status runs in single server"
+IF(count(*) >= 0, 1, 0)
+1
+select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_ccl_status limit 1;
 desc oceanbase.__all_virtual_mview_running_job;
 Field	Type	Null	Key	Default	Extra
 svr_ip	varchar(46)	NO		NULL	
@@ -11357,6 +11477,7 @@ session_id	bigint(20) unsigned	NO		NULL
 read_snapshot	bigint(20)	NO		NULL	
 parallel	bigint(20)	NO		NULL	
 job_start_time	timestamp(6)	NO		NULL	
+target_data_sync_scn	bigint(20) unsigned	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_mview_running_job;
 IF(count(*) >= 0, 1, 0)
 1
@@ -11382,3 +11503,263 @@ select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all
 IF(count(*) >= 0, 1, 0)
 1
 select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_dynamic_partition_table limit 1;
+desc oceanbase.__all_virtual_ls_migration_task;
+Field	Type	Null	Key	Default	Extra
+svr_ip	varchar(46)	NO		NULL	
+svr_port	bigint(20)	NO		NULL	
+tenant_id	bigint(20)	NO		NULL	
+ls_id	bigint(20)	NO		NULL	
+type	varchar(64)	NO		NULL	
+status	varchar(64)	NO		NULL	
+task_id	varchar(64)	NO		NULL	
+priority	bigint(20)	NO		NULL	
+config_version	varchar(128)	NO		NULL	
+src	varchar(52)	NO		NULL	
+dst	varchar(52)	NO		NULL	
+data_src	varchar(52)	NO		NULL	
+paxos_replica_number	bigint(20)	NO		NULL	
+prioritize_same_zone_src	varchar(4)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ls_migration_task;
+IF(count(*) >= 0, 1, 0)
+1
+"oceanbase.__all_virtual_ls_migration_task runs in single server"
+IF(count(*) >= 0, 1, 0)
+1
+select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_ls_migration_task limit 1;
+desc oceanbase.__all_virtual_ss_notify_tasks_stat;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+ls_id	bigint(20)	NO	PRI	NULL	
+tablet_id	bigint(20)	NO	PRI	NULL	
+id	bigint(20)	NO	PRI	NULL	
+svr_ip	varchar(46)	NO		NULL	
+svr_port	bigint(20)	NO		NULL	
+state	longtext	NO		NULL	
+type	longtext	NO		NULL	
+reorganization_scn	bigint(20)	NO		NULL	
+acquire_sslog_scn	bigint(20)	NO		NULL	
+acquire_aim_ls_scn	bigint(20)	NO		NULL	
+sslog_kv_commit_version	bigint(20)	NO		NULL	
+notify_path	longtext	NO		NULL	
+generate_ts	timestamp(6)	NO		NULL	
+enqueue_ts	timestamp(6)	NO		NULL	
+ready_ts	timestamp(6)	NO		NULL	
+consume_ts	timestamp(6)	NO		NULL	
+retire_reason	longtext	NO		NULL	
+err_ret	bigint(20)	NO		NULL	
+retry_cnt	bigint(20)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ss_notify_tasks_stat;
+IF(count(*) >= 0, 1, 0)
+1
+"oceanbase.__all_virtual_ss_notify_tasks_stat runs in single server"
+IF(count(*) >= 0, 1, 0)
+1
+select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_ss_notify_tasks_stat limit 1;
+desc oceanbase.__all_virtual_ss_notify_tablets_stat;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+ls_id	bigint(20)	NO	PRI	NULL	
+tablet_id	bigint(20)	NO	PRI	NULL	
+reorganization_scn	bigint(20)	NO		NULL	
+svr_ip	varchar(46)	NO		NULL	
+svr_port	bigint(20)	NO		NULL	
+apply_ss_change_version	bigint(20)	NO		NULL	
+notify_ss_change_version	bigint(20)	NO		NULL	
+applying_ss_change_version	bigint(20)	NO		NULL	
+oldest_ss_change_version	bigint(20)	NO		NULL	
+desc oceanbase.__all_virtual_tenant_location;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+location_id	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+location_name	varchar(128)	NO			
+location_url	varchar(4000)	NO			
+location_access_info	varchar(8000)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_tenant_location;
+IF(count(*) >= 0, 1, 0)
+1
+select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_tenant_location limit 1;
+desc oceanbase.__all_virtual_tenant_location_history;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+location_id	bigint(20)	NO	PRI	NULL	
+schema_version	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+is_deleted	bigint(20)	NO		NULL	
+location_name	varchar(128)	YES			
+location_url	varchar(4000)	YES			
+location_access_info	varchar(8000)	YES			
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_tenant_location_history;
+IF(count(*) >= 0, 1, 0)
+1
+select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_tenant_location_history limit 1;
+desc oceanbase.__all_virtual_objauth_mysql;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+user_id	bigint(20)	NO	PRI	NULL	
+obj_name	varchar(128)	NO	PRI	NULL	
+obj_type	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+all_priv	bigint(20)	NO		0	
+grantor	varchar(128)	NO			
+grantor_host	varchar(128)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_objauth_mysql;
+IF(count(*) >= 0, 1, 0)
+1
+select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_objauth_mysql limit 1;
+desc oceanbase.__all_virtual_objauth_mysql_history;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+user_id	bigint(20)	NO	PRI	NULL	
+obj_name	varchar(128)	NO	PRI	NULL	
+obj_type	bigint(20)	NO	PRI	NULL	
+schema_version	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+is_deleted	bigint(20)	NO		NULL	
+all_priv	bigint(20)	YES		0	
+grantor	varchar(128)	YES			
+grantor_host	varchar(128)	YES			
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_objauth_mysql_history;
+IF(count(*) >= 0, 1, 0)
+1
+select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_objauth_mysql_history limit 1;
+desc oceanbase.__tenant_virtual_show_create_location;
+Field	Type	Null	Key	Default	Extra
+location_id	bigint(20)	NO	PRI	NULL	
+location_name	varchar(128)	NO		NULL	
+create_location	varchar(8192)	NO		NULL	
+desc oceanbase.__tenant_virtual_list_file;
+Field	Type	Null	Key	Default	Extra
+location_id	bigint(20)	NO	PRI	NULL	
+location_sub_path	varchar(128)	NO	PRI	NULL	
+pattern	varchar(128)	NO	PRI	NULL	
+file_name	varchar(16384)	NO		NULL	
+file_size	bigint(20)	NO		NULL	
+desc oceanbase.__all_virtual_external_resource;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+resource_id	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+database_id	bigint(20)	NO		NULL	
+name	varchar(256)	NO		NULL	
+type	bigint(20)	NO		NULL	
+content	longblob	NO		NULL	
+comment	varchar(4096)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_external_resource;
+IF(count(*) >= 0, 1, 0)
+1
+select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_external_resource limit 1;
+desc oceanbase.__all_virtual_external_resource_history;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+resource_id	bigint(20)	NO	PRI	NULL	
+schema_version	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+is_deleted	bigint(20)	NO		NULL	
+database_id	bigint(20)	YES		NULL	
+name	varchar(256)	YES		NULL	
+type	bigint(20)	YES		NULL	
+content	longblob	YES		NULL	
+comment	varchar(4096)	YES		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_external_resource_history;
+IF(count(*) >= 0, 1, 0)
+1
+select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_external_resource_history limit 1;
+desc oceanbase.__all_virtual_ccl_rule_history;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+ccl_rule_id	bigint(20)	NO	PRI	NULL	
+schema_version	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+is_deleted	bigint(20)	NO		NULL	
+ccl_rule_name	varchar(128)	YES		NULL	
+affect_user_name	varchar(64)	YES		NULL	
+affect_host	varchar(128)	YES		NULL	
+affect_for_all_databases	tinyint(4)	YES		1	
+affect_for_all_tables	tinyint(4)	YES		1	
+affect_database	varchar(128)	YES		NULL	
+affect_table	varchar(256)	YES		NULL	
+affect_dml	bigint(20)	YES		0	
+affect_scope	bigint(20)	YES		0	
+ccl_keywords	varchar(1048576)	YES		NULL	
+max_concurrency	bigint(20)	YES		0	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ccl_rule_history;
+IF(count(*) >= 0, 1, 0)
+1
+select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_ccl_rule_history limit 1;
+desc oceanbase.__all_virtual_tenant_vector_mem_info;
+Field	Type	Null	Key	Default	Extra
+svr_ip	varchar(46)	NO		NULL	
+svr_port	bigint(20)	NO		NULL	
+tenant_id	bigint(20)	NO		NULL	
+raw_malloc_size	bigint(20)	NO		NULL	
+index_metadata_size	bigint(20)	NO		NULL	
+vector_mem_hold	bigint(20)	NO		NULL	
+vector_mem_used	bigint(20)	NO		NULL	
+vector_mem_limit	bigint(20)	NO		NULL	
+tx_share_limit	bigint(20)	NO		NULL	
+vector_mem_detail_info	varchar(65535)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_tenant_vector_mem_info;
+IF(count(*) >= 0, 1, 0)
+1
+select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_tenant_vector_mem_info limit 1;
+desc oceanbase.__all_virtual_logservice_cluster_info;
+Field	Type	Null	Key	Default	Extra
+cluster_id	bigint(20) unsigned	NO	PRI	NULL	
+cluster_version	varchar(128)	NO		NULL	
+lm_rpc_addr	varchar(46)	NO		NULL	
+lm_http_addr	varchar(46)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_logservice_cluster_info;
+IF(count(*) >= 0, 1, 0)
+1
+select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_logservice_cluster_info limit 1;
+desc oceanbase.__all_virtual_ss_gc_status;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+gc_type	varchar(32)	NO	PRI	NULL	
+last_succ_scn	bigint(20)	NO		NULL	
+extra_info	varchar(4096)	YES		NULL	
+svr_ip	varchar(46)	NO		NULL	
+svr_port	bigint(20)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ss_gc_status;
+IF(count(*) >= 0, 1, 0)
+1
+"oceanbase.__all_virtual_ss_gc_status runs in single server"
+IF(count(*) >= 0, 1, 0)
+1
+select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_ss_gc_status limit 1;
+desc oceanbase.__all_virtual_ss_gc_detect_info;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+ls_id	bigint(20)	NO	PRI	NULL	
+tablet_id	bigint(20)	NO	PRI	NULL	
+transfer_scn	bigint(20)	NO	PRI	NULL	
+is_collected	tinyint(4)	NO		NULL	
+gc_end_scn	bigint(20)	NO		NULL	
+svr_ip	varchar(46)	NO		NULL	
+svr_port	bigint(20)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ss_gc_detect_info;
+IF(count(*) >= 0, 1, 0)
+1
+select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_ss_gc_detect_info limit 1;
+desc oceanbase.__all_virtual_dba_source_v1;
+Field	Type	Null	Key	Default	Extra
+owner	varchar(128)	NO		NULL	
+name	varchar(128)	NO		NULL	
+type	varchar(12)	NO		NULL	
+line	decimal(38,0)	NO		NULL	
+text	varchar(4000)	NO		NULL	
+origin_con_id	decimal(38,0)	NO		NULL	
+object_id	decimal(38,0)	NO		NULL	
+database_id	decimal(38,0)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_dba_source_v1;
+IF(count(*) >= 0, 1, 0)
+1
+select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_dba_source_v1 limit 1;

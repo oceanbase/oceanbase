@@ -335,7 +335,9 @@ int ObPLObjectValue::init(const ObILibCacheObject &cache_obj, ObPLCacheCtx &pc_c
 {
   int ret = OB_SUCCESS;
   const pl::ObPLCacheObject &pl_object = static_cast<const pl::ObPLCacheObject &>(cache_obj);
-  if (OB_FAIL(add_match_info(pc_ctx, &pc_ctx.key_, cache_obj))) {
+  if (OB_UNLIKELY(pl_routine_obj_ != nullptr)) {
+    ret = OB_SQL_PC_PLAN_DUPLICATE;
+  } else if (OB_FAIL(add_match_info(pc_ctx, &pc_ctx.key_, cache_obj))) {
     LOG_WARN("failed to add_match_info", K(ret));
   } else {
     params_info_.reset();
@@ -420,25 +422,34 @@ int ObPLObjectValue::inner_set_max_concurrent_num(const ObOutlineInfo *outline_i
   return ret;
 }
 
+int ObPLObjectValue::external_check()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(pl_routine_obj_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("pl_routine_obj_ is null", K(ret));
+  } else if ((pl_routine_obj_->is_prcr() || pl_routine_obj_->is_sfc()) &&
+              static_cast<ObPLCompileUnit*>(pl_routine_obj_)->has_incomplete_rt_dep_error()) {
+    ret = OB_OLD_SCHEMA_VERSION;
+    LOG_WARN("Need to remove cache obj which dependency routine has error schema.", K(ret));
+  }
+
+  return ret;
+}
+
+void ObPLObjectValue::set_expired_schema_version(const PCVPlSchemaObj &src)
+{
+  if (OB_NOT_NULL(pl_routine_obj_)) {
+    ObSchemaObjVersion &out_date_version = pl_routine_obj_->get_stat_for_update().out_of_date_dependcy_version_;
+    out_date_version.object_id_ = src.schema_id_;
+    out_date_version.version_ = src.schema_version_;
+  }
+}
+
 void ObPLObjectValue::reset()
 {
   ObDLinkBase<ObPLObjectValue>::reset();
-  for (int64_t i = 0; i < stored_schema_objs_.count(); i++) {
-    if (OB_ISNULL(stored_schema_objs_.at(i)) || OB_ISNULL(pc_alloc_)) {
-      // do nothing
-    } else {
-      stored_schema_objs_.at(i)->reset();
-      pc_alloc_->free(stored_schema_objs_.at(i));
-    }
-  }
-  stored_schema_objs_.reset();
-  sys_schema_version_ = OB_INVALID_VERSION;
-  tenant_schema_version_ = OB_INVALID_VERSION;
-  sessid_ = 0;
-  sess_create_time_ = 0;
-  contain_sys_name_table_ = false;
-  contain_sys_pl_object_ = false;
-  contain_tmp_table_ = false;
+  ObPLDependencyCheck::reset();
   params_info_.reset();
 
   pl_routine_obj_ = nullptr;
@@ -455,7 +466,7 @@ int64_t ObPLObjectValue::get_mem_size()
   return value_mem_size;
 }
 
-int ObPLObjectValue::lift_tenant_schema_version(int64_t new_schema_version)
+int ObPLDependencyCheck::lift_tenant_schema_version(int64_t new_schema_version)
 {
   int ret = OB_SUCCESS;
   if (new_schema_version <= tenant_schema_version_) {
@@ -466,7 +477,24 @@ int ObPLObjectValue::lift_tenant_schema_version(int64_t new_schema_version)
   return ret;
 }
 
-int ObPLObjectValue::obtain_new_column_infos(share::schema::ObSchemaGetterGuard &schema_guard,
+void ObPLDependencyCheck::reset()
+{
+  for (int64_t i = 0; i < stored_schema_objs_.count(); i++) {
+    if (OB_ISNULL(stored_schema_objs_.at(i)) || OB_ISNULL(pc_alloc_)) {
+      // do nothing
+    } else {
+      stored_schema_objs_.at(i)->reset();
+      pc_alloc_->free(stored_schema_objs_.at(i));
+    }
+  }
+  stored_schema_objs_.reset();
+  sys_schema_version_ = OB_INVALID_VERSION;
+  tenant_schema_version_ = OB_INVALID_VERSION;
+  contain_sys_name_table_ = false;
+  contain_sys_pl_object_ = false;
+}
+
+int ObPLDependencyCheck::obtain_new_column_infos(share::schema::ObSchemaGetterGuard &schema_guard,
                                               const PCVPlSchemaObj &schema_obj,
                                               ObIArray<ObPLTableColumnInfo> &column_infos)
 {
@@ -506,7 +534,7 @@ int ObPLObjectValue::obtain_new_column_infos(share::schema::ObSchemaGetterGuard 
   return ret;
 }
 
-int ObPLObjectValue::check_value_version(share::schema::ObSchemaGetterGuard *schema_guard,
+int ObPLDependencyCheck::check_value_version(share::schema::ObSchemaGetterGuard *schema_guard,
                                           bool need_check_schema,
                                           const ObIArray<PCVPlSchemaObj> &schema_array,
                                           bool &is_old_version)
@@ -551,7 +579,7 @@ int ObPLObjectValue::check_value_version(share::schema::ObSchemaGetterGuard *sch
           is_old_version = true;
         }
         if (OB_SUCC(ret) && is_old_version) {
-          copy_obj_schema_version(pl_routine_obj_->get_stat_for_update().out_of_date_dependcy_version_, schema_obj1);
+          set_expired_schema_version(*schema_obj1);
           LOG_WARN("mismatched schema objs", K(ret) ,K(*schema_obj1), K(schema_obj2), K(i));
         }
       }
@@ -561,7 +589,7 @@ int ObPLObjectValue::check_value_version(share::schema::ObSchemaGetterGuard *sch
 }
 
 
-int ObPLObjectValue::need_check_schema_version(ObPLCacheCtx &pc_ctx,
+int ObPLDependencyCheck::need_check_schema_version(ObPLCacheBasicCtx &pc_ctx,
                                                 int64_t &new_schema_version,
                                                 bool &need_check)
 {
@@ -573,22 +601,21 @@ int ObPLObjectValue::need_check_schema_version(ObPLCacheCtx &pc_ctx,
   } else {
     int64_t cached_tenant_schema_version = ATOMIC_LOAD(&tenant_schema_version_);
     need_check = ((new_schema_version != cached_tenant_schema_version)
-                  || contain_tmp_table_
                   || contain_sys_pl_object_
                   || contain_sys_name_table_);
     if (need_check && REACH_TIME_INTERVAL(10000000)) {
       LOG_INFO("need check schema", K(new_schema_version), K(cached_tenant_schema_version));
     }
-    if (need_check && (pl_routine_obj_->is_prcr() || pl_routine_obj_->is_sfc())
-      && static_cast<ObPLCompileUnit*>(pl_routine_obj_)->has_incomplete_rt_dep_error()) {
-        ret = OB_OLD_SCHEMA_VERSION;
-        LOG_WARN("Need to remove cache obj which dependency routine has error schema.", K(ret));
+    if (need_check) {
+      if (OB_FAIL(external_check())) {
+        LOG_WARN("fail to external check", K(ret));
+      }
     }
   }
   return ret;
 }
 
-int ObPLObjectValue::get_all_dep_schema(ObSchemaGetterGuard &schema_guard,
+int ObPLDependencyCheck::get_all_dep_schema(ObSchemaGetterGuard &schema_guard,
                                          const DependenyTableStore &dep_schema_objs,
                                          ObIArray<PCVPlSchemaObj> &schema_array)
 {
@@ -635,7 +662,7 @@ int ObPLObjectValue::get_all_dep_schema(ObSchemaGetterGuard &schema_guard,
   return ret;
 }
 
-int ObPLObjectValue::resolve_and_check_synonym(ObSchemaChecker &schema_checker,
+int ObPLDependencyCheck::resolve_and_check_synonym(ObSchemaChecker &schema_checker,
                                                 uint64_t tenant_id,
                                                 uint64_t db_id,
                                                 ObSQLSessionInfo &session_info,
@@ -676,7 +703,7 @@ int ObPLObjectValue::resolve_and_check_synonym(ObSchemaChecker &schema_checker,
   return ret;
 }
 
-int ObPLObjectValue::get_synonym_schema_version(ObPLCacheCtx &pc_ctx,
+int ObPLDependencyCheck::get_synonym_schema_version(ObPLCacheBasicCtx &pc_ctx,
                                                 uint64_t tenant_id,
                                                 const PCVPlSchemaObj &pcv_schema,
                                                 int64_t &new_version)
@@ -704,11 +731,11 @@ int ObPLObjectValue::get_synonym_schema_version(ObPLCacheCtx &pc_ctx,
         } else {
           bool exist = false;
           bool is_private_syn = false;
-          OZ (schema_checker.check_exist_same_name_object_with_synonym(synonym_info->get_tenant_id(),
-                                                                        pcv_schema.invoker_db_id_,
-                                                                        synonym_info->get_synonym_name_str(),
-                                                                        exist,
-                                                                        is_private_syn));
+          OZ (schema_checker.check_object_exists_by_name(synonym_info->get_tenant_id(),
+                                                         pcv_schema.invoker_db_id_,
+                                                         synonym_info->get_synonym_name_str(),
+                                                         exist,
+                                                         is_private_syn));
           if (OB_FAIL(ret)) {
           } else if (exist) {
             ret = OB_OLD_SCHEMA_VERSION;
@@ -730,7 +757,7 @@ int ObPLObjectValue::get_synonym_schema_version(ObPLCacheCtx &pc_ctx,
   return ret;
 }
 
-int ObPLObjectValue::get_all_dep_schema(ObPLCacheCtx &pc_ctx,
+int ObPLDependencyCheck::get_all_dep_schema(ObPLCacheBasicCtx &pc_ctx,
                                          const uint64_t database_id,
                                          int64_t &new_schema_version,
                                          bool &need_check_schema,
@@ -781,7 +808,7 @@ int ObPLObjectValue::get_all_dep_schema(ObPLCacheCtx &pc_ctx,
         }
         if (OB_INVALID_VERSION == new_version) {
           ret = OB_OLD_SCHEMA_VERSION;
-          copy_obj_schema_version(pl_routine_obj_->get_stat_for_update().out_of_date_dependcy_version_, pcv_schema);
+          set_expired_schema_version(*pcv_schema);
           LOG_WARN("can not get newer schema version", K(ret), KPC(pcv_schema));
         } else if (OB_SUCC(ret)) {
           tmp_schema_obj.schema_id_ = pcv_schema->schema_id_; // same id
@@ -816,7 +843,7 @@ int ObPLObjectValue::get_all_dep_schema(ObPLCacheCtx &pc_ctx,
         tmp_schema_obj.reset();
       } else if (nullptr == table_schema) {
         ret = OB_OLD_SCHEMA_VERSION;
-        copy_obj_schema_version(pl_routine_obj_->get_stat_for_update().out_of_date_dependcy_version_, pcv_schema);
+        set_expired_schema_version(*pcv_schema);
         LOG_WARN("table not exist", K(ret), K(*pcv_schema), K(table_schema));
       } else if (OB_FAIL(tmp_schema_obj.init_without_copy_name(table_schema))) {
         LOG_WARN("failed to init pcv schema obj", K(ret));
@@ -832,7 +859,7 @@ int ObPLObjectValue::get_all_dep_schema(ObPLCacheCtx &pc_ctx,
 }
 
 
-int ObPLObjectValue::match_dep_schema(const ObPLCacheCtx &pc_ctx,
+int ObPLDependencyCheck::match_dep_schema(const ObPLCacheBasicCtx &pc_ctx,
                                        const ObIArray<PCVPlSchemaObj> &schema_array,
                                        bool &is_same)
 {
@@ -857,7 +884,7 @@ int ObPLObjectValue::match_dep_schema(const ObPLCacheCtx &pc_ctx,
                  && !stored_schema_objs_.at(i)->match_compare(schema_array.at(i))) {
         // check whether common table name is same as system table in oracle mode
         is_same = false;
-        copy_obj_schema_version(pl_routine_obj_->get_stat_for_update().out_of_date_dependcy_version_, stored_schema_objs_.at(i));
+        set_expired_schema_version(*stored_schema_objs_.at(i));
         LOG_WARN("mismatched schema objs", K(*stored_schema_objs_.at(i)), K(stored_schema_objs_.at(i)), K(i));
       } else {
         // do nothing
@@ -867,7 +894,7 @@ int ObPLObjectValue::match_dep_schema(const ObPLCacheCtx &pc_ctx,
   return ret;
 }
 
-int ObPLObjectValue::add_match_info(ObILibCacheCtx &ctx,
+int ObPLDependencyCheck::add_match_info(ObILibCacheCtx &ctx,
                                   ObILibCacheKey *key,
                                   const ObILibCacheObject &cache_obj)
 {
@@ -882,8 +909,6 @@ int ObPLObjectValue::add_match_info(ObILibCacheCtx &ctx,
                   !cache_object.is_call_stmt())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("cache object is invalid", K(cache_object));
-  } else if (OB_UNLIKELY(pl_routine_obj_ != nullptr)) {
-    ret = OB_SQL_PC_PLAN_DUPLICATE;
   } else if (OB_FAIL(set_stored_schema_objs(cache_object.get_dependency_table(),
                                             pc_ctx.schema_guard_))) {
       LOG_WARN("failed to set stored schema objs",
@@ -891,16 +916,12 @@ int ObPLObjectValue::add_match_info(ObILibCacheCtx &ctx,
   } else {
     sys_schema_version_ = cache_object.get_sys_schema_version();
     tenant_schema_version_ = cache_object.get_tenant_schema_version();
-    if (contain_tmp_table_) {
-      sessid_ = pc_ctx.session_info_->get_sessid_for_table();
-      sess_create_time_ = pc_ctx.session_info_->get_sess_create_time();
-    }
   }
   return ret;
 }
 
 
-int ObPLObjectValue::set_stored_schema_objs(const DependenyTableStore &dep_table_store,
+int ObPLDependencyCheck::set_stored_schema_objs(const DependenyTableStore &dep_table_store,
                                           share::schema::ObSchemaGetterGuard *schema_guard)
 {
   int ret = OB_SUCCESS;
@@ -988,9 +1009,6 @@ int ObPLObjectValue::set_stored_schema_objs(const DependenyTableStore &dep_table
         // do nothing
       }
       if (OB_SUCC(ret) && OB_NOT_NULL(pcv_schema_obj)) {
-        if (pcv_schema_obj->is_tmp_table_ && !contain_tmp_table_) {
-          contain_tmp_table_ = true;
-        }
         if (!contain_sys_pl_object_ &&
             (PACKAGE_SCHEMA == pcv_schema_obj->schema_type_ ||
              UDT_SCHEMA == pcv_schema_obj->schema_type_) &&
@@ -1369,9 +1387,9 @@ int ObPLObjectSet::inner_add_cache_obj(ObILibCacheCtx &ctx,
                          !cache_object->is_call_stmt())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("cache object is invalid", K(cache_object));
-  } else if (OB_FAIL(ObPLObjectValue::get_all_dep_schema(*pc_ctx.schema_guard_,
-                                                          cache_object->get_dependency_table(),
-                                                          schema_array))) {
+  } else if (OB_FAIL(ObPLDependencyCheck::get_all_dep_schema(*pc_ctx.schema_guard_,
+                                                            cache_object->get_dependency_table(),
+                                                            schema_array))) {
     LOG_WARN("failed to get all dep schema", K(ret));
   } else {
     DLIST_FOREACH(pl_object_value, object_value_sets_) {
@@ -1512,8 +1530,9 @@ int ObPLCacheCtx::adjust_definer_database_id()
 do {                                                                             \
   OZ(schema_guard_->get_##type##_info(get_tenant_id_by_object_id(key_id),        \
                                       key_id, tmp_##type##_info));               \
-  CK(OB_NOT_NULL(tmp_##type##_info));                                            \
-  if (OB_FAIL(ret)) {                                                            \
+  if (OB_ISNULL(tmp_##type##_info)) {                                            \
+    ret = OB_ERR_INVALID_SCHEMA;                                                 \
+    LOG_WARN("failed to get " #type " info. ", K(ret), K(key_id));               \
   } else if (!tmp_##type##_info->is_invoker_right()) {                           \
     key_.db_id_ = tmp_##type##_info->get_database_id();                          \
   }                                                                              \

@@ -63,7 +63,7 @@ int ObExprArraySortby::calc_result_typeN(ObExprResType& type,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("exec ctx is null", K(ret));
   } else if (ob_is_null(lambda_type)) {
-    is_null_res = true;
+    types_stack[0].set_calc_type(ObUTinyIntType);
   } else if (!ob_is_array_supported_type(lambda_type)) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_WARN("invalid data type", K(ret), K(lambda_type));

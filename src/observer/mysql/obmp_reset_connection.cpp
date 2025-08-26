@@ -266,6 +266,10 @@ int ObMPResetConnection::process()
     }
     force_disconnect();
   }
+  int tmp_ret = OB_SUCCESS;
+  if (OB_NOT_NULL(session)) {
+    tmp_ret = do_after_process(*session, false/*async_resp_used*/);
+  }
 
   THIS_WORKER.set_session(NULL);
   if (session != NULL) {

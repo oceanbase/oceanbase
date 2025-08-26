@@ -210,7 +210,7 @@ int ObPartitionPreSplit::get_estimated_table_size(
 
   if (OB_FAIL(index_table_schema.get_column_ids(column_ids))) {
     LOG_WARN("[PRE_SPLIT] fail to get mapping column ids.", K(ret));
-  } else if (OB_FAIL(get_data_table_part_ids(data_table_schema, part_ids))) {
+  } else if (OB_FAIL(part_ids.push_back(-1))) {
     LOG_WARN("[PRE_SPLIT] fail to get data table part id.", K(ret), K(data_table_schema));
   } else {
     common::ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
@@ -335,7 +335,7 @@ int ObPartitionPreSplit::get_global_index_pre_split_schema_if_need(
   } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id, schema_guard))) {
     LOG_WARN("[PRE_SPLIT] fail to get tenant schema guard", K(ret), K(tenant_id));
   } else if (OB_FALSE_IT(schema_guard.set_session_id(session_id))) {
-  } else if (schema_guard.get_table_schema(tenant_id, database_name, table_name, false/*is_index*/, data_table_schema)) {
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, database_name, table_name, false/*is_index*/, data_table_schema))) {
     LOG_WARN("[PRE_SPLIT] fail to get table schema", K(ret), K(tenant_id), K(database_name), K(table_name));
   } else if (OB_ISNULL(data_table_schema)) {
     ret = OB_TABLE_NOT_EXIST;

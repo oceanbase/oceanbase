@@ -603,7 +603,8 @@ ObTableScanSpec::ObTableScanSpec(ObIAllocator &alloc, const ObPhyOperatorType ty
     parser_properties_(),
     est_cost_simple_info_(),
     pseudo_column_exprs_(alloc),
-    lob_inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD)
+    lob_inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD),
+    lake_table_format_(share::ObLakeTableFormat::INVALID)
 {
 }
 
@@ -632,7 +633,8 @@ OB_SERIALIZE_MEMBER((ObTableScanSpec, ObOpSpec),
                     parser_name_,
                     parser_properties_,
                     pseudo_column_exprs_,
-                    lob_inrow_threshold_);
+                    lob_inrow_threshold_,
+                    lake_table_format_);
 
 DEF_TO_STRING(ObTableScanSpec)
 {
@@ -1101,7 +1103,9 @@ int ObTableScanOp::prepare_all_das_tasks()
   }
 
   if (OB_SUCC(ret)) {
-    if (MY_SPEC.gi_above_ && !MY_INPUT.key_ranges_.empty()) {
+    // if use gi schedule and index merge, need to prepare scan range at the time of the first scan
+    // or if the tasks are not all local tasks
+    if (MY_SPEC.gi_above_ && !MY_INPUT.key_ranges_.empty() && !MY_CTDEF.use_index_merge_) {
       if (OB_FAIL(prepare_das_task())) {
         LOG_WARN("prepare das task failed", K(ret));
       }
@@ -1501,6 +1505,8 @@ int ObTableScanOp::prepare_single_scan_range(int64_t group_idx, bool need_sort)
     } else if (OB_FAIL(ObExternalTableUtils::prepare_single_scan_range(
                                                 ctx_.get_my_session()->get_effective_tenant_id(),
                                                 MY_CTDEF.scan_ctdef_,
+                                                &tsc_rtdef_.scan_rtdef_,
+                                                ctx_,
                                                 partition_ids,
                                                 key_ranges,
                                                 range_allocator,
@@ -1776,7 +1782,7 @@ int ObTableScanOp::set_need_check_outrow_lob()
     if (OB_ISNULL(e)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("error unexpected, expr is nullptr", K(ret));
-    } else if (e->obj_meta_.is_lob_storage()) {
+    } else if (ObMediumTextType == e->obj_meta_.get_type()) { // String type
       need_check_outrow_lob_ = true;
       break;
     }
@@ -1902,6 +1908,13 @@ int ObTableScanOp::inner_close()
     }
   }
 
+  if (OB_SUCC(ret)) {
+    ObSQLSessionInfo *session = GET_MY_SESSION(ctx_);
+    if (OB_NOT_NULL(session) && session->is_diagnosis_enabled()) {
+      ObDiagnosisManager& diagnosis_manager = ctx_.get_diagnosis_manager();
+      diagnosis_manager.close();
+    }
+  }
   if (OB_SUCC(ret)) {
     fts_index_.reuse();
     iter_end_ = false;
@@ -2196,8 +2209,10 @@ int ObTableScanOp::local_iter_rescan()
     LOG_WARN("assign task ranges failed", K(ret));
   } else if (OB_UNLIKELY(iter_end_)) {
     //do nothing
-  } else if (MY_INPUT.key_ranges_.empty() &&
-      OB_FAIL(prepare_scan_range())) { // prepare scan input param
+  } else if ((MY_INPUT.key_ranges_.empty() || MY_CTDEF.use_index_merge_) &&
+             OB_FAIL(prepare_scan_range())) {
+    // if use index merge but key range is not empty
+    // maybe use gi scheduler, need to prepare scan range
     LOG_WARN("fail to prepare scan param", K(ret));
   } else {
     DASTaskIter task_iter = scan_iter_->begin_task_iter();
@@ -2663,9 +2678,7 @@ ERRSIM_POINT_DEF(EN_TABLE_SCAN_RETRY_WAIT_EVENT_ERRSIM);
 int ObTableScanOp::inner_get_next_batch(const int64_t max_row_cnt)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(EN_TABLE_SCAN_RETRY_WAIT_EVENT_ERRSIM)) {
-    ret = EN_TABLE_SCAN_RETRY_WAIT_EVENT_ERRSIM;
-  } else if (OB_UNLIKELY(rand_scan_processor_.use_rand_scan())) {
+  if (OB_UNLIKELY(rand_scan_processor_.use_rand_scan())) {
     if (OB_FAIL(rand_scan_processor_.inner_get_next_batch(max_row_cnt))) {
       LOG_WARN("random table scan failed", K(ret));
     }
@@ -2685,6 +2698,15 @@ int ObTableScanOp::inner_get_next_batch(const int64_t max_row_cnt)
       }
     }
   }
+
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    ret = EN_TABLE_SCAN_RETRY_WAIT_EVENT_ERRSIM ? : OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      STORAGE_LOG(ERROR, "ERRSIM EN_TABLE_SCAN_RETRY_WAIT_EVENT_ERRSIM", K(ret));
+    }
+  }
+#endif
   return ret;
 }
 
@@ -3503,12 +3525,23 @@ int ObTableScanOp::do_diagnosis(ObExecContext &exec_ctx, ObBitVector &skip)
 {
   int ret = OB_SUCCESS;
   ObDiagnosisManager& diagnosis_manager = exec_ctx.get_diagnosis_manager();
-  if (OB_FAIL(output_->get_diagnosis_info(&diagnosis_manager))) {
+  const ObSQLSessionInfo *session = nullptr;
+  if (OB_ISNULL(session = ctx_.get_my_session()) || OB_ISNULL(output_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("fail to get diagnosis info", K(ret));
-  } else if (OB_FAIL(diagnosis_manager.do_diagnosis(skip,
-                                            exec_ctx.get_my_session()->get_diagnosis_limit_num()))){
-    LOG_WARN("fail to do diagnosis", K(ret));
+    LOG_WARN("session or output is null", K(ret), K(session), K(output_));
+  } else if (output_->get_type() != DAS_ITER_MERGE) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected iter type", K(ret), K(output_->get_type()));
+  } else {
+    ObDASMergeIter *das_merge_iter = static_cast<ObDASMergeIter *>(output_);
+    if (OB_FAIL(das_merge_iter->get_cur_diagnosis_info(&diagnosis_manager))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to get diagnosis info", K(ret));
+    } else if (OB_FAIL(diagnosis_manager.do_diagnosis(skip, session->get_diagnosis_info(),
+                                                    ctx_.get_px_sqc_id(), ctx_.get_px_task_id(),
+                                                    ctx_.get_allocator()))){
+      LOG_WARN("fail to do diagnosis", K(ret));
+    }
   }
   return ret;
 }
@@ -3628,9 +3661,7 @@ int ObTableScanOp::transform_physical_rowid_rowkey(ObIAllocator &allocator,
 int ObTableScanOp::inner_get_next_row()
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(EN_TABLE_SCAN_RETRY_WAIT_EVENT_ERRSIM)) {
-    ret = EN_TABLE_SCAN_RETRY_WAIT_EVENT_ERRSIM;
-  } else if (OB_UNLIKELY(MY_SPEC.is_spatial_ddl())) {
+  if (OB_UNLIKELY(MY_SPEC.is_spatial_ddl())) {
     if (OB_FAIL(inner_get_next_spatial_index_row())) {
       if (ret != OB_ITER_END) {
         LOG_WARN("spatial index ddl : get next spatial index row failed", K(ret));
@@ -3653,6 +3684,15 @@ int ObTableScanOp::inner_get_next_row()
       LOG_WARN("get next row failed", K(ret));
     }
   }
+
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    ret = EN_TABLE_SCAN_RETRY_WAIT_EVENT_ERRSIM ? : OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      STORAGE_LOG(ERROR, "ERRSIM EN_TABLE_SCAN_RETRY_WAIT_EVENT_ERRSIM", K(ret));
+    }
+  }
+#endif
   return ret;
 }
 
@@ -3791,7 +3831,7 @@ int ObTableScanOp::multivalue_get_pure_data(
     if (OB_FAIL(ret)) {
     } else if (FALSE_IT(rowkey_end = column_count - 1)) {
     } else if (FALSE_IT(rowkey_start = rowkey_end - data_rowkey_cnt)) {
-    } else if (OB_FAIL(extend_domain_obj_buffer(SAPTIAL_INDEX_DEFAULT_ROW_COUNT))) {
+    } else if (OB_FAIL(extend_domain_obj_buffer(record_num))) {
       LOG_WARN("failed to extend obobj buffer.", K(ret));
     } else {
       ObObj tmp_objs[column_count];
@@ -3831,7 +3871,7 @@ int ObTableScanOp::inner_get_next_multivalue_index_row()
   bool need_ignore_null = false;
   if (OB_ISNULL(domain_index_.dom_rows_)) {
     if (OB_FAIL(init_multivalue_index_rows())) {
-      LOG_WARN("init spatial row store failed", K(ret));
+      LOG_WARN("init multivalue row store failed", K(ret));
     }
   }
   if (OB_SUCC(ret)) {

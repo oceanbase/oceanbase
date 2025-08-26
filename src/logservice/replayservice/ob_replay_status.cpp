@@ -262,17 +262,17 @@ int ObReplayServiceSubmitTask::next_log(const SCN &replayable_point,
       if (next_min_scn == next_to_submit_scn_
           || !replayable_point.is_valid()) {
         // do nothing
-      } else if (!next_min_scn.is_valid()) {
+      } else if (!next_min_scn.is_valid() || next_min_scn == SCN::base_scn()) {
         // should only occurs when palf has no log
         CLOG_LOG(INFO, "next_min_scn is invalid", K(type_), K(replayable_point),
                  K(next_min_scn), K(next_to_submit_scn_), K(ret), K(iterator_));
       } else if (OB_UNLIKELY(next_min_scn < next_to_submit_scn_)) {
         // TODO @yunlong: 维护next_min_scn, 当前实现会导致replay卡住
         ret = OB_SUCCESS;
-        // LSN unused_lsn;
+        LSN unused_lsn;
         // updating next to submit log info is failed, set fatal error for replay status.
-        // replay_status_->set_err_info(unused_lsn, next_min_scn, ObLogBaseType::INVALID_LOG_BASE_TYPE,
-        //                              0, true, ObClockGenerator::getClock(), ret);
+        replay_status_->set_err_info(unused_lsn, next_min_scn, ObLogBaseType::INVALID_LOG_BASE_TYPE,
+                                     0, true, ObClockGenerator::getClock(), ret);
         CLOG_LOG(ERROR, "failed to update next_to_submit_scn_", K(type_), K(replayable_point),
                  K(next_min_scn), K(next_to_submit_scn_), K(ret), K(iterator_));
       } else {

@@ -63,7 +63,8 @@ TEST_F(TestTabletAggregatedInfo, test_space_usage)
 
   // check tablet's space_usage with empty major sstable
   ObTabletHandle new_tablet_handle;
-  const ObTabletPersisterParam param(ls_id, ls_handle.get_ls()->get_ls_epoch(), tablet_id, tablet->get_transfer_seq());
+  const uint64_t data_version = DATA_CURRENT_VERSION;
+  const ObTabletPersisterParam param(data_version, ls_id, ls_handle.get_ls()->get_ls_epoch(), tablet_id, tablet->get_transfer_seq());
   ASSERT_EQ(OB_SUCCESS, ObTabletPersister::persist_and_transform_tablet(param, *tablet, new_tablet_handle));
   ObTabletSpaceUsage space_usage = new_tablet_handle.get_obj()->tablet_meta_.space_usage_;
   ASSERT_EQ(0, space_usage.all_sstable_data_occupy_size_);

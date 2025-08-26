@@ -43,7 +43,8 @@ ObRemoteLogWriter::ObRemoteLogWriter() :
   tenant_id_(OB_INVALID_TENANT_ID),
   ls_svr_(NULL),
   restore_service_(NULL),
-  worker_(NULL)
+  worker_(NULL),
+  task_cond_()
 {}
 
 ObRemoteLogWriter::~ObRemoteLogWriter()
@@ -83,6 +84,8 @@ void ObRemoteLogWriter::destroy()
   ls_svr_ = NULL;
   restore_service_ = NULL;
   worker_ = NULL;
+  share::ObThreadPool::destroy();
+  LOG_INFO("ObRemoteLogWriter destroy succ");
 }
 
 int ObRemoteLogWriter::start()
@@ -128,9 +131,18 @@ void ObRemoteLogWriter::run1()
       int64_t end_tstamp = ObTimeUtility::current_time();
       int64_t wait_interval = THREAD_RUN_INTERVAL - (end_tstamp - begin_tstamp);
       if (wait_interval > 0) {
-        ob_usleep(wait_interval, true/*is_idle_sleep*/);
+        task_cond_.timedwait(wait_interval);
       }
     }
+  }
+}
+
+void ObRemoteLogWriter::notify_task()
+{
+  if (OB_UNLIKELY(! inited_)) {
+    LOG_INFO("ObRemoteLogWriter not init");
+  } else {
+    task_cond_.signal();
   }
 }
 
@@ -197,6 +209,7 @@ int ObRemoteLogWriter::foreach_ls_(const ObLSID &id)
       // try retire task, if task is consumed done or stale, free it,
       // otherwise push_back to task_queue_
       if (NULL != task) {
+        ObTimeGuard time_guard("retire_task", 5 * 1000 * 1000);
         int tmp_ret = OB_SUCCESS;
         task->iter_.update_source_cb();
         if (OB_SUCCESS != (tmp_ret = try_retire_(task))) {
@@ -222,6 +235,10 @@ int ObRemoteLogWriter::submit_entries_(ObFetchLogTask &task)
   int64_t entry_size = 0;
   LSN max_submit_lsn;
   SCN max_submit_scn;
+  const uint64_t io_tenant_id = MTL_ID();
+  ObObjectStorageTenantGuard object_storage_tenant_guard(
+    io_tenant_id, OB_IO_MANAGER.get_object_storage_io_timeout_ms(io_tenant_id) * 1000LL);
+  task.task_stat_.start_submit_ts_ = ObTimeUtility::current_time();
   while (OB_SUCC(ret) && ! has_set_stop()) {
     if (OB_FAIL(task.iter_.next(entry, lsn, buf, size))) {
       if (OB_ITER_END != ret) {
@@ -250,6 +267,8 @@ int ObRemoteLogWriter::submit_entries_(ObFetchLogTask &task)
     }
   } // while
 
+  task.task_stat_.finish_submit_ts_ = ObTimeUtility::current_time();
+
   if (OB_ITER_END == ret) {
     if (lsn.is_valid()) {
       LOG_INFO("submit_entries_ succ", K(id), K(lsn), K(entry.get_scn()), K(task));
@@ -259,7 +278,7 @@ int ObRemoteLogWriter::submit_entries_(ObFetchLogTask &task)
 
   if (max_submit_lsn.is_valid() && max_submit_scn.is_valid()) {
     int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(update_max_fetch_info_(id, proposal_id, max_submit_lsn, max_submit_scn))) {
+    if (OB_TMP_FAIL(update_max_fetch_info_(id, proposal_id, max_submit_lsn, max_submit_scn, task.task_stat_))) {
       LOG_WARN("update max fetch info failed", K(id), K(proposal_id), K(max_submit_lsn), K(max_submit_scn));
     } else {
       LOG_INFO("update max fetch context succ", K(id), K(proposal_id), K(max_submit_lsn), K(max_submit_scn));
@@ -301,11 +320,12 @@ int ObRemoteLogWriter::submit_log_(const ObLSID &id,
 int ObRemoteLogWriter::update_max_fetch_info_(const ObLSID &id,
     const int64_t proposal_id,
     const palf::LSN &lsn,
-    const share::SCN &scn)
+    const share::SCN &scn,
+    const ObRemoteFetchTaskStat &stat)
 {
   int ret = OB_SUCCESS;
   GET_RESTORE_HANDLER_CTX(id) {
-    if (OB_FAIL(restore_handler->update_max_fetch_info(proposal_id, lsn, scn))) {
+    if (OB_FAIL(restore_handler->update_max_fetch_info(proposal_id, lsn, scn, stat))) {
       LOG_WARN("update max fetch info failed", K(id), K(proposal_id), K(lsn), K(scn));
     }
   }

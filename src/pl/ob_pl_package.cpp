@@ -121,14 +121,14 @@ int ObPLPackageAST::process_generic_type()
     " SYS$REC_V2TABLE",
     "<ASSOC_ARRAY_1>"
   };
-  if (0 == get_name().case_compare("STANDARD")
-      && 0 == get_db_name().case_compare(OB_SYS_DATABASE_NAME)) {
+  if (get_name().case_compare_equal("STANDARD")
+      && get_db_name().case_compare_equal(OB_SYS_DATABASE_NAME)) {
     const ObPLUserTypeTable &user_type_table = get_user_type_table();
     const ObUserDefinedType *user_type = NULL;
     for (int64_t i = 0; OB_SUCC(ret) && i < user_type_table.get_count(); ++i) {
       if (OB_NOT_NULL(user_type = user_type_table.get_type(i))) {
         for (int64_t j = 0; OB_SUCC(ret) && j < PL_GENERIC_MAX; ++j) {
-          if (0 == user_type->get_name().case_compare(generic_type_table[j])) {
+          if (user_type->get_name().case_compare_equal(generic_type_table[j])) {
             (const_cast<ObUserDefinedType *>(user_type))
               ->set_generic_type(static_cast<ObPLGenericType>(j));
           }
@@ -372,6 +372,7 @@ int ObPLPackage::execute_init_routine(ObIAllocator &allocator, ObExecContext &ex
       ObObj result;
       int status;
       ObSEArray<int64_t, 2> subp_path;
+      ObCacheObjGuard cacheobj_guard(PL_ROUTINE_HANDLE);
       OZ (pl_engine->execute(exec_ctx,
                              exec_ctx.get_allocator(),
                              init_routine->get_package_id(),
@@ -380,6 +381,7 @@ int ObPLPackage::execute_init_routine(ObIAllocator &allocator, ObExecContext &ex
                              params,
                              nocopy_param,
                              result,
+                             cacheobj_guard,
                              &status,
                              false,
                              init_routine->is_function()));
@@ -500,7 +502,7 @@ int ObPLPackage::get_cursor(
     const ObPLVar *v = NULL;
     CK (OB_NOT_NULL(it));
     CK (OB_NOT_NULL(v = get_var_table().at(it->get_index())));
-    if (OB_SUCC(ret) && 0 == v->get_name().case_compare(cursor_name)) {
+    if (OB_SUCC(ret) && v->get_name().case_compare_equal(cursor_name)) {
       cursor = it;
       cursor_idx = i;
       break;

@@ -471,7 +471,7 @@ int ObLockExecutor::query_lock_id_(const ObString &lock_name,
   lock_id = OB_INVALID_OBJECT_ID;
 
   OZ (databuff_printf(where_cond, WHERE_CONDITION_BUFFER_SIZE,
-                      "WHERE name = '%s'", to_cstring(lock_name)));
+                      "WHERE name = '%.*s'", lock_name.length(), lock_name.ptr()));
   OZ (databuff_printf(table_name, MAX_FULL_TABLE_NAME_LENGTH,
                       "%s.%s", OB_SYS_DATABASE_NAME, OB_ALL_DBMS_LOCK_ALLOCATED_TNAME));
   OZ (ObTableAccessHelper::read_single_row(tenant_id,
@@ -504,7 +504,7 @@ int ObLockExecutor::query_lock_id_and_lock_handle_(const ObString &lock_name,
   lock_id = OB_INVALID_OBJECT_ID;
 
   OZ (databuff_printf(where_cond, WHERE_CONDITION_BUFFER_SIZE,
-                      "WHERE name = '%s'", to_cstring(lock_name)));
+                      "WHERE name = '%.*s'", lock_name.length(), lock_name.ptr()));
   OZ (databuff_printf(table_name, MAX_FULL_TABLE_NAME_LENGTH,
                       "%s.%s", OB_SYS_DATABASE_NAME, OB_ALL_DBMS_LOCK_ALLOCATED_TNAME));
   OZ (ObTableAccessHelper::read_single_row(tenant_id,
@@ -598,7 +598,7 @@ int ObLockExecutor::get_first_session_info_(common::sqlclient::ObMySQLResult &re
   OX (GET_COL_IGNORE_NULL(res.get_uint, "server_session_id", tmp_session_id));
   OX (server_session_id = static_cast<uint32_t>(tmp_session_id));
   OX (session_addr.reset());
-  OV (session_addr.set_ip_addr(to_cstring(svr_ip), svr_port), OB_ERR_UNEXPECTED, svr_ip, svr_port);
+  OV (session_addr.set_ip_addr(svr_ip, svr_port), OB_ERR_UNEXPECTED, svr_ip, svr_port);
 
   return ret;
 }
@@ -877,7 +877,7 @@ int ObUnLockExecutor::release_all_locks_(ObLockContext &ctx,
 
   OZ (get_task_type_by_release_type_(release_type, task_type));
   OZ (ObTableLockDetector::get_unlock_request_list(session, owner_id, task_type, allocator, arg_list));
-  OX (release_all_locks_(ctx, arg_list, session, tx_param, release_cnt));
+  OZ (release_all_locks_(ctx, arg_list, session, tx_param, release_cnt));
   // clean the unlock request list
   for (int64_t i = 0; i < arg_list.count(); i++) {
     ObLockRequest *arg = arg_list.at(i);

@@ -7,10 +7,14 @@ enable_testing()
 add_definitions(-DOB_UNITTEST)
 
 function(oblib_addtest mainfile)
-  get_filename_component(testname ${mainfile} NAME_WE)
+  if (${ARGC} GREATER 1)
+    list(GET ARGN 0 testname)
+  else()
+    get_filename_component(testname ${mainfile} NAME_WE)
+  endif()
   add_executable(${testname} ${mainfile})
   add_test(${testname} ${testname})
-  target_link_libraries(${testname} PRIVATE -Wl,--whole-archive mock_di -Wl,--no-whole-archive oblib oblib_testbase -static-libgcc -static-libstdc++ ${ARGN}
+  target_link_libraries(${testname} PRIVATE -Wl,--whole-archive mock_di -Wl,--no-whole-archive oblib oblib_testbase -static-libgcc -static-libstdc++
       ${OB_RELRO_FLAG} -Wl,-T,${CMAKE_SOURCE_DIR}/rpm/ld.lds)
 endfunction()
 

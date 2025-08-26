@@ -15,7 +15,6 @@
 #include "ob_i_storage.h"
 #include "ob_storage_file.h"
 #include "ob_storage_oss_base.h"
-#include "ob_storage_cos_base.h"
 #include "ob_storage_s3_base.h"
 #include "hdfs/ob_storage_hdfs_jni_base.h"
 #include "ob_storage_obdal_base.h"
@@ -41,6 +40,8 @@ class ObObjectDevice;
 void print_access_storage_log(const char *msg, const common::ObString &uri,
     const int64_t start_ts, const int64_t size = 0, bool *is_slow = NULL);
 int get_storage_type_from_path(const common::ObString &uri, ObStorageType &type);
+// specifically for external table, designed to be compatible with COS.
+int get_storage_type_from_path_for_external_table(const common::ObString &uri, ObStorageType &type);
 int validate_uri_type(const common::ObString &uri);
 int get_storage_type_from_name(const char *type_str, ObStorageType &type);
 const char *get_storage_type_str(const ObStorageType &type);
@@ -278,7 +279,7 @@ public:
       const ObIArray<ObString> &files_to_delete, ObIArray<int64_t> &failed_files_idx);
   int del_unmerged_parts(const common::ObString &uri);
 
-  // For one object, if given us the uri(no matter in oss, cos or s3), we can't tell the type of this object.
+  // For one object, if given us the uri(no matter in oss or s3), we can't tell the type of this object.
   // It may be a 'single、normal' object. Or it may be a 's3-appendable-object'(like a dir), containing several
   // 'single、normal' objects.
   // So, this function is for checking the object meta, to get its meta info
@@ -361,7 +362,6 @@ private:
 
   ObStorageFileUtil file_util_;
   ObStorageOssUtil oss_util_;
-  ObStorageCosUtil cos_util_;
   ObStorageS3Util s3_util_;
   ObStorageHdfsJniUtil hdfs_util_;
   ObStorageObDalUtil obdal_util_;
@@ -435,7 +435,6 @@ protected:
   ObIStorageReader *reader_;
   ObStorageFileReader file_reader_;
   ObStorageOssReader oss_reader_;
-  ObStorageCosReader cos_reader_;
   ObStorageS3Reader s3_reader_;
   ObStorageHdfsReader hdfs_reader_;
   ObStorageObDalReader obdal_reader_;
@@ -467,7 +466,6 @@ private:
   ObIStorageReader *reader_;
   ObStorageFileReader file_reader_;
   ObStorageOssReader oss_reader_;
-  ObStorageCosReader cos_reader_;
   ObStorageS3Reader s3_reader_;
   ObStorageHdfsReader hdfs_reader_;
   ObStorageObDalReader obdal_reader_;
@@ -489,7 +487,6 @@ protected:
   ObIStorageWriter *writer_;
   ObStorageFileSingleWriter file_writer_;
   ObStorageOssWriter oss_writer_;
-  ObStorageCosWriter cos_writer_;
   ObStorageS3Writer s3_writer_;
   ObStorageHdfsWriter hdfs_writer_;
   ObStorageObDalWriter obdal_writer_;
@@ -526,7 +523,6 @@ private:
   ObIStorageWriter *appender_;
   ObStorageFileAppender file_appender_;
   ObStorageOssAppendWriter oss_appender_;
-  ObStorageCosAppendWriter cos_appender_;
   ObStorageS3AppendWriter s3_appender_;
   ObStorageHdfsAppendWriter hdfs_appender_;
   ObStorageObDalAppendWriter obdal_appender_;
@@ -560,7 +556,6 @@ public:
 protected:
   ObIStorageMultiPartWriter *multipart_writer_;
   ObStorageFileMultiPartWriter file_multipart_writer_;
-  ObStorageCosMultiPartWriter cos_multipart_writer_;
   ObStorageOssMultiPartWriter oss_multipart_writer_;
   ObStorageS3MultiPartWriter s3_multipart_writer_;
   ObStorageObDalMultiPartWriter obdal_multipart_writer_;
@@ -584,7 +579,6 @@ public:
 protected:
   ObIStorageParallelMultipartWriter *multipart_writer_;
   ObStorageParallelFileMultiPartWriter file_multipart_writer_;
-  ObStorageParallelCosMultiPartWriter cos_multipart_writer_;
   ObStorageParallelOssMultiPartWriter oss_multipart_writer_;
   ObStorageParallelS3MultiPartWriter s3_multipart_writer_;
   ObStorageParallelObDalMultiPartWriter obdal_multipart_writer_;

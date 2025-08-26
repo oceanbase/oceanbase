@@ -190,6 +190,7 @@ private:
       const ObIArray<ObTabletID> &input_tablet_ids,
       const ObIArray<ObString> &input_table_names);
   bool is_mapping_valid_() const;
+  int get_random_server_(const uint64_t tenant_id, common::ObAddr &target_server);
 private:
   bool is_inited_;
   common::ObArenaAllocator inner_alloc_;

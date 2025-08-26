@@ -21,7 +21,6 @@ using namespace storage;
 namespace blocksstable
 {
 
-
 template<typename ReaderType>
 class PreciseCompare
 {
@@ -83,7 +82,8 @@ private:
   const ObStorageDatumUtils *datum_utils_;
 };
 
-ObIMicroBlockFlatReader::ObIMicroBlockFlatReader()
+template<bool EnableNewFlatFormat>
+ObIMicroBlockFlatReader<EnableNewFlatFormat>::ObIMicroBlockFlatReader()
   : header_(nullptr),
     data_begin_(nullptr),
     data_end_(nullptr),
@@ -93,21 +93,23 @@ ObIMicroBlockFlatReader::ObIMicroBlockFlatReader()
 {
 }
 
-ObIMicroBlockFlatReader::~ObIMicroBlockFlatReader()
+template<bool EnableNewFlatFormat>
+ObIMicroBlockFlatReader<EnableNewFlatFormat>::~ObIMicroBlockFlatReader()
 {
   reset();
 }
 
-void ObIMicroBlockFlatReader::reset()
+template<bool EnableNewFlatFormat>
+void ObIMicroBlockFlatReader<EnableNewFlatFormat>::reset()
 {
   header_ = nullptr;
   data_begin_ = nullptr;
   data_end_ = nullptr;
   index_data_ = nullptr;
-  flat_row_reader_.reset();
 }
 
-int ObIMicroBlockFlatReader::find_bound_(
+template<bool EnableNewFlatFormat>
+int ObIMicroBlockFlatReader<EnableNewFlatFormat>::find_bound_(
     const ObDatumRowkey &key,
     const bool lower_bound,
     const int64_t begin_idx,
@@ -123,7 +125,7 @@ int ObIMicroBlockFlatReader::find_bound_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid ptr", K(ret), K(data_begin_), K(index_data_));
   } else {
-    PreciseCompare<ObRowReader> flat_compare(
+    PreciseCompare<typename std::conditional<EnableNewFlatFormat, ObRowReaderV1, ObRowReaderV0>::type> flat_compare(
         ret,
         equal,
         &flat_row_reader_,
@@ -147,7 +149,8 @@ int ObIMicroBlockFlatReader::find_bound_(
   return ret;
 }
 
-int ObIMicroBlockFlatReader::init(const ObMicroBlockData &block_data)
+template<bool EnableNewFlatFormat>
+int ObIMicroBlockFlatReader<EnableNewFlatFormat>::init(const ObMicroBlockData &block_data)
 {
   int ret = OB_SUCCESS;
   if(OB_UNLIKELY(!block_data.is_valid())){
@@ -166,13 +169,14 @@ int ObIMicroBlockFlatReader::init(const ObMicroBlockData &block_data)
 /*
  * ObMicroBlockGetReader
  * */
-int ObMicroBlockGetReader::inner_init(
+template<bool EnableNewFlatFormat>
+int ObMicroBlockGetReader<EnableNewFlatFormat>::inner_init(
     const ObMicroBlockData &block_data,
     const ObITableReadInfo &read_info,
     const ObDatumRowkey &rowkey)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObIMicroBlockFlatReader::init(block_data))) {
+  if (OB_FAIL(ObIMicroBlockFlatReader<EnableNewFlatFormat>::init(block_data))) {
     LOG_WARN("failed to init reader", K(ret), K(block_data), K(read_info));
   } else {
     row_count_ = header_->row_count_;
@@ -193,7 +197,10 @@ int ObMicroBlockGetReader::inner_init(
   return ret;
 }
 
-int ObMicroBlockGetReader::get_row(
+
+template<bool EnableNewFlatFormat>
+int ObMicroBlockGetReader<EnableNewFlatFormat>::get_row(
+    const ObMicroBlockAddr &block_addr,
     const ObMicroBlockData &block_data,
     const ObDatumRowkey &rowkey,
     const ObITableReadInfo &read_info,
@@ -201,6 +208,8 @@ int ObMicroBlockGetReader::get_row(
 {
   int ret = OB_SUCCESS;
   int64_t row_idx;
+  UNUSED(block_addr);
+
   if (OB_UNLIKELY(!read_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid columns info ", K(ret), K(read_info));
@@ -222,7 +231,8 @@ int ObMicroBlockGetReader::get_row(
   return ret;
 }
 
-int ObMicroBlockGetReader::exist_row(
+template<bool EnableNewFlatFormat>
+int ObMicroBlockGetReader<EnableNewFlatFormat>::exist_row(
     const ObMicroBlockData &block_data,
     const ObDatumRowkey &rowkey,
     const ObITableReadInfo &read_info,
@@ -252,7 +262,8 @@ int ObMicroBlockGetReader::exist_row(
   return ret;
 }
 
-int ObMicroBlockGetReader::locate_rowkey(const ObDatumRowkey &rowkey, int64_t &row_idx)
+template<bool EnableNewFlatFormat>
+int ObMicroBlockGetReader<EnableNewFlatFormat>::locate_rowkey(const ObDatumRowkey &rowkey, int64_t &row_idx)
 {
   int ret = OB_SUCCESS;
   bool need_binary_search = false;
@@ -264,7 +275,7 @@ int ObMicroBlockGetReader::locate_rowkey(const ObDatumRowkey &rowkey, int64_t &r
     LOG_WARN("faile to locate rowkey by hash index", K(ret));
   } else if (need_binary_search) {
     bool is_equal = false;
-    if (OB_FAIL(ObIMicroBlockFlatReader::find_bound_(rowkey, true/*lower_bound*/, 0, row_count_,
+    if (OB_FAIL(ObIMicroBlockFlatReader<EnableNewFlatFormat>::find_bound_(rowkey, true/*lower_bound*/, 0, row_count_,
         read_info_->get_datum_utils(), row_idx, is_equal))) {
       LOG_WARN("fail to lower_bound rowkey", K(ret));
     } else if (row_count_ == row_idx || !is_equal) {
@@ -284,7 +295,8 @@ int ObMicroBlockGetReader::locate_rowkey(const ObDatumRowkey &rowkey, int64_t &r
   return ret;
 }
 
-int ObMicroBlockGetReader::locate_rowkey_fast_path(const ObDatumRowkey &rowkey,
+template<bool EnableNewFlatFormat>
+int ObMicroBlockGetReader<EnableNewFlatFormat>::locate_rowkey_fast_path(const ObDatumRowkey &rowkey,
                                                    int64_t &row_idx,
                                                    bool &need_binary_search,
                                                    bool &found)
@@ -330,17 +342,20 @@ int ObMicroBlockGetReader::locate_rowkey_fast_path(const ObDatumRowkey &rowkey,
   return ret;
 }
 
-int ObMicroBlockGetReader::get_row(
+template<bool EnableNewFlatFormat>
+int ObMicroBlockGetReader<EnableNewFlatFormat>::get_row(
+    const ObMicroBlockAddr &block_addr,
     const ObMicroBlockData &block_data,
     const ObITableReadInfo &read_info,
     const uint32_t row_idx,
     ObDatumRow &row)
 {
   int ret = OB_SUCCESS;
+  UNUSED(block_addr);
   if (OB_UNLIKELY(!read_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid columns info ", K(ret), K(read_info));
-  } else if (OB_FAIL(ObIMicroBlockFlatReader::init(block_data))) {
+  } else if (OB_FAIL(ObIMicroBlockFlatReader<EnableNewFlatFormat>::init(block_data))) {
     LOG_WARN("Failed to init reader", K(ret), K(block_data), K(read_info));
   } else {
     row_count_ = header_->row_count_;
@@ -363,13 +378,16 @@ int ObMicroBlockGetReader::get_row(
   return ret;
 }
 
-int ObMicroBlockGetReader::get_row_id(
+template<bool EnableNewFlatFormat>
+int ObMicroBlockGetReader<EnableNewFlatFormat>::get_row_id(
+    const ObMicroBlockAddr &block_addr,
     const ObMicroBlockData &block_data,
     const ObDatumRowkey &rowkey,
     const ObITableReadInfo &read_info,
     int64_t &row_id)
 {
   int ret = OB_SUCCESS;
+  UNUSED(block_addr);
   if (OB_UNLIKELY(!read_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid columns info ", K(ret), K(read_info));
@@ -384,19 +402,20 @@ int ObMicroBlockGetReader::get_row_id(
 }
 
 /***************             ObMicroBlockReader              ****************/
-void ObMicroBlockReader::reset()
+template<bool EnableNewFlatFormat>
+void ObMicroBlockReader<EnableNewFlatFormat>::reset()
 {
-  ObIMicroBlockFlatReader::reset();
+  ObIMicroBlockFlatReader<EnableNewFlatFormat>::reset();
   ObIMicroBlockReader::reset();
   header_ = NULL;
   data_begin_ = NULL;
   data_end_ = NULL;
   index_data_ = NULL;
-  flat_row_reader_.reset();
   allocator_.reuse();
 }
 
-int ObMicroBlockReader::init(
+template<bool EnableNewFlatFormat>
+int ObMicroBlockReader<EnableNewFlatFormat>::init(
     const ObMicroBlockData &block_data,
     const ObITableReadInfo &read_info)
 {
@@ -407,7 +426,7 @@ int ObMicroBlockReader::init(
   if (OB_UNLIKELY(!read_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("columns info is invalid", K(ret), K(read_info));
-  } else if (OB_FAIL(ObIMicroBlockFlatReader::init(block_data))) {
+  } else if (OB_FAIL(ObIMicroBlockFlatReader<EnableNewFlatFormat>::init(block_data))) {
     LOG_WARN("fail to init, ", K(ret));
   } else {
     row_count_ = header_->row_count_;
@@ -423,7 +442,8 @@ int ObMicroBlockReader::init(
   return ret;
 }
 
-int ObMicroBlockReader::init(
+template<bool EnableNewFlatFormat>
+int ObMicroBlockReader<EnableNewFlatFormat>::init(
     const ObMicroBlockData &block_data,
 	const ObStorageDatumUtils *datum_utils)
 {
@@ -431,7 +451,7 @@ int ObMicroBlockReader::init(
   if (IS_INIT) {
     reset();
   }
-  if (OB_FAIL(ObIMicroBlockFlatReader::init(block_data))) {
+  if (OB_FAIL(ObIMicroBlockFlatReader<EnableNewFlatFormat>::init(block_data))) {
     LOG_WARN("fail to init, ", K(ret));
   } else {
     row_count_ = header_->row_count_;
@@ -447,7 +467,8 @@ int ObMicroBlockReader::init(
   return ret;
 }
 
-int ObMicroBlockReader::compare_rowkey(
+template<bool EnableNewFlatFormat>
+int ObMicroBlockReader<EnableNewFlatFormat>::compare_rowkey(
     const ObDatumRowkey &rowkey,
     const int64_t idx,
     int32_t &compare_result)
@@ -469,7 +490,8 @@ int ObMicroBlockReader::compare_rowkey(
   return ret;
 }
 
-int ObMicroBlockReader::find_bound(
+template<bool EnableNewFlatFormat>
+int ObMicroBlockReader<EnableNewFlatFormat>::find_bound(
                  const ObDatumRowkey &key,
                  const bool lower_bound,
                  const int64_t begin_idx,
@@ -485,7 +507,7 @@ int ObMicroBlockReader::find_bound(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(key), K(begin_idx), K(end_idx), K(row_count_),
              KP_(data_begin), KP_(index_data), KP_(read_info));
-  } else if (OB_FAIL(ObIMicroBlockFlatReader::find_bound_(
+  } else if (OB_FAIL(ObIMicroBlockFlatReader<EnableNewFlatFormat>::find_bound_(
           key,
           lower_bound,
           begin_idx,
@@ -498,7 +520,8 @@ int ObMicroBlockReader::find_bound(
   return ret;
 }
 
-int ObMicroBlockReader::find_bound(
+template<bool EnableNewFlatFormat>
+int ObMicroBlockReader<EnableNewFlatFormat>::find_bound(
     const ObDatumRowkey &key,
     const bool lower_bound,
     const int64_t begin_idx,
@@ -513,7 +536,7 @@ int ObMicroBlockReader::find_bound(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(key), K(begin_idx), K_(row_count), KP_(data_begin),
              KP_(index_data), KP_(datum_utils));
-  } else if (OB_FAIL(ObIMicroBlockFlatReader::find_bound_(
+  } else if (OB_FAIL(ObIMicroBlockFlatReader<EnableNewFlatFormat>::find_bound_(
           key,
           lower_bound,
           begin_idx,
@@ -526,7 +549,8 @@ int ObMicroBlockReader::find_bound(
   return ret;
 }
 
-int ObMicroBlockReader::find_bound_through_linear_search(
+template<bool EnableNewFlatFormat>
+int ObMicroBlockReader<EnableNewFlatFormat>::find_bound_through_linear_search(
     const ObDatumRowkey &rowkey,
     const int64_t begin_idx,
     int64_t &row_idx)
@@ -557,7 +581,8 @@ int ObMicroBlockReader::find_bound_through_linear_search(
   return ret;
 }
 
-int ObMicroBlockReader::find_bound(
+template<bool EnableNewFlatFormat>
+int ObMicroBlockReader<EnableNewFlatFormat>::find_bound(
     const ObDatumRange &range,
     const int64_t begin_idx,
     int64_t &row_idx,
@@ -569,7 +594,8 @@ int ObMicroBlockReader::find_bound(
   return find_bound(range.get_start_key(), true, begin_idx, row_idx, equal);
 }
 
-int ObMicroBlockReader::get_row(const int64_t index, ObDatumRow &row)
+template<bool EnableNewFlatFormat>
+int ObMicroBlockReader<EnableNewFlatFormat>::get_row(const int64_t index, ObDatumRow &row)
 {
   int ret = OB_SUCCESS;
   if(IS_NOT_INIT){
@@ -595,7 +621,8 @@ int ObMicroBlockReader::get_row(const int64_t index, ObDatumRow &row)
   return ret;
 }
 
-int ObMicroBlockReader::get_row_header(
+template<bool EnableNewFlatFormat>
+int ObMicroBlockReader<EnableNewFlatFormat>::get_row_header(
     const int64_t row_idx,
     const ObRowHeader *&row_header)
 {
@@ -615,7 +642,8 @@ int ObMicroBlockReader::get_row_header(
   return ret;
 }
 
-int ObMicroBlockReader::get_logical_row_cnt(
+template<bool EnableNewFlatFormat>
+int ObMicroBlockReader<EnableNewFlatFormat>::get_logical_row_cnt(
     const int64_t last,
     int64_t &row_idx,
     int64_t &row_cnt) const
@@ -642,7 +670,8 @@ int ObMicroBlockReader::get_logical_row_cnt(
   return ret;
 }
 
-int ObMicroBlockReader::get_row_count(int64_t &row_count)
+template<bool EnableNewFlatFormat>
+int ObMicroBlockReader<EnableNewFlatFormat>::get_row_count(int64_t &row_count)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -655,7 +684,8 @@ int ObMicroBlockReader::get_row_count(int64_t &row_count)
 }
 
 // notice, trans_version of ghost row is min(0)
-int ObMicroBlockReader::get_multi_version_info(
+template<bool EnableNewFlatFormat>
+int ObMicroBlockReader<EnableNewFlatFormat>::get_multi_version_info(
     const int64_t row_idx,
     const int64_t schema_rowkey_cnt,
     const ObRowHeader *&row_header,
@@ -707,7 +737,8 @@ int ObMicroBlockReader::get_multi_version_info(
   return ret;
 }
 
-int ObMicroBlockReader::filter_pushdown_filter(
+template<bool EnableNewFlatFormat>
+int ObMicroBlockReader<EnableNewFlatFormat>::filter_pushdown_filter(
     const sql::ObPushdownFilterExecutor *parent,
     sql::ObPushdownFilterExecutor &filter,
     const sql::PushdownFilterInfo &pd_filter_info,
@@ -827,7 +858,8 @@ int ObMicroBlockReader::filter_pushdown_filter(
   return ret;
 }
 
-int ObMicroBlockReader::filter_pushdown_truncate_filter(
+template<bool EnableNewFlatFormat>
+int ObMicroBlockReader<EnableNewFlatFormat>::filter_pushdown_truncate_filter(
     const sql::ObPushdownFilterExecutor *parent,
     sql::ObPushdownFilterExecutor &filter,
     const sql::PushdownFilterInfo &pd_filter_info,
@@ -901,7 +933,8 @@ int ObMicroBlockReader::filter_pushdown_truncate_filter(
   return ret;
 }
 
-int ObMicroBlockReader::get_rows(
+template<bool EnableNewFlatFormat>
+int ObMicroBlockReader<EnableNewFlatFormat>::get_rows(
     const common::ObIArray<int32_t> &cols_projector,
     const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
     const common::ObIArray<blocksstable::ObStorageDatum> *default_datums,
@@ -995,7 +1028,8 @@ int ObMicroBlockReader::get_rows(
   return ret;
 }
 
-int ObMicroBlockReader::get_rows(
+template<bool EnableNewFlatFormat>
+int ObMicroBlockReader<EnableNewFlatFormat>::get_rows(
     const common::ObIArray<int32_t> &cols_projector,
     const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
     const common::ObIArray<blocksstable::ObStorageDatum> *default_datums,
@@ -1116,7 +1150,8 @@ int ObMicroBlockReader::get_rows(
   return ret;
 }
 
-int ObMicroBlockReader::get_row_count(
+template<bool EnableNewFlatFormat>
+int ObMicroBlockReader<EnableNewFlatFormat>::get_row_count(
     int32_t col,
     const int32_t *row_ids,
     const int64_t row_cap,
@@ -1166,7 +1201,8 @@ int ObMicroBlockReader::get_row_count(
   return ret;
 }
 
-int ObMicroBlockReader::get_aggregate_result(
+template<bool EnableNewFlatFormat>
+int ObMicroBlockReader<EnableNewFlatFormat>::get_aggregate_result(
     const ObTableIterParam &iter_param,
     const ObTableAccessContext &context,
     const int32_t col_offset,
@@ -1229,7 +1265,8 @@ int ObMicroBlockReader::get_aggregate_result(
   return ret;
 }
 
-int ObMicroBlockReader::get_aggregate_result(
+template<bool EnableNewFlatFormat>
+int ObMicroBlockReader<EnableNewFlatFormat>::get_aggregate_result(
     const ObTableIterParam &iter_param,
     const ObTableAccessContext &context,
     const int32_t *row_ids,
@@ -1313,7 +1350,8 @@ int ObMicroBlockReader::get_aggregate_result(
   return ret;
 }
 
-int ObMicroBlockReader::get_column_datum(
+template<bool EnableNewFlatFormat>
+int ObMicroBlockReader<EnableNewFlatFormat>::get_column_datum(
     const ObTableIterParam &iter_param,
     const ObTableAccessContext &context,
     const share::schema::ObColumnParam &col_param,
@@ -1361,6 +1399,13 @@ int ObMicroBlockReader::get_column_datum(
   }
   return ret;
 }
+
+template class ObIMicroBlockFlatReader<true>;
+template class ObIMicroBlockFlatReader<false>;
+template class ObMicroBlockReader<true>;
+template class ObMicroBlockReader<false>;
+template class ObMicroBlockGetReader<true>;
+template class ObMicroBlockGetReader<false>;
 
 }
 }

@@ -409,12 +409,12 @@ int ObFilePreBuffer::convert_coalesce_col_range_to_cache_entry(
   int ret = OB_SUCCESS;
   RangeCacheEntry *entry = nullptr;
   int64_t range_count = column_range.count();
-  char *buf =
-    (char *)alloc_.alloc(sizeof(ColumnRangeCacheEntry) + sizeof(RangeCacheEntry) * range_count);
+  char *buf = nullptr;
   if (range_count < 1) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid range count", K(range_count), K(ret));
-  } else if (nullptr == buf) {
+  } else if (OB_ISNULL(buf = (char *)alloc_.alloc(sizeof(ColumnRangeCacheEntry)
+                                                  + sizeof(RangeCacheEntry) * range_count))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("alloc memory failed", KR(ret));
   } else {
@@ -452,8 +452,8 @@ int ObFilePreBuffer::convert_coalesce_column_ranges(
       ColumnRangeCacheEntry *column_cache_entry = nullptr;
       if (OB_FAIL(convert_coalesce_col_range_to_cache_entry(column_range, column_cache_entry))) {
         LOG_WARN("failed to convert coalesce column range to cache entry", K(ret));
-      } else {
-        column_range_cache_entries.at(i) = column_cache_entry;
+      } else if (OB_FAIL(column_range_cache_entries.push_back(column_cache_entry))) {
+        LOG_WARN("failed to push back", K(ret));
       }
     }
   }

@@ -25,6 +25,7 @@
 #include "sql/privilege_check/ob_ora_priv_check.h"
 #include "rpc/obmysql/packet/ompk_auth_switch.h"
 #include "sql/engine/dml/ob_trigger_handler.h"
+#include "share/ob_license_utils.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
@@ -238,7 +239,7 @@ int ObMPConnect::init_process_single_stmt(const ObMultiStmtItem &multi_stmt_item
 
     //对于tracelog的处理，不影响正常逻辑，错误码无须赋值给ret
     int tmp_ret = OB_SUCCESS;
-    tmp_ret = do_after_process(session, ctx, false); // 不是异步回包
+    tmp_ret = do_after_process(session, false); // 不是异步回包
     UNUSED(tmp_ret);
   }
   return ret;
@@ -418,6 +419,16 @@ int ObMPConnect::process()
       ObOKPParam ok_param;
       ok_param.is_on_connect_ = true;
       ok_param.affected_rows_ = 0;
+      const int login_warning_buf_len = 50;
+      char login_warning[login_warning_buf_len];
+      int tmp_ret = OB_SUCCESS;
+
+      if (OB_TMP_FAIL(ObLicenseUtils::get_login_message(login_warning, login_warning_buf_len))) {
+        LOG_WARN("fail to get login warning message", KR(ret));
+        login_warning[0] = '\0';
+      } else {
+        ok_param.message_ = login_warning;
+      }
       if (OB_FAIL(send_ok_packet(*session, ok_param))) {
         LOG_WARN("fail to send ok packet", K(ok_param), K(ret));
       }
@@ -585,37 +596,40 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
           db_name_.assign_ptr(db_name_var_, db_name_.length());
         }
       }
-
+      ObString proxied_user;
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(get_proxy_user_name(proxied_user))) {
+        LOG_WARN("get proxy user info failed", K(ret));
+      }
       lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(ObCompatModeGetter::get_tenant_mode(conn->tenant_id_, compat_mode))) {
         LOG_WARN("fail to get tenant mode in convert_oracle_object_name", K(ret));
-      } else if (compat_mode == lib::Worker::CompatMode::ORACLE) {
-        ObString proxied_user;
-        if (OB_FAIL(get_proxy_user_name(proxied_user))) {
-          LOG_WARN("get proxy user info failed", K(ret));
-        } else if (!proxied_user.empty()) {
-          uint64_t tenant_data_version = 0;
-          if (OB_FAIL(GET_MIN_DATA_VERSION(conn->tenant_id_, tenant_data_version))) {
-            LOG_WARN("get tenant data version failed", K(ret));
-          } else if (!ObSQLUtils::is_data_version_ge_423_or_432(tenant_data_version)) {
-            ret = OB_PASSWORD_WRONG;
-            LOG_WARN("tenant version is below 423 or 432", K(ret));
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "connect proxy user is not supported when data version is below 4.2.3 or 4.3.2");
-          } else if (proxied_user.length() > OB_MAX_USER_NAME_BUF_LENGTH) {
-            ret = OB_SIZE_OVERFLOW;
-            LOG_WARN("proxy user name too long", K(ret));
-          } else {
-            MEMCPY(proxied_user_name_var_, proxied_user.ptr(), proxied_user.length());
-            proxied_user_name_var_[proxied_user.length()] = '\0';
-            proxied_user_name_.assign(proxied_user_name_var_, proxied_user.length());
-            if (OB_FAIL(convert_oracle_object_name(conn->tenant_id_, proxied_user_name_))) {
-              LOG_WARN("fail to convert oracle db name", K(ret));
-            }
-          }
+      } else if (!proxied_user.empty()) {
+        uint64_t tenant_data_version = 0;
+        if (compat_mode == lib::Worker::CompatMode::MYSQL) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("mysql mode use proxy user name is not supported", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "mysql mode use proxy user name");
+        } else if (OB_FAIL(GET_MIN_DATA_VERSION(conn->tenant_id_, tenant_data_version))) {
+          LOG_WARN("get tenant data version failed", K(ret));
+        } else if (!ObSQLUtils::is_data_version_ge_423_or_432(tenant_data_version)) {
+          ret = OB_PASSWORD_WRONG;
+          LOG_WARN("tenant version is below 423 or 432", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "connect proxy user is not supported when data version is below 4.2.3 or 4.3.2");
+        } else if (proxied_user.length() > OB_MAX_USER_NAME_BUF_LENGTH) {
+          ret = OB_SIZE_OVERFLOW;
+          LOG_WARN("proxy user name too long", K(ret));
         } else {
-          proxied_user_name_.reset();
+          MEMCPY(proxied_user_name_var_, proxied_user.ptr(), proxied_user.length());
+          proxied_user_name_var_[proxied_user.length()] = '\0';
+          proxied_user_name_.assign(proxied_user_name_var_, proxied_user.length());
+          if (OB_FAIL(convert_oracle_object_name(conn->tenant_id_, proxied_user_name_))) {
+            LOG_WARN("fail to convert oracle db name", K(ret));
+          }
         }
+      } else {
+        proxied_user_name_.reset();
       }
       share::schema::ObSessionPrivInfo session_priv;
       EnableRoleIdArray enable_role_id_array;
@@ -714,7 +728,7 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
               int receive_asr_times = 0;
               while (OB_SUCC(ret) && OB_ISNULL(asr_pkt)) {
                 ++receive_asr_times;
-                usleep(10 * 1000); // Sleep 10 ms at every time trying receive auth-switch-response mysql pkt
+                ob_usleep(10 * 1000); // Sleep 10 ms at every time trying receive auth-switch-response mysql pkt
                 // TO DO:
                 // In most unix system, The max TCP Retransmission Timeout is under 240 seconds,
                 // we need to set a suitable timeout, what should this be?
@@ -1519,17 +1533,11 @@ int ObMPConnect::get_connection_control_stat(const uint64_t tenant_id,
     int64_t current_gmt = ObTimeUtil::current_time();
     if (threshold <= 0 || current_failed_login_num + 1 < threshold) {
       // do nothing
+    } else if (current_failed_login_num + 1 == threshold) {
+      need_lock = true;
     } else {
       delay = MIN(MAX((current_failed_login_num + 1 - threshold) * MSECS_PER_SEC, min_delay), max_delay);
       is_locked = current_gmt <= delay * USECS_PER_MSEC + last_failed_login_timestamp;
-      if (current_failed_login_num + 1 == threshold
-          || (current_failed_login_num + 1 > threshold
-              && current_gmt - last_failed_login_timestamp > USECS_PER_SEC * 10)) {
-        // 1. failed_login_num achieve the threshold exactly
-        // 2. user is unlocked manually need to be locked again, the interval 10s is used to reduce
-        //    concurrent ddl operation
-        need_lock = true;
-      }
     }
   }
   return ret;

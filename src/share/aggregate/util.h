@@ -677,6 +677,10 @@ inline bool supported_aggregate_function(const ObItemType agg_op, bool use_hash_
   case T_FUN_SYS_RB_BUILD_AGG: {
     return GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_0;
   }
+  case T_FUN_SYS_RB_AND_AGG:
+  case T_FUN_SYS_RB_OR_AGG: {
+    return GET_MIN_CLUSTER_VERSION() >= MOCK_CLUSTER_VERSION_4_3_5_3;
+  }
   case T_FUN_SUM_OPNSIZE: {
     return GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_1;
   }

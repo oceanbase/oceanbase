@@ -39,6 +39,8 @@
 #include "sql/session/ob_local_session_var.h"
 #include "share/schema/ob_list_row_values.h" // ObListRowValues
 #include "share/storage_cache_policy/ob_storage_cache_common.h"
+#include "share/schema/ob_new_row_struct.h"
+#include "sql/engine/expr/ob_expr_like.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -143,6 +145,7 @@ static const uint64_t OB_MIN_ID  = 0;//used for lower_bound
 #define GENERATED_VEC_IVF_CENTER_ID_COLUMN_FLAG (INT64_C(1) << 28)
 #define STRING_LOB_COLUMN_FLAG (INT64_C(1) << 29)
 #define HEAP_TABLE_PRIMARY_KEY_FLAG (INT64_C(1) << 30)
+#define HEAP_TABLE_CLUSTERING_KEY_FLAG (INT64_C(1) << 31)
 
 //the high 32-bit flag isn't stored in __all_column
 #define GENERATED_DEPS_CASCADE_FLAG (INT64_C(1) << 32)
@@ -169,6 +172,7 @@ static const uint64_t OB_MIN_ID  = 0;//used for lower_bound
 #define GENERATED_VEC_SPIV_DIM_COLUMN_FLAG (INT64_C(1) << 51)
 #define GENERATED_VEC_SPIV_VALUE_COLUMN_FLAG (INT64_C(1) << 52)
 #define GENERATED_VEC_SPIV_VEC_COLUMN_FLAG (INT64_C(1) << 53)
+#define GENERATED_HYBRID_VEC_CHUNK_COLUMN_FLAG (INT64_C(1) << 54)
 #define SPATIAL_COLUMN_SRID_MASK (0xffffffffffffffe0L)
 
 #define STORED_COLUMN_FLAGS_MASK 0xFFFFFFFF
@@ -404,12 +408,15 @@ enum ObIndexType
   INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY = 41,
   // sparse vector inverted index
   INDEX_TYPE_VEC_SPIV_DIM_DOCID_VALUE_LOCAL = 42,
+  // hybrid vec
+  INDEX_TYPE_HYBRID_INDEX_LOG_LOCAL = 43,
+  INDEX_TYPE_HYBRID_INDEX_EMBEDDED_LOCAL = 44,
 
   /*
   * Attention!!! when add new index type,
   * need update func ObSimpleTableSchemaV2::should_not_validate_data_index_ckm()
   */
-  INDEX_TYPE_MAX = 43,
+  INDEX_TYPE_MAX = 45,
 };
 
 bool is_support_split_index_type(const ObIndexType index_type);
@@ -836,6 +843,16 @@ inline bool is_vec_ivfpq_rowkey_cid_index(const ObIndexType index_type)
   return index_type == INDEX_TYPE_VEC_IVFPQ_ROWKEY_CID_LOCAL;
 }
 
+inline bool is_hybrid_vec_index_log_type(const ObIndexType index_type)
+{
+  return index_type == INDEX_TYPE_HYBRID_INDEX_LOG_LOCAL;
+}
+
+inline bool is_hybrid_vec_index_embedded_type(const ObIndexType index_type)
+{
+  return index_type == INDEX_TYPE_HYBRID_INDEX_EMBEDDED_LOCAL;
+}
+
 inline bool is_local_vec_ivfflat_index(const ObIndexType index_type)
 {
   return is_vec_ivfflat_centroid_index(index_type) ||
@@ -899,7 +916,15 @@ inline bool is_local_vec_hnsw_index(const ObIndexType index_type)
          is_vec_vid_rowkey_type(index_type) ||
          is_vec_delta_buffer_type(index_type) ||
          is_vec_index_id_type(index_type) ||
-         is_vec_index_snapshot_data_type(index_type);
+         is_vec_index_snapshot_data_type(index_type) ||
+         is_hybrid_vec_index_log_type(index_type) ||
+         is_hybrid_vec_index_embedded_type(index_type);
+}
+
+inline bool is_local_hybrid_vec_index(const ObIndexType index_type)
+{
+  return index_type == INDEX_TYPE_HYBRID_INDEX_LOG_LOCAL ||
+         index_type == INDEX_TYPE_HYBRID_INDEX_EMBEDDED_LOCAL;
 }
 
 inline bool is_doc_rowkey_aux(const ObIndexType index_type)
@@ -993,6 +1018,12 @@ inline bool is_vec_spiv_index_aux(const ObIndexType index_type)
   return index_type == INDEX_TYPE_VEC_SPIV_DIM_DOCID_VALUE_LOCAL;
 }
 
+inline bool is_hybrid_vec_index(const ObIndexType index_type)
+{
+  return is_hybrid_vec_index_log_type(index_type)
+         || is_hybrid_vec_index_embedded_type(index_type);
+}
+
 inline bool is_built_in_multivalue_index(const ObIndexType index_type)
 {
   return is_rowkey_doc_aux(index_type)
@@ -1071,7 +1102,8 @@ inline bool is_vec_domain_index(const ObIndexType index_type)
 inline bool is_vec_index(const ObIndexType index_type)
 {
   return is_vec_domain_index(index_type) ||
-         is_built_in_vec_index(index_type);
+         is_built_in_vec_index(index_type) ||
+         is_hybrid_vec_index(index_type);
 }
 
 
@@ -1097,6 +1129,16 @@ inline bool is_index_local_storage(ObIndexType index_type)
            || is_local_vec_index(index_type)
            || is_global_local_fts_index(index_type)
            || is_local_multivalue_index(index_type);
+}
+
+inline bool is_index_support_empty_table_opt(ObIndexType index_type)
+{
+  return INDEX_TYPE_NORMAL_LOCAL == index_type
+          || INDEX_TYPE_UNIQUE_LOCAL == index_type
+          || INDEX_TYPE_NORMAL_GLOBAL == index_type
+          || INDEX_TYPE_UNIQUE_GLOBAL == index_type
+          || INDEX_TYPE_NORMAL_GLOBAL_LOCAL_STORAGE == index_type
+          || INDEX_TYPE_UNIQUE_GLOBAL_LOCAL_STORAGE == index_type;
 }
 
 // Note: When adding new related table, you need to modify OB_MAX_TRANSFER_BINDING_TABLET_CNT
@@ -1299,6 +1341,7 @@ typedef enum {
   LOCATION_SCHEMA = 45,
   OBJ_MYSQL_PRIV = 46,
   EXTERNAL_RESOURCE_SCHEMA = 47,
+  AI_MODEL_SCHEMA = 48,
   ///<<< add schema type before this line
   OB_MAX_SCHEMA
 } ObSchemaType;
@@ -1490,6 +1533,7 @@ enum class ObObjectType {
   CONTEXT         = 16,
   CATALOG         = 17,
   LOCATION        = 18,
+  AI_MODEL        = 19,
   MAX_TYPE,
 };
 struct ObSchemaObjVersion
@@ -1540,7 +1584,7 @@ struct ObSchemaObjVersion
     return get_schema_type(object_type_);
   }
 
-  static  ObSchemaType get_schema_type(ObDependencyTableType object_type)
+  static ObSchemaType get_schema_type(ObDependencyTableType object_type)
   {
     ObSchemaType ret_type = OB_MAX_SCHEMA;
     switch (object_type) {
@@ -1581,6 +1625,46 @@ struct ObSchemaObjVersion
     return ret_type;
   }
 
+  static ObDependencyTableType get_depemdency_table_type(ObObjectType object_type)
+  {
+    ObDependencyTableType ret_type = DEPENDENCY_INVALID;
+    switch (object_type) {
+      case ObObjectType::TABLE:
+        ret_type = DEPENDENCY_TABLE;
+        break;
+      case ObObjectType::VIEW:
+        ret_type = DEPENDENCY_VIEW;
+        break;
+      case ObObjectType::PROCEDURE:
+        ret_type = DEPENDENCY_PROCEDURE;
+        break;
+      case ObObjectType::FUNCTION:
+        ret_type = DEPENDENCY_FUNCTION;
+        break;
+      case ObObjectType::PACKAGE:
+        ret_type = DEPENDENCY_PACKAGE;
+        break;
+      case ObObjectType::PACKAGE_BODY:
+        ret_type = DEPENDENCY_PACKAGE_BODY;
+        break;
+      case ObObjectType::SEQUENCE:
+        ret_type = DEPENDENCY_SEQUENCE;
+        break;
+      case ObObjectType::TYPE:
+        ret_type = DEPENDENCY_TYPE;
+        break;
+      case ObObjectType::TYPE_BODY:
+        ret_type = DEPENDENCY_TYPE_BODY;
+        break;
+      case ObObjectType::SYNONYM:
+        ret_type = DEPENDENCY_SYNONYM;
+        break;
+      default:
+        break;
+    }
+    return ret_type;
+  }
+
   static ObObjectType get_schema_object_type(ObDependencyTableType object_type)
   {
     ObObjectType ret_type = ObObjectType::MAX_TYPE;
@@ -1608,6 +1692,9 @@ struct ObSchemaObjVersion
         break;
       case DEPENDENCY_TYPE:
         ret_type = ObObjectType::TYPE;
+        break;
+      case DEPENDENCY_TYPE_BODY:
+        ret_type = ObObjectType::TYPE_BODY;
         break;
       case DEPENDENCY_SYNONYM:
         ret_type = ObObjectType::SYNONYM;
@@ -3049,6 +3136,7 @@ public:
   void reset_partition_array() {
     partition_array_capacity_ = 0;
     partition_num_ = 0;
+    destroy_list_idx_hash_array_();
     partition_array_ = NULL;
   }
   void reset_hidden_partition_array() {
@@ -3141,7 +3229,9 @@ public:
   //            existed (sub)partition it will return OB_DUPLICATE_OBJECT_EXIST
   //note this function would check both partitions and subpartitions
   int check_partition_duplicate_with_name(const ObString &name) const;
-
+  const share::schema::ListIdxHashArray *get_list_idx_hash_array() const { return list_idx_hash_array_; }
+  int build_list_idx_hash_array();
+  void destroy_list_idx_hash_array_();
 protected:
   int inner_add_partition(const ObPartition &part);
   template<class T>
@@ -3171,6 +3261,7 @@ protected:
   {
     return (sub_part_template_flags_ & flag) > 0;
   }
+  int get_list_part_value_cnt_(int64_t &count);
 protected:
   static const int64_t DEFAULT_ARRAY_CAPACITY = 128;
 protected:
@@ -3210,6 +3301,9 @@ protected:
   int64_t hidden_partition_num_;
   common::ObRowkey transition_point_;
   common::ObRowkey interval_range_;
+  // Record ObNewRow -> part_idx when table's firt part is list like
+  // won't serialize/deserialize
+  share::schema::ListIdxHashArray *list_idx_hash_array_;
 };
 /*TODO: Delete the following interfaces in ObTablegroupSchema and ObDatabaseSchema
 int ObTablegroupSchema::get_first_primary_zone_inherit()
@@ -3618,7 +3712,12 @@ private:
       const common::ObNewRange &range,
       ObPartition * const* partition_array,
       const int64_t partition_num,
+      const share::schema::ListIdxHashArray *list_idx_hash_array,
       common::ObIArray<PartitionIndex> &indexes);
+  static int get_list_row_idx_in_hash_array_(
+      const share::schema::ListIdxHashArray *list_idx_hash_array,
+      const common::ObNewRow &row,
+      int64_t &part_idx);
 
   // param[@in]:
   // - fill_tablet_id: if fill_tablet_id is false, invalid tablet_id.
@@ -3651,6 +3750,7 @@ private:
       const common::ObNewRow &row,
       ObPartition * const* partition_array,
       const int64_t partition_num,
+      const share::schema::ListIdxHashArray *list_idx_hash_array,
       common::ObIArray<PartitionIndex> &indexes);
 
   // param[@in]:
@@ -3954,6 +4054,14 @@ enum class ObMVRefreshStatsCollectionLevel : int64_t
   MAX
 };
 
+enum class ObMVNestedRefreshMode : int64_t
+{
+  INDIVIDUAL = 0,
+  INCONSISTENT = 1,
+  CONSISTENT = 2,
+  MAX
+};
+
 struct ObVectorIndexRefreshInfo
 {
   OB_UNIS_VERSION(1);
@@ -3988,6 +4096,7 @@ public:
   ObString exec_env_;
   int64_t parallel_;
   int64_t refresh_dop_;
+  ObMVNestedRefreshMode nested_refresh_mode_;
 
   ObMVRefreshInfo() :
   refresh_method_(ObMVRefreshMethod::NEVER),
@@ -3996,7 +4105,8 @@ public:
   next_time_expr_(),
   exec_env_(),
   parallel_(OB_INVALID_COUNT),
-  refresh_dop_(0) {}
+  refresh_dop_(0),
+  nested_refresh_mode_(ObMVNestedRefreshMode::INDIVIDUAL) {}
 
   void reset() {
     refresh_method_ = ObMVRefreshMethod::NEVER;
@@ -4006,6 +4116,7 @@ public:
     exec_env_.reset();
     parallel_ = OB_INVALID_COUNT;
     refresh_dop_ = 0;
+    nested_refresh_mode_ = ObMVNestedRefreshMode::INDIVIDUAL;
   }
 
   bool operator == (const ObMVRefreshInfo &other) const {
@@ -4015,7 +4126,8 @@ public:
       && next_time_expr_ == other.next_time_expr_
       && exec_env_ == other.exec_env_
       && parallel_ == other.parallel_
-      && refresh_dop_ == other.refresh_dop_;
+      && refresh_dop_ == other.refresh_dop_
+      && nested_refresh_mode_ == other.nested_refresh_mode_;
   }
 
 
@@ -4025,7 +4137,8 @@ public:
       K_(next_time_expr),
       K_(exec_env),
       K_(parallel),
-      K_(refresh_dop));
+      K_(refresh_dop),
+      K_(nested_refresh_mode));
 };
 
 class ObViewSchema : public ObSchema
@@ -7511,7 +7624,8 @@ public:
       const bool is_tmp_mlog = false)
       : table_id_(table_id),
         table_type_(table_type),
-        index_type_(index_type)
+        index_type_(index_type),
+        is_tmp_mlog_(is_tmp_mlog)
   {}
   bool operator ==(const ObAuxTableMetaInfo &other) const {
     return (table_id_ == other.table_id_
@@ -8032,6 +8146,7 @@ public:
   inline int set_sequence_name(const char *name) { return deep_copy_str(name, name_); }
   inline int set_sequence_name(const common::ObString &name) { return deep_copy_str(name, name_); }
   inline int set_name(const common::ObString &name) { return set_sequence_name(name); }
+  inline int set_remote_database_name(const common::ObString &name) { return deep_copy_str(name, remote_db_name_); }
   // inline void set_max_value(int64_t val) { option_.set_max_value(val); }
   // inline void set_min_value(int64_t val) { option_.set_min_value(val); }
   // inline void set_increment_by(int64_t val) { option_.set_increment_by(val); }
@@ -8083,6 +8198,7 @@ public:
   }
   inline const common::ObString &get_sequence_name() const { return name_; }
   inline const char *get_sequence_name_str() const { return extract_str(name_); }
+  inline const common::ObString &get_remote_database_name() const { return remote_db_name_; }
   inline share::ObSequenceOption &get_sequence_option() { return option_; }
   inline const share::ObSequenceOption &get_sequence_option() const { return option_; }
   inline ObTenantSequenceId get_tenant_sequence_id() const
@@ -8099,7 +8215,8 @@ public:
                        K_(schema_version),
                        K_(option),
                        K_(is_system_generated),
-                       K_(dblink_id));
+                       K_(dblink_id),
+                       K_(remote_db_name));
 private:
   //void *alloc(int64_t size);
   // int get_value(const common::ObString &str, int64_t &val);
@@ -8114,6 +8231,8 @@ private:
   bool is_system_generated_;
   //common::ObArenaAllocator allocator_;
   uint64_t dblink_id_;
+  // select db.seq.nextval@link, remote_db_name_ = 'db'
+  ObString remote_db_name_;
 };
 
 typedef ObSequenceSchema ObSequenceInfo;
@@ -8710,7 +8829,6 @@ public:
   inline const common::ObString &get_directory_name_str() const { return directory_name_; }
   inline const char *get_directory_path() const { return extract_str(directory_path_); }
   inline const common::ObString &get_directory_path_str() const { return directory_path_; }
-
   inline ObTenantDirectoryId get_tenant_directory_id() const { return ObTenantDirectoryId(tenant_id_, directory_id_); }
 
   TO_STRING_KV(K_(tenant_id), K_(directory_id), K_(schema_version),
@@ -8722,7 +8840,6 @@ private:
   common::ObString directory_name_;
   common::ObString directory_path_;
 };
-
 
 // Add or delete an audit rule, corresponding to the audit/noaudit syntax
 enum ObSAuditModifyType : uint64_t
@@ -9737,9 +9854,12 @@ public:
   {
     struct
     {
-      uint64_t min_max_       :1;
-      uint64_t sum_           :1;
-      uint64_t reserved_      :62;
+      uint64_t min_max_                 :1;
+      uint64_t sum_                     :1;
+      uint64_t loose_min_max_           :1;
+      uint64_t bm25_token_freq_param_   :1;
+      uint64_t bm25_doc_len_param_      :1;
+      uint64_t reserved_                :59;
     };
     uint64_t pack_;
   };

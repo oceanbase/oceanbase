@@ -48,6 +48,7 @@ public:
   // @param [out] stored_str records the stored ptr and length of string.
   // @return OB_SUCCESS if succeed, other error code if error occurs.
   int write_string(const ObString &str, ObString *stored_str);
+  int write_string_reuse_buf(const ObString &str, ObString *stored_str);
   int write_number(const number::ObNumber &nmb, number::ObNumber *stored_nmb);
   // Writes an obj to buf.
   // @param [in] obj the object to be stored.

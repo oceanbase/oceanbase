@@ -307,7 +307,12 @@ int ObPartTransCtx::check_and_response_scheduler_(ObTxState next_phase, int resu
 int ObPartTransCtx::update_local_max_commit_version_(const SCN &commit_version)
 {
   int ret = OB_SUCCESS;
-  trans_service_->get_tx_version_mgr().update_max_commit_ts(commit_version, false);
+  if (is_for_sslog_()) {
+    // for sslog
+    trans_service_->get_tx_version_mgr_for_sslog().update_max_commit_ts(commit_version, false);
+  } else {
+    trans_service_->get_tx_version_mgr().update_max_commit_ts(commit_version, false);
+  }
   return ret;
 }
 

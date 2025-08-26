@@ -235,8 +235,8 @@ int ObStorageHAGetMemberHelper::filter_dest_replica_(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument!", K(ret), K(dst), K(learner_list));
   } else if (!learner_list.contains(dst.get_server())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("learner list must include dst", K(ret), K(learner_list), K(dst));
+    ret = OB_LS_NOT_IN_LEARNER_LIST;
+    LOG_WARN("learner list not include dst, maybe ls has been removed", K(ret), K(learner_list), K(dst));
   } else if (OB_FAIL(learner_list.remove_learner(dst.get_server()))) {
     LOG_WARN("failed to remove learner", K(ret), K(learner_list), K(dst));
   }

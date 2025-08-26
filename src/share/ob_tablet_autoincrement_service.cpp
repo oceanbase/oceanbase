@@ -86,26 +86,23 @@ int ObTabletAutoincMgr::clear_cache_if_fallback_for_mlog(
 
     if (prefetch_node_.is_valid() && curr_node_.is_valid()
         && curr_node_.cache_end_ + 1 !=  prefetch_node_.cache_start_) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("curr_node_ and prefetch_node_ is invalid", KPC(this));
-    }
-
-    if (OB_FAIL(ret)) {
+      LOG_INFO("auto inc seq fallback, need clear cache", K(ret), KPC(this), K(current_value));
+      curr_node_.reset();
+      prefetch_node_.reset();
+      next_value_ = 1;
     } else if (prefetch_node_.is_valid()) {
       cache_value = prefetch_node_.cache_end_;
     } else if (curr_node_.is_valid()) {
       cache_value = curr_node_.cache_end_;
     }
 
-    if (OB_FAIL(ret)) {
-    } else if (0 == cache_value) {
+    if (0 == cache_value) {
       LOG_INFO("inc cache is empty, skip check", KPC(this));
     } else if (cache_value + 1 < current_value) {
       LOG_INFO("auto inc seq fallback, need clear cache", K(ret), KPC(this), K(current_value));
       curr_node_.reset();
       prefetch_node_.reset();
       next_value_ = 1;
-    } else if (cache_value + 1 > current_value) {
     }
 
     mutex_.unlock();
@@ -387,7 +384,7 @@ int ObTabletAutoincrementService::get_autoinc_seq_for_mlog(
           LOG_WARN("get auto inc timeout", K(ret), K(abs_timeout_us));
         } else {
           need_retry = true;
-          usleep(100);
+          ob_usleep(100);
         }
       } else if (OB_FAIL(tmp_autoinc_seq.get_autoinc_seq_value(current_value))) {
         LOG_WARN("failed to get autoinc seq value", K(ret), K(tmp_autoinc_seq));

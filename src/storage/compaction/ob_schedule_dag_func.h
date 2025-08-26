@@ -26,7 +26,7 @@ namespace storage
 {
 namespace mds
 {
-class ObMdsTableMergeDagParam;
+class ObTabletMdsMiniMergeDagParam;
 }
 struct ObDDLTableMergeDagParam;
 struct ObTabletSplitParam;
@@ -83,7 +83,7 @@ public:
       storage::ObTabletLobSplitDag *&dag,
       const bool is_emergency = false);
   static int schedule_mds_table_merge_dag(
-      storage::mds::ObMdsTableMergeDagParam &param,
+      storage::mds::ObTabletMdsMiniMergeDagParam &param,
       const bool is_emergency = false);
   static int schedule_batch_freeze_dag(
     const ObBatchFreezeTabletsParam &freeze_param);

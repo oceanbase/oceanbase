@@ -25,6 +25,7 @@
 #include "sql/resolver/dml/ob_raw_expr_sets.h"
 #include "sql/resolver/expr/ob_raw_expr_copier.h"
 #include "sql/resolver/dml/ob_stmt_expr_visitor.h"
+#include "share/vector_index/ob_vector_index_param.h"
 
 namespace oceanbase
 {
@@ -178,6 +179,7 @@ struct TableItem
     transpose_table_def_ = NULL;
     // assign default value for compatibility
     catalog_name_ = lib::is_oracle_mode() ? OB_INTERNAL_CATALOG_NAME_UPPER : OB_INTERNAL_CATALOG_NAME;
+    external_location_id_ = common::OB_INVALID_ID;  // 检查权限时临时外表拿不到tableschema
   }
 
   virtual TO_STRING_KV(N_TID, table_id_,
@@ -201,7 +203,7 @@ struct TableItem
                KPC_(function_table_expr),
                K_(flashback_query_type), KPC_(flashback_query_expr), K_(table_type),
                K_(exec_params), KPC_(sample_info), K_(mview_id), K_(need_expand_rt_mv),
-               K_(external_table_partition), K_(catalog_name));
+               K_(external_table_partition), K_(catalog_name), K_(external_location_id));
 
   enum TableType
   {
@@ -358,6 +360,8 @@ struct TableItem
   SampleInfo *sample_info_;
   // transpose table
   TransposeDef *transpose_table_def_;
+  // external location
+  uint64_t external_location_id_;
 };
 
 struct ColumnItem
@@ -743,6 +747,11 @@ public:
   common::ObIArray<JoinedTable*> &get_joined_tables() { return joined_tables_; }
   inline int64_t get_order_item_size() const { return order_items_.count(); }
   inline bool is_single_table_stmt() const { return (1 == get_table_size()); }
+  inline bool has_multi_base_tables() const {
+    return !get_semi_infos().empty() ||
+           get_from_item_size() > 1 ||
+           (get_from_item_size() == 1 && get_from_item(0).is_joined_);
+  }
   int add_semi_info(SemiInfo* info) { return semi_infos_.push_back(info); }
   int remove_semi_info(SemiInfo* info);
   inline common::ObIArray<SemiInfo*> &get_semi_infos() { return semi_infos_; }
@@ -786,6 +795,9 @@ public:
                                           ObSQLSessionInfo *session_info);
   int set_sharable_expr_reference(ObRawExpr &expr, ExplicitedRefType ref_type);
   int check_pseudo_column_valid();
+  int check_stmt_valid();
+  int recursively_check_stmt_valid();
+  int check_unpivot_valid();
   int get_target_pseudo_column(const ObItemType target_type,
                                const uint64_t table_id,
                                ObPseudoColumnRawExpr *&pseudo_col);
@@ -996,6 +1008,8 @@ public:
   inline bool is_reverse_link() const { return is_reverse_link_; }
   inline void set_has_vec_approx(bool has_vec_approx) { has_vec_approx_ = has_vec_approx; }
   inline bool has_vec_approx() const { return has_vec_approx_; }
+  const share::ObVectorIndexQueryParam& get_vector_index_query_param() const { return vector_index_query_param_; }
+  share::ObVectorIndexQueryParam& get_vector_index_query_param() { return vector_index_query_param_; }
   bool is_contain_vector_origin_distance_calc() const;
   int add_subquery_ref(ObQueryRefRawExpr *query_ref);
   virtual int get_child_stmt_size(int64_t &child_size) const;
@@ -1077,7 +1091,8 @@ public:
                N_USER_VARS, user_var_exprs_,
                K_(dblink_id),
                K_(is_reverse_link),
-               K_(has_vec_approx));
+               K_(has_vec_approx),
+               K_(vector_index_query_param));
 
   int check_if_contain_inner_table(bool &is_contain_inner_table) const;
 #ifdef OB_BUILD_SHARED_STORAGE
@@ -1278,6 +1293,7 @@ protected:
   bool has_vec_approx_;
   // fulltext search exprs
   common::ObSEArray<ObMatchFunRawExpr*, 2, common::ModulePageAllocator, true> match_exprs_;
+  share::ObVectorIndexQueryParam vector_index_query_param_;
 };
 
 template <typename T>

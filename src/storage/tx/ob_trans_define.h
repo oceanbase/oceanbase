@@ -36,6 +36,7 @@
 #include "storage/tx/ob_multi_data_source_tx_buffer_node.h"
 #include "storage/tx/ob_tx_on_demand_print.h"
 #include "storage/tx/ob_tx_seq.h"
+#include "storage/tx/ob_trans_id.h"
 
 namespace oceanbase
 {
@@ -226,65 +227,6 @@ protected:
   }
 private:
   ObReserveAllocator reserve_allocator_;
-};
-
-class ObTransID
-{
-  OB_UNIS_VERSION(1);
-public:
-  ObTransID() : tx_id_(0) {}
-  ObTransID(const int64_t tx_id) : tx_id_(tx_id) {}
-  ~ObTransID() { tx_id_ = 0; }
-  ObTransID &operator=(const ObTransID &r) {
-    if (this != &r) {
-      tx_id_ = r.tx_id_;
-    }
-    return *this;
-  }
-  ObTransID &operator=(const int64_t &id) {
-    tx_id_ = id;
-    return *this;
-  }
-  bool operator<(const ObTransID &id) {
-    bool bool_ret = false;
-    if (this->compare(id) < 0) {
-      bool_ret = true;
-    }
-    return bool_ret;
-  }
-  bool operator>(const ObTransID &id) {
-    bool bool_ret = false;
-    if (this->compare(id) > 0) {
-      bool_ret = true;
-    }
-    return bool_ret;
-  }
-  int64_t get_id() const { return tx_id_; }
-  uint64_t hash() const
-  {
-    return murmurhash(&tx_id_, sizeof(tx_id_), 0);
-  }
-  int hash(uint64_t &hash_val) const
-  {
-    hash_val = hash();
-    return OB_SUCCESS;
-  }
-  bool is_valid() const { return tx_id_ > 0; }
-  void reset() { tx_id_ = 0; }
-  int compare(const ObTransID& other) const;
-  operator int64_t() const { return tx_id_; }
-  bool operator==(const ObTransID &other) const
-  { return tx_id_ == other.tx_id_; }
-  bool operator!=(const ObTransID &other) const
-  { return tx_id_ != other.tx_id_; }
-  /*  XA  */
-  int parse(char *b) {
-    UNUSED(b);
-    return OB_SUCCESS;
-  }
-  TO_STRING_AND_YSON(OB_ID(txid), tx_id_);
-private:
-  int64_t tx_id_;
 };
 
 struct ObLockForReadArg
@@ -1095,7 +1037,8 @@ public:
   static const int64_t ADVANCE_LS_CKPT_TASK = 1;
   static const int64_t STANDBY_CLEANUP_TASK = 2;
   static const int64_t DUP_TABLE_TX_REDO_SYNC_RETRY_TASK = 3;
-  static const int64_t MAX = 4;
+  static const int64_t PALF_KV_GC_TASK = 4;
+  static const int64_t MAX = 5;
 public:
   static bool is_valid(const int64_t task_type)
   { return task_type > UNKNOWN && task_type < MAX; }
@@ -1951,6 +1894,22 @@ struct ObIArraySerDeTrait {
     }
     return ret;
   }
+};
+
+static const uint64_t GTS_TENANT_ID_BITS = 48;
+static const uint64_t GTS_SSLOG_TENANT_ID_FLAG_MASK = (1ULL << GTS_TENANT_ID_BITS);
+static const uint64_t GTS_REAL_TENANT_ID_MASK = (1ULL << GTS_TENANT_ID_BITS) - 1;
+
+OB_INLINE uint64_t get_sslog_gts_tenant_id(uint64_t tenant_id)
+{ return tenant_id | GTS_SSLOG_TENANT_ID_FLAG_MASK; }
+
+OB_INLINE bool is_sslog_gts_tenant_id(uint64_t tenant_id)
+{ return ~GTS_REAL_TENANT_ID_MASK & tenant_id; }
+
+struct SSLogModID
+{
+  static constexpr const char OB_SSLOG_UID_RPC_PROXY[] = "SSLogUIdProxy";
+  static constexpr const char OB_SSLOG_UID_REQUEST_RPC[] = "SSLogUIdReqRPC";
 };
 
 } // transaction

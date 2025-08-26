@@ -651,8 +651,8 @@ public:
   virtual void test(ObRetryParam &v) const override
   {
     int ret = OB_SUCCESS;
-    if (v.session_.get_ddl_info().is_ddl() && (!v.session_.get_ddl_info().is_retryable_ddl()
-                                              || v.session_.get_ddl_info().is_mview_complete_refresh())) {
+    if ((v.session_.get_ddl_info().is_ddl() && !v.session_.get_ddl_info().is_retryable_ddl()) ||
+                                            v.session_.get_ddl_info().is_mview_complete_refresh()) {
       v.client_ret_ = v.err_;
       v.retry_type_ = RETRY_TYPE_NONE;
       v.no_more_test_ = true;
@@ -682,6 +682,10 @@ public:
       v.no_more_test_ = true;
       v.retry_type_ = RETRY_TYPE_NONE;
       v.client_ret_ = OB_TIMEOUT;
+    } else if (v.is_interrupted_by_outer_query_) {
+      v.no_more_test_ = true;
+      v.retry_type_ = RETRY_TYPE_NONE;
+      v.client_ret_ = v.err_;
     }
   }
 private:
@@ -772,7 +776,6 @@ void ObQueryRetryCtrl::location_error_proc(ObRetryParam &v)
   ObFastFailRetryPolicy fast_fail;
   ObCommonRetryIndexLongWaitPolicy retry_long_wait;
   retry_obj.test(fast_fail).test(retry_long_wait);
-
   if (RETRY_TYPE_LOCAL == v.retry_type_) {
     ObRefreshLocationCacheBlockPolicy block_refresh; // FIXME: why block?
     retry_obj.test(block_refresh);
@@ -914,7 +917,6 @@ void ObQueryRetryCtrl::timeout_proc(ObRetryParam &v)
 {
 #ifdef OB_BUILD_SPM
   if (OB_UNLIKELY(v.err_ == OB_TIMEOUT &&
-                  ObSpmCacheCtx::STAT_FIRST_EXECUTE_PLAN == v.ctx_.spm_ctx_.spm_stat_ &&
                   v.ctx_.spm_ctx_.need_spm_timeout_)) {
     const_cast<ObSqlCtx &>(v.ctx_).spm_ctx_.spm_stat_ = ObSpmCacheCtx::STAT_FALLBACK_EXECUTE_PLAN;
     const_cast<ObSqlCtx &>(v.ctx_).spm_ctx_.need_spm_timeout_ = false;
@@ -1149,6 +1151,7 @@ int ObQueryRetryCtrl::init()
   ERR_RETRY_FUNC("SCHEMA",   OB_SCHEMA_EAGAIN,                   schema_error_proc,          inner_schema_error_proc,                              nullptr);
   ERR_RETRY_FUNC("SCHEMA",   OB_SCHEMA_NOT_UPTODATE,             schema_error_proc,          inner_schema_error_proc,                              nullptr);
   ERR_RETRY_FUNC("SCHEMA",   OB_ERR_PARALLEL_DDL_CONFLICT,       schema_error_proc,          inner_schema_error_proc,                              nullptr);
+  ERR_RETRY_FUNC("SCHEMA",   OB_ERR_DDL_RESOURCE_NOT_ENOUGH,     short_wait_retry_proc,      short_wait_retry_proc,                                nullptr);
   ERR_RETRY_FUNC("SCHEMA",   OB_AUTOINC_CACHE_NOT_EQUAL,         autoinc_cache_not_equal_retry_proc, autoinc_cache_not_equal_retry_proc, nullptr);
   ERR_RETRY_FUNC("SCHEMA",   OB_NO_PARTITION_FOR_GIVEN_VALUE_SCHEMA_ERROR, schema_error_proc,  empty_proc,                                           nullptr);
 
@@ -1285,6 +1288,10 @@ void ObQueryRetryCtrl::test_and_save_retry_state(const ObGlobalContext &gctx,
                                                  bool is_part_of_pl_sql)
 {
   int ret = OB_SUCCESS;
+  bool is_interrupted_by_outer_query = IS_INTERRUPTED_BY_OUTER_QUERY();
+  // ignore interrupted state of current checker when execute inner sql during get retry state.
+  ObInterruptChecker tmp_checker;
+  ObInterruptCheckerGuard checker_guard(tmp_checker);
   client_ret = err;
   retry_type_ = RETRY_TYPE_NONE;
   retry_err_code_ = OB_SUCCESS;
@@ -1321,7 +1328,8 @@ void ObQueryRetryCtrl::test_and_save_retry_state(const ObGlobalContext &gctx,
                              retry_times_,
                              err,
                              retry_type_,
-                             client_ret);
+                             client_ret,
+                             is_interrupted_by_outer_query);
     // do some common checks in this hook, which is not bond to certain error code
     ObQueryRetryCtrl::before_func(retry_param);
     // this 'if' check is necessary, as direct call to func may override

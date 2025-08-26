@@ -328,7 +328,7 @@ int ObMvccRowFilter::read_row_(
   final_result = false;
   const ObRowHeader *row_header = nullptr;
   const ObMemtableDataHeader *mtd = reinterpret_cast<const ObMemtableDataHeader *>(node.buf_);
-  blocksstable::ObRowReader row_reader;
+  blocksstable::ObCompatRowReader row_reader;
   if (OB_ISNULL(mtd)) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", KR(ret), K_(mds_filter), K(node), KP(mtd));
@@ -635,7 +635,7 @@ int ObMvccRow::insert_trans_node(ObIMvccCtx &ctx,
                      && !(prev->seq_no_.get_branch() == 0 && node.seq_no_.get_branch() == 0)) {
             ret = OB_ERR_UNEXPECTED;
             TRANS_LOG(ERROR, "prev node seq_no > this node", KR(ret), KPC(prev), K(node), KPC(this));
-            usleep(1000);
+            ob_usleep(1000);
             ob_abort();
           } else {
             next_node = next;
@@ -680,7 +680,7 @@ int ObMvccRow::insert_trans_node(ObIMvccCtx &ctx,
             && !(tmp->seq_no_.get_branch() == 0 && node.seq_no_.get_branch() == 0)) {
           ret = OB_ERR_UNEXPECTED;
           TRANS_LOG(ERROR, "prev node seq_no > this node", KR(ret), "prev", PC(tmp), K(node), KPC(this));
-          usleep(1000);
+          ob_usleep(1000);
           ob_abort();
         }
       }
@@ -736,7 +736,10 @@ int ObMvccRow::elr(const ObTransID &tx_id,
 {
   int ret = OB_SUCCESS;
   ObMvccTransNode *iter = get_list_head();
-  if (NULL != iter && iter->need_elr()) {
+  if (NULL != iter
+      && !iter->is_elr()
+      && !iter->is_committed()
+      && !iter->is_aborted()) {
     while (NULL != iter && OB_SUCC(ret)) {
       if (tx_id != iter->tx_id_) {
         break;
@@ -1266,7 +1269,7 @@ void ObMvccRow::print_row()
 {
   int ret = OB_SUCCESS;
   blocksstable::ObDatumRow datum_row;
-  blocksstable::ObRowReader row_reader;
+  blocksstable::ObCompatRowReader row_reader;
   ObMvccRow *row = this;
   TRANS_LOG(INFO, "qianchen print row", K(*row));
   for (ObMvccTransNode *node = row->get_list_head(); OB_SUCC(ret) && OB_NOT_NULL(node); node = node->prev_) {

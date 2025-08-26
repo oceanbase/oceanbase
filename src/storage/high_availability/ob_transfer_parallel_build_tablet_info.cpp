@@ -50,9 +50,9 @@ bool ObTransferParallelBuildTabletDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObTransferParallelBuildTabletDag::hash() const
+uint64_t ObTransferParallelBuildTabletDag::hash() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   hash_value = common::murmurhash(
       &ls_id_, sizeof(ls_id_), hash_value);
   return hash_value;
@@ -293,7 +293,7 @@ int ObTransferParallelBuildTabletTask::do_build_tablet_info_(const share::ObTran
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), KP(tablet), K(tablet_info));
-  } else if (OB_FAIL(tablet->get_latest(user_data, writer, trans_stat, trans_version))) {
+  } else if (OB_FAIL(tablet->get_latest_tablet_status(user_data, writer, trans_stat, trans_version))) {
     LOG_WARN("failed to get latest tablet status", K(ret), KPC(tablet), K(tablet_info));
   } else if (ObTabletStatus::TRANSFER_OUT != user_data.tablet_status_) {
     ret = OB_STATE_NOT_MATCH;

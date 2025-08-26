@@ -26,10 +26,14 @@ enum AllocFailedReason // FARM COMPAT WHITELIST
   INVALID_ALLOC_SIZE,
   SINGLE_ALLOC_SIZE_OVERFLOW,
   CTX_HOLD_REACH_LIMIT,
+  ERRSIM_CTX_HOLD_REACH_LIMIT,
   TENANT_HOLD_REACH_LIMIT,
+  ERRSIM_TENANT_HOLD_REACH_LIMIT,
   SERVER_HOLD_REACH_LIMIT,
+  ERRSIM_SERVER_HOLD_REACH_LIMIT,
   PHYSICAL_MEMORY_EXHAUST,
-  ERRSIM_INJECTION
+  ERRSIM_PHYSICAL_MEMORY_EXHAUST,
+  ERRSIM_INJECTION,
 };
 
 struct AllocFailedCtx
@@ -58,12 +62,16 @@ public:
   bool need_wash_block() const
   {
     return reason_ == lib::CTX_HOLD_REACH_LIMIT ||
+           reason_ == lib::ERRSIM_CTX_HOLD_REACH_LIMIT ||
            reason_ == lib::TENANT_HOLD_REACH_LIMIT ||
-           reason_ == lib::SERVER_HOLD_REACH_LIMIT;
+           reason_ == lib::ERRSIM_TENANT_HOLD_REACH_LIMIT ||
+           reason_ == lib::SERVER_HOLD_REACH_LIMIT ||
+           reason_ == lib::ERRSIM_SERVER_HOLD_REACH_LIMIT;
   }
   bool need_wash_chunk() const
   {
-    return reason_ == lib::PHYSICAL_MEMORY_EXHAUST;
+    return reason_ == lib::PHYSICAL_MEMORY_EXHAUST ||
+           reason_ == lib::ERRSIM_PHYSICAL_MEMORY_EXHAUST;
 
   }
 };

@@ -66,6 +66,7 @@ enum class ObMergeEngineType : uint8_t
 {
   OB_MERGE_ENGINE_PARTIAL_UPDATE = 0,
   OB_MERGE_ENGINE_DELETE_INSERT = 1,
+  OB_MERGE_ENGINE_INSERT_ONLY = 2,
   OB_MERGE_ENGINE_MAX
 };
 
@@ -131,6 +132,10 @@ public:
   static inline ObRowStoreType get_row_store_type(const ObStoreFormatType store_format)
   {
     return is_store_format_valid(store_format) ? store_format_items[store_format].row_store_type_: MAX_ROW_STORE;
+  }
+  static inline bool is_row_store_type_with_flat(const ObRowStoreType type)
+  {
+    return FLAT_ROW_STORE == type || FLAT_OPT_ROW_STORE == type;
   }
   static inline bool is_row_store_type_with_encoding(const ObRowStoreType type)
   {
@@ -229,6 +234,10 @@ public:
       }
       case ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT: {
         str = "DELETE_INSERT";
+        break;
+      }
+      case ObMergeEngineType::OB_MERGE_ENGINE_INSERT_ONLY: {
+        str = "INSERT_ONLY";
         break;
       }
       case ObMergeEngineType::OB_MERGE_ENGINE_MAX:

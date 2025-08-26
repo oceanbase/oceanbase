@@ -103,7 +103,7 @@ public:
   ObPxTransmitChProvider transmit_data_ch_provider_;
   bool all_tasks_finish_;
   bool interrupted_; // 标记当前 SQC 是否被 QC 中断
-  common::ObSEArray<ObPxTabletInfo, 8> partitions_info_;
+  common::ObSEArray<ObPxTabletInfo, 8> px_tablets_info_;
   ObPxBloomfilterChProvider bf_ch_provider_;
   ObPxCreateBloomFilterChannelMsgP px_bloom_filter_msg_proc_;
   ObOptStatsGatherWholeMsgP opt_stats_gather_whole_msg_proc_;

@@ -213,7 +213,7 @@ int ObGtsSource::get_gts(const MonotonicTs stc,
       TRANS_LOG(WARN, "get gts leader fail", K(tmp_ret), K_(tenant_id));
       (void)refresh_gts_location_();
     } else if (leader == server_) {
-      MTL_SWITCH(tenant_id_) {
+      MTL_SWITCH(get_real_tenant_id_()) {
         ret = OB_EAGAIN;
         // When getting gts, if the global timestamp service is locally, get gts directly
         // Here the error code is overwritten by the result of the local call
@@ -278,7 +278,7 @@ int ObGtsSource::get_gts_from_local_timestamp_service_(ObAddr &leader,
   if (OB_ISNULL(timestamp_access)) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "timestamp access is null", KR(ret), KP(timestamp_access), K_(tenant_id), K(leader));
-  } else if (OB_FAIL(timestamp_access->get_number(tmp_gts))) {
+  } else if (OB_FAIL(timestamp_access->get_number(tmp_gts, is_sslog_gts_()))) {
     if (EXECUTE_COUNT_PER_SEC(100)) {
       TRANS_LOG(WARN, "global_timestamp_service get gts fail", K(leader), K(tmp_gts), KR(ret));
     }
@@ -515,7 +515,6 @@ int ObGtsSource::get_gts_leader_(ObAddr &leader)
 {
   int ret = OB_SUCCESS;
   const int64_t cluster_id = GCONF.cluster_id;
-  ObLSID ls_id = GTS_LS;
 #ifdef ERRSIM
   ret = OB_E(EventTable::EN_GET_GTS_LEADER) OB_SUCCESS;
   if (OB_LS_LOCATION_LEADER_NOT_EXIST == ret) {
@@ -523,14 +522,11 @@ int ObGtsSource::get_gts_leader_(ObAddr &leader)
     return ret;
   }
 #endif
-  if (GCTX.is_shared_storage_mode() && is_meta_tenant(tenant_id_)) {
-    ls_id = SSLOG_LS;
-  }
   if (gts_cache_leader_.is_valid()) {
     leader = gts_cache_leader_;
-  } else if (OB_FAIL(location_adapter_->nonblock_get_leader(cluster_id, tenant_id_, ls_id, leader))) {
+  } else if (OB_FAIL(location_adapter_->nonblock_get_leader(cluster_id, get_real_tenant_id_(), get_target_ls_id_(), leader))) {
     if (EXECUTE_COUNT_PER_SEC(16)) {
-      TRANS_LOG(WARN, "gts nonblock get leader failed", K(ret), K_(tenant_id), K(GTS_LS));
+      TRANS_LOG(WARN, "gts nonblock get leader failed", K(ret), K_(tenant_id), K(get_target_ls_id_()));
     }
   } else {
     gts_cache_leader_ = leader;
@@ -556,7 +552,7 @@ int ObGtsSource::query_gts_(const ObAddr &leader)
     TRANS_LOG(WARN, "update latest srr error", KR(ret), K_(tenant_id), K(srr));
   } else if (OB_FAIL(msg.init(tenant_id_, srr, ts_range_size, server_))) {
     TRANS_LOG(WARN, "msg init failed", KR(ret), K_(tenant_id));
-  } else if (OB_FAIL(gts_request_rpc_->post(tenant_id_, leader, msg))) {
+  } else if (OB_FAIL(gts_request_rpc_->post(get_real_tenant_id_(), leader, msg))) {
     TRANS_LOG(WARN, "post gts request failed", KR(ret), K(leader), K(msg));
     (void)refresh_gts_location_();
   } else {
@@ -570,14 +566,10 @@ int ObGtsSource::refresh_gts_location_()
 {
   int ret = OB_SUCCESS;
   gts_cache_leader_.reset();
-  ObLSID ls_id = GTS_LS;
-  if (GCTX.is_shared_storage_mode() && is_meta_tenant(tenant_id_)) {
-    ls_id = SSLOG_LS;
-  }
   if (refresh_location_interval_.reach()) {
     const int64_t cluster_id = GCONF.cluster_id;
-    if (OB_FAIL(location_adapter_->nonblock_renew(cluster_id, tenant_id_, ls_id))) {
-      TRANS_LOG(WARN, "gts nonblock renew error", KR(ret), K(GTS_LS));
+    if (OB_FAIL(location_adapter_->nonblock_renew(cluster_id, get_real_tenant_id_(), get_target_ls_id_()))) {
+      TRANS_LOG(WARN, "gts nonblock renew error", KR(ret), K(get_target_ls_id_()));
     } else {
       TRANS_LOG(INFO, "gts nonblock renew success", K(ret), K_(tenant_id), K_(gts_local_cache));
     }
@@ -707,6 +699,11 @@ int ObGtsSource::handle_gts_err_response(const ObGtsErrResponse &err_msg)
   }
 
   return ret;
+}
+
+share::ObLSID ObGtsSource::get_target_ls_id_() const
+{
+  return !is_sslog_gts_() ? GTS_LS : SSLOG_LS;
 }
 
 } // transaction

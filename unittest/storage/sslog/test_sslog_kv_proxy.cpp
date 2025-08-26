@@ -20,6 +20,7 @@
 #include "close_modules/shared_storage/storage/incremental/sslog/ob_sslog_kv_proxy.h"
 #include "share/scn.h"
 #include "test_mock_palf_kv.h"
+#include "src/share/config/ob_server_config.h"
 
 namespace oceanbase
 {
@@ -40,6 +41,7 @@ public:
   virtual void SetUp()
   {
     PALF_KV.clear();
+    GCONF.cluster_id = 1;
   }
   virtual void TearDown()
   {

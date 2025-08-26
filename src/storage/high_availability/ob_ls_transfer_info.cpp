@@ -210,7 +210,7 @@ ObLSTransferMetaInfo::ObLSTransferMetaInfo()
     data_version_(DEFAULT_MIN_DATA_VERSION)
 {
 #ifdef ERRSIM
-  data_version_ = EN_LS_TRANSFER_INFO_DATA_VERSION ? DATA_CURRENT_VERSION : DEFAULT_MIN_DATA_VERSION;
+  data_version_ = EN_LS_TRANSFER_INFO_DATA_VERSION ?  DATA_CURRENT_VERSION : DEFAULT_MIN_DATA_VERSION;
 #endif
 }
 
@@ -373,9 +373,14 @@ bool ObLSTransferMetaInfo::is_trans_status_same(
   return trans_status_ == trans_status;
 }
 
-bool ObLSTransferMetaInfo::is_abort_status()
+bool ObLSTransferMetaInfo::is_abort_status() const
 {
   return ObTransferInTransStatus::ABORT == trans_status_;
+}
+
+bool ObLSTransferMetaInfo::is_prepare_status() const
+{
+  return ObTransferInTransStatus::PREPARE == trans_status_;
 }
 
 int ObLSTransferMetaInfo::update_trans_status_(

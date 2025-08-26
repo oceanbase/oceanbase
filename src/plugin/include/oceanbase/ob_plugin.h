@@ -30,11 +30,14 @@
  * @details This is a constant value
  */
 #define OBP_PLUGIN_API_VERSION OBP_MAKE_VERSION(0, 1, 0)
+
+#define OBP_PLUGIN_API_VERSION_0_2_0 OBP_MAKE_VERSION(0, 2, 0)
+
 /**
  * current API version
  * @details This value will change if we add more API
  */
-#define OBP_PLUGIN_API_VERSION_CURRENT OBP_PLUGIN_API_VERSION
+#define OBP_PLUGIN_API_VERSION_CURRENT OBP_PLUGIN_API_VERSION_0_2_0
 
 #ifdef OBP_DYNAMIC_PLUGIN
 /** in dynamic library plugin **/
@@ -96,9 +99,10 @@ typedef ObPluginDatum ObPluginParamPtr;
 enum OBP_PUBLIC_API ObPluginType
 {
   OBP_PLUGIN_TYPE_INVALID = 0,
-  OBP_PLUGIN_TYPE_FT_PARSER,   /**< fulltext parser plugin */
+  OBP_PLUGIN_TYPE_FT_PARSER,   /** fulltext parser plugin */
   OBP_PLUGIN_TYPE_EXTERNAL,    /** external table data resource */
-  OBP_PLUGIN_TYPE_MAX,         /**< max plugin type */
+  OBP_PLUGIN_TYPE_KMS,         /** KMS plugin */
+  OBP_PLUGIN_TYPE_MAX,         /** max plugin type */
 };
 
 /**

@@ -34,7 +34,8 @@ namespace sql
 class ObReceiveRowReader
 {
 public:
-  ObReceiveRowReader(int64_t id) :
+  ObReceiveRowReader(int64_t id, const ExprFixedArray *child_exprs,
+                    bool reorder_fixed_expr, common::ObIAllocator *allocator = NULL) :
       recv_head_(NULL),
       recv_tail_(NULL),
       iterated_buffers_(NULL),
@@ -45,7 +46,10 @@ public:
       vec_row_iter_(NULL),
       row_meta_(),
       curr_vector_(),
-      id_(id)
+      id_(id),
+      reorder_fixed_expr_(reorder_fixed_expr),
+      child_exprs_(child_exprs),
+      allocator_(allocator)
   {
   }
   ~ObReceiveRowReader()
@@ -54,6 +58,8 @@ public:
   }
 
   int add_buffer(dtl::ObDtlLinkedBuffer &buf, bool &transferred);
+  void set_allocator(common::ObIAllocator *allocator) {allocator_ = allocator;}
+  RowMeta &get_row_meta() { return row_meta_; }
 
   bool has_more() const
   {
@@ -128,6 +134,8 @@ public:
                          const ObCompactRow **srows);
   void reset();
 
+  int init_row_meta();
+
 private:
   template <typename BLOCK, typename ROW>
   // return NULL for iterate end.
@@ -166,6 +174,10 @@ private:
   dtl::ObDtlMsgType msg_type_;
   dtl::ObDtlVectors curr_vector_;
   int64_t id_;
+  bool reorder_fixed_expr_ = false;
+  const ExprFixedArray *child_exprs_ = NULL;
+  common::ObIAllocator *allocator_ = NULL;
+  bool row_meta_init_ = false;
 };
 
 class ObPxNewRow

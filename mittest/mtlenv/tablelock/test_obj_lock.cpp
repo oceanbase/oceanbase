@@ -27,6 +27,15 @@
 
 namespace oceanbase
 {
+
+namespace storage
+{
+void ObTxData::dec_ref()
+{
+  return;
+}
+} // namespace storage
+
 namespace transaction
 {
 namespace tablelock

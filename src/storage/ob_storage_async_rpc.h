@@ -37,6 +37,9 @@ RPC_HA(obrpc::OB_CHECK_START_TRANSFER_TABLETS, obrpc::ObTransferTabletInfoArg, o
 RPC_HA(obrpc::OB_HA_UPDATE_TRANSFER_META_INFO, obrpc::ObUpdateTransferMetaInfoArg, obrpc::Int64, ObUpdateTransferMetaInfoProxy);
 RPC_HA(obrpc::OB_HA_CHECK_TRANSFER_IN_TABLET_ABORTED, obrpc::ObTransferTabletInfoArg, obrpc::ObTransferInTabletAbortedRes, ObCheckTransferInTabletAbortProxy);
 RPC_HA(obrpc::OB_HA_FETCH_LS_REPLAY_SCN, obrpc::ObFetchLSReplayScnArg, obrpc::ObFetchLSReplayScnRes, ObFetchLSReplayScnProxy);
+#ifdef OB_BUILD_SHARED_STORAGE
+RPC_HA(obrpc::OB_HA_CHECK_TRANSFER_OUT_TABLET_STATUS, obrpc::ObCheckTransferOutTabletStatusArg, obrpc::ObCheckTransferOutTabletStatusRes, ObCheckTransferOutTabletStatusProxy);
+#endif
 
 
 struct ObHAAsyncRpcArg final

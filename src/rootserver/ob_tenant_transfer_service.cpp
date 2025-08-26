@@ -263,16 +263,6 @@ int ObTenantTransferService::process_init_task_(const ObTransferTaskID task_id)
     ret = OB_NEED_RETRY;
     TTS_INFO("last task failed, need to process task later",
         KR(ret), K_(tenant_id), K(task), "result_comment", transfer_task_comment_to_str(result_comment));
-#ifdef OB_BUILD_SHARED_STORAGE
-  } else if (GCTX.is_shared_storage_mode()
-      && OB_FAIL(lock_and_check_tenant_merge_status_(trans, need_wait))) {
-    LOG_WARN("lock and check tenant merge status failed", KR(ret));
-  } else if (need_wait) {
-    result_comment = WAIT_FOR_MAJOR_COMPACTION;
-    ret = OB_NEED_WAIT;
-    TTS_INFO("tenant is merging, need wait",
-        KR(ret), K_(tenant_id), K(task), "result_comment", transfer_task_comment_to_str(result_comment));
-#endif
   } else if (OB_FAIL(check_ls_member_list_and_learner_list_(
       *sql_proxy_,
       task.get_src_ls(),
@@ -838,6 +828,8 @@ int ObTenantTransferService::add_table_lock_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("connection is null", KR(ret), K_(tenant_id), K(part_info));
   } else if (table_schema.is_offline_ddl_table()) {
+    // During the offline DDL execution, only the primary table has table lock,
+    // while no locks were applied to the hidden table. We should not tranfer the hidden table.
     ret = OB_TRY_LOCK_ROW_CONFLICT;
     TTS_INFO("treat offline ddl hidden table as locked table, do not transfer", KR(ret), K(part_info));
   } else if (table_schema.is_global_index_table()
@@ -903,7 +895,6 @@ int ObTenantTransferService::add_in_trans_lock_and_refresh_schema_(
   const uint64_t table_id = part_info.table_id();
   const bool is_out_trans = false;
   const ObTableLockOwnerID invalid_owner_id;
-  ObSimpleTableSchemaV2 *new_table_schema = NULL;
   const int64_t start_time = ObTimeUtility::current_time();
   TTS_INFO("add in trans lock and refresh schema start", K(start_time), K(part_info));
   if (IS_NOT_INIT || OB_ISNULL(sql_proxy_)) {
@@ -931,22 +922,9 @@ int ObTenantTransferService::add_in_trans_lock_and_refresh_schema_(
 
   TTS_INFO("add in trans table lock finish", KR(ret),
       "cost_time", ObTimeUtility::current_time() - start_time, K(part_info));
-  // After adding table lock, refresh schema to detect the concurrent online ddl
-  if (FAILEDx(get_latest_table_schema_(allocator, table_id, new_table_schema))) {
-    if (OB_TABLE_NOT_EXIST == ret) {
-      // With no table lock on the global index table, we lock primary table for it.
-      // So global index table may be deleted after adding table lock.
-      if (table_schema->is_global_index_table()) {
-        TTS_INFO("global index table not exist", KR(ret), K(part_info));
-      } else {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("table cannot not exist", KR(ret), K(table_id), K_(tenant_id));
-      }
-    } else {
-      LOG_WARN("get latest table schema failed", KR(ret), K(table_id));
-    }
-  } else if (OB_FAIL(get_tablet_and_partition_idx_by_object_id_(
-      *new_table_schema,
+
+  if (FAILEDx(get_tablet_and_partition_idx_by_object_id_(
+      *table_schema,
       part_info.part_object_id(),
       tablet_id,
       part_idx,
@@ -962,28 +940,111 @@ int ObTenantTransferService::add_in_trans_lock_and_refresh_schema_(
       tablet_id,
       0,/*try lock*/
       trans))) {
-    if (OB_TRY_LOCK_ROW_CONFLICT != ret || OB_ERR_EXCLUSIVE_LOCK_CONFLICT != ret) {
+    if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_ERR_EXCLUSIVE_LOCK_CONFLICT != ret) {
       LOG_WARN("lock for transfer in trans failed", KR(ret),
           K_(tenant_id), "table_id", part_info.table_id(), K(tablet_id));
     }
-  } else {
-    table_schema = new_table_schema;
-  }
-  // Double check for online ddl on global index table.
-  // Global index table may be deleted after refreshing table schema and before adding online ddl lock.
-  // Online ddl lock can not check tablet exist, so it may lock successfully while tablet not exists.
-  if (OB_SUCC(ret) && table_schema->is_global_index_table()) {
-    if (OB_FAIL(get_latest_table_schema_(allocator, table_id, new_table_schema))) {
-      if (OB_TABLE_NOT_EXIST == ret) {
-        TTS_INFO("global index table not exist", KR(ret), K(table_id), K(part_info));
-      } else {
-        LOG_WARN("get latest table schema failed", KR(ret), K(table_id), K(part_info));
-      }
+  // There might be concurrent DDL that have modified the table schema during adding lock.
+  // Online ddl lock can not check tablet exist, so it may lock successfully
+  // while tablet not exists or tablet is swapped. So we need double check.
+  } else if (OB_FAIL(refresh_schema_and_double_check_(
+      part_info,
+      tablet_id,
+      part_idx,
+      subpart_idx,
+      allocator,
+      table_schema))) {
+    if (OB_TABLE_NOT_EXIST != ret
+        && OB_ENTRY_NOT_EXIST != ret
+        && OB_ERR_EXCLUSIVE_LOCK_CONFLICT != ret) {
+      LOG_WARN("refresh schema and double check failed", KR(ret),
+          K(part_info), K(tablet_id), K(part_idx), K(subpart_idx));
     }
   }
+
   TTS_INFO("add in trans lock and refresh schema finish", KR(ret),
       "cost_time", ObTimeUtility::current_time() - start_time,
       K(part_info), K(tablet_id), K(part_idx), K(subpart_idx));
+  return ret;
+}
+
+int ObTenantTransferService::refresh_schema_and_double_check_(
+    const share::ObTransferPartInfo &part_info,
+    const ObTabletID &tablet_id,
+    int64_t &part_idx,
+    int64_t &subpart_idx,
+    common::ObIAllocator &allocator,
+    ObSimpleTableSchemaV2 *&table_schema)
+{
+  int ret = OB_SUCCESS;
+  ObSimpleTableSchemaV2 *new_table_schema = nullptr;
+  ObTabletID new_tablet_id;
+  int64_t new_part_idx = OB_INVALID_INDEX;
+  int64_t new_subpart_idx = OB_INVALID_INDEX;
+  int64_t ori_schema_version = OB_INVALID_VERSION;
+  int64_t new_schema_version = OB_INVALID_VERSION;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(!part_info.is_valid() || !tablet_id.is_valid()) || OB_ISNULL(table_schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(part_info), K(tablet_id), KP(table_schema));
+  } else if (FALSE_IT(ori_schema_version = table_schema->get_schema_version())) {
+  } else if (OB_FAIL(get_latest_table_schema_(allocator, part_info.table_id(), new_table_schema))) {
+    if (OB_TABLE_NOT_EXIST == ret) {
+      // With no table lock on the global index table, we lock primary table for it.
+      // So global index table may be deleted after adding table lock and before adding online ddl lock.
+      if (table_schema->is_global_index_table()) {
+        LOG_INFO("global index table not exist", KR(ret), K(part_info), K(ori_schema_version));
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table not exists after locking table", KR(ret), K(part_info),
+            K(tablet_id), K(part_idx), K(subpart_idx), KPC(table_schema));
+      }
+    } else {
+      LOG_WARN("get latest table schema failed", KR(ret), K(part_info), KPC(table_schema));
+    }
+  } else if (OB_ISNULL(new_table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null new table schema", KR(ret), K(part_info),
+        K(part_info), K(tablet_id), KPC(table_schema));
+  } else if (FALSE_IT(new_schema_version = new_table_schema->get_schema_version())) {
+  } else if (OB_FAIL(get_tablet_and_partition_idx_by_object_id_(
+      *new_table_schema,
+      part_info.part_object_id(),
+      new_tablet_id,
+      new_part_idx,
+      new_subpart_idx))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      LOG_INFO("tablet not exist after adding lock", KR(ret), K(part_info), K(tablet_id),
+          K(part_idx), K(subpart_idx), K(ori_schema_version), K(new_schema_version));
+    } else {
+      LOG_WARN("get tablet and partition idx by object_id failed", KR(ret), K(part_info),
+          K(tablet_id), K(part_idx), K(subpart_idx), K(ori_schema_version), K(new_schema_version));
+    }
+  } else if (new_tablet_id != tablet_id) {
+    // This is a defense to prevent the concurrent partition-exchange changing tablet_ids.
+    // In some scenarios, such as when direct-load processes hash/key partitions, or when
+    // partition-exchange handles partitioned table and secondary partition, they only
+    // exchange tablet_ids while object_ids remain unchanged.
+    // Treat these scenarios as lock conflicts.
+    ret = OB_ERR_EXCLUSIVE_LOCK_CONFLICT;
+    LOG_INFO("tablet changed during adding lock", KR(ret), K(part_info), K(tablet_id),
+        K(new_tablet_id), K(part_idx), K(new_part_idx), K(subpart_idx), K(new_subpart_idx),
+        K(ori_schema_version), K(new_schema_version));
+  } else if (new_part_idx != part_idx || new_subpart_idx != subpart_idx) {
+    // The concurrent DDLs such as add/drop-partition or partition-split will change the idx.
+    // As long as the tablet_id remains unchanged, the transfer can be executed normally.
+    LOG_INFO("part_idx or subpart_idx has been changed during adding lock",
+        KR(ret), K(part_info), K(part_idx), K(new_part_idx), K(subpart_idx), K(new_subpart_idx),
+        K(ori_schema_version), K(new_schema_version));
+    part_idx = new_part_idx;
+    subpart_idx = new_subpart_idx;
+  }
+  if (OB_SUCC(ret) && new_schema_version > ori_schema_version) {
+    LOG_INFO("replace with new table schema", K(part_info), K(ori_schema_version), K(new_schema_version));
+    table_schema = new_table_schema;
+  }
   return ret;
 }
 
@@ -1138,7 +1199,10 @@ int ObTenantTransferService::get_related_table_schemas_(
 {
   int ret = OB_SUCCESS;
   related_table_schemas.reset();
-  const int64_t schema_version = INT64_MAX - 1; // get newest schema
+  // After locking, the table schema of the primary table may still be modified due to concurrent partition splitting,
+  // resulting in a mismatch between the latest related table schema and the table schema of the primary table.
+  // So, here we need to specify the schema version of the primary table.
+  const int64_t schema_version = table_schema.get_schema_version();
   ObRefreshSchemaStatus schema_status;
   schema_status.tenant_id_ = tenant_id_;
   ObArray<uint64_t> related_table_ids;
@@ -1167,7 +1231,7 @@ int ObTenantTransferService::get_related_table_schemas_(
     LOG_WARN("fail to fetch_aux_tables", KR(ret), K_(tenant_id),
         K(primary_table_id), K(schema_status), K(related_table_ids), K(schema_version));
   } else {
-    TTS_INFO("get related table infos", K(primary_table_id), K(related_infos));
+    TTS_INFO("get related table infos", K(schema_version), K(primary_table_id), K(related_infos));
   }
   ARRAY_FOREACH(related_infos, idx) {
     const ObAuxTableMetaInfo &info = related_infos.at(idx);
@@ -1181,13 +1245,14 @@ int ObTenantTransferService::get_related_table_schemas_(
   if (OB_FAIL(ret)) {
   } else if (related_table_ids.empty()) {
     // skip
-  } else if (OB_FAIL(batch_get_latest_table_schemas_(
+  } else if (OB_FAIL(batch_get_table_schemas_by_version_(
       allocator,
+      schema_version,
       related_table_ids,
       related_table_schemas))) {
-    LOG_WARN("fail to batch get latest table schemas", KR(ret), K(related_table_ids));
+    LOG_WARN("fail to batch get table schemas by version", KR(ret), K(related_table_ids), K(schema_version));
   } else {
-    TTS_INFO("get related table schema", K(primary_table_id),
+    TTS_INFO("get related table schema", K(primary_table_id), K(schema_version),
         K(related_infos), "schema count", related_table_schemas.count());
   }
   return ret;
@@ -1777,8 +1842,6 @@ int ObTenantTransferService::get_latest_table_schema_(
 {
   int ret = OB_SUCCESS;
   table_schema = NULL;
-  ObSEArray<ObObjectID, 1> table_ids;
-  ObSEArray<ObSimpleTableSchemaV2 *, 1> table_schemas;
   if (IS_NOT_INIT || OB_ISNULL(sql_proxy_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
@@ -1797,25 +1860,29 @@ int ObTenantTransferService::get_latest_table_schema_(
 }
 
 // the count of table_schemas may be smaller than table_ids
-int ObTenantTransferService::batch_get_latest_table_schemas_(
+int ObTenantTransferService::batch_get_table_schemas_by_version_(
     common::ObIAllocator &allocator,
+    const int64_t schema_version,
     const common::ObIArray<ObObjectID> &table_ids,
     common::ObIArray<ObSimpleTableSchemaV2 *> &table_schemas)
 {
+  DEBUG_SYNC(BEFORE_TRANSFER_GET_RELATED_TABLE_SCHEMAS);
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT || OB_ISNULL(sql_proxy_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
-  } else if (OB_UNLIKELY(table_ids.empty())) {
+  } else if (OB_UNLIKELY(table_ids.empty() || schema_version < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid table_ids", KR(ret), K(table_ids));
-  } else if (OB_FAIL(ObSchemaUtils::batch_get_latest_table_schemas(
+    LOG_WARN("invalid args", KR(ret), K(table_ids), K(schema_version));
+  } else if (OB_FAIL(ObSchemaUtils::batch_get_table_schemas_by_version(
       *sql_proxy_,
       allocator,
       tenant_id_,
+      schema_version,
       table_ids,
       table_schemas))) {
-    LOG_WARN("fail to get latest table schema", KR(ret), K_(tenant_id), K(table_ids));
+    LOG_WARN("fail to batch get table schemas by version",
+        KR(ret), K_(tenant_id), K(schema_version), K(table_ids));
   }
   return ret;
 }

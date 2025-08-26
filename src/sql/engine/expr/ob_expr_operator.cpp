@@ -1790,8 +1790,9 @@ int ObExprOperator::aggregate_collection_sql_type(
       if (ob_is_null(types[i].get_type())) {
         // do nothing
       } else if (!ob_is_collection_sql_type(types[i].get_type())) {
-        ret = OB_ERR_INVALID_TYPE_FOR_OP;
-        LOG_WARN("invalid type for op", K(ret), K(types[i].get_type()));
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not supported type for merge", K(ret), K(types[i].get_type()));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "merge array with other type is");
       } else if (first) {
         // choose the first collection subschema id now
         type.set_subschema_id(types[i].get_subschema_id());
@@ -3730,7 +3731,7 @@ int ObRelationalExprOperator::eval_compare_composite(CollectionPredRes &cmp_resu
       cmp_result = COLL_PRED_NULL;
     } else if (OB_FAIL(params.at(0).get_bool(tmp_result))) {
       LOG_WARN("failed to get result",
-               K(ret), K(obj1), K(obj2), K(params), K(result), K(tmp_result));
+               K(ret), K(obj1), K(obj2), K(params), K(result), K(tmp_result), K(CMP_EQ_PL));
     } else if (CO_EQ == cmp_op) {
       cmp_result = tmp_result ? COLL_PRED_TRUE : COLL_PRED_FALSE;
     } else if (CO_NE == cmp_op) {

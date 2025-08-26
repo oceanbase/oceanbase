@@ -733,7 +733,6 @@ int ObTxReplayExecutor::replay_one_row_in_memtable_(ObMutatorRowHeader &row_head
     storeCtx.tablet_id_ = row_head.tablet_id_;
     storeCtx.ls_ = ls_;
 
-    ObRelativeTable relative_table;
     lib::CompatModeGuard compat_guard(mode);
     switch (row_head.mutator_type_) {
     case MutatorType::MUTATOR_ROW: {

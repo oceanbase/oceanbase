@@ -41,6 +41,7 @@
 #include "storage/compaction/ob_compaction_memory_context.h"
 #include "storage/ob_storage_schema_util.h"
 #include "storage/blocksstable/ob_sstable_private_object_cleaner.h"
+#include "storage/blocksstable/ob_micro_block_writer.h"
 
 #define OK(ass) ASSERT_EQ(OB_SUCCESS, (ass))
 
@@ -183,12 +184,12 @@ public:
 public:
   static const int64_t MICRO_BLOCK_SIZE = 4 * 1024;
   static const int64_t MACRO_BLOCK_SIZE = 64 * 1024;
-  static const int64_t MAX_MICRO_BLOCK_CNT = 100;
+  static const int64_t MAX_MICRO_BLOCK_CNT = 300;
   static const int64_t MACRO_BLOCK_COUNT = 1000;
   static const int64_t SCHEMA_VERSION = 10;
   static const int64_t TEST_COLUMN_CNT = 6;
   static const int64_t TEST_ROWKEY_COLUMN_CNT = 2;
-  static const int64_t MAX_FILE_SIZE = 256 * 1024 * 1024;
+  static const int64_t MAX_FILE_SIZE = 1024 * 1024 * 1024;
   enum LoadDataType
   {
     ALL_DELETE = 0,
@@ -210,7 +211,7 @@ public:
   ObWholeDataStoreDesc index_desc_;
   ObSSTablePrivateObjectCleaner cleaner_;
   ObMacroBlockWriter macro_writer_;
-  ObMicroBlockWriter micro_writer_;
+  ObMicroBlockWriter<> micro_writer_;
   ObRowStoreType row_store_type_;
   ObSSTableIndexBuilder *root_index_builder_;
 
@@ -360,6 +361,7 @@ void ObMultiVersionSSTableTest::prepare_table_schema(
   table_schema_.set_row_store_type(FLAT_ROW_STORE);
   table_schema_.set_storage_format_version(OB_STORAGE_FORMAT_VERSION_V4);
   table_schema_.set_merge_engine_type(merge_engine_type);
+  table_schema_.set_micro_block_format_version(ObMicroBlockFormatVersionHelper::LATEST_VERSION);
 
   ObColumnSchemaV2 column;
   //init column

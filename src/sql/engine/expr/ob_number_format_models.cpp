@@ -2452,7 +2452,7 @@ int ObNFMToNumber::process_hex_format(const common::ObString &in_str,
     }
   }
   if (OB_FAIL(ret)) {
-  } else if ('-' == str[str_pos]) {
+  } else if (str_pos < str_len && '-' == str[str_pos]) {
     ret = OB_ERR_CAST_VARCHAR_TO_NUMBER;
     LOG_WARN("not support negative number", K(ret), K(in_str));
   } else if (ObNFMElem::has_type((~NFM_HEX_FLAG) & (~NFM_ZERO_FLAG)

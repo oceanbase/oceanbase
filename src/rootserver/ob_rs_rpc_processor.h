@@ -36,7 +36,9 @@ inline bool is_parallel_ddl(const obrpc::ObRpcPacketCode pcode)
          || obrpc::OB_PARALLEL_SET_COMMENT == pcode
          || obrpc::OB_PARALLEL_CREATE_INDEX == pcode
          || obrpc::OB_PARALLEL_UPDATE_INDEX_STATUS == pcode
-         || obrpc::OB_PARALLEL_CREATE_NORMAL_TENANT == pcode;
+         || obrpc::OB_PARALLEL_DROP_TABLE == pcode
+         || obrpc::OB_PARALLEL_CREATE_NORMAL_TENANT == pcode
+         || obrpc::OB_PARALLEL_HTABLE_DDL == pcode;
 }
 
 inline bool need_ddl_lock(const obrpc::ObRpcPacketCode pcode)
@@ -57,7 +59,12 @@ inline bool allow_ddl_thread_rpc_not_match(const obrpc::ObRpcPacketCode pcode)
          || obrpc::OB_SPLIT_RESOURCE_POOL == pcode
          || obrpc::OB_MERGE_RESOURCE_POOL == pcode
          || obrpc::OB_BACKUP_DATABASE == pcode
-         || obrpc::OB_GET_TENANT_SCHEMA_VERSIONS == pcode;
+         || obrpc::OB_GET_TENANT_SCHEMA_VERSIONS == pcode
+         || obrpc::OB_BROADCAST_SCHEMA == pcode
+         || obrpc::OB_PHYSICAL_RESTORE_TENANT == pcode
+         || obrpc::OB_RUN_UPGRADE_JOB == pcode
+         || obrpc::OB_DROP_RESTORE_POINT == pcode
+         || obrpc::OB_CLEAN_SPLITTED_TABLET == pcode;
 }
 
 // precondition: enable_ddl = false
@@ -232,6 +239,14 @@ protected:
         ret = OB_OP_NOT_ALLOW;
         RS_LOG(WARN, "ddl operation not allow, can not process this request", K(ret), K(pcode));
       } else {
+        int64_t consumer_group_id = share::OBCG_DEFAULT;
+        if (is_ddl_like_ && OB_NOT_NULL(ddl_arg_)) {
+          omt::ObTenantConfigGuard tenant_config(TENANT_CONF(ddl_arg_->exec_tenant_id_));
+          if (tenant_config.is_valid() && tenant_config->_enable_ddl_worker_isolation) {
+            consumer_group_id = share::OBCG_DDL;
+          }
+        }
+        CONSUMER_GROUP_ID_GUARD(consumer_group_id);
         if (is_ddl_like_) {
           if (OB_ISNULL(ddl_arg_)) {
             ret = OB_MISS_ARGUMENT;
@@ -303,6 +318,7 @@ protected:
           int64_t start_ts = ObTimeUtility::current_time();
           bool with_ddl_lock = false;
           if (is_ddl_like_ && need_ddl_lock(pcode)) {
+            RS_LOG(INFO, "[DDL] try to get ddl lock");
             if (is_parallel_ddl(pcode)) {
               if (OB_FAIL(root_service_.get_ddl_service().ddl_rlock())) {
                 RS_LOG(WARN, "root service ddl lock fail", K(ret), K(ddl_arg_));
@@ -314,6 +330,7 @@ protected:
             }
             if (OB_SUCC(ret)) {
               with_ddl_lock = true;
+              RS_LOG(INFO, "[DDL] get ddl lock", "cost", ObTimeUtility::current_time() - start_ts);
             }
           }
           if (OB_FAIL(ret)) {
@@ -473,6 +490,7 @@ DEFINE_RS_RPC_PROCESSOR(obrpc::OB_START_REDEF_TABLE, ObRpcStartRedefTableP, star
 
 // ddl rpc processors
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_HIDDEN_TABLE, ObRpcCreateHiddenTableP, create_hidden_table(arg_, result_));
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_HIDDEN_TABLE_V2, ObRpcCreateHiddenTableV2P, create_hidden_table_v2(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_COMMIT_ALTER_TENANT_LOCALITY, ObRpcCommitAlterTenantLocalityP, commit_alter_tenant_locality(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_TENANT, ObRpcCreateTenantP, create_tenant(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_PARALLEL_CREATE_NORMAL_TENANT, ObRpcParallelCreateNormalTenantP, parallel_create_normal_tenant(arg_));
@@ -496,6 +514,7 @@ DEFINE_DDL_SYS_TNT_RPC_PROCESSOR(obrpc::OB_ALTER_TABLE, ObRpcAlterTableP, alter_
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_EXCHANGE_PARTITION, ObRpcExchangePartitionP, exchange_partition(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_SPLIT_GLOBAL_INDEX_TABLET, ObSplitGlobalIndexTabletTaskP, split_global_index_tablet(arg_));
 DEFINE_DDL_SYS_TNT_RPC_PROCESSOR(obrpc::OB_DROP_TABLE, ObRpcDropTableP, drop_table(arg_, result_));
+DEFINE_DDL_SYS_TNT_RPC_PROCESSOR(obrpc::OB_PARALLEL_DROP_TABLE, ObRpcParallelDropTableP, parallel_drop_table(arg_, result_));
 DEFINE_DDL_SYS_TNT_RPC_PROCESSOR(obrpc::OB_RENAME_TABLE, ObRpcRenameTableP, rename_table(arg_));
 DEFINE_DDL_SYS_TNT_RPC_PROCESSOR(obrpc::OB_TRUNCATE_TABLE, ObRpcTruncateTableP, truncate_table(arg_, result_));
 DEFINE_DDL_SYS_TNT_RPC_PROCESSOR(obrpc::OB_TRUNCATE_TABLE_V2, ObRpcTruncateTableV2P, truncate_table_v2(arg_, result_));
@@ -521,9 +540,10 @@ DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_REVOKE_DB, ObRpcRevokeDBP, revoke_database
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_REVOKE_TABLE, ObRpcRevokeTableP, revoke_table(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_REVOKE_ROUTINE, ObRpcRevokeRoutineP, revoke_routine(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_REVOKE_SYSPRIV, ObRpcRevokeSysPrivP, revoke_syspriv(arg_));
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_REVOKE_OBJECT, ObRpcRevokeObjP, revoke_object(arg_));
 DEFINE_DDL_SYS_TNT_RPC_PROCESSOR(obrpc::OB_UPDATE_INDEX_TABLE_STATUS, ObUpdateIndexTableStatusP, update_index_status(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_UPDATE_MVIEW_TABLE_STATUS, ObRpcUpdateMViewTableStatusP, update_mview_status(arg_));
-DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_PARALLEL_UPDATE_INDEX_STATUS, ObUpdateIndexStatusP, parallel_update_index_status(arg_, result_));
+DEFINE_DDL_SYS_TNT_RPC_PROCESSOR(obrpc::OB_PARALLEL_UPDATE_INDEX_STATUS, ObUpdateIndexStatusP, parallel_update_index_status(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DROP_LOB, ObDropLobP, drop_lob(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_FLASHBACK_TABLE_FROM_RECYCLEBIN, ObRpcFlashBackTableFromRecyclebinP, flashback_table_from_recyclebin(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_FLASHBACK_INDEX, ObRpcFlashBackIndexP, flashback_index(arg_));
@@ -712,6 +732,11 @@ DEFINE_RS_RPC_PROCESSOR(obrpc::OB_RS_FLUSH_OPT_STAT_MONITORING_INFO, ObRpcFlushO
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_DIRECTORY, ObRpcCreateDirectoryP, create_directory(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DROP_DIRECTORY, ObRpcDropDirectoryP, drop_directory(arg_));
 
+// location object
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_LOCATION, ObRpcCreateLocationP, create_location(arg_));
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DROP_LOCATION, ObRpcDropLocationP, drop_location(arg_));
+
+
 // context object
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DO_CONTEXT_DDL, ObRpcDoContextDDLP, do_context_ddl(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_RECOMPILE_ALL_VIEWS_BATCH, ObRpcRecompileAllViewsBatchP, recompile_all_views_batch(arg_));
@@ -730,6 +755,9 @@ DEFINE_RS_RPC_PROCESSOR(obrpc::OB_ADMIN_SYNC_REWRITE_RULES, ObRpcAdminSyncRewrit
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_HANDLE_RLS_POLICY_DDL, ObRpcHandleRlsPolicyDDLP, handle_rls_policy_ddl(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_HANDLE_RLS_GROUP_DDL, ObRpcHandleRlsGroupDDLP, handle_rls_group_ddl(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_HANDLE_RLS_CONTEXT_DDL, ObRpcHandleRlsContextDDLP, handle_rls_context_ddl(arg_));
+// row level security ddl
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_CCL_RULE, ObRpcCreateCCLRuleDDLP, create_ccl_rule_ddl(arg_));
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DROP_CCL_RULE, ObRpcDropCCLRuleDDLP, drop_ccl_rule_ddl(arg_));
 #ifdef OB_BUILD_TDE_SECURITY
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_GET_ROOT_KEY, ObGetRootKeyP, handle_get_root_key(arg_, result_));
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_RELOAD_MASTER_KEY, ObReloadMasterKeyP, reload_master_key(arg_, result_));
@@ -744,6 +772,12 @@ DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_HANDLE_CATALOG_DDL, ObRpcHandleCatalogDDLP
 
 // for ob_admin
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_FORCE_DROP_LONELY_LOB_AUX_TABLE, ObForceDropLonelyLobAuxTableP, force_drop_lonely_lob_aux_table(arg_));
+
+// external resource ddl
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_EXTERNAL_RESOURCE, ObRpcCreateExternalResourceP, create_external_resource(arg_, result_));
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DROP_EXTERNAL_RESOURCE, ObRpcDropExternalResourceP, drop_external_resource(arg_, result_));
+// htable ddl
+DEFINE_DDL_SYS_TNT_RPC_PROCESSOR(obrpc::OB_PARALLEL_HTABLE_DDL, ObRpcParallelHTableDDLP, parallel_htable_ddl(arg_, result_));
 
 #undef DEFINE_RS_RPC_PROCESSOR_
 #undef DEFINE_RS_RPC_PROCESSOR

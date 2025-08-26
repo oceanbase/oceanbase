@@ -72,6 +72,7 @@ struct ObBackupCleanTaskType final
   {
     BACKUP_SET = 0,
     BACKUP_PIECE = 1,
+    BACKUP_COMPLEMENT_LOG = 2,
     MAX,
   };
   static const char *get_str(const TYPE &type);
@@ -146,7 +147,7 @@ public:
   int64_t task_count_;
   int64_t success_task_count_;
 };
-  // TODO(xingzhi) 4.4 Split the structure of set and piece
+  // TODO(lyh444845) 4.4.1 Split the structure of set and piece
 
 struct ObBackupCleanTaskAttr final
 {
@@ -191,6 +192,9 @@ struct ObBackupCleanLSTaskAttr final
   bool is_valid() const;
   void reset(); 
   bool is_delete_backup_set_task() const { return ObBackupCleanTaskType::BACKUP_SET == task_type_; }
+  bool is_delete_backup_complement_task() const {
+    return ObBackupCleanTaskType::BACKUP_COMPLEMENT_LOG == task_type_;
+  }
   bool is_delete_backup_piece_task() const { return ObBackupCleanTaskType::BACKUP_PIECE == task_type_; }
   int assign(const ObBackupCleanLSTaskAttr &other);
   TO_STRING_KV(K_(task_id), K_(tenant_id), K_(ls_id), K_(job_id),  K_(backup_set_id),

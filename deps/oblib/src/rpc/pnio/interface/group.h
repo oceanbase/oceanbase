@@ -41,6 +41,8 @@ typedef int (*client_cb_t)(void* arg, int io_err, const char* b, int64_t sz);
 #endif
 #define PN_GRP_COMM                           \
   int count;                                  \
+  int config_count;                           \
+  int created_count;                          \
   int64_t rx_bw RK_CACHE_ALIGNED;             \
   uint64_t rx_bytes RK_CACHE_ALIGNED;         \
   int64_t next_readable_time RK_CACHE_ALIGNED
@@ -77,8 +79,12 @@ PN_API int pn_listen(int port, serve_cb_t cb);
 // if listen_id == -1,  act as client only
 // make sure grp != 0
 PN_API int pn_provision(int listen_id, int grp, int thread_count);
+PN_API int pn_update_thread_count(int gid, int thread_count);
+int pn_set_thread_count(int listen_id, int gid, int thread_count);
 // gid_tid = (gid<<8) | tid
 PN_API int pn_send(uint64_t gtid, struct sockaddr_storage* sock_addr, const pn_pkt_t* pkt, uint32_t* pkt_id_ret);
+PN_API void* pn_send_alloc(uint64_t gtid, int64_t sz);
+PN_API void pn_send_free(void* p);
 PN_API void* pn_resp_pre_alloc(uint64_t req_id, int64_t sz);
 PN_API int pn_resp(uint64_t req_id, const char* buf, int64_t hdr_sz, int64_t payload_sz, int64_t resp_expired_abs_us);
 PN_API int pn_get_peer(uint64_t req_id, struct sockaddr_storage* addr);
@@ -98,6 +104,10 @@ void reset_pnio_statistics(int64_t *read_bytes, int64_t *write_bytes);
 pn_comm_t* get_current_pnio();
 void pn_release(pn_comm_t* pn_comm);
 void pn_print_diag_info(pn_comm_t* pn_comm);
+void pkts_sk_rebalance();
+
+void pn_set_trace_point(uint64_t req_id, int32_t trace_point);
+void pn_set_trace_info(uint64_t req_id, int64_t tenant_id, int16_t pocde, const uint64_t* trace_id);
 
 #define PNIO_OK                     0
 #define PNIO_ERROR                  (-1)

@@ -246,8 +246,9 @@ class ObSleepEventGuard : public ObWaitEventGuard
 public:
   ObSleepEventGuard(
       const int64_t sleep_us,
+      const int64_t p2, //caller bt
       const uint64_t timeout_ms = 0
-  ) : ObWaitEventGuard(EVENT_ID, timeout_ms, sleep_us, 0, 0)
+  ) : ObWaitEventGuard(EVENT_ID, timeout_ms, sleep_us, p2, 0)
   {
     lib::Thread::sleep_us_ = sleep_us;
   }
@@ -289,21 +290,21 @@ private:
   ObDiagnosticInfo *di_;
 };
 
+extern int64_t get_rel_offset(int64_t addr);
 } /* namespace common */
 } /* namespace oceanbase */
 
-#define SLEEP(time)                                                                        \
-  do {                                                                                     \
-    oceanbase::common::ObSleepEventGuard<oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP> \
-        wait_guard(((int64_t)time) * 1000 * 1000);                                         \
-    ::sleep(time);                                                                         \
+#define SLEEP(time)                                                                                         \
+  do {                                                                                                      \
+    oceanbase::common::ObSleepEventGuard<oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP>                  \
+        wait_guard(((int64_t)time) * 1000 * 1000, get_rel_offset((int64_t)__builtin_frame_address(0)));     \
+    ::sleep(time);                                                                                          \
   } while (0)
-
-#define USLEEP(time)                                                                       \
-  do {                                                                                     \
-    oceanbase::common::ObSleepEventGuard<oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP> \
-        wait_guard((int64_t)time);                                                         \
-    ::usleep(time);                                                                        \
+#define USLEEP(time)                                                                                        \
+  do {                                                                                                      \
+    oceanbase::common::ObSleepEventGuard<oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP>                  \
+        wait_guard((int64_t)time, get_rel_offset((int64_t)__builtin_frame_address(0)));                     \
+    ::usleep(time);                                                                                         \
   } while (0)
 
 #define GLOBAL_EVENT_GET(stat_no)             \

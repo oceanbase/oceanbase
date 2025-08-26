@@ -21,10 +21,17 @@
 
 namespace oceanbase
 {
-using namespace common;
 using namespace blocksstable;
 using namespace storage;
 using namespace share::schema;
+
+namespace common
+{
+bool is_tenant_has_sslog(const uint64_t tenant_id)
+{
+  return false;
+}
+}
 
 class TestDDLClogCase : public ::testing::Test
 {
@@ -139,7 +146,7 @@ void TestDDLClogCase::mock_sstable(ObTableHandleV2 &table_handle)
   table_key.version_range_.snapshot_version_ = mock_snapshot_version;
 
   ASSERT_EQ(OB_SUCCESS, storage_schema.init(allocator_, table_schema_, lib::Worker::CompatMode::MYSQL));
-  ASSERT_EQ(OB_SUCCESS, param.init_for_empty_major_sstable(ObTabletID(tablet_id_), storage_schema, 100, -1, false));
+  ASSERT_EQ(OB_SUCCESS, param.init_for_empty_major_sstable(ObTabletID(tablet_id_), storage_schema, 100, -1, false, false));
   ASSERT_NE(nullptr, buf = allocator_.alloc(sizeof(ObSSTable)));
   ASSERT_NE(nullptr, sstable = new(buf)ObSSTable());
   ASSERT_EQ(OB_SUCCESS, sstable->init(param, &allocator_));
@@ -149,50 +156,24 @@ void TestDDLClogCase::mock_sstable(ObTableHandleV2 &table_handle)
 void TestDDLClogCase::prepare_ddl_finish_log(ObTabletID &tablet_id, ObDDLFinishLog &finish_log)
 {
   int ret = OB_SUCCESS;
-  ObLSHandle ls_handle;
-  ObSSTable *sstable = nullptr;
-  ObTabletCreateSSTableParam param;
-  ObStorageSchema storage_schema;
-  ObTabletHandle tablet_handle;
-  ObTabletHandle new_tablet_handle;
-  ObTabletMacroInfo macro_block_info;
-  int64_t mock_start_macro_seq = 101;
-
-  ObLSService* ls_service = MTL(ObLSService*);
-  ObSharedObjectWriteInfo write_info;
-  ObTabletMacroInfo tablet_macro_info;
-  ObStorageObjectHandle object_handle;
-  ObTabletPersisterParam persister_param(ObTabletID(tablet_id), 0 /*transfer_seq*/,mock_snapshot_version, mock_start_macro_seq);
-  ObTabletPersister persister(persister_param, ObCtxIds::DEFAULT_CTX_ID);
-  ObITable::TableKey table_key;
-  table_key.tablet_id_ = ObTabletID(tablet_id); /*table key use new tablet id*/
-  table_key.table_type_ = ObITable::MAJOR_SSTABLE;
-  ObBlockInfoSet block_info_set;
-  ObLinkedMacroBlockItemWriter linked_writer;
-  ObTabletSpaceUsage space_usage;
-  common::ObSEArray<ObSharedObjectsWriteCtx, 16> total_write_ctxs;
-  ObSArray<MacroBlockId> shared_meta_id_arr;
-
-  ASSERT_EQ(OB_SUCCESS, storage_schema.init(allocator_, table_schema_, lib::Worker::CompatMode::MYSQL));
-  ASSERT_NE(ls_service, nullptr);
-  ASSERT_EQ(OB_SUCCESS, ls_service->get_ls(ObLSID(ls_id_), ls_handle, ObLSGetMod::DDL_MOD));
-  ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet(ObTabletID(tablet_id_), tablet_handle, 0, ObMDSGetTabletMode::READ_WITHOUT_CHECK));
-
-  ASSERT_EQ(OB_SUCCESS, block_info_set.init());
-  ASSERT_EQ(OB_SUCCESS, tablet_macro_info.init(allocator_, block_info_set, &linked_writer));
-
-  ASSERT_EQ(OB_SUCCESS, persister.persist_and_fill_tablet((*tablet_handle.get_obj()), linked_writer, total_write_ctxs,
-                                                          new_tablet_handle, space_usage,
-                                                          macro_block_info, shared_meta_id_arr));
-  if (OB_ISNULL(new_tablet_handle.get_obj()->macro_info_addr_.get_ptr())) {
-    new_tablet_handle.get_obj()->macro_info_addr_.ptr_ = &tablet_macro_info;
+  ObTableHandleV2 table_handle;
+  mock_sstable(table_handle);
+  if (table_handle.is_valid()) {
+    ObSSTable *sstable = NULL;
+    ASSERT_EQ(OB_SUCCESS, table_handle.get_sstable(sstable));
+    int64_t buf_len = 0;
+    if (sstable) {
+      const uint64_t data_version = DATA_CURRENT_VERSION;
+      char *buf = (char*)mtl_malloc((buf_len = sstable->get_serialize_size(data_version)), "MajorSSTable");
+      if (buf) {
+        int64_t pos = 0;
+        ASSERT_EQ(OB_SUCCESS, sstable->serialize(data_version, buf, buf_len, pos));
+        ASSERT_EQ(OB_SUCCESS, finish_log.init(tenant_id_, ObLSID(ls_id_), sstable->key_, buf, pos, mock_data_format_version));
+      } else {
+        ASSERT_EQ(true, false) <<"buf is null";
+      }
+    }
   }
-  ASSERT_EQ(OB_SUCCESS, persister.fill_tablet_write_info(allocator_, new_tablet_handle.get_obj(),  write_info));
-  blocksstable::ObStorageObjectOpt curr_opt;
-  persister.build_async_write_start_opt_(curr_opt);
-  ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.alloc_object(curr_opt, object_handle));
-  ASSERT_EQ(OB_SUCCESS, finish_log.init(tenant_id_, ObLSID(ls_id_), table_key, write_info.buffer_, write_info.size_, object_handle.get_macro_id(), mock_data_format_version));
-
   return ;
 }
 

@@ -45,6 +45,9 @@ int ObRequest::set_trace_point(int trace_point)
     }
   } else {
     handling_state_ = trace_point;
+    if (OB_RPC == type_) {
+      RPC_REQ_OP.set_trace_point(this, trace_point);
+    }
   }
   return OB_SUCCESS;
 }

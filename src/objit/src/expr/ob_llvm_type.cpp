@@ -85,13 +85,8 @@ int ObIRObj::set_obj(core::JitContext &jc, const ObIRValuePtr obj, ObObjType typ
     case ObVarcharType: {
       ObIRValuePtr len_indices[] = {get_const(jc.get_context(), 32, 0),
                                     get_const(jc.get_context(), 32, OBJ_IDX_VAL_LEN)};
-#ifdef CPP_STANDARD_20
       ObIRValuePtr str_len_p = jc.get_builder().CreateGEP(ObIRType::getInt64Ty(jc.get_context()), obj, makeArrayRef(len_indices));
       val_len_ = jc.get_builder().CreateLoad(ObIRType::getInt64Ty(jc.get_context()),str_len_p);
-#else
-      ObIRValuePtr str_len_p = jc.get_builder().CreateGEP(obj, makeArrayRef(len_indices));
-      val_len_ = jc.get_builder().CreateLoad(str_len_p);
-#endif
       //ptr
     } break;
     default: {
@@ -122,17 +117,10 @@ ObIRValuePtr ObIRObj::get_ir_value_element(core::JitContext &jc,
   ObIRValuePtr ret = NULL;
   ObIRValuePtr indices[] = {get_const(jc.get_context(), 32, 0),
                             get_const(jc.get_context(), 32, idx)};
-#ifdef CPP_STANDARD_20
   ObIRValuePtr value_p = jc.get_builder().CreateGEP(ObIRType::getInt64Ty(jc.get_context()), obj,
                                                makeArrayRef(indices),
                                                "obj_elem_p");
   ret = jc.get_builder().CreateLoad(ObIRType::getInt64Ty(jc.get_context()), value_p, "value_elem");
-#else
-  ObIRValuePtr value_p = jc.get_builder().CreateGEP(obj,
-                                               makeArrayRef(indices),
-                                               "obj_elem_p");
-  ret = jc.get_builder().CreateLoad(value_p, "value_elem");
-#endif
   return ret;
 }
 

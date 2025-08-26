@@ -17,8 +17,10 @@
 #include "share/config/ob_config_mode_name_def.h"
 #include "share/backup/ob_archive_persist_helper.h"
 #include "share/backup/ob_tenant_archive_mgr.h"
+#include "share/shared_storage/ob_ss_local_cache_control_mode.h"
 #include "plugin/sys/ob_plugin_load_param.h"
 #include "share/table/ob_table_config_util.h"
+#include "storage/ob_micro_block_format_version_helper.h"
 
 namespace oceanbase
 {
@@ -164,34 +166,11 @@ bool less_or_equal_tx_share_limit(const uint64_t tenant_id, const int64_t value)
   return bool_ret;
 }
 
-bool check_vector_memory_limit(const uint64_t tenant_id, const int64_t value)
-{
-  bool bool_ret = false;
-  int64_t vector_memory_limit = 0;
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-  if (tenant_config.is_valid()) {
-    vector_memory_limit = tenant_config->ob_vector_memory_limit_percentage;
-    if (0 == vector_memory_limit) {
-      // 0 is default value, which means vector index is disabled,do not need to check
-      bool_ret = true;
-    } else if (value + 15 + vector_memory_limit >= 100) {
-      bool_ret = false;
-    } else {
-      bool_ret = true;
-    }
-  } else {
-    bool_ret = false;
-    OB_LOG_RET(ERROR, OB_INVALID_CONFIG, "tenant config check_vector_memory_limit is invalid",K(value), K(vector_memory_limit), K(tenant_id));
-  }
-  return bool_ret;
-}
-
 bool ObConfigMemstoreLimitChecker::check(const uint64_t tenant_id, const obrpc::ObAdminSetConfigItem &t)
 {
   bool is_valid = false;
   int64_t value = ObConfigIntParser::get(t.value_.ptr(), is_valid);
-  if (less_or_equal_tx_share_limit(tenant_id, value) &&
-      check_vector_memory_limit(tenant_id, value)) {
+  if (less_or_equal_tx_share_limit(tenant_id, value)) {
     is_valid = true;
   } else {
     is_valid = false;
@@ -482,6 +461,16 @@ bool ObConfigAuditLogCompressionChecker::check(const ObConfigItem &t) const
       || 0 == tmp_string.case_compare("ZSTD");
 }
 
+bool ObConfigDiagnosisLogCompressionChecker::check(const ObConfigItem &t) const
+{
+  common::ObString tmp_string(t.str());
+  return 0 == tmp_string.case_compare("none")
+      || 0 == tmp_string.case_compare("zstd")
+      || 0 == tmp_string.case_compare("deflate")
+      || 0 == tmp_string.case_compare("gzip")
+      || 0 == tmp_string.case_compare("auto");
+}
+
 bool ObConfigAuditLogPathChecker::check(const ObConfigItem &t) const
 {
   int ret = OB_SUCCESS;
@@ -669,21 +658,10 @@ bool ObConfigVectorMemoryChecker::check(const uint64_t tenant_id, const obrpc::O
 {
   bool is_valid = false;
   int64_t value = ObConfigIntParser::get(t.value_.ptr(), is_valid);
-  int64_t cur_value = 0;
-  int64_t upper_limit = 0;
-  int ret = OB_SUCCESS;
-  if (is_valid) {
-    if (value == 0) {
-      is_valid = true;
-    } else if (OB_FAIL(ObPluginVectorIndexHelper::get_vector_memory_value_and_limit(tenant_id, cur_value, upper_limit))) {
-      OB_LOG_RET(ERROR, OB_INVALID_CONFIG, "fail to get_vector_memory_value_and_limit", K(tenant_id));
-    } else if (0 < value && value < upper_limit) {
-      is_valid = true;
-    } else {
-      is_valid = false;
-    }
-    int64_t memory_size = 0;
-    ObPluginVectorIndexHelper::get_vector_memory_limit_size(tenant_id, memory_size);
+  if (less_or_equal_tx_share_limit(tenant_id, value)) {
+    is_valid = true;
+  } else {
+    is_valid = false;
   }
   return is_valid;
 }
@@ -1534,6 +1512,71 @@ bool ObParallelDDLControlParser::parse(const char *str, uint8_t *arr, int64_t le
   return bret;
 }
 
+bool ObSSLocalCacheControlParser::parse(const char *str, uint8_t *arr, int64_t len)
+{
+  bool bret = true;
+  ObSSLocalCacheControlMode cache_mode;
+  if (OB_ISNULL(str) || OB_ISNULL(arr)) {
+    bret = false;
+    OB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "Get config item failed", KP(str), KP(arr));
+  } else if (strlen(str) == 0) {
+    // do nothing
+  } else {
+    int tmp_ret = OB_SUCCESS;
+    ObSEArray<std::pair<ObString, ObString>, 3> kv_list;
+    int64_t str_len = strlen(str);
+    const int64_t buf_len = 3 * str_len; // need replace ',' to ' , '
+    char buf[buf_len];
+    MEMSET(buf, 0, sizeof(buf));
+    MEMCPY(buf, str, str_len);
+    if (OB_TMP_FAIL(ObModeConfigParserUitl::format_mode_str(str, str_len, buf, buf_len))) {
+      bret = false;
+      OB_LOG_RET(WARN, tmp_ret, "fail to format mode str", K(str));
+    } else if (OB_TMP_FAIL(ObModeConfigParserUitl::get_kv_list(buf, kv_list, ":"))) {
+      bret = false;
+      OB_LOG_RET(WARN, tmp_ret, "fail to get kv list", K(str));
+    } else if (OB_UNLIKELY(kv_list.count() != 3)) {
+      bret = false;
+      OB_LOG_RET(WARN, OB_INVALID_ARGUMENT, "invalid str, please set 3 cache config, only support ss_micro_cache、"
+        "ss_macro_read_cache and ss_macro_write_cache", K(str), K(kv_list.count()));
+    } else {
+      const uint16_t MODE_DEFAULT = ObSSLocalCacheControlMode::MODE_DEFAULT;
+      const uint16_t MODE_ON = ObSSLocalCacheControlMode::MODE_ON;
+      const uint16_t MODE_OFF = ObSSLocalCacheControlMode::MODE_OFF;
+
+      for (int64_t i = 0; bret && i < kv_list.count(); ++i) {
+        uint16_t mode = MODE_DEFAULT;
+        if (kv_list.at(i).second.case_compare(MODE_VAL_ON) == 0) {
+          mode = MODE_ON;
+        } else if (kv_list.at(i).second.case_compare(MODE_VAL_OFF) == 0) {
+          mode = MODE_OFF;
+        } else {
+          bret = false;
+          OB_LOG_RET(WARN, OB_INVALID_CONFIG, "only support on and off mode", K(kv_list.at(i).second));
+        }
+        if (!bret) {
+        } else if (kv_list.at(i).first.case_compare("ss_micro_cache") == 0) {
+          cache_mode.set_micro_cache_mode(mode);
+        } else if (kv_list.at(i).first.case_compare("ss_macro_read_cache") == 0) {
+          cache_mode.set_macro_read_cache_mode(mode);
+        } else if (kv_list.at(i).first.case_compare("ss_macro_write_cache") == 0) {
+          cache_mode.set_macro_write_cache_mode(mode);
+        } else {
+          bret = false;
+          OB_LOG_RET(WARN, OB_INVALID_CONFIG, "only support ss_micro_cache、ss_macro_read_cache and ss_macro_write_cache",
+            K(kv_list.at(i).first));
+        }
+      }
+    }
+  }
+  if (bret) {
+    for (uint64_t i = 0; i < 8; ++i) {
+      arr[i] = static_cast<uint8_t>((cache_mode.get_value() >> (i * 8)) & 0xFF);
+    }
+  }
+  return bret;
+}
+
 bool ObConfigKvGroupCommitRWModeChecker::check(const ObConfigItem &t) const
 {
   ObString v_str(t.str());
@@ -1656,7 +1699,32 @@ bool ObConfigJavaParamsChecker::check(const ObConfigItem &t) const
   // Only the ob_enable_java_env is true, then can pass to continue
   if (GCONF.ob_enable_java_env) {
     bret = true;
+  } else {
+    int ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "enable java env is false", K(ret));
   }
+  return bret;
+}
+const ObString ObConfigJniTransDataParamsChecker::arrow_table_str_("arrowTable");
+const ObString ObConfigJniTransDataParamsChecker::off_heap_table_str_("offHeapTable");
+bool ObConfigJniTransDataParamsChecker::check(const ObConfigItem &t) const
+{
+  bool bret = false;
+  common::ObString tmp_str(t.str());
+  // Only the ob_enable_java_env is true, then can pass to continue
+  if (GCONF.ob_enable_java_env) {
+    if (0 == tmp_str.case_compare(arrow_table_str_)
+      || 0 == tmp_str.case_compare(off_heap_table_str_)) {
+      bret = true;
+    } else {
+      int ret = OB_INVALID_ARGUMENT;
+      OB_LOG(WARN, "split mode is not arrowTable or offHeapTable", K(ret));
+    }
+  } else {
+    int ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "enable java env is false", K(ret));
+  }
+
   return bret;
 }
 
@@ -1664,14 +1732,14 @@ bool ObConfigEnableAutoSplitChecker::check(const ObConfigItem &t) const
 {
   bool is_valid = false;
   bool enable_auto_split = ObConfigBoolParser::get(t.str(), is_valid);
-  return is_valid && !(GCTX.is_shared_storage_mode() && enable_auto_split);
+  return is_valid;
 }
 
 bool ObConfigAutoSplitTabletSizeChecker::check(const ObConfigItem &t) const
 {
   bool is_valid = false;
   int64_t value = ObConfigCapacityParser::get(t.str(), is_valid);
-  return is_valid && !GCTX.is_shared_storage_mode();
+  return is_valid;
 }
 
 bool ObConfigGlobalIndexAutoSplitPolicyChecker::check(const ObConfigItem &t) const
@@ -1682,6 +1750,33 @@ bool ObConfigGlobalIndexAutoSplitPolicyChecker::check(const ObConfigItem &t) con
           || 0 == tmp_str.case_compare("ALL")
           || 0 == tmp_str.case_compare("OFF"));
   return bret;
+}
+
+bool ObHNSWIterFilterScanNumChecker::check(const ObConfigItem &t) const
+{
+  bool is_valid = false;
+  int64_t iter_max_scan_num = ObConfigIntParser::get(t.str(), is_valid);
+  if (is_valid) {
+    is_valid = (iter_max_scan_num >= MIN_HNSW_ITER_SCAN_NUMS &&
+                iter_max_scan_num <= MAX_HNSW_ITER_SCAN_NUMS);
+  }
+  return is_valid;
+}
+
+bool ObConfigDefaultMicroBlockFormatVersionChecker::check(const ObConfigItem &t) const
+{
+  int ret = OB_SUCCESS;
+  bool is_valid = true;
+  int64_t version = ObConfigIntParser::get(t.str(), is_valid);
+
+  if (version > ObMicroBlockFormatVersionHelper::LATEST_VERSION || version <= 0) {
+    is_valid = false;
+    ret = OB_NOT_SUPPORTED;
+    OB_LOG(WARN, "it's not allowded to set micro block format version to invalid version", K(ret), K(version));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "it's not allowded to set micro block format version to invalid version");
+  }
+
+  return is_valid;
 }
 
 } // end of namepace common

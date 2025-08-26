@@ -23,11 +23,11 @@ namespace storage
 {
 namespace mds
 {
-class ObMdsTableMergeDagParam : public compaction::ObTabletMergeDagParam
+class ObTabletMdsMiniMergeDagParam : public compaction::ObTabletMergeDagParam
 {
 public:
-  ObMdsTableMergeDagParam();
-  virtual ~ObMdsTableMergeDagParam() = default;
+  ObTabletMdsMiniMergeDagParam();
+  virtual ~ObTabletMdsMiniMergeDagParam() = default;
 public:
   INHERIT_TO_STRING_KV("ObTabletMergeDagParam", compaction::ObTabletMergeDagParam,
                        K_(flush_scn), KTIME_(generate_ts), K_(mds_construct_sequence), K_(mds_construct_sequence));

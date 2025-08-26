@@ -422,6 +422,13 @@ const int64_t OB_MAX_SLAVE_READ_DELAY_TS = 5 * 1000 * 1000;
 
 const int64_t OB_MAX_DIRECTORY_NAME_LENGTH = 128; // Compatible with Oracle
 const int64_t OB_MAX_DIRECTORY_PATH_LENGTH = 4000; // Compatible with Oracle
+
+const int64_t OB_MAX_LOCATION_NAME_LENGTH = 128;
+
+const int64_t OB_MAX_LOCATION_URL_LENGTH = 4000;
+
+const int64_t OB_MAX_LOCATION_ACCESS_INFO_LENGTH = 8000;
+const int64_t LOCATION_DEFINE_LENGTH = 8 * 1024;
 const uint64_t OB_MAX_INTERVAL_PARTITIONS = 1048575; // interval parted table max partitions
 const int64_t OB_MAX_BALANCE_GROUP_NAME_LENGTH = 512;
 const int64_t OB_SERVICE_NAME_LENGTH = 64;
@@ -788,6 +795,7 @@ const char *const OB_FILE_PREFIX = "file://";
 const char *const OB_COS_PREFIX = "cos://";
 const char *const OB_S3_PREFIX = "s3://";
 const char *const OB_HDFS_PREFIX= "hdfs://";
+const char *const OB_AZBLOB_PREFIX = "azblob://";
 const char *const OB_ADAPTIVELY_APPENDABLE_FORMAT_META = "FORMAT_META";
 const char *const OB_ADAPTIVELY_APPENDABLE_SEAL_META = "SEAL_META";
 const char *const OB_ADAPTIVELY_APPENDABLE_FRAGMENT_PREFIX = "@APD_PART@";
@@ -1793,6 +1801,7 @@ const int64_t OB_MALLOC_BIG_BLOCK_SIZE = (1LL << 21) - ACHUNK_PRESERVE_SIZE;// 2
 const int64_t OB_MALLOC_REQ_NORMAL_BLOCK_SIZE = (240LL << 10);                 // 240KB
 const int64_t WARMUP_MAX_KEY_SET_SIZE_IN_RPC = (1LL << 22);                    // 4M
 const int64_t OB_DEFAULT_STACK_SIZE = (1L << 19);                              // 512K
+const int64_t OB_MAX_CSV_BATCHLINE_BUF_SIZE = (1LL << 23); // 8M
 
 const int64_t OB_MAX_MYSQL_RESPONSE_PACKET_SIZE = OB_MALLOC_BIG_BLOCK_SIZE;
 
@@ -1967,7 +1976,7 @@ const int64_t OB_DEFAULT_MAX_TABLET_SIZE = 256 * 1024 * 1024; // 256MB
 const int64_t OB_MAX_MACRO_BLOCK_TYPE = 16;
 const int32_t OB_DEFAULT_CHARACTER_SET = 33; //UTF8
 const int64_t OB_MYSQL_PACKET_BUFF_SIZE = 6 * 1024; //6KB
-const int64_t OB_MAX_THREAD_NUM = 4096;
+const int64_t OB_MAX_THREAD_NUM_DO_NOT_USE = 4096;
 const int64_t OB_RESERVED_THREAD_NUM = 128; // Naked threads created with pthread_create, such as easy
 const int32_t OB_MAX_SYS_BKGD_THREAD_NUM = 64;
 #if __x86_64__
@@ -2060,6 +2069,9 @@ const int16_t DEFUALT_PRECISION_FOR_INTERVAL = 2;
 
 const int64_t OB_ORACLE_SCALE_FOR_NUMBER = -127;
 
+// load inner table schema
+const int64_t HARD_CODE_SCHEMA_VERSION_BEGIN = 1 << 17;
+
 #define NUMBER_SCALE_UNKNOWN_YET (lib::is_oracle_mode() ? ORA_NUMBER_SCALE_UNKNOWN_YET: SCALE_UNKNOWN_YET)
 //TDE相关参数
 const int64_t MAX_ENCRYPTION_SECRET_LENGTH = 256;
@@ -2104,6 +2116,10 @@ const char *const OB_LOG_ROW_VALUE_PARTIAL_JSON = "partial_json";
 const char *const OB_LOG_ROW_VALUE_PARTIAL_ALL = "partial_all";
 // default duplicate read consistency is strong
 const int64_t OB_DEFAULT_DUPLICATE_READ_CONSISTENCY = 0;
+
+// ss_gc
+const int64_t OB_SS_GC_TASK_TYPE_LENGTH = 32;
+
 // json partial update expr flag
 enum ObJsonPartialUpdateFlag
 {
@@ -2280,6 +2296,7 @@ const char *const E_REPLICA_STR = "E";
 // columnstore replica
 const char *const COLUMNSTORE_REPLICA_STR = "COLUMNSTORE";
 const char *const C_REPLICA_STR = "C";
+const int64_t OB_LOCATION_UTILS_REMOVE = 1;
 
 class ObReplicaTypeCheck
 {

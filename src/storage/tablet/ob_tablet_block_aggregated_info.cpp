@@ -363,11 +363,14 @@ int ObTabletMacroInfo::deserialize(ObArenaAllocator &allocator, const char *buf,
     LOG_WARN("fail to deserialize shared meta block id array", K(ret), KP(buf), K(data_len));
   } else if (new_pos - pos < size && OB_FAIL(shared_data_block_info_arr_.deserialize(allocator, buf, data_len, new_pos))) {
     LOG_WARN("fail to deserialize shared data block id array", K(ret), KP(buf), K(data_len));
-  } else if (OB_UNLIKELY(new_pos - pos != size)) {
+  } else if (OB_UNLIKELY(new_pos - pos > size)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet macro info's size doesn't match", K(ret), K(new_pos), K(pos), K(size), K(meta_block_info_arr_), K(data_block_info_arr_));
-  } else {
-    pos = new_pos;
+  } else if (new_pos - pos < size) {
+    LOG_WARN("old server may deserialize value written by new server", K(new_pos-pos), K(size), K(pos));
+  }
+  if (OB_SUCC(ret)) {
+    pos += size;
     is_inited_ = true;
   }
   return ret;

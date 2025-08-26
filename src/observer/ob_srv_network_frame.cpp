@@ -258,6 +258,14 @@ int ObSrvNetworkFrame::reload_config()
   int32_t tcp_keepintvl     = static_cast<int>(GCONF.tcp_keepintvl);
   int32_t tcp_keepcnt       = static_cast<int>(GCONF.tcp_keepcnt);
   int32_t user_timeout      = static_cast<int>(GCONF.dead_socket_detection_timeout);
+  int32_t rpc_thread_count  = static_cast<int>(GCONF.net_thread_count);
+  if (0 == rpc_thread_count) {
+    rpc_thread_count = get_default_net_thread_count();
+    if (2 == rpc_thread_count) {
+      // Decrease the rpc thread count when net_thread_count = 2 for performance optimization
+      rpc_thread_count = 1;
+    }
+  }
 
   if (GCONF._enable_easy_keepalive) {
     enable_easy_keepalive = 1;
@@ -287,6 +295,13 @@ int ObSrvNetworkFrame::reload_config()
                                                                         tcp_keepidle, tcp_keepintvl,
                                                                         tcp_keepcnt))) {
     LOG_WARN("Failed to set sql tcp keepalive parameters for sql nio server", K(ret));
+  } else if (OB_FAIL(obrpc::global_poc_server.update_thread_count(rpc_thread_count))) {
+    if (OB_NOT_SUPPORTED == ret) {
+      LOG_WARN("it is not supported for reducing rpc_thread_count dynamically, and it will take effect after restarting observer",
+                K(rpc_thread_count));
+    } else {
+      LOG_WARN("Failed to set rpc net thread count", K(rpc_thread_count));
+    }
   }
   return ret;
 }
@@ -556,36 +571,46 @@ int ObSrvNetworkFrame::reload_ssl_config()
         }
       }
 #endif
-
-      if (! use_bkmi) {
-        if (!use_sm) {
-          if (EASY_OK != easy_ssl_ob_config_check(OB_SSL_CA_FILE, OB_SSL_CERT_FILE,
-                                                  OB_SSL_KEY_FILE, NULL, NULL, true, false)) {
-            ret = OB_INVALID_CONFIG;
-            LOG_WARN("key and cert not match", K(ret));
-            LOG_USER_ERROR(OB_INVALID_CONFIG, "key and cert not match");
+      if (OB_SUCC(ret)) {
+        bool allow_sm = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_1_0 ||
+                      (GET_MIN_CLUSTER_VERSION() >= MOCK_CLUSTER_VERSION_4_2_5_2 && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_0_0);
+        if (use_sm && !allow_sm) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("CLUSTER_VERSION < 4.4.1.0 or not in [4.2.5.2, 4.3.0.0)", KR(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "CLUSTER_VERSION < 4.4.1.0 or not in [4.2.5.2, 4.3.0.0), national encryption not supported");
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (!use_bkmi) {
+          if (!use_sm) {
+            if (EASY_OK != easy_ssl_ob_config_check(OB_SSL_CA_FILE, OB_SSL_CERT_FILE,
+                                                    OB_SSL_KEY_FILE, NULL, NULL, true, false)) {
+              ret = OB_INVALID_CONFIG;
+              LOG_WARN("key and cert not match", K(ret));
+              LOG_USER_ERROR(OB_INVALID_CONFIG, "key and cert not match");
+            } else {
+              ca_cert = OB_SSL_CA_FILE;
+              public_cert = OB_SSL_CERT_FILE;
+              private_key = OB_SSL_KEY_FILE;
+            }
+  #ifdef OB_USE_BABASSL
           } else {
-            ca_cert = OB_SSL_CA_FILE;
-            public_cert = OB_SSL_CERT_FILE;
-            private_key = OB_SSL_KEY_FILE;
+            if (EASY_OK != easy_ssl_ob_config_check(OB_SSL_CA_FILE,
+                                                    OB_SSL_SM_SIGN_CERT_FILE, OB_SSL_SM_SIGN_KEY_FILE,
+                                                    OB_SSL_SM_ENC_CERT_FILE, OB_SSL_SM_ENC_KEY_FILE,
+                                                    true, true)) {
+              ret = OB_INVALID_CONFIG;
+              LOG_WARN("key and cert not match", K(ret));
+              LOG_USER_ERROR(OB_INVALID_CONFIG, "key and cert not match");
+            } else {
+              ca_cert = OB_SSL_CA_FILE;
+              public_cert = OB_SSL_SM_SIGN_CERT_FILE;
+              private_key = OB_SSL_SM_SIGN_KEY_FILE;
+              enc_cert = OB_SSL_SM_ENC_CERT_FILE;
+              enc_private_key = OB_SSL_SM_ENC_KEY_FILE;
+            }
+  #endif
           }
-#ifdef OB_USE_BABASSL
-        } else {
-          if (EASY_OK != easy_ssl_ob_config_check(OB_SSL_CA_FILE,
-                                                   OB_SSL_SM_SIGN_CERT_FILE, OB_SSL_SM_SIGN_KEY_FILE,
-                                                   OB_SSL_SM_ENC_CERT_FILE, OB_SSL_SM_ENC_KEY_FILE,
-                                                   true, true)) {
-            ret = OB_INVALID_CONFIG;
-            LOG_WARN("key and cert not match", K(ret));
-            LOG_USER_ERROR(OB_INVALID_CONFIG, "key and cert not match");
-          } else {
-            ca_cert = OB_SSL_CA_FILE;
-            public_cert = OB_SSL_SM_SIGN_CERT_FILE;
-            private_key = OB_SSL_SM_SIGN_KEY_FILE;
-            enc_cert = OB_SSL_SM_ENC_CERT_FILE;
-            enc_private_key = OB_SSL_SM_ENC_KEY_FILE;
-          }
-#endif
         }
       }
 
@@ -621,7 +646,7 @@ int ObSrvNetworkFrame::reload_ssl_config()
                    "ssl_key_expired_time", GCTX.ssl_key_expired_time_, K(new_hash_value));
           if (OB_SUCC(ret)) {
             if (enable_new_sql_nio()) {
-              common::ObSSLConfig ssl_config(!use_bkmi, use_sm, ca_cert, public_cert, private_key, NULL, NULL);
+              common::ObSSLConfig ssl_config(!use_bkmi, use_sm, ca_cert, public_cert, private_key, enc_cert, enc_private_key);
               if (OB_FAIL(ob_ssl_load_config(OB_SSL_CTX_ID_SQL_NIO, ssl_config))) {
                 LOG_WARN("create ssl ctx failed!", K(ret));
               } else {
@@ -631,10 +656,8 @@ int ObSrvNetworkFrame::reload_ssl_config()
             if (OB_SUCC(ret)) {
               const int OB_EASY_RPC_SSL_CTX_ID = 0;
               if (OB_FAIL(create_ssl_ctx(OB_EASY_RPC_SSL_CTX_ID, !use_bkmi, use_sm,
-                                          ca_cert, public_cert, private_key, NULL, NULL))) {
-                LOG_ERROR("create ssl ctx failed", K(OB_EASY_RPC_SSL_CTX_ID), K(ret));
-              } else if (OB_FAIL(ob_add_client_CA_list_from_sys_table(ussl_get_server_ctx(OB_EASY_RPC_SSL_CTX_ID)))) {
-                LOG_WARN("add client CA to SSL_CTX failed",  K(ret));
+                                          ca_cert, public_cert, private_key, enc_cert, enc_private_key))) {
+                LOG_ERROR("create ssl ctx failed", K(OB_EASY_RPC_SSL_CTX_ID));
               }
             }
           }
@@ -687,8 +710,8 @@ void ObSrvNetworkFrame::wait()
   if (NULL != obmysql::global_sql_nio_server) {
     obmysql::global_sql_nio_server->wait();
   }
-  obrpc::global_poc_server.wait();
   ussl_wait();
+  obrpc::global_poc_server.wait();
 }
 
 int ObSrvNetworkFrame::stop()

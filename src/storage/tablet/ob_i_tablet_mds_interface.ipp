@@ -163,7 +163,7 @@ inline int ObITabletMdsInterface::get_mds_data_from_tablet(
       MDS_LOG(DEBUG, "read nothing from mds sstable", K(ret));
     } else if (OB_EMPTY_RESULT == ret) {
       // skip report warn log
-    } else {
+    } else if (OB_SNAPSHOT_DISCARDED != ret) {
       MDS_LOG(WARN, "fail to read data from mds sstable", K(ret));
     }
   } else {
@@ -420,9 +420,9 @@ int ObITabletMdsInterface::is_locked_by_others(bool &is_locked, const mds::MdsWr
 
 template <typename T, typename OP, typename std::enable_if<OB_TRAIT_IS_FUNCTION_LIKE(OP, int(const T&)), bool>::type>
 int ObITabletMdsInterface::get_latest(OP &&read_op,
-                                      mds::MdsWriter &writer,// FIXME(xuwang.txw): should not exposed, will be removed later
-                                      mds::TwoPhaseCommitState &trans_stat,// FIXME(xuwang.txw): should not exposed, will be removed later
-                                      share::SCN &trans_version,// FIXME(xuwang.txw): should not exposed, will be removed later
+                                      mds::MdsWriter &writer,// FIXME(zk250686): should not exposed, will be removed later
+                                      mds::TwoPhaseCommitState &trans_stat,// FIXME(zk250686): should not exposed, will be removed later
+                                      share::SCN &trans_version,// FIXME(zk250686): should not exposed, will be removed later
                                       const int64_t read_seq) const
 {
   #define PRINT_WRAPPER KR(ret), K(*this), K(typeid(OP).name())

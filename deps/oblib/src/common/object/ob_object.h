@@ -131,7 +131,8 @@ public:
                || ObExtendType == type_) {
       set_collation_level(CS_LEVEL_INVALID);
       set_collation_type(CS_TYPE_INVALID);
-    } else if (ObHexStringType == type_) {
+    } else if (ObHexStringType == type_
+               || ob_is_geometry(static_cast<ObObjType>(type_))) {
       set_collation_type(CS_TYPE_BINARY);
     } else if (ObJsonType == type_) {
       set_collation_type(CS_TYPE_UTF8MB4_BIN);
@@ -142,7 +143,6 @@ public:
                && !ob_is_lob_locator(static_cast<ObObjType>(type_))
                && !ob_is_raw(static_cast<ObObjType>(type_))
                && !ob_is_enum_or_set_type(static_cast<ObObjType>(type_))
-               && !ob_is_geometry(static_cast<ObObjType>(type_))
                && !ob_is_roaringbitmap(static_cast<ObObjType>(type_))) {
       set_collation_level(CS_LEVEL_NUMERIC);
       set_collation_type(CS_TYPE_BINARY);
@@ -297,6 +297,8 @@ public:
   OB_INLINE bool is_year() const { return type_ == static_cast<uint8_t>(ObYearType); }
   OB_INLINE bool is_date() const { return type_ == static_cast<uint8_t>(ObDateType); }
   OB_INLINE bool is_mysql_date() const { return type_ == static_cast<uint8_t>(ObMySQLDateType); }
+  OB_INLINE bool is_mysql_date_or_date() const { return is_date() || is_mysql_date(); }
+  OB_INLINE bool is_mysql_datetime_or_datetime() const { return is_datetime() || is_mysql_datetime(); }
   OB_INLINE bool is_time() const { return type_ == static_cast<uint8_t>(ObTimeType); }
   OB_INLINE bool is_timestamp_tz() const { return type_ == static_cast<uint8_t>(ObTimestampTZType); }
   OB_INLINE bool is_timestamp_ltz() const { return type_ == static_cast<uint8_t>(ObTimestampLTZType); }
@@ -633,13 +635,15 @@ struct ObLobDataOutRowCtx
   // and this field is added later when bug is found, and may be a random value
   uint32_t reserved_;
 
-  bool is_empty_sql() const { return OpType::EMPTY_SQL == op_; }
+  bool is_append() const { return OpType::APPEND == op_; }
+  bool is_insert() const { return OpType::INSERT == op_; }
+  bool is_write() const { return OpType::WRITE == op_; }
+  bool is_erase() const { return OpType::ERASE == op_; }
   bool is_diff_v1() const { return OpType::DIFF == op_;}
   bool is_diff() const { return OpType::DIFF == op_ || OpType::DIFF_V2 == op_; }
   bool is_ext_info_log() const { return OpType::EXT_INFO_LOG == op_; }
-  bool is_valid_old_value_ext_info_log() const { return OpType::VALID_OLD_VALUE_EXT_INFO_LOG == op_; }
   bool is_valid_old_value() const { return OpType::VALID_OLD_VALUE == op_; }
-
+  bool is_valid_old_value_ext_info_log() const { return OpType::VALID_OLD_VALUE_EXT_INFO_LOG == op_; }
   int64_t get_real_chunk_size() const;
 };
 

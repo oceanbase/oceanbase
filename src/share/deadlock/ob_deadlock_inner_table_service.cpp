@@ -12,6 +12,7 @@
 
 #include "ob_deadlock_inner_table_service.h"
 #include "rootserver/ob_root_service.h"
+#include "lib/utility/ob_macro_utils.h"
 
 namespace oceanbase
 {
@@ -35,7 +36,107 @@ static const char* extra_info_if_exist(const ObIArray<ObString> &extra_info, int
   return idx < extra_info.count() ? extra_info.at(idx).ptr() : "";
 }
 
-int ObDeadLockInnerTableService::insert(const ObDetectorInnerReportInfo &inner_info,
+static int set_session_timezone(const uint64_t exec_tenant_id, ObDeadLockInnerConnHelper &conn_helper)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString set_timezone_sql;
+  tzset(); // init tzname
+  int64_t current_time_us = ObClockGenerator::getRealClock();
+  struct tm tmp_tm;
+  UNUSED(localtime_r(&current_time_us, &tmp_tm));
+  bool is_neg = false;
+  if (tmp_tm.tm_gmtoff < 0) {
+    is_neg = true;
+    tmp_tm.tm_gmtoff = 0 - tmp_tm.tm_gmtoff;
+  }
+  const int64_t tz_hour = tmp_tm.tm_gmtoff / 3600;
+  const int64_t tz_minutes = (tmp_tm.tm_gmtoff % 3600) % 60;
+  int64_t affected_rows = 0;
+  if (OB_UNLIKELY(!conn_helper.is_valid())) {
+    DETECT_LOG(WARN, "invalid conn helper", K(is_neg), K(tz_hour), K(tz_minutes));
+  } else if (OB_FAIL(set_timezone_sql.assign_fmt("set time_zone='%s%02ld:%02ld'",
+                                                 (is_neg ? "-" : "+"),
+                                                 tz_hour,
+                                                 tz_minutes))) {
+    DETECT_LOG(WARN, "assign set timezone sql fail", K(is_neg), K(tz_hour), K(tz_minutes));
+  } else if (OB_FAIL(conn_helper.sql_write(exec_tenant_id, set_timezone_sql.ptr(), affected_rows))) {
+    DETECT_LOG(WARN, "execute set timezone sql fail", K(is_neg), K(tz_hour), K(tz_minutes));
+  } else {
+    DETECT_LOG(INFO, "execute set timezone sql success", K(is_neg), K(tz_hour),
+      K(tz_minutes), K(set_timezone_sql), K(affected_rows));
+  }
+  return ret;
+}
+
+int ObDeadLockInnerConnHelper::init()
+{
+  int ret = OB_SUCCESS;
+  observer::ObInnerSQLConnectionPool *pool = nullptr;
+  common::sqlclient::ObISQLConnection *conn = nullptr;
+
+  if (OB_ISNULL(sql_client_)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(ERROR, "sql client is NULL", K(ret));
+  } else if (OB_ISNULL(pool = static_cast<observer::ObInnerSQLConnectionPool *>(
+                  sql_client_->get_pool()))) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(ERROR, "connection pool is NULL", K(ret));
+  } else if (OB_FAIL(pool->acquire(MTL_ID(),
+                                   conn,
+                                   nullptr /*client_addr*/,
+                                   0 /*group_id*/))) {
+    STORAGE_LOG(WARN, "acquire connection failed", K(ret));
+  } else {
+    conn_ = static_cast<observer::ObInnerSQLConnection *>(conn);
+  }
+  return ret;
+}
+
+void ObDeadLockInnerConnHelper::reset()
+{
+  int ret = OB_SUCCESS;
+  observer::ObInnerSQLConnectionPool *pool = nullptr;
+
+  // the two operation should never failed
+  if (OB_ISNULL(sql_client_)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(ERROR, "sql client is NULL", K(ret));
+  } else if (OB_ISNULL(pool = static_cast<observer::ObInnerSQLConnectionPool *>(
+                  sql_client_->get_pool()))) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(ERROR, "connection pool is NULL", K(ret));
+  } else if (OB_FAIL(pool->release(conn_, true/*success*/))) {
+    STORAGE_LOG(ERROR, "release connection failed", K(ret));
+  }
+
+  sql_client_ = nullptr;
+  conn_ = nullptr;
+}
+
+int ObDeadLockInnerConnHelper::sql_write(const uint64_t tenant_id,
+                                          const char *sql,
+                                          int64_t &affected_rows)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(conn_->execute_write(tenant_id, sql, affected_rows))) {
+    STORAGE_LOG(WARN, "execute sql failed", K(ret), K(tenant_id));
+  }
+  return ret;
+}
+
+int ObDeadLockInnerConnHelper::sql_read(const uint64_t tenant_id,
+                                        const char *sql,
+                                        common::ObMySQLProxy::MySQLResult &result)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(conn_->execute_read(tenant_id, sql, result))) {
+    STORAGE_LOG(WARN, "execute sql failed", K(ret), K(tenant_id));
+  }
+  return ret;
+}
+
+int ObDeadLockInnerTableService::insert(ObDeadLockInnerConnHelper &conn_helper,
+                                        const ObDetectorInnerReportInfo &inner_info,
                                         int64_t idx,
                                         int64_t size,
                                         int64_t current_ts)
@@ -52,7 +153,9 @@ int ObDeadLockInnerTableService::insert(const ObDetectorInnerReportInfo &inner_i
   char ip_buffer[MAX_IP_ADDR_LENGTH + 1];
 
   DETECT_TIME_GUARD(100_ms);
-  if (CLICK() && false == inner_info.get_addr().ip_to_string(ip_buffer, MAX_IP_ADDR_LENGTH)) {
+  if (CLICK() && OB_FAIL(set_session_timezone(exec_tenant_id, conn_helper))) {
+    DETECT_LOG(WARN, "set session timezone fail", KR(ret));
+  } else if (CLICK() && false == inner_info.get_addr().ip_to_string(ip_buffer, MAX_IP_ADDR_LENGTH)) {
     DETECT_LOG(WARN, "ip to string failed");
   } else if (CLICK() && OB_FAIL(sql.assign_fmt(INSERT_DEADLOCK_EVENT_SQL,
                                       OB_ALL_DEADLOCK_EVENT_HISTORY_TNAME,
@@ -81,9 +184,9 @@ int ObDeadLockInnerTableService::insert(const ObDetectorInnerReportInfo &inner_i
   } else if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     DETECT_LOG(WARN, "sql_proxy_ not init yet, report abort", KR(ret), K(sql));
-  } else if (CLICK() && OB_FAIL(GCTX.sql_proxy_->write(exec_tenant_id,
-                                                             sql.ptr(),
-                                                             affected_rows))) {
+  } else if (CLICK() && OB_FAIL(conn_helper.sql_write(exec_tenant_id,
+                                                      sql.ptr(),
+                                                      affected_rows))) {
     DETECT_LOG(WARN, "execute sql fail", KR(ret), K(tenant_id), K(exec_tenant_id), K(sql));
   } else {
     DETECT_LOG(INFO, "execute sql success", KR(ret), K(sql));
@@ -97,17 +200,22 @@ int ObDeadLockInnerTableService::insert_all(const ObIArray<ObDetectorInnerReport
 {
   int ret = OB_SUCCESS;
 
+  ObDeadLockInnerConnHelper conn_helper;
   DETECT_TIME_GUARD(100_ms);
-  const int64_t current_ts = ObClockGenerator::getRealClock();
-  for (int64_t i = 0; i < infos.count() && OB_SUCC(ret); ++i) {
-    const ObDetectorInnerReportInfo &info = infos.at(i);
-    if (CLICK() && OB_FAIL(insert(info, i + 1, infos.count(), current_ts))) {
-      DETECT_LOG(WARN, "insert item failed", KR(ret), K(info));
+  if (CLICK() && OB_FAIL(conn_helper.init())) {
+    DETECT_LOG(WARN, "init connection helper fail", KR(ret));
+  } else {
+    const int64_t current_ts = ObClockGenerator::getRealClock();
+    for (int64_t i = 0; i < infos.count() && OB_SUCC(ret); ++i) {
+      const ObDetectorInnerReportInfo &info = infos.at(i);
+      if (CLICK() && OB_FAIL(insert(conn_helper, info, i + 1, infos.count(), current_ts))) {
+        DETECT_LOG(WARN, "insert item failed", KR(ret), K(info));
+      }
     }
-  }
 
-  if (OB_SUCC(ret)) {
-    DETECT_LOG(INFO, "insert items success", K(infos));
+    if (OB_SUCC(ret)) {
+      DETECT_LOG(INFO, "insert items success", K(infos));
+    }
   }
 
   return ret;

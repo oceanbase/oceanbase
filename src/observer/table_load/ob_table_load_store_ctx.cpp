@@ -67,8 +67,10 @@ ObTableLoadStoreCtx::ObTableLoadStoreCtx(ObTableLoadTableCtx *ctx)
     write_ctx_(),
     merge_op_allocator_("TLD_MergeOp"),
     merge_root_op_(nullptr),
+    status_lock_(common::ObLatchIds::TABLE_LOAD_STORE_STATUS_LOCK),
     status_(ObTableLoadStatusType::NONE),
     error_code_(OB_SUCCESS),
+    rwlock_(common::ObLatchIds::TABLE_LOAD_STORE_RW_LOCK),
     last_heart_beat_ts_(ObTimeUtil::current_time()),
     is_inited_(false)
 {
@@ -285,7 +287,7 @@ int ObTableLoadStoreCtx::advance_status(ObTableLoadStatusType status)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(status));
   } else {
-    obsys::ObWLockGuard guard(status_lock_);
+    obsys::ObWLockGuard<> guard(status_lock_);
     if (OB_UNLIKELY(ObTableLoadStatusType::ERROR == status_)) {
       ret = error_code_;
       LOG_WARN("store has error", KR(ret));
@@ -315,7 +317,7 @@ int ObTableLoadStoreCtx::set_status_error(int error_code)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(error_code));
   } else {
-    obsys::ObWLockGuard guard(status_lock_);
+    obsys::ObWLockGuard<> guard(status_lock_);
     if (static_cast<int64_t>(status_) >= static_cast<int64_t>(ObTableLoadStatusType::ERROR)) {
       // ignore
     } else {
@@ -331,7 +333,7 @@ int ObTableLoadStoreCtx::set_status_error(int error_code)
 int ObTableLoadStoreCtx::set_status_abort(int error_code)
 {
   int ret = OB_SUCCESS;
-  obsys::ObWLockGuard guard(status_lock_);
+  obsys::ObWLockGuard<> guard(status_lock_);
   if (ObTableLoadStatusType::ABORT == status_) {
     LOG_INFO("LOAD DATA STORE already abort");
   } else {
@@ -348,7 +350,7 @@ int ObTableLoadStoreCtx::set_status_abort(int error_code)
 int ObTableLoadStoreCtx::check_status(ObTableLoadStatusType status) const
 {
   int ret = OB_SUCCESS;
-  obsys::ObRLockGuard guard(status_lock_);
+  obsys::ObRLockGuard<> guard(status_lock_);
   if (OB_UNLIKELY(status != status_)) {
     if (ObTableLoadStatusType::ERROR == status_) {
       ret = error_code_;
@@ -501,6 +503,7 @@ int ObTableLoadStoreCtx::init_write_ctx()
   } else {
     static const int64_t MACRO_BLOCK_WRITER_MEM_SIZE = 10 * 1024LL * 1024LL;
     static const int64_t cg_chunk_mem_limit = 64 * 1024L; // 64K
+    write_ctx_.schema_ = data_store_table_ctx_->schema_;
     // table_data_desc_
     write_ctx_.table_data_desc_ = basic_table_data_desc_;
     write_ctx_.table_data_desc_.rowkey_column_num_ =
@@ -616,8 +619,6 @@ int ObTableLoadStoreCtx::init_write_ctx()
         const ObColumnSchemaV2 *col_schema = nullptr;
         write_ctx_.px_column_descs_.set_block_allocator(ModulePageAllocator(allocator_));
         write_ctx_.px_column_project_idxs_.set_block_allocator(ModulePageAllocator(allocator_));
-        write_ctx_.px_null_vectors_.set_block_allocator(ModulePageAllocator(allocator_));
-        write_ctx_.px_null_vector_project_idxs_.set_block_allocator(ModulePageAllocator(allocator_));
         int64_t project_idx = 0;
         for (int64_t i = 0; OB_SUCC(ret) && i < col_descs.count(); ++i) {
           const ObColDesc &col_desc = col_descs.at(i);
@@ -625,42 +626,56 @@ int ObTableLoadStoreCtx::init_write_ctx()
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected col schema is null", KR(ret), K(col_desc));
           }
-          // SQL执行计划不包含xmltype列, 存储层要写这一列, 需要补null
-          else if (col_schema->is_xmltype()) {
-            ObIVector *vector = nullptr;
-            if (OB_UNLIKELY(!col_schema->is_unused())) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("unexpected xmltype column is not unused", KR(ret));
-            } else if (OB_FAIL(ObDirectLoadVectorUtils::new_vector(col_desc, allocator_, vector))) {
-              LOG_WARN("fail to new vector", KR(ret), K(col_desc));
-            } else if (OB_FAIL(ObDirectLoadVectorUtils::prepare_vector(
-                         vector, ctx_->param_.batch_size_, allocator_))) {
-              LOG_WARN("fail to prepare vector", KR(ret), KPC(vector));
-            } else if (OB_FAIL(ObDirectLoadVectorUtils::set_vector_all_null(
-                         vector, ctx_->param_.batch_size_))) {
-              LOG_WARN("fail to set vector all null", KR(ret), KPC(vector));
-            } else if (OB_FAIL(write_ctx_.px_null_vectors_.push_back(vector))) {
-              LOG_WARN("fail to push back", KR(ret));
-            } else if (OB_FAIL(write_ctx_.px_null_vector_project_idxs_.push_back(project_idx++))) {
-              LOG_WARN("fail to push back", KR(ret));
-            } else {
-              write_ctx_.px_need_project_ = true;
-            }
-          }
           // SQL执行计划包含隐藏主键列、虚拟生成列以及其他普通列
           else if (OB_FAIL(write_ctx_.px_column_descs_.push_back(col_desc))) {
             LOG_WARN("fail to push back", KR(ret));
           }
-          // 旁路不接收隐藏主键列, 存储层不写虚拟生成列, 都需要过滤
-          else if (ObColumnSchemaV2::is_hidden_pk_column_id(col_desc.col_id_) ||
-                   col_schema->is_virtual_generated_column()) {
+          // 存储层不写虚拟生成列
+          else if (col_schema->is_virtual_generated_column()) {
             if (OB_FAIL(write_ctx_.px_column_project_idxs_.push_back(-1))) {
               LOG_WARN("fail to push back", KR(ret));
-            } else {
-              write_ctx_.px_need_project_ = true;
             }
-          } else if (OB_FAIL(write_ctx_.px_column_project_idxs_.push_back(project_idx++))) {
-            LOG_WARN("fail to push back", KR(ret));
+          } else {
+            // 旁路不接收隐藏主键列
+            if (ObColumnSchemaV2::is_hidden_pk_column_id(col_desc.col_id_)) {
+              if (OB_FAIL(write_ctx_.px_column_project_idxs_.push_back(-1))) {
+                LOG_WARN("fail to push back", KR(ret));
+              }
+            } else {
+              if (OB_FAIL(write_ctx_.px_column_project_idxs_.push_back(project_idx))) {
+                LOG_WARN("fail to push back", KR(ret));
+              }
+            }
+            ++project_idx;
+          }
+        }
+      }
+    }
+    if (OB_SUCC(ret) && ctx_->param_.px_mode_) {
+      const ObArray<ObTableLoadLSIdAndPartitionId> &ls_partition_ids =
+        data_store_table_ctx_->ls_partition_ids_;
+      write_ctx_.is_single_part_ = (1 == ls_partition_ids.count());
+      if (write_ctx_.is_single_part_) {
+        write_ctx_.single_tablet_id_ = ls_partition_ids[0].part_tablet_id_.tablet_id_;
+        if (OB_FAIL(ObDirectLoadVectorUtils::make_const_tablet_id_vector(write_ctx_.single_tablet_id_,
+                                                                         allocator_,
+                                                                         write_ctx_.single_tablet_id_vector_))) {
+          LOG_WARN("fail to make const tablet id vector", KR(ret), K(write_ctx_.single_tablet_id_));
+        }
+      } else {
+        if (OB_FAIL(write_ctx_.tablet_idx_map_.create(1024, "TLD_TbtIdxMap", "TLD_TbtIdxMap",
+                                                      MTL_ID()))) {
+          LOG_WARN("fail to create hashmap", KR(ret));
+        } else {
+          for (int64_t i = 0; OB_SUCC(ret) && i < ls_partition_ids.count(); ++i) {
+            const ObTabletID &tablet_id = ls_partition_ids[i].part_tablet_id_.tablet_id_;
+            if (OB_FAIL(write_ctx_.tablet_idx_map_.set_refactored(tablet_id.id(), i))) {
+              LOG_WARN("fail to set refactored", KR(ret), K(tablet_id));
+              if (OB_HASH_EXIST == ret) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("unexpected duplicate tablet id", KR(ret), K(tablet_id));
+              }
+            }
           }
         }
       }
@@ -897,7 +912,7 @@ int ObTableLoadStoreCtx::start_trans(const ObTableLoadTransId &trans_id,
   } else if (OB_FAIL(check_status(ObTableLoadStatusType::LOADING))) {
     LOG_WARN("fail to check status", KR(ret), K_(status));
   } else {
-    obsys::ObWLockGuard guard(rwlock_);
+    obsys::ObWLockGuard<> guard(rwlock_);
     const ObTableLoadSegmentID &segment_id = trans_id.segment_id_;
     SegmentCtx *segment_ctx = nullptr;
     if (OB_FAIL(segment_ctx_map_.get(segment_id, segment_ctx))) {
@@ -942,7 +957,7 @@ int ObTableLoadStoreCtx::commit_trans(ObTableLoadStoreTrans *trans)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), KP(trans));
   } else {
-    obsys::ObWLockGuard guard(rwlock_);
+    obsys::ObWLockGuard<> guard(rwlock_);
     const ObTableLoadSegmentID &segment_id = trans->get_trans_id().segment_id_;
     SegmentCtx *segment_ctx = nullptr;
     ObTableLoadTransStore *trans_store = nullptr;
@@ -990,7 +1005,7 @@ int ObTableLoadStoreCtx::abort_trans(ObTableLoadStoreTrans *trans)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), KP(trans));
   } else {
-    obsys::ObWLockGuard guard(rwlock_);
+    obsys::ObWLockGuard<> guard(rwlock_);
     const ObTableLoadSegmentID &segment_id = trans->get_trans_id().segment_id_;
     SegmentCtx *segment_ctx = nullptr;
     if (OB_FAIL(segment_ctx_map_.get(segment_id, segment_ctx))) {
@@ -1031,7 +1046,7 @@ void ObTableLoadStoreCtx::put_trans(ObTableLoadStoreTrans *trans)
       ObTableLoadTransStatusType trans_status = trans_ctx->get_trans_status();
       OB_ASSERT(ObTableLoadTransStatusType::COMMIT == trans_status ||
                 ObTableLoadTransStatusType::ABORT == trans_status);
-      obsys::ObWLockGuard guard(rwlock_);
+      obsys::ObWLockGuard<> guard(rwlock_);
       if (OB_FAIL(trans_map_.erase_refactored(trans->get_trans_id()))) {
         LOG_WARN("fail to erase_refactored", KR(ret));
       } else {
@@ -1054,7 +1069,7 @@ int ObTableLoadStoreCtx::get_trans(const ObTableLoadTransId &trans_id,
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadStoreCtx not init", KR(ret));
   } else {
-    obsys::ObRLockGuard guard(rwlock_);
+    obsys::ObRLockGuard<> guard(rwlock_);
     if (OB_FAIL(trans_map_.get_refactored(trans_id, trans))) {
       if (OB_UNLIKELY(OB_HASH_NOT_EXIST != ret)) {
         LOG_WARN("fail to get_refactored", KR(ret), K(trans_id));
@@ -1076,7 +1091,7 @@ int ObTableLoadStoreCtx::get_trans_ctx(const ObTableLoadTransId &trans_id,
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadStoreCtx not init", KR(ret));
   } else {
-    obsys::ObRLockGuard guard(rwlock_);
+    obsys::ObRLockGuard<> guard(rwlock_);
     if (OB_FAIL(trans_ctx_map_.get_refactored(trans_id, trans_ctx))) {
       if (OB_UNLIKELY(OB_HASH_NOT_EXIST != ret)) {
         LOG_WARN("fail to get trans ctx", KR(ret), K(trans_id));
@@ -1096,7 +1111,7 @@ int ObTableLoadStoreCtx::get_segment_trans(const ObTableLoadSegmentID &segment_i
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadStoreCtx not init", KR(ret));
   } else {
-    obsys::ObRLockGuard guard(rwlock_);
+    obsys::ObRLockGuard<> guard(rwlock_);
     SegmentCtx *segment_ctx = nullptr;
     if (OB_FAIL(segment_ctx_map_.get(segment_id, segment_ctx))) {
       if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
@@ -1124,7 +1139,7 @@ int ObTableLoadStoreCtx::get_active_trans_ids(ObIArray<ObTableLoadTransId> &tran
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadStoreCtx not init", KR(ret));
   } else {
-    obsys::ObRLockGuard guard(rwlock_);
+    obsys::ObRLockGuard<> guard(rwlock_);
     for (TransMap::const_iterator trans_iter = trans_map_.begin();
          OB_SUCC(ret) && trans_iter != trans_map_.end(); ++trans_iter) {
       if (OB_FAIL(trans_id_array.push_back(trans_iter->first))) {
@@ -1143,7 +1158,7 @@ int ObTableLoadStoreCtx::get_committed_trans_ids(
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadStoreCtx not init", KR(ret));
   } else {
-    obsys::ObRLockGuard guard(rwlock_);
+    obsys::ObRLockGuard<> guard(rwlock_);
     if (OB_FAIL(trans_id_array.create(committed_trans_store_array_.count(), allocator))) {
       LOG_WARN("fail to create trans id array", KR(ret));
     } else {
@@ -1164,7 +1179,7 @@ int ObTableLoadStoreCtx::get_committed_trans_stores(
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadStoreCtx not init", KR(ret));
   } else {
-    obsys::ObRLockGuard guard(rwlock_);
+    obsys::ObRLockGuard<> guard(rwlock_);
     if (OB_FAIL(trans_store_array.assign(committed_trans_store_array_))) {
       LOG_WARN("fail to assign trans store array", KR(ret));
     }
@@ -1179,7 +1194,7 @@ int ObTableLoadStoreCtx::check_exist_trans(bool &exist) const
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadStoreCtx not init", KR(ret));
   } else {
-    obsys::ObRLockGuard guard(rwlock_);
+    obsys::ObRLockGuard<> guard(rwlock_);
     exist = !trans_map_.empty();
   }
   return ret;
@@ -1200,7 +1215,7 @@ int ObTableLoadStoreCtx::get_table_store_from_committed_trans_stores(ObDirectLoa
     // 有主键表不排序路径
     table_store.set_multiple_sstable();
   }
-  obsys::ObRLockGuard guard(rwlock_);
+  obsys::ObRLockGuard<> guard(rwlock_);
   for (int64_t i = 0; OB_SUCC(ret) && i < committed_trans_store_array_.count(); ++i) {
     ObTableLoadTransStore *trans_store = committed_trans_store_array_.at(i);
     for (int64_t j = 0; OB_SUCC(ret) && j < trans_store->session_store_array_.count(); ++j) {
@@ -1216,7 +1231,7 @@ int ObTableLoadStoreCtx::get_table_store_from_committed_trans_stores(ObDirectLoa
 
 void ObTableLoadStoreCtx::clear_committed_trans_stores()
 {
-  obsys::ObWLockGuard guard(rwlock_);
+  obsys::ObWLockGuard<> guard(rwlock_);
   for (int64_t i = 0; i < committed_trans_store_array_.count(); ++i) {
     ObTableLoadTransStore *trans_store = committed_trans_store_array_.at(i);
     ObTableLoadTransCtx *trans_ctx = trans_store->trans_ctx_;

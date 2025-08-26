@@ -441,7 +441,8 @@ void ObTenantFreezeInfoMgr::check_tenant_in_restore_with_mv_(
 int ObTenantFreezeInfoMgr::get_min_reserved_snapshot(
     const ObTabletID &tablet_id,
     const int64_t merged_version,
-    ObStorageSnapshotInfo &snapshot_info)
+    ObStorageSnapshotInfo &snapshot_info,
+    const bool skip_undo_retention)
 {
   int ret = OB_SUCCESS;
   ObFreezeInfo freeze_info;
@@ -468,24 +469,32 @@ int ObTenantFreezeInfoMgr::get_min_reserved_snapshot(
     if (OB_ISNULL(ss_gc_srv = MTL(ObSSGarbageCollectorService *))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ObSSGarbageCollectorService should not be null", KR(ret));
-    } else {
-      last_succ_scn = ss_gc_srv->get_last_succ_gc_scn();
+    } else if (OB_FAIL(ss_gc_srv->get_min_ss_gc_last_succ_scn(false /*is_for_sslog_table */, last_succ_scn))) {
+      LOG_WARN("get last_succ_scns from ObSSGarbageCollectorService failed", KR(ret));
     }
     // get last_succ_scn from user_tenant
     uint64_t user_tenant_id = gen_user_tenant_id(MTL_ID());
+    SCN user_last_succ_scn;
     ss_gc_srv = nullptr;
     MTL_SWITCH(user_tenant_id) {
       if (OB_ISNULL(ss_gc_srv = MTL(ObSSGarbageCollectorService *))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("ObSSGarbageCollectorService should not be null", KR(ret));
+      } else if (OB_FAIL(ss_gc_srv->get_min_ss_gc_last_succ_scn(false /*is_for_sslog_table */, user_last_succ_scn))) {
+        LOG_WARN("get last_succ_scns from ObSSGarbageCollectorService failed", KR(ret));
       } else {
-        last_succ_scn = SCN::min(last_succ_scn, ss_gc_srv->get_last_succ_gc_scn());
+        last_succ_scn = SCN::min(last_succ_scn, user_last_succ_scn);
       }
     }
     snapshot_info.update_by_smaller_snapshot(ObStorageSnapshotInfo::SNAPSHOT_FOR_SS_GC, last_succ_scn.get_val_for_tx());
     LOG_TRACE("set multi_start_version for sslog_table", KR(ret), K(user_tenant_id), K(snapshot_info));
 #endif
-  } else if (OB_FAIL(get_multi_version_duration(duration))) {
+  }
+  if (OB_FAIL(ret)) {
+  } else if (skip_undo_retention && !GCTX.is_shared_storage_mode()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("get unexpected argument skip_undo_retention", K(ret));
+  } else if (!skip_undo_retention && OB_FAIL(get_multi_version_duration(duration))) {
     STORAGE_LOG(WARN, "fail to get multi version duration", K(ret), K(tablet_id));
   } else {
     if (merged_version < 1) {

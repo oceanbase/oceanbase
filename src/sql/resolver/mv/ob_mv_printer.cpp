@@ -427,16 +427,22 @@ int ObMVPrinter::gen_max_min_seq_window_func_exprs(const TableItem &table,
   ObAggFunRawExpr *aggr_max = NULL;
   ObAggFunRawExpr *aggr_min = NULL;
   ObRawExpr *col_expr = NULL;
-  if (OB_ISNULL(ctx_.stmt_factory_.get_query_ctx())) {
+  ObQueryCtx *query_ctx = NULL;
+  ObSchemaGetterGuard *schema_guard = NULL;
+  if (OB_ISNULL(query_ctx = ctx_.stmt_factory_.get_query_ctx())
+      || OB_ISNULL(schema_guard = query_ctx->sql_schema_guard_.get_schema_guard())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret), K(ctx_.stmt_factory_.get_query_ctx()));
-  } else if (OB_FAIL(ctx_.stmt_factory_.get_query_ctx()->sql_schema_guard_.get_table_schema(source_table.ref_id_, source_data_schema))) {
+    LOG_WARN("get unexpected null", K(ret), K(query_ctx), K(schema_guard));
+  } else if (OB_FAIL(query_ctx->sql_schema_guard_.get_table_schema(source_table.ref_id_, source_data_schema))) {
     LOG_WARN("failed to get table schema", K(ret));
   } else if (OB_ISNULL(source_data_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(source_data_schema));
-  } else if (source_data_schema->is_table_with_pk()) {
-    if (OB_FAIL(source_data_schema->get_rowkey_column_ids(unique_col_ids))) {
+  } else if (!source_data_schema->is_table_with_hidden_pk_column()) {
+    // For compatibility reasons (the logic pk of heap table may not exist in mlog),
+    // only index organized tables with primary key use logic pk, heap tables and
+    // index organized tables without primary key will use hidden pk.
+    if (OB_FAIL(source_data_schema->get_logic_pk_column_ids(schema_guard, unique_col_ids))) {
       LOG_WARN("failed to get rowkey column ids", KR(ret));
     }
   } else if (OB_FAIL(create_simple_column_expr(table.get_table_name(), HEAP_TABLE_ROWKEY_COL_NAME, table.table_id_, col_expr))) {
@@ -468,7 +474,7 @@ int ObMVPrinter::gen_max_min_seq_window_func_exprs(const TableItem &table,
               || OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_FUN_MAX, aggr_max))
               || OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_FUN_MIN, aggr_min))) {
     LOG_WARN("create window function expr failed", K(ret));
-  } else if (OB_ISNULL(sequence_expr), OB_ISNULL(win_max) || OB_ISNULL(win_min)
+  } else if (OB_ISNULL(sequence_expr) || OB_ISNULL(win_max) || OB_ISNULL(win_min)
              || OB_ISNULL(aggr_max) || OB_ISNULL(aggr_min)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(sequence_expr), K(win_max), K(win_min), K(aggr_max), K(aggr_min));
@@ -727,19 +733,13 @@ int ObMVPrinter::gen_rowkey_join_conds_for_table(const TableItem &origin_table,
   int ret = OB_SUCCESS;
   ObSEArray<uint64_t, 4> rowkey_column_ids;
   const ObTableSchema *table_schema = NULL;
-   if (OB_ISNULL(ctx_.stmt_factory_.get_query_ctx())) {
+  if (OB_ISNULL(ctx_.stmt_factory_.get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(ctx_.stmt_factory_.get_query_ctx()));
   } else if (OB_FAIL(ctx_.stmt_factory_.get_query_ctx()->sql_schema_guard_.get_table_schema(origin_table.ref_id_, table_schema))) {
     LOG_WARN("failed to get table schema", K(ret));
-  } else if (OB_UNLIKELY(table_schema->is_table_without_pk())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected table schema", K(ret), KPC(table_schema));
-  } else if (OB_FAIL(table_schema->get_rowkey_column_ids(rowkey_column_ids))) {
-    LOG_WARN("failed to get rowkey column ids", K(ret));
-  } else if (OB_UNLIKELY(rowkey_column_ids.empty())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected empty array", K(ret));
+  } else if (OB_FAIL(get_table_logic_pk_ids(table_schema, rowkey_column_ids))) {
+    LOG_WARN("failed to get table logic pk", K(ret), KPC(table_schema));
   } else {
     const ObColumnSchemaV2 *rowkey_column = NULL;
     ObRawExpr *l_col = NULL;
@@ -914,6 +914,30 @@ int ObMVPrinter::append_old_new_col_filter(const TableItem &table,
     LOG_WARN("failed to build or expr", K(ret));
   } else if (OB_FAIL(conds.push_back(filter))) {
     LOG_WARN("failed to push back expr", K(ret));
+  }
+  return ret;
+}
+
+int ObMVPrinter::get_table_logic_pk_ids(const ObTableSchema *table_schema,
+                                        ObIArray<uint64_t> &logic_pk_ids)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard *schema_guard = NULL;
+  bool has_pk = false;
+  if (OB_ISNULL(table_schema) || OB_ISNULL(ctx_.stmt_factory_.get_query_ctx())
+      || OB_ISNULL(schema_guard = ctx_.stmt_factory_.get_query_ctx()->sql_schema_guard_.get_schema_guard())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(table_schema), K(ctx_.stmt_factory_.get_query_ctx()), K(schema_guard));
+  } else if (OB_FAIL(table_schema->is_table_with_logic_pk(*schema_guard, has_pk))) {
+    LOG_WARN("failed to check table with logic pk", K(ret), KPC(table_schema));
+  } else if (OB_UNLIKELY(!has_pk)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected table schema without logic pk", K(ret), KPC(table_schema));
+  } else if (OB_FAIL(table_schema->get_logic_pk_column_ids(schema_guard, logic_pk_ids))) {
+    LOG_WARN("failed to get table logic pk", K(ret), KPC(table_schema));
+  } else if (OB_UNLIKELY(logic_pk_ids.empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected empty array", K(ret));
   }
   return ret;
 }

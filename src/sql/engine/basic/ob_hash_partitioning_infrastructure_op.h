@@ -833,6 +833,8 @@ private:
   bool is_destroyed_;
   HpGroupAggrFunc total_mem_used_func_;
   HpGroupAggrFunc slice_cnt_func_;
+  ObChunkDatumStore::StoredRow **store_rows_ = nullptr;
+  int store_rows_size_ = 0;
 };
 
 //////////////////// start ObHashPartInfrastructure //////////////////
@@ -1032,6 +1034,10 @@ void ObHashPartInfrastructure<HashCol, HashRowStore>::destroy()
       my_skip_ = nullptr;
       alloc_->free(items_);
       items_ = nullptr;
+      if (store_rows_ != nullptr) {
+        alloc_->free(store_rows_);
+        store_rows_ = nullptr;
+      }
     }
     DESTROY_CONTEXT(mem_context_);
     mem_context_ = NULL;
@@ -2615,8 +2621,21 @@ int ObHashPartInfrastructure<HashCol, HashRowStore>::get_left_next_batch(
 {
   int ret = OB_SUCCESS;
   //const ObChunkDatumStore::StoredRow **store_row = nullptr;
-  ObChunkDatumStore::StoredRow *store_rows[max_row_cnt];
-  if (OB_ISNULL(hash_values_for_batch)) {
+  if (store_rows_ == nullptr || store_rows_size_ < max_row_cnt) {
+    if (store_rows_ != nullptr) {
+      alloc_->free(store_rows_);
+      store_rows_ = nullptr;
+    }
+    if (OB_ISNULL(store_rows_ = static_cast<ObChunkDatumStore::StoredRow **>
+        (alloc_->alloc(max_row_cnt * sizeof(ObChunkDatumStore::StoredRow *))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc store rows", K(ret));
+    } else {
+      store_rows_size_ = max_row_cnt;
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(hash_values_for_batch)) {
     ret = OB_ERR_UNEXPECTED;
     SQL_ENG_LOG(WARN, "hash values vector is not init", K(ret));
   } else if (OB_ISNULL(cur_left_part_) || OB_ISNULL(eval_ctx_)) {
@@ -2626,7 +2645,7 @@ int ObHashPartInfrastructure<HashCol, HashRowStore>::get_left_next_batch(
                                                          *eval_ctx_,
                                                          max_row_cnt,
                                                          read_rows,
-                                                         const_cast<const ObChunkDatumStore::StoredRow **>(&store_rows[0])))) {
+                                                         const_cast<const ObChunkDatumStore::StoredRow**>(store_rows_)))) {
     if (OB_ITER_END != ret) {
       SQL_ENG_LOG(WARN, "failed to get next batch", K(ret));
     }
@@ -2634,7 +2653,7 @@ int ObHashPartInfrastructure<HashCol, HashRowStore>::get_left_next_batch(
   //we need to precalcucate the hash values for batch, if not iter_end
   if (OB_SUCC(ret)) {
     for (int64_t i = 0; i < read_rows; ++i) {
-      HashRowStore *sr = static_cast<HashRowStore *> (store_rows[i]);
+      HashRowStore *sr = static_cast<HashRowStore *> (store_rows_[i]);
       hash_values_for_batch[i] = (sr->get_hash_value() & HashRowStore::get_hash_mask());
     }
   }

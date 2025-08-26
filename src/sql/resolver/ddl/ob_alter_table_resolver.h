@@ -73,6 +73,8 @@ public:
                                   const ObColumnResolveStat &stat);
   int check_alter_geo_column_allowed(const share::schema::AlterColumnSchema &alter_column_schema,
                                      const share::schema::ObColumnSchemaV2 &origin_col_schema);
+  int check_alter_rb_column_allowed(const share::schema::AlterColumnSchema &alter_column_schema,
+                                    const share::schema::ObColumnSchemaV2 &origin_col_schema);
   int check_alter_multivalue_depend_column_allowed(const share::schema::AlterColumnSchema &alter_column_schema,
                                                    const share::schema::ObColumnSchemaV2 &data_column_schema);
   int resolve_modify_column(const ParseNode &node,
@@ -198,7 +200,7 @@ private:
   int fill_split_source_tablet_id(const ObString& source_part_name,
                                   const share::schema::ObTableSchema &origin_table_schema,
                                   share::schema::AlterTableSchema &alter_table_schema);
-  virtual int get_table_schema_for_check(share::schema::ObTableSchema &table_schema) override;
+  virtual int get_table_schema_for_check(const share::schema::ObTableSchema *&table_schema) override;
   //int generate_new_schema(const share::schema::ObTableSchema &origin_table_schema,
   //                        share::schema::AlterTableSchema &new_table_schema);
   int check_column_definition_node(const ParseNode *node);

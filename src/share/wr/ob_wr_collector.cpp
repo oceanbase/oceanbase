@@ -491,7 +491,9 @@ int ObWrCollector::collect_ash()
                 } else if (ash.sql_id_[0] != '\0' &&
                           OB_FAIL(dml_splicer.add_column("sql_id", ash.sql_id_))) {
                   LOG_WARN("failed to add column sql_id", KR(ret), K(ash));
-                } else if (OB_FAIL(dml_splicer.add_column("trace_id", ash.trace_id_))) {
+                } else if (ash.trace_id_[0] == '\0' && OB_FAIL(dml_splicer.add_column(true, "trace_id"))) {
+                  LOG_WARN("failed to add column trace_id", KR(ret), K(ash));
+                } else if (ash.trace_id_[0] != '\0' && OB_FAIL(dml_splicer.add_column("trace_id", ash.trace_id_))) {
                   LOG_WARN("failed to add column trace_id", KR(ret), K(ash));
                 FILL_NULLABLE_COLUMN(event_no)
                 FILL_NULLABLE_COLUMN(event_id)
@@ -1330,7 +1332,8 @@ int ObWrCollector::collect_sqltext()
               int64_t affected_rows = 0;
               uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
               query_timeout = timeout_ts_ - common::ObTimeUtility::current_time();
-              const char* query_sql = to_cstring(ObHexEscapeSqlStr(ObString::make_string(sqltext.query_sql_)));
+              ObCStringHelper helper;
+              const char* query_sql = helper.convert(ObHexEscapeSqlStr(ObString::make_string(sqltext.query_sql_)));
               if (OB_UNLIKELY(query_timeout <= 0)) {
                 ret = OB_TIMEOUT;
                 LOG_WARN("wr snapshot timeout", KR(tmp_ret), K_(timeout_ts));

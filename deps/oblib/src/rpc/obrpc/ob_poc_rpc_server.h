@@ -38,12 +38,13 @@ public:
   ~ObPocServerHandleContext() {
     destroy();
   }
-  static int create(int64_t resp_id, const char* buf, int64_t sz, rpc::ObRequest*& req);
+  static int create(int64_t resp_id, const ObRpcPacket &tmp_pkt, int64_t sz, rpc::ObRequest*& req);
   void destroy() { pool_.destroy(); }
   void resp(ObRpcPacket* pkt);
   static int resp_error(uint64_t resp_id, int err_code, const char* b, const int64_t sz);
   ObAddr get_peer();
   void set_peer_unsafe(); // This function can only be called from the pnio thread.
+  void set_trace_point(int32_t trace_point);
   void* alloc(int64_t sz);
   void set_resp_expired_time(int64_t ts) { resp_expired_abs_us_ = ts; }
   int64_t get_resp_expired_time() { return resp_expired_abs_us_; }
@@ -70,6 +71,7 @@ public:
   ~ObPocRpcServer() {}
   int start(int port, int net_thread_count, rpc::frame::ObReqDeliver* deliver);
   int start_net_client(int net_thread_count);
+  int update_thread_count(int net_thread_count);
   void stop();
   void wait();
   void destroy();

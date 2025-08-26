@@ -28,11 +28,18 @@
 #include "share/ob_zone_merge_info.h"
 #include "share/stat/ob_dbms_stats_maintenance_window.h"
 #include "share/external_table/ob_external_table_file_mgr.h"
+#include "share/balance/ob_scheduled_trigger_partition_balance.h" // ObScheduledTriggerPartitionBalance
+#include "share/balance/ob_object_balance_weight_operator.h" // ObObjectBalanceWeightOperator
 #include "storage/mview/ob_mview_sched_job_utils.h"
 #include "pl/ob_pl_persistent.h"
 #include "pl/pl_cache/ob_pl_cache_mgr.h"
 #include "pl/pl_recompile/ob_pl_recompile_task_helper.h"
 #include "share/ob_scheduled_manage_dynamic_partition.h"
+#include "share/schema/ob_ccl_rule_sql_service.h"
+#include "logservice/data_dictionary/ob_data_dict_scheduler.h"    // ObDataDictScheduler
+#ifdef OB_BUILD_SPM
+#include "sql/spm/ob_spm_controller.h"
+#endif
 
 namespace oceanbase
 {
@@ -533,16 +540,105 @@ int ObDDLOperator::create_database(ObDatabaseSchema &database_schema,
     LOG_ERROR("schema_service must not null");
   } else if (OB_FAIL(schema_service->fetch_new_database_id(
       database_schema.get_tenant_id(), new_database_id))) {
-    LOG_WARN("fetch new database id failed", K(database_schema.get_tenant_id()),
-             K(ret));
+    LOG_WARN("fetch new database id failed", KR(ret), K(tenant_id), K(new_database_id));
+  } else if (FALSE_IT(database_schema.set_database_id(new_database_id))) {
+  } else if (OB_FAIL(try_create_tablegroup_for_database_(trans, database_schema))) {
+    LOG_WARN("failed to create tablegroup for database", KR(ret), K(database_schema));
   } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
-    LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+    LOG_WARN("fail to gen new schema_version", KR(ret), K(tenant_id), K(new_schema_version));
   } else {
-    database_schema.set_database_id(new_database_id);
     database_schema.set_schema_version(new_schema_version);
     if (OB_FAIL(schema_service->get_database_sql_service().insert_database(
         database_schema, trans, ddl_stmt_str))) {
-      LOG_WARN("insert database failed", K(database_schema), K(ret));
+      LOG_WARN("insert database failed", KR(ret), K(database_schema));
+    }
+  }
+  return ret;
+}
+
+int ObDDLOperator::try_create_tablegroup_for_database_(
+    common::ObMySQLTransaction &trans,
+    share::schema::ObDatabaseSchema &database_schema)
+{
+  int ret = OB_SUCCESS;
+  ObTablegroupSchema tablegroup_schema;
+  ObSqlString tablegroup_name;
+  uint64_t tenant_data_version = 0;
+  const uint64_t tenant_id = database_schema.get_tenant_id();
+  const uint64_t database_id = database_schema.get_database_id();
+  uint64_t tablegroup_id = OB_INVALID_ID;
+  bool enable_database_sharding_none = false;
+  bool is_oracle_mode = false;
+  bool tablegroup_is_exist = false;
+  {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if (tenant_config.is_valid()) {
+      enable_database_sharding_none = tenant_config->enable_database_sharding_none;
+    }
+  }
+
+  if (OB_UNLIKELY(!trans.is_started() || !is_valid_id(database_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(database_id));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+    LOG_WARN("get tenant data version failed", K(ret));
+  } else if (tenant_data_version < DATA_VERSION_4_4_1_0) {
+    // do nothing
+  } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_oracle_mode))) {
+    LOG_WARN("fail to get compat mode", KR(ret), K(tenant_id));
+  } else if (is_oracle_mode
+      || !database_schema.get_default_tablegroup_name().empty()
+      || !enable_database_sharding_none) {
+    // do nothing
+  } else if (OB_FAIL(tablegroup_name.assign_fmt("TG_DB_%lu", database_id))) {
+    LOG_WARN("failed to generate tablegroup name", KR(ret), K(database_id));
+  } else if (OB_FAIL(schema_service_.check_tablegroup_exist(
+      tenant_id,
+      tablegroup_name.string(),
+      tablegroup_id,
+      tablegroup_is_exist))) {
+    LOG_WARN("check tablegroup exist failed", KR(ret), K(tenant_id),
+        K(tablegroup_name), K(tablegroup_id), K(tablegroup_is_exist));
+  } else if (tablegroup_is_exist) {
+    LOG_WARN("tablegroup already exists", KR(ret), K(tablegroup_name), K(tablegroup_id));
+    ObSqlString err_msg;
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(err_msg.assign_fmt("tablegroup %.*s already exists, "
+        "create default sharding none tablegroup for database failed",
+        tablegroup_name.length(),
+        tablegroup_name.ptr()))) {
+      LOG_WARN("fail to assign error msg", KR(ret), KR(tmp_ret));
+    } else {
+      LOG_USER_WARN(OB_ENTRY_EXIST, err_msg.ptr());
+    }
+    // reset
+    database_schema.set_default_tablegroup_id(OB_INVALID_ID);
+    database_schema.set_default_tablegroup_name(ObString()); // empty
+  } else {
+    tablegroup_schema.set_tenant_id(tenant_id);
+    tablegroup_schema.set_tablegroup_name(tablegroup_name.string());
+    tablegroup_schema.set_comment("auto-created sharding none tablegroup for database");
+    ObObjectBalanceWeight tablegroup_balance_weight;
+    const int64_t default_tablegroup_weight = 1;
+    if (OB_FAIL(tablegroup_schema.set_sharding(OB_PARTITION_SHARDING_NONE))) {
+      LOG_WARN("set sharding failed", KR(ret), K(tablegroup_schema));
+    } else if (OB_FAIL(create_tablegroup(tablegroup_schema, trans))) {
+      LOG_WARN("create tablegroup failed", KR(ret), K(tablegroup_schema));
+    } else if (OB_FAIL(database_schema.set_default_tablegroup_name(tablegroup_name.string()))) {
+      LOG_WARN("set default tablegroup name failed", KR(ret), K(tablegroup_name));
+    } else if (FALSE_IT(tablegroup_id = tablegroup_schema.get_tablegroup_id())) {
+    } else if (OB_FAIL(tablegroup_balance_weight.init_tablegroup_weight(
+        tenant_id,
+        tablegroup_id,
+        default_tablegroup_weight))) {
+      LOG_WARN("init tablegroup balance weight failed", KR(ret), K(tenant_id),
+          "tablegroup_id", tablegroup_id, K(default_tablegroup_weight));
+    } else if (OB_FAIL(ObObjectBalanceWeightOperator::update(trans, tablegroup_balance_weight))) {
+      LOG_WARN("update tablegroup balance weight failed", KR(ret), K(tablegroup_balance_weight));
+    } else {
+      database_schema.set_default_tablegroup_id(tablegroup_id);
+      LOG_INFO("create sharding none tablegroup for database", KR(ret),
+          K(tenant_id), K(database_id), K(tablegroup_name), K(tablegroup_id));
     }
   }
   return ret;
@@ -844,6 +940,7 @@ int ObDDLOperator::drop_database(const ObDatabaseSchema &db_schema,
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < udt_ids.count(); ++i) {
         const ObUDTTypeInfo *udt_info = NULL;
+        ObUDTTypeInfo udt;
         const uint64_t udt_id = udt_ids.at(i);
         int64_t new_schema_version = OB_INVALID_VERSION;
         if (OB_FAIL(schema_service_.get_tenant_schema_guard(tenant_id, schema_guard))) {
@@ -853,11 +950,19 @@ int ObDDLOperator::drop_database(const ObDatabaseSchema &db_schema,
         } else if (OB_ISNULL(udt_info)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("routine info is NULL", K(ret));
-        } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
-          LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
-        } else if (OB_FAIL(schema_service_impl->get_udt_sql_service().drop_udt(
-                           *udt_info, new_schema_version, trans))) {
-          LOG_WARN("drop routine failed", "routine_id", udt_info->get_type_id(), K(ret));
+        } else if (OB_FAIL(udt.assign(*udt_info))) {
+          LOG_WARN("assign udt info failed", K(ret));
+        } else if (udt.is_object_type()) {
+          udt.clear_property_flag(ObUDTTypeFlag::UDT_FLAG_OBJECT_TYPE_BODY);
+          udt.set_object_ddl_type(ObUDTTypeFlag::UDT_FLAG_OBJECT_TYPE_SPEC);
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+            LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+          } else if (OB_FAIL(schema_service_impl->get_udt_sql_service().drop_udt(
+                             udt, new_schema_version, trans))) {
+            LOG_WARN("drop routine failed", "routine_id", udt_info->get_type_id(), K(ret));
+          }
         }
         if (OB_SUCC(ret)) {
           uint64_t udt_db_id = udt_info->get_database_id();
@@ -3328,7 +3433,11 @@ int ObDDLOperator::alter_table_alter_index(
       } else {
         new_index_table_schema.set_index_visibility(alter_index_arg.index_visibility_);
         new_index_table_schema.set_schema_version(new_schema_version);
-        new_index_table_schema.set_storage_cache_policy(alter_index_arg.storage_cache_policy_);
+        if (OB_ISNULL(alter_index_arg.storage_cache_policy_)) {
+          new_index_table_schema.set_storage_cache_policy(index_table_schema->get_storage_cache_policy());
+        } else {
+          new_index_table_schema.set_storage_cache_policy(alter_index_arg.storage_cache_policy_);
+        }
         if(OB_FAIL(schema_service->get_table_sql_service().update_table_options(
                     trans,
                     *index_table_schema,
@@ -3756,6 +3865,116 @@ int ObDDLOperator::alter_table_rename_index(
                                                        trans,
                                                        allocator))) {
           LOG_WARN("failed to rename built in index_snapshot_data_table index", K(ret), K(tenant_id),
+              K(data_table_id), K(database_id), K(index_name), K(new_index_name));
+        }
+      } else if (is_vec_ivfflat_centroid_index(index_table_schema->get_index_type())) {
+        if (OB_FAIL(alter_table_rename_built_in_index_(tenant_id,
+                                                       data_table_id,
+                                                       database_id,
+                                                       INDEX_TYPE_VEC_IVFFLAT_CID_VECTOR_LOCAL, /* index_type */
+                                                       index_name,
+                                                       new_index_name,
+                                                       new_index_status,
+                                                       is_in_deleting,
+                                                       schema_guard,
+                                                       trans,
+                                                       allocator))) {
+          LOG_WARN("failed to rename built in ivf_cid_vector index", K(ret), K(tenant_id),
+              K(data_table_id), K(database_id), K(index_name), K(new_index_name));
+        } else if (OB_FAIL(alter_table_rename_built_in_index_(tenant_id,
+                                                              data_table_id,
+                                                              database_id,
+                                                              INDEX_TYPE_VEC_IVFFLAT_ROWKEY_CID_LOCAL, /* index_type */
+                                                              index_name,
+                                                              new_index_name,
+                                                              new_index_status,
+                                                              is_in_deleting,
+                                                              schema_guard,
+                                                              trans,
+                                                              allocator))) {
+          LOG_WARN("failed to rename built in ivf_rowkey_cid index", K(ret), K(tenant_id),
+              K(data_table_id), K(database_id), K(index_name), K(new_index_name));
+        }
+      } else if (is_vec_ivfsq8_centroid_index(index_table_schema->get_index_type())) {
+         if (OB_FAIL(alter_table_rename_built_in_index_(tenant_id,
+                                                       data_table_id,
+                                                       database_id,
+                                                       INDEX_TYPE_VEC_IVFSQ8_META_LOCAL, /* index_type */
+                                                       index_name,
+                                                       new_index_name,
+                                                       new_index_status,
+                                                       is_in_deleting,
+                                                       schema_guard,
+                                                       trans,
+                                                       allocator))) {
+          LOG_WARN("failed to rename built in ivfsq8_meta index", K(ret), K(tenant_id),
+              K(data_table_id), K(database_id), K(index_name), K(new_index_name));
+        } else if (OB_FAIL(alter_table_rename_built_in_index_(tenant_id,
+                                                              data_table_id,
+                                                              database_id,
+                                                              INDEX_TYPE_VEC_IVFSQ8_CID_VECTOR_LOCAL, /* index_type */
+                                                              index_name,
+                                                              new_index_name,
+                                                              new_index_status,
+                                                              is_in_deleting,
+                                                              schema_guard,
+                                                              trans,
+                                                              allocator))) {
+          LOG_WARN("failed to rename built in ivfsq8_cid_vector index", K(ret), K(tenant_id),
+              K(data_table_id), K(database_id), K(index_name), K(new_index_name));
+        } else if (OB_FAIL(alter_table_rename_built_in_index_(tenant_id,
+                                                              data_table_id,
+                                                              database_id,
+                                                              INDEX_TYPE_VEC_IVFSQ8_ROWKEY_CID_LOCAL, /* index_type */
+                                                              index_name,
+                                                              new_index_name,
+                                                              new_index_status,
+                                                              is_in_deleting,
+                                                              schema_guard,
+                                                              trans,
+                                                              allocator))) {
+          LOG_WARN("failed to rename built in ivfsq8_rowkey_cid index", K(ret), K(tenant_id),
+              K(data_table_id), K(database_id), K(index_name), K(new_index_name));
+        }
+      } else if (is_vec_ivfpq_centroid_index(index_table_schema->get_index_type())) {
+         if (OB_FAIL(alter_table_rename_built_in_index_(tenant_id,
+                                                       data_table_id,
+                                                       database_id,
+                                                       INDEX_TYPE_VEC_IVFPQ_PQ_CENTROID_LOCAL, /* index_type */
+                                                       index_name,
+                                                       new_index_name,
+                                                       new_index_status,
+                                                       is_in_deleting,
+                                                       schema_guard,
+                                                       trans,
+                                                       allocator))) {
+          LOG_WARN("failed to rename built in ivfpq_pq_centroid index", K(ret), K(tenant_id),
+              K(data_table_id), K(database_id), K(index_name), K(new_index_name));
+        } else if (OB_FAIL(alter_table_rename_built_in_index_(tenant_id,
+                                                              data_table_id,
+                                                              database_id,
+                                                              INDEX_TYPE_VEC_IVFPQ_CODE_LOCAL, /* index_type */
+                                                              index_name,
+                                                              new_index_name,
+                                                              new_index_status,
+                                                              is_in_deleting,
+                                                              schema_guard,
+                                                              trans,
+                                                              allocator))) {
+          LOG_WARN("failed to rename built in ivfpq_code index", K(ret), K(tenant_id),
+              K(data_table_id), K(database_id), K(index_name), K(new_index_name));
+        } else if (OB_FAIL(alter_table_rename_built_in_index_(tenant_id,
+                                                              data_table_id,
+                                                              database_id,
+                                                              INDEX_TYPE_VEC_IVFPQ_ROWKEY_CID_LOCAL, /* index_type */
+                                                              index_name,
+                                                              new_index_name,
+                                                              new_index_status,
+                                                              is_in_deleting,
+                                                              schema_guard,
+                                                              trans,
+                                                              allocator))) {
+          LOG_WARN("failed to rename built in ivfpq_rowkey_cid index", K(ret), K(tenant_id),
               K(data_table_id), K(database_id), K(index_name), K(new_index_name));
         }
       }
@@ -4277,6 +4496,7 @@ int ObDDLOperator::update_aux_table(
           new_aux_table_schema.set_duplicate_attribute(new_table_schema.get_duplicate_scope(), new_table_schema.get_duplicate_read_consistency());
           new_aux_table_schema.set_enable_macro_block_bloom_filter(new_table_schema.get_enable_macro_block_bloom_filter());
           new_aux_table_schema.set_lob_inrow_threshold(new_table_schema.get_lob_inrow_threshold());
+          new_aux_table_schema.set_micro_block_format_version(new_table_schema.get_micro_block_format_version());
         }
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(new_aux_table_schema.set_compress_func_name(new_table_schema.get_compress_func_name()))) {
@@ -6275,30 +6495,13 @@ int ObDDLOperator::init_tenant_spm_configure(uint64_t tenant_id,
   const uint64_t extract_tenant_id = ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id);
   int64_t affected_rows = 0;
   ObSqlString sql;
-  if (OB_FAIL(sql.assign_fmt("INSERT INTO %s (tenant_id, name, value) VALUES ",
-                             OB_ALL_SPM_CONFIG_TNAME))) {
-    RS_LOG(WARN, "sql assign failed", K(ret));
-  } else if (OB_FAIL(sql.append_fmt("(%lu, \"%s\", NULL),", extract_tenant_id, "AUTO_CAPTURE_ACTION"))) {
-    RS_LOG(WARN, "sql append failed", K(ret));
-  } else if (OB_FAIL(sql.append_fmt("(%lu, \"%s\", NULL),", extract_tenant_id, "AUTO_CAPTURE_MODULE"))) {
-    RS_LOG(WARN, "sql append failed", K(ret));
-  } else if (OB_FAIL(sql.append_fmt("(%lu, \"%s\", NULL),", extract_tenant_id, "AUTO_CAPTURE_PARSING_SCHEMA_NAME"))) {
-    RS_LOG(WARN, "sql append failed", K(ret));
-  } else if (OB_FAIL(sql.append_fmt("(%lu, \"%s\", NULL),", extract_tenant_id, "AUTO_CAPTURE_SQL_TEXT"))) {
-    RS_LOG(WARN, "sql append failed", K(ret));
-  } else if (OB_FAIL(sql.append_fmt("(%lu, \"%s\", \"%s\"),", extract_tenant_id, "AUTO_SPM_EVOLVE_TASK", "OFF"))) {
-    RS_LOG(WARN, "sql append failed", K(ret));
-  } else if (OB_FAIL(sql.append_fmt("(%lu, \"%s\", \"%s\"),", extract_tenant_id, "AUTO_SPM_EVOLVE_TASK_INTERVAL", "3600"))) {
-    RS_LOG(WARN, "sql append failed", K(ret));
-  } else if (OB_FAIL(sql.append_fmt("(%lu, \"%s\", \"%s\"),", extract_tenant_id, "AUTO_SPM_EVOLVE_TASK_MAX_RUNTIME", "1800"))) {
-    RS_LOG(WARN, "sql append failed", K(ret));
-  } else if (OB_FAIL(sql.append_fmt("(%lu, \"%s\", \"%s\"),", extract_tenant_id, "SPACE_BUDGET_PERCENT", "10"))) {
-    RS_LOG(WARN, "sql append failed", K(ret));
-  } else if (OB_FAIL(sql.append_fmt("(%lu, \"%s\", \"%s\");", extract_tenant_id, "PLAN_RETENTION_WEEKS", "53"))) {
-    RS_LOG(WARN, "sql append failed", K(ret));
+#ifdef OB_BUILD_SPM
+  if (OB_FAIL(ObSpmController::gen_spm_configure_insert(extract_tenant_id, sql))) {
+    RS_LOG(WARN, "gen spm configure insert failed", K(ret));
   } else if (OB_FAIL(trans.write(exec_tenant_id, sql.ptr(), affected_rows))) {
     RS_LOG(WARN, "execute sql failed", K(ret), K(sql));
   } else {/*do nothing*/}
+#endif
   return ret;
 }
 
@@ -7044,6 +7247,33 @@ int ObDDLOperator::drop_db_table_privs(
             routine_priv->get_sort_key(), empty_priv, new_schema_version, &dcl_stmt, trans,
             0, false, "", ""))) {
           LOG_WARN("Delete table privilege failed", K(routine_priv), K(ret));
+        }
+      }
+    }
+  }
+
+  // delete object privileges of this user MYSQL
+  if (OB_SUCC(ret)) {
+    ObArray<const ObObjMysqlPriv *> obj_mysql_privs;
+    if (OB_FAIL(schema_guard.get_obj_mysql_priv_with_user_id(
+                                 tenant_id, user_id, obj_mysql_privs))) {
+      LOG_WARN("Get obj mysql privileges of user to be deleted error",
+                K(tenant_id), K(user_id), K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < obj_mysql_privs.count(); ++i) {
+        const ObObjMysqlPriv *obj_mysql_priv = obj_mysql_privs.at(i);
+        int64_t new_schema_version = OB_INVALID_VERSION;
+        ObPrivSet empty_priv = 0;
+        ObString dcl_stmt;
+        if (OB_ISNULL(obj_mysql_priv)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("obj mysql priv is NULL", K(ret), K(obj_mysql_priv));
+        } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+          LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+        } else if (OB_FAIL(schema_sql_service->get_priv_sql_service().grant_object(
+            obj_mysql_priv->get_sort_key(), empty_priv, new_schema_version, &dcl_stmt, trans,
+            0, false, "", ""))) {
+          LOG_WARN("Delete obj mysql privilege failed", K(obj_mysql_priv), K(ret));
         }
       }
     }
@@ -7797,7 +8027,8 @@ int ObDDLOperator::grant_table(
       need_flush = (new_priv != table_priv_set);
       bool is_directory_or_catalog = false;
       if (obj_priv_array.count() > 0
-          && ((static_cast<uint64_t>(ObObjectType::DIRECTORY) == obj_priv_key.obj_type_)
+          && (((static_cast<uint64_t>(ObObjectType::DIRECTORY) == obj_priv_key.obj_type_
+              || static_cast<uint64_t>(ObObjectType::LOCATION) == obj_priv_key.obj_type_))
               || (static_cast<uint64_t>(ObObjectType::CATALOG) == obj_priv_key.obj_type_))) {
         is_directory_or_catalog = true;
       }
@@ -10642,7 +10873,6 @@ int ObDDLOperator::drop_directory(const ObString &ddl_str,
 }
 //----End of functions for directory object----
 
-
 int ObDDLOperator::alter_user_proxy(const ObUserInfo* client_user_info,
                                     const ObUserInfo* proxy_user_info,
                                     const uint64_t flags,
@@ -11512,6 +11742,18 @@ int ObDDLOperator::init_tenant_scheduled_job(
                      tenant_id,
                      trans))) {
     LOG_WARN("create scheduled trigger partition balance job failed", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(ObScheduledTriggerPartitionBalance::create_scheduled_trigger_partition_balance_job(
+    sys_variable,
+    tenant_id,
+    true/*is_enabled*/,
+    trans))) {
+      LOG_WARN("create scheduled trigger partition balance job failed", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(datadict::ObDataDictScheduler::create_scheduled_trigger_dump_data_dict_job(
+      sys_variable,
+      tenant_id,
+      true/*is_enabled*/,
+      trans))) {
+    LOG_WARN("create scheduled trigger dump_data_dict job failed", KR(ret), K(tenant_id));
   }
   return ret;
 }

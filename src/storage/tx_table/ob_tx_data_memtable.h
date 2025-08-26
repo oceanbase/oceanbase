@@ -156,7 +156,6 @@ public:  // ObTxDataMemtable
       is_iterating_(false),
       construct_list_done_(false),
       pre_process_done_(false),
-      do_recycle_(false),
       max_tx_scn_(),
       inserted_cnt_(0),
       deleted_cnt_(0),
@@ -236,6 +235,7 @@ public:  // ObTxDataMemtable
                        K_(is_iterating),
                        K_(pre_process_done),
                        K_(construct_list_done),
+                       K(ls_id_),
                        "min_tx_scn", get_min_tx_scn(),
                        K_(max_tx_scn),
                        "min_start_scn", get_min_start_scn(),
@@ -322,7 +322,6 @@ public:  // checkpoint
   bool ready_for_flush();
 
 public:  // getter && setter
-  bool do_recycled() { return do_recycle_; }
   int64_t get_tx_data_count() { return tx_data_map_->count(); }
   int64_t size() { return get_tx_data_count(); }
   int64_t get_inserted_count() { return inserted_cnt_; }
@@ -441,7 +440,6 @@ private:  // ObTxDataMemtable
   bool is_iterating_;
   bool construct_list_done_;
   bool pre_process_done_;
-  bool do_recycle_;
 
   // the maximum scn in this tx data memtable
   share::SCN max_tx_scn_;

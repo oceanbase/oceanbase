@@ -180,7 +180,10 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
             && OB_UNLIKELY(parse_tree.type_ != T_SHOW_CHECK_TABLE)
             && OB_UNLIKELY(parse_tree.type_ != T_SHOW_OLAP_ASYNC_JOB_STATUS)
             && OB_UNLIKELY(parse_tree.type_ != T_SHOW_CATALOGS)
-            && OB_UNLIKELY(parse_tree.type_ != T_SHOW_CREATE_CATALOG)) {
+            && OB_UNLIKELY(parse_tree.type_ != T_SHOW_CREATE_CATALOG)
+            && OB_UNLIKELY(parse_tree.type_ != T_SHOW_LOCATIONS)
+            && OB_UNLIKELY(parse_tree.type_ != T_SHOW_CREATE_LOCATION)
+            && OB_UNLIKELY(parse_tree.type_ != T_LOCATION_UTILS_LIST)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected parse tree type", K(ret), K(parse_tree.type_));
   } else {
@@ -1974,6 +1977,143 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
                                      OB_TENANT_VIRTUAL_SHOW_CREATE_CATALOG_ORA_TNAME),
                            catalog_id);
           }
+        }
+        break;
+      }
+      case T_SHOW_LOCATIONS: {
+        uint64_t min_version = OB_INVALID_VERSION;
+        if (OB_FAIL(GET_MIN_DATA_VERSION(real_tenant_id, min_version))) {
+            LOG_WARN("get min data_version failed", K(ret), K(real_tenant_id));
+        } else if (min_version < DATA_VERSION_4_4_0_0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "show locations");
+          LOG_WARN("not support to show locations", K(ret), K(real_tenant_id));
+        } else if (OB_UNLIKELY(parse_tree.num_child_ != 0)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("parse tree is wrong", K(ret), K(parse_tree.num_child_));
+        } else {
+          show_resv_ctx.stmt_type_ = stmt::T_SHOW_LOCATIONS;
+          uint64_t tenant_id = is_oracle_mode ? session_info_->get_effective_tenant_id() : sql_tenant_id;
+          GEN_SQL_STEP_1(ObShowSqlSet::SHOW_LOCATIONS);
+          GEN_SQL_STEP_2(ObShowSqlSet::SHOW_LOCATIONS,
+                         REAL_NAME(OB_SYS_DATABASE_NAME, OB_ORA_SYS_SCHEMA_NAME),
+                         REAL_NAME(OB_ALL_TENANT_LOCATION_TNAME, OB_ALL_VIRTUAL_TENANT_LOCATION_REAL_AGENT_ORA_TNAME),
+                         tenant_id);
+        }
+        break;
+      }
+      case T_SHOW_CREATE_LOCATION: {
+        uint64_t min_version = OB_INVALID_VERSION;
+        if (OB_FAIL(GET_MIN_DATA_VERSION(real_tenant_id, min_version))) {
+            LOG_WARN("get min data_version failed", K(ret), K(real_tenant_id));
+        } else if (min_version < DATA_VERSION_4_4_0_0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "show create location");
+          LOG_WARN("not support to show create location", K(ret), K(real_tenant_id));
+        } else if (OB_UNLIKELY(parse_tree.num_child_ != 1) || OB_ISNULL(parse_tree.children_[0])) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("parse tree is wrong", K(ret), K(parse_tree.num_child_));
+        } else {
+          show_resv_ctx.stmt_type_ = stmt::T_SHOW_CREATE_LOCATION;
+          ObString location_name;
+          location_name.assign_ptr(parse_tree.children_[0]->str_value_,
+                                  static_cast<ObString::obstr_size_t>(parse_tree.children_[0]->str_len_));
+          ObSchemaGetterGuard *schema_guard = NULL;
+          uint64_t location_id = OB_INVALID_ID;
+          if(OB_ISNULL(schema_checker_) || OB_ISNULL(schema_guard = schema_checker_->get_schema_guard())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("got null ptr", K(ret));
+          } else if (OB_FAIL(schema_checker_->get_location_id(real_tenant_id, location_name, location_id))) {
+            LOG_WARN("failed to get location id", K(ret));
+          } else if (OB_FAIL(schema_guard->check_location_access(session_priv, enable_role_id_array, location_name))) {
+            LOG_WARN("failed to check location access", K(ret));
+          }
+          if (OB_SUCC(ret)) {
+            GEN_SQL_STEP_1(ObShowSqlSet::SHOW_CREATE_LOCATION);
+            GEN_SQL_STEP_2(ObShowSqlSet::SHOW_CREATE_LOCATION, OB_SYS_DATABASE_NAME,
+                           OB_TENANT_VIRTUAL_SHOW_CREATE_LOCATION_TNAME, location_id);
+          }
+        }
+        break;
+      }
+      case T_LOCATION_UTILS_LIST: {
+        uint64_t min_version = OB_INVALID_VERSION;
+        uint64_t location_id = OB_INVALID_ID;
+        ObString sub_path;
+        ObString pattern;
+        ObString location_name;
+        if (OB_FAIL(GET_MIN_DATA_VERSION(real_tenant_id, min_version))) {
+            LOG_WARN("get min data_version failed", K(ret), K(real_tenant_id));
+        } else if (min_version < DATA_VERSION_4_4_0_0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "list location files");
+          LOG_WARN("not support to show create location", K(ret), K(real_tenant_id));
+        } else if (OB_UNLIKELY(parse_tree.num_child_ != 3) || OB_ISNULL(parse_tree.children_[0])) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("parse tree is wrong", K(ret), K(parse_tree.num_child_));
+        } else {
+          show_resv_ctx.stmt_type_ = stmt::T_LOCATION_UTILS_LIST;
+          ParseNode *child_node = parse_tree.children_[0];
+          location_name.assign_ptr(child_node->str_value_, static_cast<int32_t>(child_node->str_len_));
+          ObSchemaGetterGuard *schema_guard = NULL;
+          if(OB_ISNULL(schema_checker_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("got null ptr", K(ret));
+          } else if (OB_FAIL(schema_checker_->get_location_id(real_tenant_id, location_name, location_id))) {
+            LOG_WARN("get location id failed", K(ret), K(real_tenant_id), K(location_name));
+          } else if(OB_ISNULL(schema_guard = schema_checker_->get_schema_guard())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("got null ptr", K(ret));
+          } else if (OB_FAIL(schema_guard->check_location_access(session_priv, enable_role_id_array, location_name))) {
+            LOG_WARN("check location priv failed", K(ret), K(session_priv), K(enable_role_id_array), K(location_name));
+          }
+          if (OB_SUCC(ret) && OB_NOT_NULL(parse_tree.children_[1])) {
+            ParseNode *child_node = parse_tree.children_[1];
+            sub_path.assign_ptr(child_node->str_value_, static_cast<int32_t>(child_node->str_len_));
+          }
+          if (OB_SUCC(ret) && OB_NOT_NULL(parse_tree.children_[2])) {
+            ParseNode *child_node = parse_tree.children_[2];
+            if (T_EXTERNAL_FILE_PATTERN != child_node->type_) {
+              ret = OB_ERR_UNEXPECTED;
+              SQL_RESV_LOG(WARN, "invalid file format option", K(ret));
+            } else if (child_node->num_child_ != 1 || OB_ISNULL(child_node->children_[0])) {
+              ret = OB_ERR_UNEXPECTED;
+              SQL_RESV_LOG(WARN, "unexpected child num", K(child_node->num_child_));
+            } else if (0 == child_node->children_[0]->str_len_) {
+              ObSqlString err_msg;
+              err_msg.append_fmt("empty regular expression");
+              ret = OB_ERR_REGEXP_ERROR;
+              LOG_USER_ERROR(OB_ERR_REGEXP_ERROR, err_msg.ptr());
+              SQL_RESV_LOG(WARN, "empty regular expression", K(ret));
+            } else {
+              pattern = ObString(child_node->children_[0]->str_len_,
+                                child_node->children_[0]->str_value_);
+              if (OB_FAIL(ObSQLUtils::convert_sql_text_to_schema_for_storing(*allocator_,
+                                                                              session_info_->get_dtc_params(),
+                                                                              pattern))) {
+                SQL_RESV_LOG(WARN, "failed to convert pattern to utf8", K(ret));
+              }
+            }
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (sub_path.empty()) {  // oracle模式下空串会导致全表扫描, 无法利用range_key传递参数
+            ObSqlString tmp_sub_path;
+            tmp_sub_path.append("/");
+            sub_path = tmp_sub_path.string();
+          }
+          if (pattern.empty()) {  // 同
+            ObSqlString tmp_pattern;
+            tmp_pattern.append("*");
+            pattern = tmp_pattern.string();
+          }
+          GEN_SQL_STEP_1(ObShowSqlSet::LOCATION_UTILS_LIST);
+          GEN_SQL_STEP_2(ObShowSqlSet::LOCATION_UTILS_LIST,
+                        REAL_NAME(OB_SYS_DATABASE_NAME, OB_ORA_SYS_SCHEMA_NAME),
+                        REAL_NAME(OB_TENANT_VIRTUAL_LIST_FILE_TNAME, OB_TENANT_VIRTUAL_LIST_FILE_ORA_TNAME),
+                        location_id,
+                        sub_path.length(), sub_path.ptr(),
+                        pattern.length(), pattern.ptr());
         }
         break;
       }
@@ -4067,6 +4207,21 @@ DEFINE_SHOW_CLAUSE_SET(SHOW_CREATE_CATALOG,
                        NULL,
                        "SELECT `catalog_name` AS `Catalog`, create_catalog AS `Create Catalog` FROM %s.%s  WHERE catalog_id = %ld",
                        R"(SELECT catalog_name AS "Catalog", create_catalog AS "Create Catalog" FROM %s.%s  WHERE catalog_id = %ld)",
+                       NULL);
+DEFINE_SHOW_CLAUSE_SET(SHOW_LOCATIONS,
+                       NULL,
+                       "SELECT `location_name` AS `Location` FROM %s.%s WHERE tenant_id = %ld and check_location_access(`location_name`) order by `Location` asc",
+                       NULL,
+                       NULL);
+DEFINE_SHOW_CLAUSE_SET(SHOW_CREATE_LOCATION,
+                        NULL,
+                        "SELECT `location_name` AS `Location`, `create_location` AS `Create Location` FROM %s.%s  WHERE location_id = %ld",
+                        NULL,
+                        NULL);
+DEFINE_SHOW_CLAUSE_SET(LOCATION_UTILS_LIST,
+                       NULL,
+                       "SELECT `file_name` AS `File`, `file_size` AS `Size` FROM %s.%s WHERE location_id = %ld and location_sub_path = '%.*s' and pattern = '%.*s'",
+                       R"(SELECT file_name AS `File`, file_size AS `Size` FROM %s.%s WHERE location_id = %ld and location_sub_path = '%.*s' and pattern = '%.*s')",
                        NULL);
 }/* ns sql*/
 }/* ns oceanbase */

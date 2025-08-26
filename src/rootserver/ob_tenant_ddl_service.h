@@ -275,6 +275,9 @@ private:
       ObDDLOperator &ddl_operator,
       ObMySQLTransaction &trans,
       common::ObIArray<share::schema::ObTableSchema> &tables);
+  int load_sys_table_schemas(
+      const ObTenantSchema &tenant_schema,
+      common::ObIArray<share::schema::ObTableSchema> &tables);
   template <typename SCHEMA>
   int extract_first_primary_zone_array(
       const SCHEMA &schema,
@@ -353,10 +356,6 @@ private:
       const share::schema::ObTenantSchema &orig_tenant_schema,
       const common::ObIArray<common::ObZone> &zones_in_pool,
       const common::ObIArray<share::schema::ObZoneRegion> &zone_region_list);
-
-  int check_alter_tenant_when_rebalance_is_disabled_(
-      const share::schema::ObTenantSchema &orig_tenant_schema,
-      const share::schema::ObTenantSchema &new_tenant_schema);
   int check_revoke_pools_permitted(
       share::schema::ObSchemaGetterGuard &schema_guard,
       const common::ObIArray<share::ObResourcePoolName> &new_pool_name_list,

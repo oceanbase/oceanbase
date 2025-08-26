@@ -593,7 +593,7 @@ int ObDynamicSamplePieceMsgCtx::sort_row_store(ObChunkDatumStore &row_store)
 }
 
 int ObDynamicSamplePieceMsgCtx::on_message(
-    common::ObIArray<ObPxSqcMeta *> &sqcs,
+    common::ObIArray<ObPxSqcMeta> &sqcs,
     const ObDynamicSamplePieceMsg &piece)
 {
   int ret = OB_SUCCESS;
@@ -625,7 +625,7 @@ int ObDynamicSamplePieceMsgCtx::on_message(
   return ret;
 }
 
-int ObDynamicSamplePieceMsgCtx::send_whole_msg(common::ObIArray<ObPxSqcMeta *> &sqcs)
+int ObDynamicSamplePieceMsgCtx::send_whole_msg(common::ObIArray<ObPxSqcMeta> &sqcs)
 {
   int ret = OB_SUCCESS;
   SMART_VAR(ObDynamicSampleWholeMsg, whole) {
@@ -634,7 +634,7 @@ int ObDynamicSamplePieceMsgCtx::send_whole_msg(common::ObIArray<ObPxSqcMeta *> &
       LOG_WARN("build sample whole message failed", K(ret), K(*this));
     }
     ARRAY_FOREACH_X(sqcs, idx, cnt, OB_SUCC(ret)) {
-      dtl::ObDtlChannel *ch = sqcs.at(idx)->get_qc_channel();
+      dtl::ObDtlChannel *ch = sqcs.at(idx).get_qc_channel();
       if (OB_ISNULL(ch)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("null expected", K(ret));
@@ -661,7 +661,7 @@ void ObDynamicSamplePieceMsgCtx::reset_resource()
 
 int ObDynamicSamplePieceMsgListener::on_message(
     ObDynamicSamplePieceMsgCtx &ctx,
-    common::ObIArray<ObPxSqcMeta *> &sqcs,
+    common::ObIArray<ObPxSqcMeta> &sqcs,
     const ObDynamicSamplePieceMsg &piece)
 {
   int ret = OB_SUCCESS;

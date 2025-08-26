@@ -79,13 +79,14 @@ int ObShowGrants::add_priv_map_recursively(uint64_t user_id, PRIV_MAP &priv_map,
     ObArray<const ObTablePriv *> table_priv_array;
     ObArray<const ObColumnPriv *> column_priv_array;
     ObArray<const ObRoutinePriv *> routine_priv_array;
+    ObArray<const ObObjMysqlPriv *> obj_mysql_priv_array;
 
     OZ (schema_guard_->get_catalog_priv_with_user_id(tenant_id_, user_id, catalog_priv_array));
     OZ (schema_guard_->get_db_priv_with_user_id(tenant_id_, user_id, db_priv_array));
     OZ (schema_guard_->get_table_priv_with_user_id(tenant_id_, user_id, table_priv_array));
     OZ (schema_guard_->get_column_priv_with_user_id(tenant_id_, user_id, column_priv_array));
     OZ (schema_guard_->get_routine_priv_with_user_id(tenant_id_, user_id, routine_priv_array));
-
+    OZ (schema_guard_->get_obj_mysql_priv_with_user_id(tenant_id_, user_id, obj_mysql_priv_array));
     //user_level
     if (OB_SUCC(ret)) {
       PrivKey priv_key;
@@ -133,6 +134,14 @@ int ObShowGrants::add_priv_map_recursively(uint64_t user_id, PRIV_MAP &priv_map,
         routine_priv_array.at(i)->get_routine_type() == ObRoutineType::ROUTINE_PROCEDURE_TYPE ?
                                               ObObjectType::PROCEDURE : ObObjectType::FUNCTION;
       OZ (add_priv_map(priv_map, priv_key, routine_priv_array.at(i)->get_priv_set()));
+    }
+
+    //object level
+    for (int i = 0; OB_SUCC(ret) && i < obj_mysql_priv_array.count(); i++) {
+      PrivKey priv_key;
+      priv_key.table_name_ = obj_mysql_priv_array.at(i)->get_obj_name_str();
+      priv_key.obj_type_ = static_cast<ObObjectType>(obj_mysql_priv_array.at(i)->get_obj_type());
+      OZ (add_priv_map(priv_map, priv_key, obj_mysql_priv_array.at(i)->get_priv_set()));
     }
 
     if (OB_SUCC(ret) && expand_roles) {
@@ -186,6 +195,7 @@ int ObShowGrants::inner_get_next_row(common::ObNewRow *&row)
         ObArray<const ObRoutinePriv *> routine_priv_array;
         ObArray<const ObColumnPriv *> column_priv_array;
         ObArray<const ObObjPriv *>obj_priv_array;
+        ObArray<const ObObjMysqlPriv *> obj_mysql_priv_array;
         PRIV_MAP priv_map;
         const int64_t PRIV_BUF_LENGTH = 512;
         char buf[PRIV_BUF_LENGTH] = {};
@@ -222,6 +232,10 @@ int ObShowGrants::inner_get_next_row(common::ObNewRow *&row)
                                                                        show_user_id,
                                                                        obj_priv_array))) {
           SERVER_LOG(WARN, "Get table priv with user id error", K(ret));
+        } else if (OB_FAIL(schema_guard_->get_obj_mysql_priv_with_user_id(tenant_id_,
+                                                                       show_user_id,
+                                                                       obj_mysql_priv_array))) {
+          SERVER_LOG(WARN, "Get obj mysql priv with user id error", K(ret));
         } else {
           user_name = user_info->get_user_name_str();
           host_name = user_info->get_host_name_str();
@@ -238,7 +252,9 @@ int ObShowGrants::inner_get_next_row(common::ObNewRow *&row)
           for (PRIV_MAP::const_iterator iter = priv_map.begin(); OB_SUCC(ret) && iter != priv_map.end(); ++iter) {
             const PrivKey &priv_key = iter->first;
             const ObPrivSet &privs = iter->second;
-            if (priv_key.catalog_name_.empty() && priv_key.db_name_.empty()) {
+            if (priv_key.catalog_name_.empty()
+                && priv_key.db_name_.empty()
+                && ObObjectType::INVALID == priv_key.obj_type_ ) {
               pos = 0;
               have_priv.priv_level_ = OB_PRIV_USER_LEVEL;
               have_priv.priv_set_ = privs;
@@ -382,6 +398,24 @@ int ObShowGrants::inner_get_next_row(common::ObNewRow *&row)
               }
             }
           }
+          // location
+          for (PRIV_MAP::const_iterator iter = priv_map.begin(); OB_SUCC(ret) && iter != priv_map.end(); ++iter) {
+            const PrivKey &priv_key = iter->first;
+            const ObPrivSet &privs = iter->second;
+            if (!priv_key.table_name_.empty()
+                && priv_key.obj_type_ == ObObjectType::LOCATION) {
+              pos = 0;
+              have_priv.priv_level_ = OB_PRIV_OBJECT_LEVEL;
+              have_priv.priv_set_ = privs;
+              have_priv.table_ = priv_key.table_name_;
+              have_priv.obj_type_ = priv_key.obj_type_;
+
+              OZ (get_grants_string(buf, PRIV_BUF_LENGTH, pos, have_priv, user_name, host_name));
+              OX (result.assign_ptr(buf, static_cast<int32_t>(pos)));
+              OZ (fill_row_cells(show_user_id, result));
+              OZ (scanner_.add_row(cur_row_));
+            }
+          }
         }
 
         if (OB_SUCC(ret) && lib::is_oracle_mode()) {
@@ -450,6 +484,7 @@ int ObShowGrants::inner_get_next_row(common::ObNewRow *&row)
             const ObSequenceSchema *seq_schema = NULL;
             const ObSimpleDatabaseSchema *db_schema = NULL;
             const ObColumnSchemaV2 *col_schema = NULL;
+            const ObLocationSchema *loc_schema = NULL;
             bool correct_obj_type = true;
             
             ObString obj_name;
@@ -507,6 +542,18 @@ int ObShowGrants::inner_get_next_row(common::ObNewRow *&row)
                       SERVER_LOG(WARN, "db not exist", K(ret));
                     }
                   }
+                  break;
+                case static_cast<uint64_t>(share::schema::ObObjectType::LOCATION):
+                  if (OB_FAIL(schema_guard_->get_location_schema_by_id(tenant_id_,
+                                                                       obj_priv->get_obj_id(),
+                                                                       loc_schema))) {
+                    SERVER_LOG(WARN, "Get location schema with loc id error", K(ret));
+                    } else if (loc_schema == NULL) {
+                      ret = OB_LOCATION_OBJ_NOT_EXIST;
+                      SERVER_LOG(WARN, "Location not exist", K(ret));
+                    } else {
+                      obj_name = loc_schema->get_location_name_str();
+                    }
                   break;
                 default:
                   correct_obj_type = false;
@@ -792,6 +839,8 @@ int ObShowGrants::print_privs_to_buff(
   } else if (OB_PRIV_ROUTINE_LEVEL == priv_level) {
     priv_all = OB_PRIV_ALL;
   } else if (OB_PRIV_OBJ_ORACLE_LEVEL == priv_level) {
+  } else if (OB_PRIV_OBJECT_LEVEL == priv_level) {
+    priv_all = OB_PRIV_OBJECT_ACC;
   } else {
     ret = OB_INVALID_ARGUMENT;
     SERVER_LOG(WARN, "Invalid priv level", K(ret));
@@ -1064,6 +1113,12 @@ int ObShowGrants::priv_level_printf(
                                 have_priv.db_.length(), have_priv.db_.ptr(),
                                 have_priv.table_.length(), have_priv.table_.ptr()))) {
       SERVER_LOG(WARN, "Fill privs to buffer failed", K(ret));
+    }
+  } else if (OB_PRIV_OBJECT_LEVEL == have_priv.priv_level_) {
+    if (ObObjectType::LOCATION == have_priv.obj_type_) {
+      if (OB_FAIL(databuff_printf(buf, buf_len, pos, " ON LOCATION `%.*s`", have_priv.table_.length(), have_priv.table_.ptr()))) {
+        SERVER_LOG(WARN, "Fill privs to buffer failed", K(ret));
+      }
     }
   }
   return ret;

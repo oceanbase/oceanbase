@@ -59,6 +59,7 @@ ObDirectLoadInsertTableParam::ObDirectLoadInsertTableParam()
     datum_utils_(nullptr),
     col_descs_(nullptr),
     cmp_funcs_(nullptr),
+    col_nullables_(nullptr),
     lob_column_idxs_(nullptr),
     online_sample_percent_(1.),
     is_no_logging_(false),
@@ -76,7 +77,7 @@ bool ObDirectLoadInsertTableParam::is_valid() const
          column_count_ >= rowkey_column_count_ && lob_inrow_threshold_ >= 0 &&
          (!is_incremental_ || trans_param_.is_valid()) && nullptr != datum_utils_ &&
          nullptr != col_descs_ && col_descs_->count() == column_count_ && nullptr != cmp_funcs_ &&
-         nullptr != lob_column_idxs_ && max_batch_size_ > 0;
+         nullptr != col_nullables_ && nullptr != lob_column_idxs_ && max_batch_size_ > 0;
 }
 
 /**

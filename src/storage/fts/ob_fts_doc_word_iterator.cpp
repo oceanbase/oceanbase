@@ -252,15 +252,14 @@ int ObFTDocWordScanIterator::build_key_range(
   int ret = OB_SUCCESS;
   static int64_t ROWKEY_COLUMN_COUNT = 2;
   common::ObNewRange range;
-  void *buf = nullptr;
+  common::ObObj *objs = nullptr;
   if (OB_UNLIKELY(OB_INVALID_ID == table_id || !doc_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(doc_id));
-  } else if (OB_ISNULL(buf = allocator_.alloc(sizeof(common::ObObj) * ROWKEY_COLUMN_COUNT * 2))) {
+  } else if (OB_ISNULL(objs = OB_NEW_ARRAY(common::ObObj, &allocator_, ROWKEY_COLUMN_COUNT * 2))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate buffer for rowkey", K(ret));
   } else {
-    common::ObObj *objs= new (buf) common::ObObj[ROWKEY_COLUMN_COUNT * 2];
     objs[0].set_varbinary(doc_id.get_string());
     objs[1] = common::ObObj::make_min_obj();
     objs[2].set_varbinary(doc_id.get_string());

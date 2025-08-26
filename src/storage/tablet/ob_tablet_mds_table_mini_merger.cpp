@@ -281,9 +281,12 @@ int ObTabletDumpMds2MiniOperator::operator()(const mds::MdsDumpKV &kv)
   return ret;
 }
 
-ObCrossLSMdsMiniMergeOperator::ObCrossLSMdsMiniMergeOperator(const share::SCN &scan_end_scn)
+ObCrossLSMdsMiniMergeOperator::ObCrossLSMdsMiniMergeOperator(
+    const share::SCN &scan_end_scn,
+    const bool keep_original_tablet_status)
   : ObMdsMiniMergeOperator(),
-    scan_end_scn_(scan_end_scn)
+    scan_end_scn_(scan_end_scn),
+    keep_original_tablet_status_(keep_original_tablet_status)
 {
 }
 
@@ -297,8 +300,8 @@ int ObCrossLSMdsMiniMergeOperator::operator()(const mds::MdsDumpKV &kv)
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
-  } else if (tablet_status_mds_unit_id == kv.k_.mds_unit_id_) {
-    // filter tablet status mds kv
+  } else if (tablet_status_mds_unit_id == kv.k_.mds_unit_id_ && !keep_original_tablet_status_) {
+    //filter tablet status mds kv
     LOG_INFO("meet tablet status mds row, should skip", K(ret), K(tablet_status_mds_unit_id));
   } else if (kv.v_.end_scn_ > scan_end_scn_) {
     LOG_INFO("node end scn is beyond scan end scn, should skip", K(ret), K_(scan_end_scn), K(kv));
@@ -368,21 +371,40 @@ void ObMdsTableMiniMerger::reset()
   is_inited_ = false;
 }
 
-int ObMdsTableMiniMerger::init(compaction::ObTabletMergeCtx &ctx, ObMdsMiniMergeOperator &op)
+int ObMdsTableMiniMerger::prepare_macro_seq_param(
+    const compaction::ObTabletMergeCtx &ctx,
+    ObMacroSeqParam &macro_seq_param)
+{
+  int ret = OB_SUCCESS;
+  ObMacroDataSeq macro_start_seq(0);
+  if (OB_FAIL(macro_start_seq.set_parallel_degree(0))) {
+    LOG_WARN("Failed to set parallel degree to macro start seq", K(ret));
+  } else if (OB_FAIL(macro_start_seq.set_sstable_seq(ctx.static_param_.sstable_logic_seq_))) {
+    LOG_WARN("Failed to set sstable seq", K(ret), K(ctx.static_param_.sstable_logic_seq_));
+  } else {
+    macro_seq_param.start_ = macro_start_seq.macro_data_seq_;
+    macro_seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
+  }
+  return ret;
+}
+
+int ObMdsTableMiniMerger::init(
+    const ObMacroSeqParam &macro_seq_param,
+    compaction::ObTabletMergeCtx &ctx,
+    ObMdsMiniMergeOperator &op)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     MDS_LOG(WARN, "init twice", K(ret));
+  } else if (OB_UNLIKELY(!macro_seq_param.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(macro_seq_param));
   } else {
     const share::ObLSID &ls_id = ctx.get_ls_id();
     const common::ObTabletID &tablet_id = ctx.get_tablet_id();
     const ObStorageSchema *storage_schema = ObMdsSchemaHelper::get_instance().get_storage_schema();
     uint64_t data_version = 0;
-    ObMacroDataSeq macro_start_seq(0);
-    ObMacroSeqParam macro_seq_param;
-    macro_seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
-
     if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
       if (OB_ENTRY_NOT_EXIST == ret) {
         ret = OB_EAGAIN;
@@ -401,13 +423,9 @@ int ObMdsTableMiniMerger::init(compaction::ObTabletMergeCtx &ctx, ObMdsMiniMerge
       LOG_WARN("mds storage schema is invalid", K(ret), KP(storage_schema), KPC(storage_schema));
     } else if (OB_FAIL(data_desc_.init(false/*is ddl*/, *storage_schema, ls_id, tablet_id,
         ctx.get_merge_type(), ctx.get_snapshot(), data_version, ctx.static_desc_.micro_index_clustered_,
-        ctx.static_desc_.tablet_transfer_seq_, ctx.static_desc_.reorganization_scn_, ctx.static_param_.scn_range_.end_scn_))) {
+        ctx.static_desc_.tablet_transfer_seq_, ctx.static_desc_.reorganization_scn_, ctx.static_param_.scn_range_.end_scn_,
+        nullptr/*cg_schema*/, 0/*table_cg_idx*/, ctx.get_exec_mode()))) {
       LOG_WARN("fail to init whole desc", KR(ret), K(ctx), K(ls_id), K(tablet_id));
-    } else if (OB_FAIL(macro_start_seq.set_parallel_degree(0))) {
-      LOG_WARN("Failed to set parallel degree to macro start seq", K(ret));
-    } else if (OB_FAIL(macro_start_seq.set_sstable_seq(ctx.static_param_.sstable_logic_seq_))) {
-      LOG_WARN("Failed to set sstable seq", K(ret), K(ctx.static_param_.sstable_logic_seq_));
-    } else if (FALSE_IT(macro_seq_param.start_ = macro_start_seq.macro_data_seq_)) {
     } else if (FALSE_IT(data_desc_.get_desc().sstable_index_builder_ = &sstable_builder_)) {
     } else if (OB_FAIL(sstable_builder_.init(data_desc_.get_desc()))) {
       LOG_WARN("Failed to init sstable builder", K(ret), K(data_desc_.get_desc()));
@@ -434,6 +452,23 @@ int ObMdsTableMiniMerger::generate_mds_mini_sstable(
     common::ObArenaAllocator &allocator,
     ObTableHandleV2 &table_handle)
 {
+  int64_t unused_tree_start_seq = 0;
+  return generate_mds_mini_sstable(allocator, table_handle, unused_tree_start_seq);
+}
+
+int ObMdsTableMiniMerger::generate_ss_mds_mini_sstable(
+    common::ObArenaAllocator &allocator,
+    ObTableHandleV2 &table_handle,
+    int64_t &tree_start_seq)
+{
+  return generate_mds_mini_sstable(allocator, table_handle, tree_start_seq);
+}
+
+int ObMdsTableMiniMerger::generate_mds_mini_sstable(
+    common::ObArenaAllocator &allocator,
+    ObTableHandleV2 &table_handle,
+    int64_t &index_tree_start_seq)
+{
   int ret = OB_SUCCESS;
   TIMEGUARD_INIT(STORAGE, 20_ms);
   if (OB_UNLIKELY(!is_inited_)) {
@@ -445,8 +480,8 @@ int ObMdsTableMiniMerger::generate_mds_mini_sstable(
         LOG_WARN("fail to close macro writer", K(ret), K(macro_writer_));
       } else if (OB_FAIL(ctx_->update_block_info(macro_writer_.get_merge_block_info(), 0/*cost_time*/))) {
         STORAGE_LOG(WARN, "Failed to add macro blocks", K(ret));
-      } else if (OB_FAIL(sstable_builder_.close(res))) {
-        LOG_WARN("fail to close sstable builder", K(ret), K(sstable_builder_));
+      } else if (OB_FAIL(close_index_builder(index_tree_start_seq, res))) {
+        LOG_WARN("close index builder failed", K(ret), K(index_tree_start_seq));
       } else if (CLICK_FAIL(param.init_for_mds(*ctx_, res, *storage_schema_))) {
         LOG_WARN("fail to create sstable param for mds", K(ret));
       } else if (CLICK_FAIL(ObTabletCreateDeleteHelper::create_sstable(param, allocator, table_handle))) {
@@ -466,6 +501,35 @@ int ObMdsTableMiniMerger::generate_mds_mini_sstable(
     const blocksstable::ObSSTable *sstable = static_cast<blocksstable::ObSSTable*>(table_handle.get_table());
     LOG_TRACE("succeed to generate mds mini sstable", K(ret), K(ls_id), K(tablet_id), KPC(sstable));
   }
+  return ret;
+}
+
+int ObMdsTableMiniMerger::close_index_builder(
+    int64_t &index_tree_start_seq/*used for ss.*/,
+    ObSSTableMergeRes &res)
+{
+  int ret = OB_SUCCESS;
+  share::ObPreWarmerParam pre_warm_param;
+  const bool is_output_exec = is_output_exec_mode(ctx_->get_exec_mode());
+  if (is_output_exec) {
+    if (OB_UNLIKELY(index_tree_start_seq <= 0
+        || nullptr == ctx_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid arg", K(ret), K(index_tree_start_seq), KPC(ctx_));
+    } else if (OB_FAIL(pre_warm_param.init(ctx_->get_ls_id(), ctx_->get_tablet_id()))) {
+      LOG_WARN("failed to init pre warm param", K(ret));
+    } else if (OB_FAIL(sstable_builder_.close_with_macro_seq(
+                  res, index_tree_start_seq,
+                  OB_DEFAULT_MACRO_BLOCK_SIZE /*nested_size*/,
+                  0 /*nested_offset*/, pre_warm_param))) {
+      LOG_WARN("close with seq failed", K(ret), K(index_tree_start_seq));
+    }
+  } else {
+    if (OB_FAIL(sstable_builder_.close(res))) {
+      LOG_WARN("fail to close sstable builder", K(ret), K(sstable_builder_));
+    }
+  }
+
   return ret;
 }
 
@@ -498,6 +562,7 @@ int ObMdsDataCompatHelper::generate_mds_mini_sstable(
     ctx->static_param_.start_time_ = common::ObTimeUtility::fast_current_time();
     ctx->static_param_.scn_range_.start_scn_ = share::SCN::plus(share::SCN::min_scn(), 1);
     ctx->static_param_.scn_range_.end_scn_ = mig_param.mds_checkpoint_scn_;
+    ctx->static_param_.merge_scn_ = ctx->static_param_.scn_range_.end_scn_;
     // migrate of ss should not rewrite the sstable of mds, set with clog checkpoint scn now.
     ctx->static_param_.rec_scn_ = mig_param.mds_checkpoint_scn_;
     ctx->static_param_.version_range_.snapshot_version_ = mig_param.mds_checkpoint_scn_.get_val_for_tx();
@@ -508,7 +573,10 @@ int ObMdsDataCompatHelper::generate_mds_mini_sstable(
   if (OB_FAIL(ret)) {
   } else {
     SMART_VARS_2((ObMdsTableMiniMerger, mds_mini_merger), (ObTabletDumpMds2MiniOperator, op)) {
-      if (OB_FAIL(mds_mini_merger.init(*ctx, op))) {
+      ObMacroSeqParam macro_seq_param;
+      if (OB_FAIL(ObMdsTableMiniMerger::prepare_macro_seq_param(*ctx, macro_seq_param))) {
+        LOG_WARN("prepare macro seq param failed", K(ret), K(macro_seq_param));
+      } else if (OB_FAIL(mds_mini_merger.init(macro_seq_param, *ctx, op))) {
         LOG_WARN("fail to init mds mini merger", K(ret), KPC(ctx), K(ls_id), K(tablet_id));
       } else if (CLICK_FAIL((mig_param.mds_data_.scan_all_mds_data_with_op(mig_param.mds_checkpoint_scn_, op)))) {
         LOG_WARN("failed to handle full memory mds data", K(ret),
@@ -556,6 +624,7 @@ int ObMdsDataCompatHelper::generate_mds_mini_sstable(
     ctx->static_param_.start_time_ = common::ObTimeUtility::fast_current_time();
     ctx->static_param_.scn_range_.start_scn_ = share::SCN::plus(share::SCN::min_scn(), 1);
     ctx->static_param_.scn_range_.end_scn_ = tablet.get_mds_checkpoint_scn();
+    ctx->static_param_.merge_scn_ = ctx->static_param_.scn_range_.end_scn_;
     ctx->static_param_.rec_scn_ = tablet.get_mds_checkpoint_scn();
     ctx->static_param_.version_range_.snapshot_version_ = tablet.get_mds_checkpoint_scn().get_val_for_tx();
     ctx->static_param_.pre_warm_param_.type_ = ObPreWarmerType::MEM_PRE_WARM;
@@ -565,7 +634,10 @@ int ObMdsDataCompatHelper::generate_mds_mini_sstable(
       LOG_WARN("fail to build full memory mds data", K(ret));
     } else {
       SMART_VARS_2((ObMdsTableMiniMerger, mds_mini_merger), (ObTabletDumpMds2MiniOperator, op)) {
-        if (CLICK_FAIL(mds_mini_merger.init(*ctx, op))) {
+        ObMacroSeqParam macro_seq_param;
+        if (CLICK_FAIL(ObMdsTableMiniMerger::prepare_macro_seq_param(*ctx, macro_seq_param))) {
+          LOG_WARN("prepare macro seq param failed", K(ret), K(macro_seq_param));
+        } else if (CLICK_FAIL(mds_mini_merger.init(macro_seq_param, *ctx, op))) {
           LOG_WARN("fail to init mds mini merger", K(ret), KPC(ctx), K(ls_id), K(tablet_id));
         } else if (CLICK_FAIL((data.scan_all_mds_data_with_op(tablet.get_mds_checkpoint_scn(), op)))) {
           LOG_WARN("failed to handle full memory mds data", K(ret),

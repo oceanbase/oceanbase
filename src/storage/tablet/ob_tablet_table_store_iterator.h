@@ -81,6 +81,7 @@ public:
       const int64_t start_pos = 0,
       const int64_t count = 1,
       const bool unpack_co_table = false);
+  int get_ith_table(const int64_t pos, ObITable *&table);
   inline bool check_store_expire() const
   {
     return (NULL == memstore_retired_) ? false : ATOMIC_LOAD(memstore_retired_);
@@ -97,7 +98,6 @@ private:
       const ObSSTableArray &sstable_array,
       const bool is_loaded_co_table,
       const blocksstable::ObSSTableMetaHandle &co_meta_handle);
-  int get_ith_table(const int64_t pos, ObITable *&table);
 private:
   friend class ObTablet; // TODO: remove this friend class when possible
   friend class ObTabletTableStore;

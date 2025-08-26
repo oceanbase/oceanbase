@@ -99,6 +99,7 @@ private:
   bool check_mlog_table_valid(const share::schema::ObTableSchema *table_schema,
                               const ObIArray<ColumnItem> &columns,
                               const share::schema::ObTableSchema &mlog_schema,
+                              ObSchemaGetterGuard *schema_guard,
                               bool &is_valid);
   int check_mav_refresh_type(const ObSelectStmt &stmt, ObMVRefreshableType &refresh_type);
   int check_mav_refresh_type_basic(const ObSelectStmt &stmt, bool &is_valid);

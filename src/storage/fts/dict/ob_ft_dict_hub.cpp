@@ -28,7 +28,7 @@ int ObFTDictHub::init()
 {
   static constexpr int K_MAX_DICT_BUCKET = 128; // for now, only built-in dicts.
   int ret = OB_SUCCESS;
-  if (OB_FAIL(dict_map_.init())) {
+  if (OB_FAIL(dict_map_.create(K_MAX_DICT_BUCKET, "dict_map"))) {
     LOG_WARN("init dict map failed", K(ret));
   } else if (OB_FAIL(rw_dict_lock_.init(K_MAX_DICT_BUCKET))) {
     LOG_WARN("init dict lock failed", K(ret));
@@ -59,8 +59,9 @@ int ObFTDictHub::build_cache(const ObFTDictDesc &desc, ObFTCacheRangeContainer &
 
     // try if valid with no recursive lock
     if (OB_FAIL(get_dict_info(key, info))) {
-      if (OB_ENTRY_NOT_EXIST == ret) {
+      if (OB_HASH_NOT_EXIST == ret) {
         // dict not exist, make new one, by caller
+        ret = OB_ENTRY_NOT_EXIST;
       } else {
         LOG_WARN("Failed to get dict info", K(ret));
       }
@@ -98,8 +99,9 @@ int ObFTDictHub::load_cache(const ObFTDictDesc &desc, ObFTCacheRangeContainer &c
     {
       ObBucketHashRLockGuard guard(rw_dict_lock_, key.hash());
       if (OB_FAIL(get_dict_info(key, info))) {
-        if (OB_ENTRY_NOT_EXIST == ret) {
+        if (OB_HASH_NOT_EXIST == ret) {
           // dict not exist, make new one, by caller
+          ret = OB_ENTRY_NOT_EXIST;
         } else {
           LOG_WARN("Failed to get dict info", K(ret));
         }
@@ -134,7 +136,7 @@ int ObFTDictHub::get_dict_info(const ObFTDictInfoKey &key, ObFTDictInfo &info)
   int ret = OB_SUCCESS;
 
   if (OB_FAIL(dict_map_.get_refactored(key, info))) {
-    if (OB_ENTRY_NOT_EXIST != ret) {
+    if (OB_HASH_NOT_EXIST != ret) {
       LOG_WARN("get dict info failed", K(ret));
     }
   }
@@ -145,22 +147,8 @@ int ObFTDictHub::get_dict_info(const ObFTDictInfoKey &key, ObFTDictInfo &info)
 int ObFTDictHub::put_dict_info(const ObFTDictInfoKey &key, const ObFTDictInfo &info)
 {
   int ret = OB_SUCCESS;
-  ObFTDictInfo tmp;
-
-  // remove old if exist
-  if (OB_FAIL(dict_map_.get_refactored(key, tmp))) {
-    if (OB_ENTRY_NOT_EXIST != ret) {
-      LOG_WARN("get dict info failed", K(ret));
-    } else {
-      ret = OB_SUCCESS;
-    }
-  } else if (OB_FAIL(dict_map_.remove_refactored(key))) {
-    LOG_WARN("remove dict info failed", K(ret));
-  }
-
-  // put new
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(dict_map_.put_refactored(key, info))) {
+  const int cover_exist_flag = 1;
+  if (OB_FAIL(dict_map_.set_refactored(key, info, cover_exist_flag))) {
     LOG_WARN("put dict info failed", K(ret));
   }
 

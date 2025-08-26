@@ -63,6 +63,9 @@ private:
                      ObExecContext &ctx);
   int revoke_sys_priv(obrpc::ObCommonRpcProxy *rpc_proxy,
                    ObRevokeStmt &stmt);
+  int revoke_object(obrpc::ObCommonRpcProxy *rpc_proxy,
+                    ObRevokeStmt &stmt,
+                    ObExecContext &ctx);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRevokeExecutor);
 };

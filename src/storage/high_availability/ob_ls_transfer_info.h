@@ -137,14 +137,14 @@ public:
       bool &is_exist);
   bool is_in_trans();
   bool is_trans_status_same(const ObTransferInTransStatus::STATUS &trans_status);
-  bool is_abort_status();
+  bool is_abort_status() const;
+  bool is_prepare_status() const;
   int get_tablet_id_array(common::ObIArray<ObTabletID> &tablet_id_array);
   bool is_in_compatible_status();
   int64_t to_string(char *buf, const int64_t buf_len) const;
   int check_transfer_tablet_is_same(
       const common::ObIArray<ObTabletID> &tablet_id_array,
       bool &is_same);
-
 private:
   int update_trans_status_(
       const ObTransferInTransStatus::STATUS &trans_status,

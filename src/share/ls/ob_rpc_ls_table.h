@@ -79,7 +79,13 @@ private:
   int check_inner_stat_() const;
   int get_timeout_(int64_t &timeout);
 
-  int get_ls_info_(ObLSInfo &ls_info);
+  int get_ls_info_(const ObLSID &ls_id, ObLSInfo &ls_info);
+  int do_detect_sslog_ls_(
+    const common::ObIArray<common::ObAddr> &server_list,
+    ObLSInfo &ls_info);
+  int check_sslog_leader_replicas_(
+    common::ObArray<ObLSReplica> &leader_replicas,
+    ObLSInfo &ls_info);
   int get_ls_info_across_cluster_(const int64_t cluster_id, ObLSInfo &ls_info);
 
   // to fetch ls_info from the given server_list

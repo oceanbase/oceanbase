@@ -89,7 +89,7 @@ public:
   OB_INLINE int64_t get_null_cnt() const { return null_node_->duplicate_cnt_; }
   OB_INLINE HashNode *get_null_node() const { return null_node_; }
   OB_INLINE int32_t *get_row_refs() const { return row_refs_; }
-  OB_INLINE int32_t *get_refs_permutation() const { return refs_permutation_; }
+  OB_INLINE int32_t *get_refs_permutation() const { return (int32_t*)buckets_; }
   OB_INLINE int64_t get_row_count() const { return row_count_; }
 
 
@@ -117,7 +117,6 @@ protected:
   HashBucket *buckets_;
   HashNode *nodes_;
   int32_t *row_refs_;
-  int32_t *refs_permutation_;
   HashNode *null_node_;
   common::ObArenaAllocator alloc_;
 
@@ -140,14 +139,17 @@ public:
   int create(const int64_t bucket_num, const int64_t node_num,
              ObDictEncodingHashTable *&hashtable);
   int recycle(const bool force_cache, ObDictEncodingHashTable *hashtable);
-private:
+  bool has_cached_dict_table() const { return hashtables_.count() > 0; }
   void clear();
+
+private:
 
   // release hashtable too large to reduce memory usage
   static const int64_t MAX_CACHED_HASHTABLE_SIZE = UINT16_MAX;
   common::ObPooledAllocator<ObDictEncodingHashTable> allocator_;
   common::ObArray<ObDictEncodingHashTable *> hashtables_;
 };
+
 
 } // end namespace blocksstable
 } // end namespace oceanbase

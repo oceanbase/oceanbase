@@ -85,19 +85,19 @@ static int try_dispatch_http_conn(int fd, int *dispatch_succ)
 {
   int err = 0;
   int pipe_fd_write = ATOMIC_LOAD(&http_conn_pipe[1]);
-  if (pipe_fd_write >= 0) {
-    char buf[CONN_PEEK_BUF_LEN];
-    ssize_t bytes = 0;
-    while ((bytes = recv(fd, buf, sizeof(buf), MSG_PEEK)) < 0 && EINTR == errno);
-    if (bytes <= 0) {
-      ussl_log_warn("peek data failed, the data might be consumed"
-                    "because the connection is_local_ip_address, regard it as a obrpc connection, bytes=%zd, err=%d",
-                    bytes, errno);
-    } else {
-      // gRPC uses HTTP/2, and the client end of connection starts with the string PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n)
-      buf[CONN_PEEK_BUF_LEN - 1] = '\0';
-      if (NULL != strstr(buf, "HTTP")) {
-        ussl_log_info("receive a http connection, fd=%d, buf:%s", fd, buf);
+  char buf[CONN_PEEK_BUF_LEN];
+  ssize_t bytes = 0;
+  while ((bytes = recv(fd, buf, sizeof(buf), MSG_PEEK)) < 0 && EINTR == errno);
+  if (bytes <= 0) {
+    ussl_log_warn("peek data failed, the data might be consumed"
+                  "because the connection is_local_ip_address, regard it as a obrpc connection, bytes=%zd, err=%d",
+                  bytes, errno);
+  } else {
+    // gRPC uses HTTP/2, and the client end of connection starts with the string PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n)
+    buf[CONN_PEEK_BUF_LEN - 1] = '\0';
+    if (NULL != strstr(buf, "HTTP")) {
+      ussl_log_info("receive a http connection, fd=%d, buf:%s", fd, buf);
+      if (pipe_fd_write >= 0) {
         while((bytes = write(pipe_fd_write, (const char*)&fd, sizeof(fd))) < 0 && EINTR == errno);
         if (bytes <= 0) {
           err = -1;
@@ -107,8 +107,11 @@ static int try_dispatch_http_conn(int fd, int *dispatch_succ)
           ussl_log_info("write grpc sock fd success, bytes=%zd, pfd=%d", bytes, pipe_fd_write);
         }
       } else {
-        ussl_log_info("not a supported http conn, hdr:%s, fd=%d", buf, fd);
+        err = -1;
+        ussl_log_warn("unable to handle a http connection, it will be disconncted, fd=%d", fd);
       }
+    } else {
+      ussl_log_info("not a http conn, hdr:%s, fd=%d", buf, fd);
     }
   }
   return err;
@@ -130,7 +133,8 @@ static void acceptfd_sk_delete(ussl_sf_t *sf, acceptfd_sk_t *s)
           ussl_log_warn("remove acceptfd from epoll failed, epfd:%d, fd:%d, errno:%d", s->ep->fd, s->fd,
                         errno);
         } else if (s->fd_info.client_gid == UINT64_MAX && 0 != (err = try_dispatch_http_conn(s->fd, &dispatch_http_succ))) {
-          ussl_log_error("try_dispatch_http_conn failed, epfd:%d, fd:%d, errno:%d", s->ep->fd, s->fd, errno);
+          need_close = 1; // the connection is a http connection and http_conn_pipe has not been inited, close it.
+          ussl_log_info("try_dispatch_http_conn failed, epfd:%d, fd:%d", s->ep->fd, s->fd);
         } else if (0 == dispatch_http_succ && 0 != (err = dispatch_accept_fd_to_certain_group(s->fd, s->fd_info.client_gid))) {
           ussl_log_warn("dispatch fd to default group failed, fd:%d, ret:%d", s->fd, ret);
         } else {

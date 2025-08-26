@@ -29,40 +29,78 @@ public:
   typedef common::ObLinearHashMap<ObTmpFileKey, ObITmpFileHandle> TmpFileMap;
 public:
   ObITenantTmpFileManager();
-  ~ObITenantTmpFileManager();
-  virtual int init();
-  virtual int start();
-  virtual void stop();
-  virtual void wait();
-  virtual void destroy();
+  virtual ~ObITenantTmpFileManager();
+  int init();
+  int start();
+  void stop();
+  void wait();
+  void destroy();
   OB_INLINE bool is_running() const { return is_running_; }
 
 public:
   virtual int alloc_dir(int64_t &dir_id) = 0;
   virtual int open(int64_t &fd, const int64_t &dir_id, const char* const label) = 0;
   int remove(const int64_t fd);
-  int aio_read(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info, ObTmpFileIOHandle &io_handle);
-  int aio_pread(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info, const int64_t offset, ObTmpFileIOHandle &io_handle);
-  int read(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info, ObTmpFileIOHandle &io_handle);
-  int pread(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info, const int64_t offset, ObTmpFileIOHandle &io_handle);
+
+  int aio_read(const uint64_t tenant_id,
+               const ObTmpFileIOInfo &io_info,
+               ObTmpFileIOHandle &io_handle,
+               ObITmpFileHandle* file_handle_hint = nullptr);
+
+  int aio_pread(const uint64_t tenant_id,
+                const ObTmpFileIOInfo &io_info,
+                const int64_t offset,
+                ObTmpFileIOHandle &io_handle,
+                ObITmpFileHandle* file_handle_hint = nullptr);
+
+  int read(const uint64_t tenant_id,
+           const ObTmpFileIOInfo &io_info,
+           ObTmpFileIOHandle &io_handle,
+           ObITmpFileHandle* file_handle_hint = nullptr);
+
+  int pread(const uint64_t tenant_id,
+            const ObTmpFileIOInfo &io_info,
+            const int64_t offset,
+            ObTmpFileIOHandle &io_handle,
+            ObITmpFileHandle* file_handle_hint = nullptr);
+
   // NOTE:
   //   only support append write.
-  int aio_write(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info, ObTmpFileIOHandle &io_handle);
-  // NOTE:
-  //   only support append write.
-  int write(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info);
-  int truncate(const int64_t fd, const int64_t offset);
-  int seal(const int64_t fd);
+  int write(const uint64_t tenant_id,
+            const ObTmpFileIOInfo &io_info,
+            ObITmpFileHandle* file_handle_hint = nullptr);
+
+  int truncate(const int64_t fd, const int64_t offset, ObITmpFileHandle* file_handle_hint = nullptr);
 
 public:
   virtual int get_tmp_file(const int64_t fd, ObITmpFileHandle &file_handle);
-  int get_tmp_file_size(const int64_t fd, int64_t &size);
+
+  int get_tmp_file_size(const int64_t fd,
+                        int64_t &size,
+                        ObITmpFileHandle* file_handle_hint = nullptr);
+
   virtual int get_tmp_file_disk_usage(int64_t &disk_data_size, int64_t &occupied_disk_size) = 0;
 
 public:
   //for virtual table to show
   int get_tmp_file_fds(ObIArray<int64_t> &fd_arr);
-  int get_tmp_file_info(const int64_t fd, ObTmpFileInfo &tmp_file_info);
+  int get_tmp_file_info(const int64_t fd, ObTmpFileBaseInfo &tmp_file_info);
+
+public:
+  void set_compressible_info(const int64_t fd,
+                             const OB_TMP_FILE_TYPE file_type,
+                             const int64_t compressible_fd,
+                             const void* compressible_file);
+
+public:
+  virtual int get_suggested_max_tmp_file_num(int64_t& suggested_max_tmp_file_num,
+                const int64_t write_cache_size_expected_reside_in_memory) = 0;
+
+protected:
+  int get_tmp_file_(const int64_t fd,
+                    ObITmpFileHandle* file_handle_hint,
+                    ObITmpFileHandle*& file_handle_ptr,
+                    ObITmpFileHandle &file_handle);
 
 protected:
   virtual int init_sub_module_() = 0;
@@ -89,8 +127,6 @@ protected:
   uint64_t tenant_id_;
   common::ObConcurrentFIFOAllocator tmp_file_allocator_;
   common::ObFIFOAllocator callback_allocator_;
-  common::ObFIFOAllocator wbp_index_cache_allocator_;
-  common::ObFIFOAllocator wbp_index_cache_bucket_allocator_;
   TmpFileMap files_;
 };
 

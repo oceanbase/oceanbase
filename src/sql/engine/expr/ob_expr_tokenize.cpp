@@ -21,13 +21,13 @@
 #include "lib/oblog/ob_log_module.h"
 #include "lib/string/ob_string.h"
 #include "lib/utility/ob_macro_utils.h"
+#include "object/ob_object.h"
 #include "plugin/sys/ob_plugin_helper.h"
+#include "share/ob_fts_index_builder_util.h"
 #include "share/ob_json_access_utils.h"
+#include "storage/fts/dict/ob_gen_dic_loader.h"
 #include "storage/fts/ob_fts_parser_property.h"
 #include "storage/fts/ob_fts_plugin_helper.h"
-#include "storage/fts/dict/ob_gen_dic_loader.h"
-#include "lib/charset/ob_charset.h"
-#include "share/ob_fts_index_builder_util.h"
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_json_func_helper.h" // file not self-contained, there're logs inside.
@@ -57,9 +57,6 @@ int ObExprTokenize::eval_tokenize(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &e
   ObIJsonBase *json_result = nullptr;
   TokenizeParam param;
 
-  int64_t doc_len = 0;
-  ObFTWordMap token_map;
-
   // check param num, which is checked in ObExprOperator::calc_result_typeN.
   if (OB_UNLIKELY(expr.arg_cnt_ < 1 || expr.arg_cnt_ > 3)) {
     ret = OB_INVALID_ARGUMENT;
@@ -86,7 +83,7 @@ int ObExprTokenize::tokenize_fulltext(const TokenizeParam &param,
 {
   int ret = OB_SUCCESS;
   storage::ObFTParseHelper tokenize_helper;
-  const int64_t ft_word_bkt_cnt = MAX(param.fulltext_.length() / 2, 2);
+  const int64_t ft_word_bkt_cnt = MIN(MAX(param.fulltext_.length() / 2, 2), 997);
   int64_t doc_len = 0;
   ObFTWordMap token_map;
 
@@ -99,12 +96,14 @@ int ObExprTokenize::tokenize_fulltext(const TokenizeParam &param,
     LOG_WARN("Fail to init tokenize helper", K(ret));
   } else if (OB_FAIL(token_map.create(ft_word_bkt_cnt, common::ObMemAttr(MTL_ID(), "FTWordMap")))) {
     LOG_WARN("Fail to create token map", K(ret));
-  } else if ((0 != param.fulltext_.length())
-             && OB_FAIL(tokenize_helper.segment(param.cs_type_,
-                                                param.fulltext_.ptr(),
-                                                param.fulltext_.length(),
-                                                doc_len,
-                                                token_map))) {
+  } else if (
+      (0 != param.fulltext_.length())
+      && OB_FAIL(tokenize_helper.segment(
+                     param.meta_,
+                     param.fulltext_.ptr(),
+                     param.fulltext_.length(),
+                     doc_len,
+                     token_map))) {
     LOG_WARN("Fail to segment fulltext", K(ret));
   } else {
     switch (param.output_mode_) {
@@ -133,9 +132,11 @@ int ObExprTokenize::tokenize_fulltext(const TokenizeParam &param,
 }
 
 ObExprTokenize::TokenizeParam ::TokenizeParam()
-    : allocator_(ObMemAttr(MTL_ID(), "TokenizeParam")),
-      parser_name_(ObString(OB_DEFAULT_FULLTEXT_PARSER_NAME)), cs_type_(CS_TYPE_INVALID),
-      fulltext_(), output_mode_(OUTPUT_MODE::DEFAULT)
+  : allocator_(ObMemAttr(MTL_ID(), "TokenizeParam")),
+    parser_name_(ObString(OB_DEFAULT_FULLTEXT_PARSER_NAME)),
+    meta_(),
+    fulltext_(),
+    output_mode_(OUTPUT_MODE::DEFAULT)
 {
 }
 
@@ -340,7 +341,8 @@ int ObExprTokenize::parse_fulltext(const ObExpr &expr, ObEvalCtx &ctx, TokenizeP
     } else {
       param.fulltext_ = fulltext_datum->get_string();
     }
-    param.cs_type_ = expr.args_[0]->datum_meta_.cs_type_;
+    param.meta_.set_varchar(); // as we hardcoded in fts_index
+    param.meta_.set_collation_type(expr.args_[0]->obj_meta_.get_collation_type());
   }
   return ret;
 }
@@ -443,10 +445,11 @@ int ObExprTokenize::TokenizeParam::try_load_dictionary_for_ik(const uint64_t ten
     LOG_WARN("fail to check need to load dic",
         K(ret), K(tenant_id), K(parser_name_), K(need_to_load_dic));
   } else if (need_to_load_dic) {
-    if (OB_FAIL(ObGenDicLoader::get_instance().get_dic_loader(tenant_id,
-                                                              parser_name_,
-                                                              ObCharset::charset_type_by_coll(cs_type_),
-                                                              dic_loader_handle))) {
+    if (OB_FAIL(ObGenDicLoader::get_instance().get_dic_loader(
+                    tenant_id,
+                    parser_name_,
+                    ObCharset::charset_type_by_coll(meta_.get_collation_type()),
+                    dic_loader_handle))) {
       LOG_WARN("fail to get dic loader", K(ret), K(tenant_id));
     } else if (OB_UNLIKELY(!dic_loader_handle.is_valid())) {
       ret = OB_ERR_UNEXPECTED;

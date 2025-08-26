@@ -73,10 +73,15 @@ public:
   virtual int resume_leader() override final;
   virtual share::SCN get_rec_scn() override final { return share::SCN::max_scn(); }
 public:
+  // is sys_ls leader or not;
+  OB_INLINE bool is_leader() const { return ATOMIC_LOAD(&is_leader_); }
   OB_INLINE int64_t get_last_dump_succ_time() const { return last_dump_succ_time_; }
   // mark need force dump data_dict, will dump data_dict regardless dump_interval.
-  OB_INLINE void mark_force_dump_data_dict(const bool need_dump = true)
-  { ATOMIC_SET(&force_need_dump_, need_dump); }
+  void mark_force_dump_data_dict(const bool need_dump = true);
+  void update_expected_dump_scn(const share::SCN &expected_dump_scn);
+  // update retention to data_dict dump history
+  // ignore if data_dict_dump_history_retention_sec < 0
+  void update_data_dict_dump_history_retention(const int64_t data_dict_dump_history_retention_sec);
 private:
   void refresh_config_();
   void switch_role_to_(bool is_leader);
@@ -107,6 +112,7 @@ private:
       const ObIArray<uint64_t> &table_ids,
       int64_t &filter_table_count);
   int filter_table_(const share::schema::ObTableSchema &table_schema, bool &is_filtered);
+  void try_recycle_dict_history_();
 private:
   static const int64_t TIMER_TASK_INTERVAL;
   static const int64_t PRINT_DETAIL_INTERVAL;
@@ -125,6 +131,11 @@ private:
   int64_t dump_interval_;
   int timer_tg_id_;
   int64_t last_dump_succ_time_;
+  share::SCN expected_dump_snapshot_scn_;
+  share::SCN last_dump_succ_snapshot_scn_;
+  // if data_dict_dump_history_retention_sec <= 0: won't recycle history;
+  // if data_dict_dump_history_retention_sec > 0: try recycle after dump succ;
+  int64_t data_dict_dump_history_retention_sec_;
   bool force_need_dump_;
 };
 

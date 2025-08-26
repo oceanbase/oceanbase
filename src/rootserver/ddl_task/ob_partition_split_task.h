@@ -91,6 +91,7 @@ public:
       const obrpc::ObPartitionSplitArg &partition_split_arg,
       const int64_t tablet_size,
       const uint64_t tenant_data_version,
+      const ObTableSchema *src_table_schema,
       const int64_t parent_task_id = 0,
       const int64_t task_status = share::ObDDLTaskStatus::PREPARE);
   int init(const ObDDLTaskRecord &task_record);
@@ -130,7 +131,7 @@ public:
       K(lob_tablet_compaction_scns_), K(freeze_progress_status_inited_),
       K(compact_progress_status_inited_), K(write_split_log_status_inited_),
       K_(data_tablet_parallel_rowkey_list), K_(index_tablet_parallel_rowkey_list),
-      K_(min_split_start_scn));
+      K_(min_split_start_scn), K_(split_start_delayed));
 protected:
   virtual void clear_old_status_context() override;
 private:
@@ -231,13 +232,15 @@ private:
       const int64_t table_id,
       const ObTabletID &src_tablet_id,
       bool &is_src_tablet_exist);
-  int prepare_tablet_split_ranges(
+  int prepare_tablet_split_ranges_inner(
       ObSEArray<ObSEArray<blocksstable::ObDatumRowkey, 8>, 8> &parallel_datum_rowkey_list);
   int prepare_tablet_split_infos(
       const share::ObLSID &ls_id,
       const ObAddr &leader_addr,
       ObIArray<obrpc::ObTabletSplitArg> &split_info_array);
   int update_task_message();
+  int register_split_info_mds(const share::ObDDLTaskStatus next_task_status);
+  int prepare_tablet_split_ranges(const share::ObDDLTaskStatus next_task_status);
 private:
   static const int64_t OB_PARTITION_SPLIT_TASK_VERSION = 1;
   using ObDDLTask::is_inited_;
@@ -272,6 +275,8 @@ private:
   common::ObSEArray<blocksstable::ObDatumRowkey, 8> data_tablet_parallel_rowkey_list_; // data table
   common::ObSEArray<common::ObSEArray<blocksstable::ObDatumRowkey, 8>, 8> index_tablet_parallel_rowkey_list_; // index table.
   share::SCN min_split_start_scn_;
+  bool split_start_delayed_;
+  ObTableSchema src_table_schema_; // incomplete table schema, no partition schema included in it
 };
 
 }  // end namespace rootserver

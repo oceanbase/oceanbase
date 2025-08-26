@@ -22,6 +22,7 @@
 #include "rpc/obrpc/ob_rpc_processor.h"
 #include "rpc/obrpc/ob_rpc_result_code.h"
 #include "share/ob_rpc_struct.h"
+#include "share/ob_ls_id.h"
 #include "storage/tx/ob_gts_msg.h"
 #include "storage/tx/ob_ts_worker.h"
 #include "storage/tx/ob_ts_response_handler.h"
@@ -49,6 +50,7 @@ public:
   int init(const uint64_t tenant_id, const int status,
            const transaction::MonotonicTs srr, const int64_t gts_start, const int64_t gts_end);
   uint64_t get_tenant_id() const { return tenant_id_; }
+  uint64_t get_real_tenant_id() const { return transaction::GTS_REAL_TENANT_ID_MASK & tenant_id_; }
   int get_status() const { return status_; }
   transaction::MonotonicTs get_srr() const { return srr_; }
   int64_t get_gts_start() const { return gts_start_; }
@@ -103,7 +105,7 @@ public:
   ~ObGtsRPCCB() {}
   void set_args(const typename ObGtsRpcProxy::AsyncCB<PC>::Request &args)
   {
-    tenant_id_ = args.get_tenant_id();
+    tenant_id_ = args.get_real_tenant_id();
   }
   int init(transaction::ObTsMgr *ts_mgr,
            transaction::ObTsWorker *ts_worker)
@@ -168,7 +170,15 @@ public:
       } else if (OB_FAIL(ts_mgr_->refresh_gts_location(tenant_id_))) {
         TRANS_LOG(WARN, "refresh gts location fail", K(ret));
       } else {
-        // do nothing
+        // update sslog location
+        if (common::is_tenant_has_sslog(tenant_id_)) {
+          const uint64_t sslog_gts_tenant_id = transaction::get_sslog_gts_tenant_id(tenant_id_);
+          if (OB_FAIL(ts_mgr_->refresh_gts_location(sslog_gts_tenant_id))) {
+            TRANS_LOG(WARN, "refresh sslog gts location fail", K(ret), K(sslog_gts_tenant_id));
+          } else {
+            // do nothing
+          }
+        }
       }
     }
   }
@@ -198,7 +208,15 @@ private:
       } else if (OB_FAIL(ts_mgr_->refresh_gts_location(tenant_id_))) {
         TRANS_LOG(WARN, "refresh gts location fail", K(ret));
       } else {
-        // do nothing
+        // update sslog location
+        if (common::is_tenant_has_sslog(tenant_id_)) {
+          const uint64_t sslog_gts_tenant_id = transaction::get_sslog_gts_tenant_id(tenant_id_);
+          if (OB_FAIL(ts_mgr_->refresh_gts_location(sslog_gts_tenant_id))) {
+            TRANS_LOG(WARN, "refresh sslog gts location fail", K(ret), K(sslog_gts_tenant_id));
+          } else {
+            // do nothing
+          }
+        }
       }
     } else {
       status = result.get_status();
@@ -227,7 +245,7 @@ private:
             } else {
               if (OB_FAIL(task->init(result.get_tenant_id(), i, ts_mgr_, transaction::TS_SOURCE_GTS))) {
                 TRANS_LOG(WARN, "gts task init error", KR(ret), KP(task), K(i), K(result));
-              } else if (OB_FAIL(ts_worker_->push_task(result.get_tenant_id(), task))) {
+              } else if (OB_FAIL(ts_worker_->push_task(result.get_real_tenant_id(), task))) {
                 TRANS_LOG(WARN, "push gts task failed", KR(ret), KP(task), K(result));
               } else {
                 TRANS_LOG(DEBUG, "push gts task success", KP(task), K(result));
@@ -239,6 +257,9 @@ private:
             }
           }
         }
+      }
+      if (result.get_tenant_id() > 10000) {
+        TRANS_LOG(INFO, "gts request callback", K(ret), K(result), K(rcode));
       }
       TRANS_LOG(DEBUG, "gts request callback", KR(ret), K(result), K(rcode));
     }

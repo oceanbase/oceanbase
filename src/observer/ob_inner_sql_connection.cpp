@@ -24,6 +24,9 @@
 #include "lib/stat/ob_diagnose_info.h"
 #include "lib/stat/ob_diagnostic_info_container.h"
 #include "storage/ob_inner_tablet_access_service.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/incremental/sslog/ob_sslog_service.h"
+#endif
 
 namespace oceanbase
 {
@@ -134,8 +137,8 @@ ObInnerSQLConnection::ObInnerSQLConnection()
       group_id_(0),
       user_timeout_(0),
       diagnostic_info_(nullptr),
-      inner_sess_query_locked_(false)
-
+      inner_sess_query_locked_(false),
+      is_for_sslog_(false)
 {
   free_session_ctx_.sessid_ = ObSQLSessionInfo::INVALID_SESSID;
 }
@@ -608,7 +611,8 @@ int ObInnerSQLConnection::process_record(sql::ObResultSet &result_set,
                                          bool has_tenant_resource,
                                          const ObString &ps_sql,
                                          bool is_from_pl,
-                                         ObString *pl_exec_params)
+                                         ObString *pl_exec_params,
+                                         const bool is_for_sslog)
 {
   int ret = OB_SUCCESS;
   ObPhysicalPlan *plan = result_set.get_physical_plan();
@@ -652,6 +656,11 @@ int ObInnerSQLConnection::process_record(sql::ObResultSet &result_set,
       audit_record.params_value_ = pl_exec_params->ptr();
       audit_record.params_value_len_ = pl_exec_params->length();
     }
+#ifdef OB_BUILD_SHARED_STORAGE
+    if (is_for_sslog) {
+      MTL(sslog::ObSSLogService*)->gather_statistic(audit_record);
+    }
+#endif
   }
   ObSQLUtils::handle_audit_record(false, sql::PSCursor == audit_record.exec_timestamp_.exec_type_
                                          ? EXECUTE_PS_EXECUTE :
@@ -697,8 +706,12 @@ int ObInnerSQLConnection::process_audit_record(sql::ObResultSet &result_set,
       audit_record.sql_len_ = min(ps_sql.length(), session.get_tenant_query_record_size_limit());
     }
     MEMCPY(audit_record.sql_id_, sql_ctx.sql_id_, (int32_t)sizeof(audit_record.sql_id_));
+    MEMCPY(audit_record.format_sql_id_, sql_ctx.format_sql_id_,
+           (int32_t)sizeof(audit_record.format_sql_id_));
+    audit_record.format_sql_id_[common::OB_MAX_SQL_ID_LENGTH] = '\0';
     audit_record.affected_rows_ = result_set.get_affected_rows();
     audit_record.return_rows_ = result_set.get_return_rows();
+    audit_record.is_batched_multi_stmt_ = sql_ctx.multi_stmt_item_.is_batched_multi_stmt();
     if (NULL != result_set.get_exec_context().get_task_executor_ctx()) {
       audit_record.partition_cnt_ = result_set.get_exec_context()
                                                     .get_das_ctx()
@@ -748,6 +761,8 @@ int ObInnerSQLConnection::process_audit_record(sql::ObResultSet &result_set,
 template <typename T>
 int ObInnerSQLConnection::process_final(const T &sql,
                                         ObInnerSQLResult &res,
+                                        ObExecRecord &exec_record,
+                                        ObExecTimestamp &exec_timestamp,
                                         int last_ret)
 {
   int ret = OB_SUCCESS;
@@ -762,6 +777,23 @@ int ObInnerSQLConnection::process_final(const T &sql,
 
     if (process_time > 1L * 1000 * 1000) {
       LOG_INFO("slow inner sql", K(last_ret), K(sql), K(process_time));
+    }
+
+    if (is_for_sslog_ && process_time > 30_ms) {
+      exec_timestamp.update_stage_time();
+      exec_record.update_stat();
+      const bool enable_perf_event = lib::is_diagnose_info_enabled();
+      LOG_INFO("slow sslog inner sql", K(last_ret), K(sql), K(process_time),
+               K(exec_timestamp));
+
+      if (enable_perf_event) {
+        LOG_INFO("slow sslog inner sql", K(exec_record.max_wait_event_),
+                 K(exec_record.wait_time_), K(exec_record.wait_count_));
+      }
+
+      if (diagnostic_info_) {
+        LOG_INFO("slow sslog diagnose", K(diagnostic_info_->get_ash_stat()));
+      }
     }
   }
   return ret;
@@ -977,7 +1009,8 @@ int ObInnerSQLConnection::query(sqlclient::ObIExecutor &executor,
           int record_ret = process_record(res.result_set(), res.sql_ctx(), get_session(),
                                 time_record, ret, execution_id, OB_INVALID_ID,
                                 max_wait_desc, total_wait_desc, exec_record, exec_timestamp,
-                                res.has_tenant_resource(), dummy_ps_sql);
+                                res.has_tenant_resource(), dummy_ps_sql,
+                                false /*is_from_pl*/, NULL /*pl_exec_params*/, is_for_sslog_);
           if (OB_SUCCESS != record_ret) {
             LOG_WARN("failed to process record",  K(executor), K(record_ret), K(ret));
           }
@@ -1014,7 +1047,7 @@ int ObInnerSQLConnection::query(sqlclient::ObIExecutor &executor,
     }
   }
   if (res.is_inited()) {
-    int aret = process_final(executor, res, ret);
+    int aret = process_final(executor, res, exec_record, exec_timestamp, ret);
     if (OB_SUCCESS != aret) {
       LOG_WARN("failed to process final",  K(executor), K(aret), K(ret));
     }
@@ -1034,11 +1067,11 @@ common::sqlclient::ObCommonServerConnectionPool *ObInnerSQLConnection::get_commo
   return NULL;
 }
 
-#define GET_LS_ID_FOR_SEARCH_TENANT_RESOURCE_SERVER                           \
-  share::ObLSID ls_id(share::ObLSID::SYS_LS_ID);                              \
-  if (GCTX.is_shared_storage_mode() && is_meta_tenant(tenant_id)) {           \
-    ls_id = SSLOG_LS;                                                         \
-  }                                                                           \
+#define GET_LS_ID_FOR_SEARCH_TENANT_RESOURCE_SERVER                                                         \
+  share::ObLSID ls_id(share::ObLSID::SYS_LS_ID);                                                            \
+  if (GCTX.is_shared_storage_mode() && (is_meta_tenant(tenant_id) || is_sys_tenant(tenant_id))) {           \
+    ls_id = SSLOG_LS;                                                                                       \
+  }                                                                                                         \
 
 template <typename T>
 int ObInnerSQLConnection::retry_while_no_tenant_resource(const int64_t cluster_id, const uint64_t &tenant_id, T function)
@@ -2000,13 +2033,30 @@ int ObInnerSQLConnection::switch_tenant(const uint64_t tenant_id)
   if (OB_INVALID_ID == tenant_id) {
     LOG_WARN("invalid argument", K(ret), K(tenant_id));
   } else if (is_inner_session()) {
-    if (OB_FAIL(get_session().switch_tenant(tenant_id))){
+    share::schema::ObSchemaGetterGuard schema_guard;
+    const ObSimpleTenantSchema *tenant_schema = nullptr;
+    if (OB_ISNULL(GCTX.schema_service_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("schema service is nullptr", K(ret));
+    } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+      LOG_WARN("failed to get schema guard", K(ret), K(tenant_id));
+    } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_schema))) {
+      LOG_WARN("failed to get tenant schema", K(tenant_id), K(tenant_schema));
+    } else if (OB_ISNULL(tenant_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tenant schema is null", K(ret));
+    } else if (OB_FAIL(get_session().switch_tenant_with_name(tenant_id, tenant_schema->get_tenant_name_str()))) {
       LOG_WARN("Init sys tenant in session error", K(ret));
-    } else if (OB_FAIL(get_session().set_user(OB_SYS_USER_NAME, OB_SYS_HOST_NAME, OB_SYS_USER_ID))) {
-      LOG_WARN("Set sys user in session error", K(ret));
-    } else {
-      get_session().set_user_priv_set(OB_PRIV_ALL | OB_PRIV_GRANT);
-      get_session().set_database_id(OB_SYS_DATABASE_ID);
+    }
+    if (OB_SUCC(ret)) {
+      const char *sys_user_name
+        = (ORACLE_MODE == tenant_schema->get_compatibility_mode()) ? OB_ORA_SYS_USER_NAME : OB_SYS_USER_NAME;
+      if (OB_FAIL(get_session().set_user(sys_user_name, OB_SYS_HOST_NAME, OB_SYS_USER_ID))) {
+        LOG_WARN("Set sys user in session error", K(ret));
+      } else {
+        get_session().set_user_priv_set(OB_PRIV_ALL | OB_PRIV_GRANT);
+        get_session().set_database_id(OB_SYS_DATABASE_ID);
+      }
     }
   } else { /*do nothing*/ }
   return ret;
@@ -2036,6 +2086,11 @@ int ObInnerSQLConnection::set_timeout(int64_t &abs_timeout_us)
         LOG_DEBUG("set timeout by worker", K(timeout), K(abs_timeout_us));
         trx_timeout = timeout;
         LOG_DEBUG("set timeout according to THIS_WORKER", K(timeout), K(trx_timeout), K(abs_timeout_us));
+      } else if (THIS_WORKER.is_timeout_ts_valid()) {
+        // timeout exceeds 102 years, so set it to 102 years
+        timeout = OB_MAX_USER_SPECIFIED_TIMEOUT;
+        abs_timeout_us = now + timeout;
+        trx_timeout = timeout;
       }
     }
   }
@@ -2290,6 +2345,7 @@ int ObInnerSQLConnection::create_session_by_mgr()
     free_session_ctx_.proxy_sessid_ = proxy_sid;
     free_session_ctx_.tenant_id_ = tenant_id;
     inner_session_->set_session_state(QUERY_ACTIVE);
+    inner_session_->set_mysql_cmd(COM_QUERY);
     EVENT_INC(ACTIVE_SESSIONS);
     free_session_ctx_.has_inc_active_num_ = true;
   }
@@ -2495,11 +2551,12 @@ ObInnerSqlWaitGuard::ObInnerSqlWaitGuard(const bool is_inner_session, common::Ob
       prev_block_sessid_(0),
       prev_info_(nullptr)
 {
+  prev_di_ = ObLocalDiagnosticInfo::get();
   if (is_inner_session_ && OB_NOT_NULL(di) && /*when remote sql or bootstraping, do not record */
-      OB_NOT_NULL(GCTX.omt_) && 0 != di->get_session_id()) {
+      OB_NOT_NULL(GCTX.omt_) && 0 != di->get_session_id() &&
+      prev_di_ != di) {
     inner_session_id_ = di->get_session_id();
     // 1. start inner sql wait event wait event
-    prev_di_ = ObLocalDiagnosticInfo::get();
     prev_info_ = ObQueryRetryAshGuard::get_info_ptr();
 
     if (OB_NOT_NULL(prev_di_)) {

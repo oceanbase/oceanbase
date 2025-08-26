@@ -789,6 +789,9 @@ int ObJsonTableOp::inner_close()
 {
   INIT_SUCC(ret);
   if (OB_NOT_NULL(root_)) {
+    if (OB_FAIL(root_->reset(&jt_ctx_))) {
+      LOG_WARN("failed to reset root node", K(ret));
+    }
     root_->destroy();
   }
   if (OB_NOT_NULL(def_root_)) {
@@ -1074,6 +1077,18 @@ int RbIterateTableFunc::eval_input(ObJsonTableOp &jt, JtScanCtx &ctx, ObEvalCtx 
 int RbIterateTableFunc::reset_ctx(ObRegCol &scan_node, JtScanCtx*& ctx)
 {
   INIT_SUCC(ret);
+  if (OB_ISNULL(scan_node.iter_)) {
+    // do nothing
+  } else {
+    int col_num = ctx->spec_ptr_->value_exprs_.count();
+    ObRoaringBitmapIter **rb_iters = reinterpret_cast<ObRoaringBitmapIter **>(scan_node.iter_);
+    for (int64_t i = 0; i < col_num; ++i) {
+      if (OB_NOT_NULL(rb_iters[i])) {
+        rb_iters[i]->destory();
+        rb_iters[i] = NULL;
+      }
+    }
+  }
   return ret;
 }
 
@@ -1094,6 +1109,8 @@ int RbIterateTableFunc::reset_path_iter(ObRegCol &scan_node, void* in, JtScanCtx
   if (OB_ISNULL(rb_iters = static_cast<ObRoaringBitmapIter **>(ctx->row_alloc_.alloc(col_num * sizeof(ObRoaringBitmapIter *))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc memory for rbs", K(ret));
+  } else {
+    MEMSET(rb_iters, 0, col_num * sizeof(ObRoaringBitmapIter *));
   }
 
   for (int64_t i = 0; OB_SUCC(ret) && i < col_num; ++i) {
@@ -1119,7 +1136,12 @@ int RbIterateTableFunc::reset_path_iter(ObRegCol &scan_node, void* in, JtScanCtx
   }
   if (OB_FAIL(ret)) {
     for (int64_t i = 0; i < col_num; ++i) {
-      ObRbUtils::rb_destroy(rbs[i]);
+      if (OB_NOT_NULL(rb_iters[i])) {
+        rb_iters[i]->destory();
+        rb_iters[i] = NULL;
+      } else {
+        ObRbUtils::rb_destroy(rbs[i]);
+      }
     }
   } else {
     scan_node.iter_ = rb_iters;
@@ -2180,32 +2202,36 @@ int ScanNode::get_next_iter(void* in, JtScanCtx* ctx, bool& is_null_value)
   is_null_value = false;
   bool is_null_iter = false;
   if (!is_evaled_ || in_ != in) {
-    in_ = in;
-    is_null_result_ = false;
-    if (OB_ISNULL(in_)) {
-      is_null_value = is_null_result_ = true;
-      seek_node_.curr_ = seek_node_.iter_ = nullptr;
-      seek_node_.cur_pos_ = 0;
-      seek_node_.total_ = 0;
-    } else if (OB_FAIL(ctx->table_func_->reset_path_iter(seek_node_, in_, ctx, ScanType::SCAN_NODE_TYPE, is_null_iter))) {   // reset path & get first result
-      RESET_COVER_CODE(ctx);
-      LOG_WARN("fail to init path", K(ret), K(ctx->spec_ptr_->table_type_), K(ctx->table_func_));
-    } else if (is_null_iter) {
-      is_null_value = is_null_result_ = true;
-      seek_node_.curr_ = seek_node_.iter_ = nullptr;
-      seek_node_.total_ = 1;
-      seek_node_.cur_pos_ = 0;
-      // 1. if root node seek result is NULL, but input(in) not null,then return end.
-      if (seek_node_.col_info_.parent_id_ == common::OB_INVALID_ID
-          || (ctx->jt_op_->get_root_param() == in  // 2. if path == '$' && root scan node not have regular column,
-              && ctx->jt_op_->get_root_entry()->get_scan_node()->reg_column_count() == 0
-              && ctx->jt_op_->get_root_entry()->get_scan_node() == this)) {
-        ret = OB_ITER_END;
+    if (OB_FAIL(seek_node_.reset(ctx))) {
+      LOG_WARN("failed to reset seek_node", K(ret));
+    } else {
+      in_ = in;
+      is_null_result_ = false;
+      if (OB_ISNULL(in_)) {
+        is_null_value = is_null_result_ = true;
+        seek_node_.curr_ = seek_node_.iter_ = nullptr;
+        seek_node_.cur_pos_ = 0;
+        seek_node_.total_ = 0;
+      } else if (OB_FAIL(ctx->table_func_->reset_path_iter(seek_node_, in_, ctx, ScanType::SCAN_NODE_TYPE, is_null_iter))) {   // reset path & get first result
+        RESET_COVER_CODE(ctx);
+        LOG_WARN("fail to init path", K(ret), K(ctx->spec_ptr_->table_type_), K(ctx->table_func_));
+      } else if (is_null_iter) {
+        is_null_value = is_null_result_ = true;
+        seek_node_.curr_ = seek_node_.iter_ = nullptr;
+        seek_node_.total_ = 1;
+        seek_node_.cur_pos_ = 0;
+        // 1. if root node seek result is NULL, but input(in) not null,then return end.
+        if (seek_node_.col_info_.parent_id_ == common::OB_INVALID_ID
+            || (ctx->jt_op_->get_root_param() == in  // 2. if path == '$' && root scan node not have regular column,
+                && ctx->jt_op_->get_root_entry()->get_scan_node()->reg_column_count() == 0
+                && ctx->jt_op_->get_root_entry()->get_scan_node() == this)) {
+          ret = OB_ITER_END;
+        }
       }
-    }
-    if (OB_SUCC(ret)) {
-      is_evaled_= true;
-      seek_node_.cur_pos_ = 0;
+      if (OB_SUCC(ret)) {
+        is_evaled_= true;
+        seek_node_.cur_pos_ = 0;
+      }
     }
   } else {
     is_null_iter = false;

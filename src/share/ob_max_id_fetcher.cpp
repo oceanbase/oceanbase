@@ -78,9 +78,11 @@ const char *ObMaxIdFetcher::max_id_name_info_[OB_MAX_ID_TYPE][2] = {
   { "ob_max_used_storage_op_id", "max used storage op id"},
   { "ob_max_used_catalog_id", "max used catalog id"},
   { "ob_max_used_ccl_rule_id", "max used ccl rule id"},
-
   {"ob_max_used_external_resource_id", "max used external resources id"}, // OB_MAX_USED_EXTERNAL_RESOURCE_ID_TYPE will be changed to OB_MAX_USED_OBJECT_ID_TYPE and won't be persisted.
   { "ob_max_used_location_id", "max used location id"},
+  { "ob_max_sensitive_rule_id", "max sensitive rule id"},
+  { "ob_max_used_ai_model_id", "max used ai model id"},
+  { "ob_max_used_ai_model_endpoint_id", "max used ai model endpoint id"}
 };
 
 lib::ObMutex ObMaxIdFetcher::mutex_bucket_[MAX_TENANT_MUTEX_BUCKET_CNT];
@@ -158,7 +160,10 @@ int ObMaxIdFetcher::convert_id_type(
     case OB_MAX_USED_RLS_POLICY_ID_TYPE:
     case OB_MAX_USED_RLS_GROUP_ID_TYPE:
     case OB_MAX_USED_RLS_CONTEXT_ID_TYPE:
-    case OB_MAX_USED_CATALOG_ID_TYPE: {
+    case OB_MAX_USED_CATALOG_ID_TYPE:
+    case OB_MAX_USED_EXTERNAL_RESOURCE_ID_TYPE:
+    case OB_MAX_USED_LOCATION_ID_TYPE:
+    case OB_MAX_USED_CCL_RULE_ID_TYPE: {
       dst = OB_MAX_USED_OBJECT_ID_TYPE;
       break;
     }

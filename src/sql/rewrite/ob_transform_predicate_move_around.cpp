@@ -2311,36 +2311,42 @@ int ObTransformPredicateMoveAround::check_pushdown_through_groupby_validity(ObSe
   is_valid = false;
   ObQueryCtx *query_ctx = NULL;
   ObSEArray<ObRawExpr *, 4> generalized_columns;
-  if(OB_ISNULL(query_ctx = stmt.get_query_ctx())) {
-    LOG_WARN("failed to get query context");
-  } else if(query_ctx->check_opt_compat_version(COMPAT_VERSION_4_3_5_BP3)) {
-    if (OB_FAIL(ObOptimizerUtil::expr_calculable_by_exprs(having_expr, stmt.get_group_exprs(),
-               true, true, is_valid))) {
+  bool block_by_groupby = false;
+  bool block_by_rollup = false;
+  if (OB_ISNULL(query_ctx = stmt.get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("query context is NULL.", K(ret));
+  } else if (OB_FAIL(extract_generalized_column(having_expr, generalized_columns))) {
+    LOG_WARN("failed to extract generalized columns", K(ret));
+  } else if (!ObOptimizerUtil::subset_exprs(
+               generalized_columns, stmt.get_group_exprs())) {
+    block_by_groupby = true;
+  } else if (ObOptimizerUtil::overlap_exprs(
+               generalized_columns, stmt.get_rollup_exprs())) {
+    block_by_rollup = true;
+  } else {
+    is_valid = true;
+  }
+  if (OB_SUCC(ret) && !is_valid && query_ctx->check_opt_compat_version(COMPAT_VERSION_4_3_5_BP3)) {
+    block_by_groupby = false;
+    block_by_rollup = false;
+    if (is_oracle_mode() && (having_expr->has_flag(IS_ROWID) || having_expr->has_flag(CNT_ROWID))) {
+      block_by_groupby = true;
+    } else if (OB_FAIL(ObOptimizerUtil::expr_calculable_by_exprs(having_expr, stmt.get_group_exprs(),
+              true, true, is_valid))) {
       LOG_WARN("failed to check if can pass through group by", K(ret));
     } else if (!is_valid) {
-      // do nothing
-      OPT_TRACE(having_expr, "can not pushdown through group by");
+      block_by_groupby = true;
     } else if (OB_FAIL(check_pushdown_through_rollup_validity(having_expr, stmt.get_rollup_exprs(), is_valid))){
       LOG_WARN("failed to check if can pass through rollup", K(ret));
     } else if (!is_valid){
-      // do nothing
-      OPT_TRACE(having_expr, "can not pushdown through rollup");
+      block_by_rollup = true;
     }
-  } else {
-    if (OB_FAIL(extract_generalized_column(having_expr, generalized_columns))) {
-      LOG_WARN("failed to extract generalized columns", K(ret));
-    } else if (!ObOptimizerUtil::subset_exprs(
-                 generalized_columns, stmt.get_group_exprs())) {
-      // do nothing
-      OPT_TRACE(having_expr, "has none group by expr, can not pushdown");
-    } else if (ObOptimizerUtil::overlap_exprs(
-                 generalized_columns, stmt.get_rollup_exprs())) {
-      //do nothing
-      OPT_TRACE(having_expr, "has rollup expr in mysql mode, can not pushdown");
-    } else {
-      // pass groupby and rollup check, is valid.
-      is_valid = true;
-    }
+  }
+  if (block_by_groupby) {
+    OPT_TRACE(having_expr, "can not pushdown through group by");
+  } else if (block_by_rollup) {
+    OPT_TRACE(having_expr, "can not pushdown through rollup");
   }
   return ret;
 }

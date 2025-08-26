@@ -47,7 +47,7 @@ int ObAllVirtualLSReplicaTaskPlan::try_tenant_disaster_recovery_(
     if (OB_TMP_FAIL(task_worker.try_tenant_common_dr_task(tenant_id, true/*only_for_display*/, task_cnt))) {
       LOG_WARN("fail to try tenant common dr task for display", KR(tmp_ret), K(tenant_id));
     }
-    if (ObRootUtils::if_deployment_mode_match()
+    if (ObRootUtils::is_dr_replace_deployment_mode_match()
      && OB_TMP_FAIL(task_worker.try_tenant_single_replica_task(tenant_id, true/*only_for_display*/, task_cnt))) {
       LOG_WARN("fail to try tenant single replica task for display", KR(tmp_ret), K(tenant_id));
     }

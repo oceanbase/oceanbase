@@ -230,6 +230,14 @@ public:
   static int exist_registered_vec_op(ObLogicalOperator &op, const bool is_root_job, bool &exist);
 
 private:
+  class PartialExprFrameInfoGen
+  {
+  public:
+    PartialExprFrameInfoGen() : dfo_raw_exprs_(nullptr), px_coord_cnt_(0)
+    {}
+    ObIArray<ObRawExpr *> *dfo_raw_exprs_;
+    int64_t px_coord_cnt_;
+  };
 #ifdef OB_BUILD_TDE_SECURITY
   int init_encrypt_metas(
     const share::schema::ObTableSchema *table_schema,
@@ -245,7 +253,8 @@ private:
                                           common::ObIArray<ObRawExpr*> &non_anti_monotone_filters,
                                           common::ObIArray<ObRawExpr*> &anti_monotone_filters);
 
-  int set_other_properties(const ObLogPlan &log_plan, ObPhysicalPlan &phy_plan);
+  int set_properties_pre(const ObLogPlan &log_plan, ObPhysicalPlan &phy_plan);
+  int set_properties_post(const ObLogPlan &log_plan, ObPhysicalPlan &phy_plan);
 
   // Post order visit logic plan and generate operator specification.
   // %in_root_job indicate that the operator is executed in main execution thread,
@@ -256,7 +265,8 @@ private:
                             const bool is_subplan,
                             bool &check_eval_once,
                             const bool need_check_output_datum,
-                            const common::ObCompressorType compress_type);
+                            const common::ObCompressorType compress_type,
+                            PartialExprFrameInfoGen &partial_frame_gen);
   int clear_all_exprs_specific_flag(const ObIArray<ObRawExpr *> &exprs, ObExprInfoFlag flag);
   int mark_expr_self_produced(ObRawExpr *expr);
   int mark_expr_self_produced(const ObIArray<ObRawExpr *> &exprs);
@@ -416,6 +426,13 @@ private:
   int generate_spec(ObLogForUpdate &op, ObTableLockSpec &spec, const bool in_root_job);
 
   int generate_spec(ObLogInsert &op, ObTableInsertUpSpec &spec, const bool in_root_job);
+
+  int generate_ins_auto_inc_expr(ObLogInsert &op,
+                                 ObTableInsertUpSpec &spec,
+                                 const IndexDMLInfo *ins_pri_dml_info);
+  int generate_upd_auto_inc_expr(ObLogInsert &op,
+                                 ObTableInsertUpSpec &spec,
+                                 const IndexDMLInfo *upd_pri_dml_info);
 
   int get_all_auto_inc_cids(const ObIArray<share::AutoincParam> &autoinc_params, ObIArray<uint64_t> &cids);
 
@@ -614,9 +631,6 @@ private:
   bool column_exists_in_list(const ObIArray<std::pair<uint64_t, uint64_t>> &visited_columns, const uint64_t table_id, const uint64_t column_id);
 
   void set_murmur_hash_func(ObHashFunc &hash_func, const ObExprBasicFuncs *basic_funcs_);
-
-  int set_batch_exec_param(const ObIArray<ObExecParamRawExpr *> &exec_params,
-                           const ObFixedArray<ObDynamicParamSetter, ObIAllocator>& setters);
 
   int prepare_runtime_filter_cmp_info(ObLogJoinFilter &join_filter_create, ObJoinFilterSpec &spec);
 

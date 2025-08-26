@@ -20,6 +20,8 @@
 #include "share/ncomp_dll/ob_flush_ncomp_dll_task.h"
 #include "rootserver/ob_tenant_ddl_service.h"
 #include "share/ob_scheduled_manage_dynamic_partition.h"
+#include "share/balance/ob_scheduled_trigger_partition_balance.h" // ObScheduledTriggerPartitionBalance
+#include "logservice/data_dictionary/ob_data_dict_scheduler.h"    // ObDataDictScheduler
 
 namespace oceanbase
 {
@@ -52,6 +54,8 @@ const uint64_t ObUpgradeChecker::UPGRADE_PATH[] = {
   CALC_VERSION(4UL, 2UL, 5UL, 3UL),  // 4.2.5.3
   CALC_VERSION(4UL, 2UL, 5UL, 4UL),  // 4.2.5.4
   CALC_VERSION(4UL, 2UL, 5UL, 5UL),  // 4.2.5.5
+  CALC_VERSION(4UL, 2UL, 5UL, 6UL),  // 4.2.5.6
+  CALC_VERSION(4UL, 2UL, 5UL, 7UL),  // 4.2.5.7
   CALC_VERSION(4UL, 3UL, 0UL, 0UL),  // 4.3.0.0
   CALC_VERSION(4UL, 3UL, 0UL, 1UL),  // 4.3.0.1
   CALC_VERSION(4UL, 3UL, 1UL, 0UL),  // 4.3.1.0
@@ -65,7 +69,10 @@ const uint64_t ObUpgradeChecker::UPGRADE_PATH[] = {
   CALC_VERSION(4UL, 3UL, 5UL, 1UL),  // 4.3.5.1
   CALC_VERSION(4UL, 3UL, 5UL, 2UL),  // 4.3.5.2
   CALC_VERSION(4UL, 3UL, 5UL, 3UL),  // 4.3.5.3
+  CALC_VERSION(4UL, 3UL, 5UL, 4UL),  // 4.3.5.4
   CALC_VERSION(4UL, 4UL, 0UL, 0UL),  // 4.4.0.0
+  CALC_VERSION(4UL, 4UL, 0UL, 1UL),  // 4.4.0.1
+  CALC_VERSION(4UL, 4UL, 1UL, 0UL),  // 4.4.1.0
 };
 
 int ObUpgradeChecker::get_data_version_by_cluster_version(
@@ -98,6 +105,8 @@ int ObUpgradeChecker::get_data_version_by_cluster_version(
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(MOCK_CLUSTER_VERSION_4_2_5_3, MOCK_DATA_VERSION_4_2_5_3)
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(MOCK_CLUSTER_VERSION_4_2_5_4, MOCK_DATA_VERSION_4_2_5_4)
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(MOCK_CLUSTER_VERSION_4_2_5_5, MOCK_DATA_VERSION_4_2_5_5)
+    CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(MOCK_CLUSTER_VERSION_4_2_5_6, MOCK_DATA_VERSION_4_2_5_6)
+    CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(MOCK_CLUSTER_VERSION_4_2_5_7, MOCK_DATA_VERSION_4_2_5_7)
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_3_0_0, DATA_VERSION_4_3_0_0)
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_3_0_1, DATA_VERSION_4_3_0_1)
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_3_1_0, DATA_VERSION_4_3_1_0)
@@ -111,7 +120,10 @@ int ObUpgradeChecker::get_data_version_by_cluster_version(
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_3_5_1, DATA_VERSION_4_3_5_1)
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_3_5_2, DATA_VERSION_4_3_5_2)
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(MOCK_CLUSTER_VERSION_4_3_5_3, MOCK_DATA_VERSION_4_3_5_3)
+    CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(MOCK_CLUSTER_VERSION_4_3_5_4, MOCK_DATA_VERSION_4_3_5_4)
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_4_0_0, DATA_VERSION_4_4_0_0)
+    CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(MOCK_CLUSTER_VERSION_4_4_0_1, MOCK_DATA_VERSION_4_4_0_1)
+    CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_4_1_0, DATA_VERSION_4_4_1_0)
 
 #undef CONVERT_CLUSTER_VERSION_TO_DATA_VERSION
     default: {
@@ -704,6 +716,8 @@ int ObUpgradeProcesserSet::init(
     INIT_PROCESSOR_BY_VERSION(4, 2, 5, 3);
     INIT_PROCESSOR_BY_VERSION(4, 2, 5, 4);
     INIT_PROCESSOR_BY_VERSION(4, 2, 5, 5);
+    INIT_PROCESSOR_BY_VERSION(4, 2, 5, 6);
+    INIT_PROCESSOR_BY_VERSION(4, 2, 5, 7);
     INIT_PROCESSOR_BY_VERSION(4, 3, 0, 0);
     INIT_PROCESSOR_BY_VERSION(4, 3, 0, 1);
     INIT_PROCESSOR_BY_VERSION(4, 3, 1, 0);
@@ -717,7 +731,10 @@ int ObUpgradeProcesserSet::init(
     INIT_PROCESSOR_BY_VERSION(4, 3, 5, 1);
     INIT_PROCESSOR_BY_VERSION(4, 3, 5, 2);
     INIT_PROCESSOR_BY_VERSION(4, 3, 5, 3);
+    INIT_PROCESSOR_BY_VERSION(4, 3, 5, 4);
     INIT_PROCESSOR_BY_VERSION(4, 4, 0, 0);
+    INIT_PROCESSOR_BY_VERSION(4, 4, 0, 1);
+    INIT_PROCESSOR_BY_VERSION(4, 4, 1, 0);
 
 #undef INIT_PROCESSOR_BY_NAME_AND_VERSION
 #undef INIT_PROCESSOR_BY_VERSION
@@ -961,6 +978,83 @@ int ObUpgradeForAllVersionProcessor::flush_ncomp_dll_job()
     LOG_INFO("post upgrade for create flush ncomp dll finished", KR(ret), K(tenant_id_));
   }
 
+  return ret;
+}
+
+int ObUpgradeForAllVersionProcessor::finish_upgrade() {
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(finish_upgrade_for_add_sys_priv())) {
+    LOG_WARN("fail to finish upgrade for add sys priv", KR(ret));
+  }
+  return ret;
+}
+
+int ObUpgradeForAllVersionProcessor::finish_upgrade_for_add_sys_priv()
+{
+  int ret = OB_SUCCESS;
+  bool is_primary_tenant = false;
+  ObSchemaGetterGuard schema_guard;
+  lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
+  ObSqlString grant_all_sql;
+  int64_t user_id = 0;
+  int64_t affected_rows = 0;
+  bool need_grant = true;
+  if (OB_ISNULL(sql_proxy_) || OB_ISNULL(oracle_sql_proxy_) || OB_ISNULL(schema_service_) || !is_valid_tenant_id(tenant_id_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", KR(ret), KP(sql_proxy_), KP(schema_service_), K(tenant_id_));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::is_primary_tenant(sql_proxy_, tenant_id_, is_primary_tenant))) {
+    LOG_WARN("check is standby tenant failed", KR(ret), K(tenant_id_));
+  } else if (!is_primary_tenant) {
+    need_grant = false;
+    LOG_INFO("not primary tenant, ignore", K(tenant_id_));
+  } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard))) {
+    LOG_WARN("failed to get tenant schema guard", KR(ret), K(tenant_id_));
+  } else if (OB_FAIL(ObCompatModeGetter::get_tenant_mode(tenant_id_, compat_mode))) {
+    LOG_WARN("failed to get tenant compat mode", KR(ret), K_(tenant_id));
+  } else if (lib::Worker::CompatMode::ORACLE == compat_mode) {
+    user_id = OB_ORA_SYS_USER_ID;
+    ObSysPriv *all_priv = nullptr;
+    if (OB_FAIL(schema_guard.get_sys_priv_with_grantee_id(tenant_id_, user_id, all_priv))) {
+      LOG_WARN("failed to get sys priv", KR(ret), K(tenant_id_), K(user_id));
+    } else if (OB_ISNULL(all_priv)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sys priv is null", KR(ret), K(tenant_id_), K(user_id));
+    } else if (OB_PRIV_ALL == (all_priv->get_priv_set() & OB_PRIV_ALL)) {
+      need_grant = false;
+      LOG_INFO("don't need grant", K(ret), K(tenant_id_), K(user_id));
+    } else if (OB_FAIL(grant_all_sql.append("grant all privileges to sys"))) {
+      LOG_WARN("fail to gen oracle grant sql", K(ret), K(tenant_id_));
+    } else if (OB_FAIL(oracle_sql_proxy_->write(tenant_id_, grant_all_sql.ptr(), affected_rows))) {
+      LOG_WARN("fail to write sql", KR(ret), K_(tenant_id), K(grant_all_sql));
+    }
+  } else if (lib::Worker::CompatMode::MYSQL == compat_mode) {
+    user_id = OB_SYS_USER_ID;
+    const ObUserInfo *user_info = nullptr;
+    if (OB_FAIL(schema_guard.get_user_info(tenant_id_, user_id, user_info))) {
+      LOG_WARN("fail to get user info", K(ret));
+    } else if (OB_ISNULL(user_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("user info is null", KR(ret), K(tenant_id_), K(user_id));
+    } else if (OB_PRIV_ALL == (user_info->get_priv_set() & OB_PRIV_ALL)) {
+      need_grant = false;
+      LOG_INFO("don't need grant", K(ret), K(tenant_id_), K(user_id));
+    } else if (OB_FAIL(grant_all_sql.append("grant all on *.* to root with grant option"))) {
+      LOG_WARN("fail to gen mysql grant sql", K(ret), K(tenant_id_));
+    } else if (OB_FAIL(sql_proxy_->write(tenant_id_, grant_all_sql.ptr(), affected_rows))) {
+      LOG_WARN("failed to write sql", K(ret), K(tenant_id_), K(grant_all_sql));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid compat_mode", K(ret), K(tenant_id_), K(compat_mode));
+  }
+
+  if (OB_FAIL(ret)) {
+    LOG_WARN("[UPGRADE] finish upgrade for add sys failed", KR(ret), K_(tenant_id), K(user_id), K(need_grant), K(is_primary_tenant));
+  } else {
+    LOG_INFO("[UPGRADE] finish upgrade for add sys succeed", K_(tenant_id), K(user_id), K(need_grant), K(is_primary_tenant));
+  }
   return ret;
 }
 
@@ -1867,6 +1961,98 @@ int ObUpgradeFor4352Processor::post_upgrade_for_dynamic_partition()
   return ret;
 }
 /* =========== 4352 upgrade processor end ============= */
+
+/* =========== 4410 upgrade processor start ============= */
+int ObUpgradeFor4410Processor::post_upgrade()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(post_upgrade_for_scheduled_trigger_partition_balance())) {
+    LOG_WARN("post for upgrade scheduled trigger partition balance failed", KR(ret));
+  } else if (OB_FAIL(post_upgrade_for_scheduled_trigger_dump_data_dict())) {
+    LOG_WARN("fail to post upgrade for scheduled trigger dump data dict", KR(ret));
+  }
+  return ret;
+}
+
+// The tenant upgraded from old version still relies on partition_balance_schedule_interval.
+// SCHEDULED_TRIGGER_PARTITION_BALANCE is disabled.
+int ObUpgradeFor4410Processor::post_upgrade_for_scheduled_trigger_partition_balance()
+{
+  int ret = OB_SUCCESS;
+  bool is_primary_tenant= false;
+  ObSchemaGetterGuard schema_guard;
+  const ObSysVariableSchema *sys_variable_schema = NULL;
+  if (OB_ISNULL(sql_proxy_) || OB_ISNULL(schema_service_) || !is_valid_tenant_id(tenant_id_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", KR(ret), KP(sql_proxy_), KP(schema_service_), K(tenant_id_));
+  } else if (!is_user_tenant(tenant_id_)) {
+    LOG_INFO("not user tenant, ignore", K(tenant_id_));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::is_primary_tenant(sql_proxy_, tenant_id_, is_primary_tenant))) {
+    LOG_WARN("check is standby tenant failed", KR(ret), K(tenant_id_));
+  } else if (!is_primary_tenant) {
+    LOG_INFO("not primary tenant, ignore", K(tenant_id_));
+  } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard))) {
+    LOG_WARN("failed to get tenant schema guard", KR(ret), K(tenant_id_));
+  } else if (OB_FAIL(schema_guard.get_sys_variable_schema(tenant_id_, sys_variable_schema))) {
+    LOG_WARN("get sys variable schema failed", KR(ret), K(tenant_id_));
+  } else if (OB_ISNULL(sys_variable_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sys variable schema is null", KR(ret));
+  } else {
+    START_TRANSACTION(sql_proxy_, tenant_id_);
+    if (FAILEDx(ObScheduledTriggerPartitionBalance::create_scheduled_trigger_partition_balance_job(
+        *sys_variable_schema,
+        tenant_id_,
+        false/*is_enabled*/,
+        trans))) { // insert ignore
+      LOG_WARN("create scheduled trigger partition balance job failed", KR(ret), K(tenant_id_));
+    }
+    END_TRANSACTION(trans);
+    LOG_INFO("post upgrade for scheduled_trigger_partition_balance finished", KR(ret), K(tenant_id_));
+  }
+  return ret;
+}
+
+int ObUpgradeFor4410Processor::post_upgrade_for_scheduled_trigger_dump_data_dict()
+{
+  int ret = OB_SUCCESS;
+  bool is_primary_tenant= false;
+  ObSchemaGetterGuard schema_guard;
+  const ObSysVariableSchema *sys_variable_schema = NULL;
+  if (OB_ISNULL(sql_proxy_) || OB_ISNULL(schema_service_) || !is_valid_tenant_id(tenant_id_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", KR(ret), KP(sql_proxy_), KP(schema_service_), K(tenant_id_));
+  } else if (!is_user_tenant(tenant_id_)) {
+    LOG_INFO("not user tenant, ignore", K(tenant_id_));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::is_primary_tenant(sql_proxy_, tenant_id_, is_primary_tenant))) {
+    LOG_WARN("check is standby tenant failed", KR(ret), K(tenant_id_));
+  } else if (!is_primary_tenant) {
+    LOG_INFO("not primary tenant, ignore", K(tenant_id_));
+  } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard))) {
+    LOG_WARN("failed to get tenant schema guard", KR(ret), K(tenant_id_));
+  } else if (OB_FAIL(schema_guard.get_sys_variable_schema(tenant_id_, sys_variable_schema))) {
+    LOG_WARN("get sys variable schema failed", KR(ret), K(tenant_id_));
+  } else if (OB_ISNULL(sys_variable_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sys variable schema is null", KR(ret));
+  } else {
+    START_TRANSACTION(sql_proxy_, tenant_id_);
+    if (FAILEDx(datadict::ObDataDictScheduler::create_scheduled_trigger_dump_data_dict_job(
+        *sys_variable_schema,
+        tenant_id_,
+        true/*is_enabled*/,
+        trans))) { // insert ignore
+      LOG_WARN("create scheduled trigger dump_data_dict job failed", KR(ret), K(tenant_id_));
+    }
+    END_TRANSACTION(trans);
+    LOG_INFO("post upgrade for create_scheduled_trigger_dump_data_dict_job finished", KR(ret), K(tenant_id_));
+  }
+  return ret;
+}
+
+/* =========== 4410 upgrade processor end ============= */
 
 } // end share
 } // end oceanbase

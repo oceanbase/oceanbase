@@ -274,7 +274,7 @@ int ObRoleChangeService::push_event_into_queue_(const RoleChangeEvent &event)
       if (palf_reach_time_interval(1 * 1000 * 1000, warn_time)) {
         CLOG_LOG(WARN, "allocate memory failed", K(ret), K(event));
       }
-      usleep(1 * 1000);
+      ob_usleep(1 * 1000);
     } else {
       ret = OB_SUCCESS;
     }
@@ -590,6 +590,15 @@ int ObRoleChangeService::switch_follower_to_leader_(
     } else {
       CLOG_LOG(WARN, "wait_replay_service_replay_done_ failed", K(ret), K(end_lsn));
     }
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (FALSE_IT(time_guard.click("ls->notify_switch_to_leader_and_wait_replace_complete"))
+      || OB_FAIL(ls->notify_switch_to_leader_and_wait_replace_complete(new_proposal_id))) {
+    if (need_retry_submit_role_change_event_(ret)) {
+      retry_ctx.set_retry_reason(RetrySubmitRoleChangeEventReason::WAIT_REPLACE_DONE_TIMEOUT);
+    } else {
+      CLOG_LOG(WARN, "notify_switch_to_leader_and_wait_replace_complete failed", K(ret), K(new_proposal_id));
+    }
+#endif
   } else if (FALSE_IT(time_guard.click("apply_service->switch_to_leader"))
       || OB_FAIL(apply_service_->switch_to_leader(ls_id, new_proposal_id))) {
     CLOG_LOG(WARN, "apply_service_ switch_to_leader failed", K(ret), K(new_role), K(new_proposal_id));
@@ -1013,7 +1022,7 @@ bool ObRoleChangeService::is_raw_write_or_flashback_mode(const AccessMode &mode)
 bool ObRoleChangeService::need_retry_submit_role_change_event_(int ret) const
 {
   bool bool_ret = false;
-  if (OB_TIMEOUT == ret) {
+  if (OB_TIMEOUT == ret || OB_WAIT_LS_REPLACE_COMPLETE_TIMEOUT == ret) {
     bool_ret = true;
   }
   return bool_ret;

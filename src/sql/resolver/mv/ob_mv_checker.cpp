@@ -300,9 +300,14 @@ int ObMVChecker::check_mv_dependency_mlog_tables(const ObSelectStmt &stmt, bool 
                                      table_schema->get_table_name());
         LOG_WARN("fail to get mlog schema", K(table_schema->get_table_name()));
         ret = OB_SUCCESS;
-      } else if (OB_FAIL(check_mlog_table_valid(table_schema, stmt.get_column_items(), *mlog_schema, is_valid))) {
+      } else if (OB_FAIL(check_mlog_table_valid(table_schema,
+                                                stmt.get_column_items(),
+                                                *mlog_schema,
+                                                sql_schema_guard->get_schema_guard(),
+                                                is_valid))) {
         LOG_WARN("failed to get and check mlog table", K(ret));
       } else if (!is_valid) {
+        // do nothing
       } else if (OB_FAIL(mlog_tables_.push_back(std::make_pair(table, mlog_schema)))) {
         LOG_WARN("failed to push back", K(ret));
       }
@@ -315,18 +320,22 @@ int ObMVChecker::check_mv_dependency_mlog_tables(const ObSelectStmt &stmt, bool 
 bool ObMVChecker::check_mlog_table_valid(const share::schema::ObTableSchema *table_schema,
                                          const ObIArray<ColumnItem> &columns,
                                          const share::schema::ObTableSchema &mlog_schema,
+                                         ObSchemaGetterGuard *schema_guard,
                                          bool &is_valid)
 {
   int ret = OB_SUCCESS;
   is_valid = true;
   uint64_t mlog_cid = OB_INVALID_ID;
+  bool has_pk = false;
   ObSEArray<uint64_t, 4> unique_col_ids;
-  if (OB_ISNULL(table_schema)) {
+  if (OB_ISNULL(table_schema) || OB_ISNULL(schema_guard)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret), K(table_schema));
-  } else if (table_schema->is_table_with_pk()) {
-    if (OB_FAIL(table_schema->get_rowkey_column_ids(unique_col_ids))) {
-      LOG_WARN("failed to get rowkey column ids", KR(ret));
+    LOG_WARN("get unexpected null", K(ret), K(table_schema), K(schema_guard));
+  } else if (OB_FAIL(table_schema->is_table_with_logic_pk(*schema_guard, has_pk))) {
+    LOG_WARN("failed to check table with logic pk", K(ret));
+  } else if (has_pk) {
+    if (OB_FAIL(table_schema->get_logic_pk_column_ids(schema_guard, unique_col_ids))) {
+      LOG_WARN("failed to get rowkey column ids", K(ret));
     }
   } else if (table_schema->get_partition_key_info().is_valid() &&
              OB_FAIL(table_schema->get_partition_key_info().get_column_ids(unique_col_ids))) {
@@ -335,11 +344,11 @@ bool ObMVChecker::check_mlog_table_valid(const share::schema::ObTableSchema *tab
              OB_FAIL(table_schema->get_subpartition_key_info().get_column_ids(unique_col_ids))) {
     LOG_WARN("failed to add subpart column ids", K(ret));
   }
-
   for (int i = 0; is_valid && OB_SUCC(ret) && i < unique_col_ids.count(); ++i) {
-    // todo wait for yuya
-    //mlog_cid = ObTableSchema::gen_mlog_col_id_from_ref_col_id(unique_col_ids.at(i));
     is_valid = NULL != mlog_schema.get_column_schema(unique_col_ids.at(i));
+    if (!is_valid) {
+      fast_refreshable_error_.assign_fmt("all primary keys and partition keys of table %s are required in the corresponding mlog table", table_schema->get_table_name());
+    }
     LOG_DEBUG("check mlog_table column is valid", K(is_valid), K(i), K(mlog_cid), K(columns));
   }
   for (int i = 0; is_valid && OB_SUCC(ret) && i < columns.count(); ++i) {
@@ -347,7 +356,7 @@ bool ObMVChecker::check_mlog_table_valid(const share::schema::ObTableSchema *tab
       mlog_cid = ObTableSchema::gen_mlog_col_id_from_ref_col_id(columns.at(i).base_cid_);
       is_valid = NULL != mlog_schema.get_column_schema(mlog_cid);
       if (!is_valid) {
-        fast_refreshable_error_.assign_fmt("column %s of table %s used in mv is required in the coresponding mlog table", columns.at(i).column_name_.ptr(), table_schema->get_table_name());
+        fast_refreshable_error_.assign_fmt("column %s of table %s used in mv is required in the corresponding mlog table", columns.at(i).column_name_.ptr(), table_schema->get_table_name());
       }
       LOG_DEBUG("check mlog_table column is valid", K(is_valid), K(i), K(mlog_cid), K(columns));
     }
@@ -796,58 +805,58 @@ int ObMVChecker::check_select_contains_all_tables_primary_key(const ObSelectStmt
                                                               bool &contain_all_rowkey)
 {
   int ret = OB_SUCCESS;
-  contain_all_rowkey = false;
-  all_table_exists_rowkey = false;
-  if (OB_ISNULL(stmt.get_query_ctx())) {
+  ObQueryCtx *query_ctx = NULL;
+  ObSchemaGetterGuard *schema_guard = NULL;
+  ObSEArray<uint64_t, 8> pk_ids;
+  ObSEArray<uint64_t, 8> col_ids_in_select;
+  all_table_exists_rowkey = true;
+  contain_all_rowkey = true;
+  if (OB_ISNULL(query_ctx = stmt.get_query_ctx())
+      || OB_ISNULL(schema_guard = query_ctx->sql_schema_guard_.get_schema_guard())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret), K(stmt.get_query_ctx()));
-  } else {
-    contain_all_rowkey = true;
-    all_table_exists_rowkey = true;
-    int64_t all_rowkey_size = 0;
-    ObSEArray<const ObRawExpr*, 8> rowkeys;
-    ObSqlSchemaGuard &sql_schema_guard = stmt.get_query_ctx()->sql_schema_guard_;
-    for (int64_t i = 0; all_table_exists_rowkey && OB_SUCC(ret) && i < stmt.get_table_items().count(); ++i) {
-      TableItem *table_item = NULL;
-      const ObTableSchema *table_schema = NULL;
-      if (OB_ISNULL(table_item = stmt.get_table_items().at(i))
-          || OB_UNLIKELY(!table_item->is_basic_table())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected table", K(ret), K(i), KPC(table_item));
-      } else if (OB_FAIL(sql_schema_guard.get_table_schema(table_item->ref_id_, table_schema))) {
-        LOG_WARN("table schema not found", K(table_schema));
-      } else if (OB_ISNULL(table_schema)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get invalid table schema", K(ret), K(table_schema));
-      } else if (table_schema->is_table_without_pk()) {
-        all_table_exists_rowkey = false;
-      } else {
-        all_rowkey_size += table_schema->get_rowkey_info().get_size();
-      }
-    }
-
-    for (int64_t i = 0; all_table_exists_rowkey &&OB_SUCC(ret) && i < stmt.get_select_items().count(); ++i) {
-      const ObRawExpr *expr = NULL;
-      int64_t idx = OB_INVALID_INDEX;
-      if (OB_ISNULL(expr = stmt.get_select_items().at(i).expr_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null", K(ret), K(i), K(stmt.get_select_items()));
-      } else if (!expr->is_column_ref_expr() || !static_cast<const ObColumnRefRawExpr*>(expr)->is_rowkey_column()) {
-        /* do nothing */
-      } else if (OB_FAIL(add_var_to_array_no_dup(rowkeys, expr, &idx))) {
-        LOG_WARN("failed to add_var to array no dup", K(ret));
-      }
-    }
-
-    if (OB_FAIL(ret) || !all_table_exists_rowkey) {
-      contain_all_rowkey = false;
-    } else if (all_rowkey_size > rowkeys.count()) {
-      contain_all_rowkey = false;
-    } else if (OB_UNLIKELY(rowkeys.count() != all_rowkey_size)) {
+    LOG_WARN("get unexpected null", K(ret), K(query_ctx), K(schema_guard));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && all_table_exists_rowkey && i < stmt.get_table_size(); ++i) {
+    const TableItem *table_item = NULL;
+    const ObTableSchema *table_schema = NULL;
+    bool has_pk = false;
+    pk_ids.reuse();
+    col_ids_in_select.reuse();
+    if (OB_ISNULL(table_item = stmt.get_table_item(i))
+        || OB_UNLIKELY(!table_item->is_basic_table())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected rowkey size", K(ret), K(all_rowkey_size), K(rowkeys.count()), K(rowkeys));
+      LOG_WARN("unexpected table", K(ret), K(i), KPC(table_item));
+    } else if (OB_FAIL(query_ctx->sql_schema_guard_.get_table_schema(table_item->ref_id_, table_schema))) {
+      LOG_WARN("table schema not found", K(ret), KPC(table_item));
+    } else if (OB_ISNULL(table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get invalid table schema", K(ret), K(table_schema));
+    } else if (OB_FAIL(table_schema->is_table_with_logic_pk(*schema_guard, has_pk))) {
+      LOG_WARN("failed to check table with logic pk", K(ret), KPC(table_schema));
+    } else if (!has_pk) {
+      all_table_exists_rowkey = false;
+      contain_all_rowkey = false;
+    } else if (!contain_all_rowkey) {
+      // do nothing
+    } else if (OB_FAIL(table_schema->get_logic_pk_column_ids(schema_guard, pk_ids))) {
+      LOG_WARN("failed to get table logic pk", K(ret), KPC(table_schema));
     } else {
-      contain_all_rowkey = true;
+      for (int64_t j = 0; OB_SUCC(ret) && j < stmt.get_select_item_size(); ++j) {
+        const ObRawExpr *expr = NULL;
+        if (OB_ISNULL(expr = stmt.get_select_item(j).expr_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret), K(j), K(stmt.get_select_item(j)));
+        } else if (expr->is_column_ref_expr()) {
+          const ObColumnRefRawExpr *col_expr = static_cast<const ObColumnRefRawExpr *>(expr);
+          if (col_expr->get_table_id() == table_item->table_id_
+              && OB_FAIL(col_ids_in_select.push_back(col_expr->get_column_id()))) {
+            LOG_WARN("failed to push back column id", K(ret), KPC(col_expr));
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        contain_all_rowkey &= ObOptimizerUtil::is_subset(pk_ids, col_ids_in_select);
+      }
     }
   }
   return ret;

@@ -49,7 +49,7 @@ public:
   INHERIT_TO_STRING_KV("ObIDag", ObIDag, K_(ddl_param));
 public:
   virtual bool operator == (const ObIDag &other) const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
 
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
@@ -130,6 +130,7 @@ public:
       const uint64_t data_format_version,
       const blocksstable::ObSSTable *first_ddl_sstable,
       const ObStorageSchema *storage_schema,
+      const share::SCN &reorganization_scn,
       blocksstable::ObWholeDataStoreDesc &data_desc);
 
   static int get_compact_meta_array(

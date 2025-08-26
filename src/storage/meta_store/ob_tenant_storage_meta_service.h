@@ -42,7 +42,7 @@ public:
 
   // for slog & checkpoint operation
   int get_meta_block_list(ObIArray<blocksstable::MacroBlockId> &meta_block_list);
-  int write_checkpoint(bool is_force);
+  int write_checkpoint(const ObTenantSlogCheckpointWorkflow::Type ckpt_type);
   storage::ObStorageLogger &get_slogger() { return slogger_; }
   const ObTenantCheckpointSlogHandler& get_ckpt_slog_hdl() const { return ckpt_slog_handler_; };
 
@@ -73,6 +73,7 @@ public:
       const ObIArray<common::ObTabletID> &tablet_id_arr,
       const ObIArray<ObMetaDiskAddr> &tablet_addr_arr);
   int write_empty_shell_tablet(
+      const uint64_t data_version,
       const int64_t ls_epoch,
       ObTablet *tablet,
       ObMetaDiskAddr &tablet_addr);
@@ -107,18 +108,20 @@ public:
       common::ObArenaAllocator &allocator,
       char *&buf,
       int64_t &buf_len);
-  int update_tenant_preallocated_seqs(const ObTenantMonotonicIncSeqs &preallocated_seqs);
   ObSharedObjectReaderWriter &get_shared_object_reader_writer() { return shared_object_rwriter_; }
   ObSharedObjectReaderWriter &get_shared_object_raw_reader_writer() { return shared_object_raw_rwriter_; }
+  int update_hidden_sys_tenant_super_block_to_real(omt::ObTenant &sys_tenant);
+  int update_real_sys_tenant_super_block_to_hidden(omt::ObTenant &sys_tenant);
 
 #ifdef OB_BUILD_SHARED_STORAGE
   // for shared storage gc operation
-  int get_private_blocks_for_tablet(
+  int get_blocks_from_private_tablet_meta(
       const share::ObLSID &id,
       const int64_t ls_epoch,
       const ObTabletID &tablet_id,
       const int64_t tablet_version,
       const int64_t tablet_transfer_seq,
+      const bool is_shared,
       ObIArray<blocksstable::MacroBlockId> &block_ids);
   int get_shared_blocks_for_tablet(
       const ObTabletID &tablet_id,
@@ -233,7 +236,8 @@ private:
   int safe_batch_write_remove_tablet_slog_for_ss(
       const ObLSID &ls_id,
       const int64_t ls_epoch,
-      const common::ObIArray<TabletInfo> &tablet_infos);
+      const common::ObIArray<TabletInfo> &tablet_infos,
+      const int64_t item_arr_expand_cnt);
   int safe_batch_write_gc_tablet_slog(
       const ObLSID &ls_id,
       const int64_t ls_epoch,

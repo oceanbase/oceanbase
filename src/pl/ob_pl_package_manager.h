@@ -63,6 +63,7 @@ class ObPLPackageState;
 class ObPLCondition;
 class ObPLCursor;
 class ObPLCacheCtx;
+class ObPLPackageGuard;
 
 struct ObSysPackageFile {
   const char *const package_name;
@@ -179,7 +180,14 @@ public:
                                 bool for_static_member = false);
 
   static int notify_package_variable_deserialize(sql::ObBasicSessionInfo *session, const ObString &name, const sql::ObSessionVariable &value);
-
+  static int get_cached_package_body_for_trigger(uint64_t tenant_id,
+                                                 uint64_t trigger_id,
+                                                 pl::ObPLPackageGuard &package_guard,
+                                                 common::ObIAllocator &allocator,
+                                                 share::schema::ObSchemaGetterGuard &schema_guard,
+                                                 sql::ObSQLSessionInfo &session_info,
+                                                 common::ObMySQLProxy &sql_proxy,
+                                                 ObPLPackage *&package_body);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPLPackageManager);
 

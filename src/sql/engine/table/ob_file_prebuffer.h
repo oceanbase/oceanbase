@@ -207,12 +207,14 @@ private:
 
 public:
   ObFilePreBuffer(ObExternalFileAccess &file_reader) :
-    alloc_(common::ObMemAttr(MTL_ID(), "PreBuffer")), options_(), timeout_ts_(INT64_MAX),
-    file_reader_(file_reader), cache_entries_(), column_range_cache_entries_()
+    alloc_(common::ObMemAttr(MTL_ID(), "PreBuffer")), options_(),
+    timeout_ts_(INT64_MAX), file_reader_(file_reader), cache_entries_(),
+    column_range_cache_entries_()
   {}
-   ObFilePreBuffer(const int64_t tenant_id, ObExternalFileAccess &file_reader) :
-    alloc_(common::ObMemAttr(tenant_id, "PreBuffer")), options_(), timeout_ts_(INT64_MAX),
-    file_reader_(file_reader), cache_entries_(), column_range_cache_entries_()
+  ObFilePreBuffer(const int64_t tenant_id, ObExternalFileAccess &file_reader) :
+    alloc_(common::ObMemAttr(tenant_id, "PreBuffer")), options_(),
+    timeout_ts_(INT64_MAX), file_reader_(file_reader), cache_entries_(),
+    column_range_cache_entries_()
   {}
   ~ObFilePreBuffer();
   int destroy();

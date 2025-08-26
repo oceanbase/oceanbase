@@ -859,6 +859,7 @@ void ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::
   is_row_lock_checked_ = false;
   need_check_prefetch_depth_ = false;
   use_multi_block_prefetch_ = false;
+  multi_block_prefetch_batch_count_ = 0;
   need_submit_io_ = true;
   cur_range_fetch_idx_ = 0;
   cur_range_prefetch_idx_ = 0;
@@ -1036,6 +1037,14 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::i
       access_ctx_->limit_param_->limit_ < 4096 &&
       access_ctx_->limit_param_->offset_ < INT32_MAX;
   use_multi_block_prefetch_ = (iter_param.get_io_read_batch_size() > 0);
+  if (use_multi_block_prefetch_) {
+    int64_t multi_block_prefetch_batch_count = iter_param.get_io_read_batch_size() / MULTI_BLOCK_PREFETCH_FAKE_BLOCK_SIZE;
+    multi_block_prefetch_batch_count = min(multi_block_prefetch_batch_count, max_micro_handle_cnt_ / 2);
+    multi_block_prefetch_batch_count = max(multi_block_prefetch_batch_count, MIN_MULTI_BLOCK_PREFETCH_BATCH_COUNT);
+    multi_block_prefetch_batch_count_ = static_cast<int16_t>(multi_block_prefetch_batch_count);
+  } else {
+    multi_block_prefetch_batch_count_ = MIN_MULTI_BLOCK_PREFETCH_BATCH_COUNT;
+  }
   switch (iter_type) {
     case ObStoreRowIterator::IteratorMultiGet:
     case ObStoreRowIterator::IteratorCOMultiGet: {
@@ -1276,8 +1285,8 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::p
     LOG_WARN("Unexpected prefetch status", K(ret), K_(cur_level), K_(index_tree_height),
              K_(micro_data_prefetch_idx), K_(cur_micro_data_fetch_idx), K_(max_micro_handle_cnt));
   } else if (micro_data_prefetch_idx_ - cur_micro_data_fetch_idx_ == max_micro_handle_cnt_ ||
-             (use_multi_block_prefetch_ && prefetch_depth_ > MIN_DATA_READ_BATCH_COUNT &&
-              (max_micro_handle_cnt_ - (micro_data_prefetch_idx_ - cur_micro_data_fetch_idx_)) < MIN_DATA_READ_BATCH_COUNT)) {
+             (use_multi_block_prefetch_ && prefetch_depth_ > multi_block_prefetch_batch_count_ &&
+              (max_micro_handle_cnt_ - (micro_data_prefetch_idx_ - cur_micro_data_fetch_idx_)) < multi_block_prefetch_batch_count_)) {
     // DataBlock ring buf full
   } else if (OB_FAIL(get_prefetch_depth(prefetch_depth))) {
     LOG_WARN("Fail to get prefetch depth", K(ret));

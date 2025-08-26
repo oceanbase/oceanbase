@@ -24,6 +24,7 @@ namespace oceanbase
 {
 namespace share
 {
+
 /**
  * --------------------------------ObGetFileIdRangeFunctor------------------------------------
  */
@@ -414,6 +415,8 @@ int ObIODeviceLocalFileOp::scan_dir(const char *dir_name, common::ObBaseDirEntry
       ret = OB_NO_SUCH_FILE_OR_DIRECTORY;
       SHARE_LOG(WARN, "dir does not exist", K(ret), K(dir_name), K(errno), KERRMSG);
     }
+  } else if (OB_FAIL(op.set_dir(dir_name))) {
+    SHARE_LOG(WARN, "fail to set dir", KR(ret), K(dir_name), K(op));
   } else {
     while (OB_SUCC(ret) && NULL != open_dir) {
       if (0 != ::readdir_r(open_dir, &entry, &result)) {
@@ -822,6 +825,8 @@ int ObIODeviceLocalFileOp::convert_sys_errno(const int error_no)
       ret = OB_EAGAIN;
       break;
     case EDQUOT:
+      ret = OB_DISK_QUOTA_EXCEEDED;
+      break;
     case ENOSPC:
       ret = OB_SERVER_OUTOF_DISK_SPACE;
       break;
@@ -936,11 +941,14 @@ int ObIODeviceLocalFileOp::check_disk_space_available(
     const int64_t free_space = std::max(0L, (int64_t)(svfs.f_bavail * svfs.f_bsize - reserved_size));
     if (data_disk_size > used_disk_size + free_space) {
       ret = OB_SERVER_OUTOF_DISK_SPACE;
+      const char *msg = (GCTX.is_shared_storage_mode()
+          ? "data file size invalid, maybe other files occupy the observer data disk space"
+          : "data file size is too large");
       if (need_report_user_error) {
-        LOG_DBA_ERROR(OB_SERVER_OUTOF_DISK_SPACE, "msg", "data file size is too large", K(ret),
+        LOG_DBA_ERROR(OB_SERVER_OUTOF_DISK_SPACE, "msg", msg, K(ret),
             K(free_space), K(reserved_size), K(used_disk_size), K(data_disk_size));
       } else {
-        LOG_DBA_WARN(OB_SERVER_OUTOF_DISK_SPACE, "msg", "data file size is too large", K(ret),
+        LOG_DBA_WARN(OB_SERVER_OUTOF_DISK_SPACE, "msg", msg, K(ret),
             K(free_space), K(reserved_size), K(used_disk_size), K(data_disk_size));
       }
     }

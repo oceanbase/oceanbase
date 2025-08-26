@@ -26,19 +26,18 @@
 #include "close_modules/shared_storage/storage/incremental/sslog/notify/ob_sslog_notify_task_queue.h"
 
 namespace oceanbase {
-// namespace sslog {
-// void *SSLogNotifyAllocator::alloc(const int64_t size) {
-//   void *ptr = std::malloc(size);// ob_malloc(size, "MDS");
-//   ATOMIC_INC(&alloc_times_);
-//   MDS_LOG(DEBUG, "alloc obj", KP(ptr), K(size), K(lbt()));
-//   return ptr;
-// }
-// void SSLogNotifyAllocator::free(void *ptr) {
-//   ATOMIC_INC(&free_times_);
-//   MDS_LOG(DEBUG, "free obj", KP(ptr), K(lbt()));
-//   std::free(ptr);// ob_free(ptr);
-// }
-// }
+namespace sslog {
+void ObSSLogNotifyTaskQueue::append_rolling(ObSSLogNotifyTask *task) {
+  ObByteLockGuard lg(lock_);
+  append_(task);
+  while (count_ * sizeof(ObSSLogNotifyTask) > sizeof(ObSSLogNotifyTask)) {
+    ObSSLogNotifyTask *head = sentinel_node_.next_;
+    head->remove_self();
+    count_--;
+    SSLogNotifyAllocator::get_instance().free(head);
+  }
+}
+}
 using namespace sslog;
 namespace unittest {
 
@@ -97,6 +96,25 @@ TEST_F(TestSSLogNotifyQueue, serialize) {
   ASSERT_EQ(ObSSLogNotifyLSKey(2, 2), ls_key);
   ASSERT_EQ(OB_SUCCESS, queue.sentinel_node_.next_->next_->next_->meta_key_.get_meta_key(ls_key));
   ASSERT_EQ(ObSSLogNotifyLSKey(3, 3), ls_key);
+}
+
+TEST_F(TestSSLogNotifyQueue, rolling) {
+  ObSSLogNotifyTaskQueue queue;
+  ObSSLogNotifyTask *task1 = (ObSSLogNotifyTask *)SSLogNotifyAllocator::get_instance().alloc(sizeof(ObSSLogNotifyTask));
+  new (task1) ObSSLogNotifyTask();
+  task1->meta_key_.set_meta_key(ObSSLogNotifyLSKey(1, 1));
+  queue.append_rolling(task1);
+  ObSSLogNotifyTask *task2 = (ObSSLogNotifyTask *)SSLogNotifyAllocator::get_instance().alloc(sizeof(ObSSLogNotifyTask));
+  new (task2) ObSSLogNotifyTask();
+  task2->meta_key_.set_meta_key(ObSSLogNotifyLSKey(1, 1));
+  queue.append_rolling(task2);
+  ASSERT_EQ(queue.count_, 1);
+}
+
+TEST_F(TestSSLogNotifyQueue, multi_destroy) {
+  ObSSLogNotifyTaskQueue queue;
+  queue.~ObSSLogNotifyTaskQueue();
+  queue.~ObSSLogNotifyTaskQueue();
 }
 
 }

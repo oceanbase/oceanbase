@@ -19,6 +19,7 @@
 #include "ob_backup_connectivity.h"
 #include "share/backup/ob_backup_connectivity.h"
 #include "share/backup/ob_tenant_archive_mgr.h"
+#include "share/ob_license_utils.h"
 
 using namespace oceanbase;
 using namespace share;
@@ -122,12 +123,15 @@ int BackupConfigItemPair::set_value(const int64_t &value)
 int ObBackupConfigParserGenerator::set(const ObBackupConfigType &type, const uint64_t tenant_id, const common::ObSqlString &value)
 {
   int ret = OB_SUCCESS;
+
   if (is_setted_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("config parser generator has been setted", K(ret));
   } else if (!type.is_valid() || !is_valid_tenant_id(tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(type), K(tenant_id));
+  } else if (type.get_type() == ObBackupConfigType::LOG_RESTORE_SOURCE && OB_FAIL(ObLicenseUtils::check_standby_allowed())) {
+    LOG_WARN("fail to check standby allowed, set log restore source is not allowed", KR(ret));
   } else if (nullptr != config_parser_) {
     config_parser_->~ObIBackupConfigItemParser();
     allocator_.free(config_parser_);
@@ -328,6 +332,14 @@ int ObBackupConfigParserMgr::init(const common::ObSqlString &name, const common:
     LOG_WARN("invalid backup config argumnet", K(ret), K(name), K(value));
   } else if (OB_FAIL(type.set_backup_config_type(name.ptr()))) {
     LOG_WARN("fail to set backup config type", K(ret), K(name));
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (GCTX.is_shared_storage_mode()
+             && (ObBackupConfigType::Type::DATA_BACKUP_DEST == type.get_type()
+                 || ObBackupConfigType::Type::LOG_ARCHIVE_DEST == type.get_type())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("set log_archive_dest/data_backup_dest in Shared-Storage mode is not supported", K(name), K(tenant_id));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "set log_archive_dest/data_backup_dest in Shared-Storage mode is ");
+#endif
   } else if (OB_FAIL(parser_generator_.set(type, tenant_id, value))) {
     LOG_WARN("fail to set backup parser generator", K(ret), K(type));
   } else if (OB_ISNULL(config_parser = parser_generator_.get_parser())) {
@@ -439,16 +451,29 @@ int ObDataBackupDestConfigParser::check_before_update_inner_config(obrpc::ObSrvR
       LOG_WARN("fail to assign backup dest", K(ret), K_(tenant_id), K_(config_items));
     } else if (OB_FAIL(ObIBackupConfigItemParser::set_default_checksum_type(backup_dest))) {
       LOG_WARN("fail to check dest checksum type", K(ret), K(backup_dest));
-    } else if (OB_FAIL(dest_mgr.init(tenant_id_, dest_type, backup_dest, trans))) {
-      LOG_WARN("fail to init dest manager", K(ret), K_(tenant_id), K(backup_dest));
-    } else if (OB_FAIL(dest_mgr.check_dest_validity(rpc_proxy, false/*need_format_file*/))) {
-      if (OB_OBJECT_STORAGE_OBJECT_LOCKED_BY_WORM == ret) {
+    } else if (OB_FAIL(dest.set(backup_dest))) {
+      LOG_WARN("fail to set backup dest", K(ret));
+    } else {
+      const char *extension = dest.get_storage_info()->get_extension();
+      char src_locality[OB_MAX_BACKUP_SRC_INFO_LENGTH] = { 0 };
+      ObBackupSrcType src_type = ObBackupSrcType::EMPTY;
+      if (OB_FAIL(ObBackupDestIOPermissionMgr::get_src_info_from_extension(ObString(extension),
+                                                    src_locality, sizeof(src_locality), src_type))) {
+        LOG_WARN("failed to get src info from extension", K(ret), K(extension));
+      } else if (ObBackupSrcType::EMPTY != src_type
+                    && OB_FAIL(ObBackupDestIOPermissionMgr::check_backup_src_info_valid(src_locality, src_type))) {
+        LOG_WARN("please check backup src info valid", K(src_locality), K(src_type));
+      } else if (OB_FAIL(dest_mgr.init(tenant_id_, dest_type, backup_dest, trans))) {
+        LOG_WARN("fail to init dest manager", K(ret), K_(tenant_id), K(backup_dest));
+      } else if (OB_FAIL(dest_mgr.check_dest_validity(rpc_proxy, false/*need_format_file*/))) {
+        if (OB_OBJECT_STORAGE_OBJECT_LOCKED_BY_WORM == ret) {
         LOG_USER_ERROR(OB_INVALID_ARGUMENT,
                           "set backup dest: parameter enable_worm=true is required for bucket with worm.");
       }
       LOG_WARN("fail to check dest validity", K(ret), K_(tenant_id), K(backup_dest));
-    } else {
-      LOG_INFO("succ to check data dest config", K_(tenant_id), K(backup_dest)); 
+      } else {
+        LOG_INFO("succ to check data dest config", K_(tenant_id), K(backup_dest));
+      }
     }
   }
   return ret;
@@ -459,6 +484,7 @@ int ObDataBackupDestConfigParser::update_data_backup_dest_config_(common::ObISQL
   int ret = OB_SUCCESS;
   share::ObBackupHelper helper;
   share::ObBackupDest dest;
+  ObBackupDestIOPermissionMgr *dest_io_permission_mgr = nullptr;
   char backup_dest_str[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
   if (!type_.is_valid() || 1 != config_items_.count() ) {
     ret = OB_INVALID_ARGUMENT;
@@ -470,8 +496,14 @@ int ObDataBackupDestConfigParser::update_data_backup_dest_config_(common::ObISQL
       LOG_WARN("fail to get_backup_dest_str", K(ret), K(dest));
     }
   }
-  
+  //Locality info is only displayed in the __all_backup_storage_info table.
+  //Delete locality info in backup dest str before updating the __all_backup_dest_parameter table.
   if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(dest_io_permission_mgr = MTL(ObBackupDestIOPermissionMgr*))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("MTL ObBackupDestIOPermissionMgr is null", K(ret));
+  } else if (OB_FAIL(dest_io_permission_mgr->delete_locality_info_in_backup_dest_str(backup_dest_str))) {
+    LOG_WARN("failed to delete locality info in backup dest str", K(ret), K(backup_dest_str));
   } else if (OB_FAIL(helper.init(tenant_id_, trans))) {
     LOG_WARN("fail to init backup help", K(ret), K(tenant_id_), K(dest));
   } else if (OB_FAIL(helper.set_backup_dest(backup_dest_str))) {
@@ -660,7 +692,16 @@ int ObLogArchiveDestConfigParser::check_before_update_inner_config(obrpc::ObSrvR
   } else {
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
     const int64_t lag_target = tenant_config.is_valid() ? tenant_config->archive_lag_target : 0L;
-    if (backup_dest.is_storage_type_s3() && MIN_LAG_TARGET_FOR_S3 > lag_target) {
+    const char *extension = backup_dest.get_storage_info()->get_extension();
+    char src_locality[OB_MAX_BACKUP_SRC_INFO_LENGTH] = { 0 };
+    ObBackupSrcType src_type = ObBackupSrcType::EMPTY;
+    if (OB_FAIL(ObBackupDestIOPermissionMgr::get_src_info_from_extension(ObString(extension),
+                                                    src_locality, sizeof(src_locality), src_type))) {
+      LOG_WARN("failed to get src info from extension", K(ret), K(extension));
+    } else if (ObBackupSrcType::EMPTY != src_type
+                  && OB_FAIL(ObBackupDestIOPermissionMgr::check_backup_src_info_valid(src_locality, src_type))) {
+      LOG_WARN("please check backup src info valid", K(src_locality), K(src_type));
+    } else if (backup_dest.is_storage_type_s3() && MIN_LAG_TARGET_FOR_S3 > lag_target) {
       ret = OB_OP_NOT_ALLOW;
       LOG_USER_ERROR(OB_OP_NOT_ALLOW, "archive_lag_target is smaller than 60s, set log_archive_dest to S3 is");
     } else if (OB_FAIL(dest_mgr.init(tenant_id_, dest_type, backup_dest_, trans))) {
@@ -705,10 +746,6 @@ int ObLogArchiveDestConfigParser::do_parse_sub_config_(const common::ObString &c
     } else if (0 == STRCASECMP(token, OB_STR_PIECE_SWITCH_INTERVAL)) {
       if (OB_FAIL(do_parse_piece_switch_interval_(token, saveptr))) {
         LOG_WARN("fail to do parse piece switch interval", K(ret), K(token), K(saveptr));
-      }
-    } else if (0 == STRCASECMP(token, OB_STR_COMPRESSION)) {
-      if (OB_FAIL(do_parse_compression_(token, saveptr))) {
-        LOG_WARN("fail to do parse compression", K(ret), K(token), K(saveptr));
       }
     } else {
       ret = OB_NOT_SUPPORTED;
@@ -785,7 +822,6 @@ int ObLogArchiveDestConfigParser::do_parse_compression_(const common::ObString &
       LOG_WARN("fail to push back pair", K(ret), K(pair));
     }
   } else {
-  // TODO(zeyong): when log archive support compression, remove this in 4.3
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("compression not support value", K(ret), K(value));
   }
@@ -892,28 +928,31 @@ int ObIBackupConfigItemParser::set_default_checksum_type(ObBackupDest &backup_de
   return ret;
 }
 
-ChangeExternalStorageDestMgr::ChangeExternalStorageDestMgr()
+ObChangeExternalStorageDestMgr::ObChangeExternalStorageDestMgr()
   : is_inited_(false),
     tenant_id_(OB_INVALID_TENANT_ID),
     dest_id_(OB_INVALID_DEST_ID),
     dest_type_(ObBackupDestType::TYPE::DEST_TYPE_MAX),
     sql_proxy_(NULL),
-    backup_dest_()
-
+    backup_dest_(),
+    change_option_(),
+    change_access_info_(false)
 {
 }
 
-void ChangeExternalStorageDestMgr::reset()
+void ObChangeExternalStorageDestMgr::reset()
 {
   is_inited_ = false;
   tenant_id_ = OB_INVALID_TENANT_ID;
   dest_id_ = OB_INVALID_DEST_ID;
   dest_type_ = ObBackupDestType::TYPE::DEST_TYPE_MAX;
-  backup_dest_.reset();
   sql_proxy_ = NULL;
+  backup_dest_.reset();
+  change_option_.reset();
+  change_access_info_ = false;
 }
 
-int ChangeExternalStorageDestMgr::init(
+int ObChangeExternalStorageDestMgr::init(
     const uint64_t tenant_id,
     const common::ObFixedLengthString<common::OB_MAX_CONFIG_VALUE_LEN> &path,
     common::ObISQLClient &sql_proxy)
@@ -943,6 +982,8 @@ int ChangeExternalStorageDestMgr::init(
   } else {
     tenant_id_ = tenant_id;
     sql_proxy_ = &sql_proxy;
+    change_option_.reset();
+    change_access_info_ = false;
     is_inited_ = true;
   }
 
@@ -950,7 +991,7 @@ int ChangeExternalStorageDestMgr::init(
 }
 
 //Updates backup_dest_ with new access_id and access_key, and validates the access permissions of new ak&sk.
-int ChangeExternalStorageDestMgr::update_and_validate_authorization(const char *access_id, const char *access_key)
+int ObChangeExternalStorageDestMgr::update_and_validate_authorization(const char *access_id, const char *access_key)
 {
   int ret = OB_SUCCESS;
   ObBackupDestMgr dest_mgr;
@@ -959,7 +1000,7 @@ int ChangeExternalStorageDestMgr::update_and_validate_authorization(const char *
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    LOG_WARN("ChangeExternalStorageDestMgr not init", K(ret));
+    LOG_WARN("ObChangeExternalStorageDestMgr not init", K(ret));
   } else if (OB_ISNULL(rpc_proxy = GCTX.srv_rpc_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("rpc_proxy should not be NULL", K(ret), KP(rpc_proxy));
@@ -979,7 +1020,7 @@ int ChangeExternalStorageDestMgr::update_and_validate_authorization(const char *
 }
 
 //updates dest attr in __all_backup_parameter_table, __all_log_archive_dest_parameter and __all_backup_storage_info.
-int ChangeExternalStorageDestMgr::update_backup_dest_authorization_(const char *access_id, const char *access_key)
+int ObChangeExternalStorageDestMgr::update_backup_dest_authorization_(const char *access_id, const char *access_key)
 {
   int ret = OB_SUCCESS;
 
@@ -1005,7 +1046,7 @@ int ChangeExternalStorageDestMgr::update_backup_dest_authorization_(const char *
   return ret;
 }
 
-int ChangeExternalStorageDestMgr::update_backup_parameter_(common::ObISQLClient &trans)
+int ObChangeExternalStorageDestMgr::update_backup_parameter_(common::ObISQLClient &trans)
 {
   int ret = OB_SUCCESS;
   ObBackupHelper backup_helper;
@@ -1036,7 +1077,7 @@ int ChangeExternalStorageDestMgr::update_backup_parameter_(common::ObISQLClient 
   return ret;
 }
 
-int ChangeExternalStorageDestMgr::update_archive_parameter_(common::ObISQLClient &trans)
+int ObChangeExternalStorageDestMgr::update_archive_parameter_(common::ObISQLClient &trans)
 {
   int ret = OB_SUCCESS;
   ObArchivePersistHelper archive_helper;
@@ -1067,12 +1108,12 @@ int ChangeExternalStorageDestMgr::update_archive_parameter_(common::ObISQLClient
   return ret;
 }
 
-int ChangeExternalStorageDestMgr::update_inner_table_authorization(common::ObISQLClient &trans)
+int ObChangeExternalStorageDestMgr::update_inner_table_authorization(common::ObISQLClient &trans)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    LOG_WARN("ChangeExternalStorageDestMgr not init", K(ret));
+    LOG_WARN("ObChangeExternalStorageDestMgr not init", K(ret));
   } else if (!backup_dest_.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("backup dest is not valid", K(ret), K(backup_dest_));
@@ -1087,5 +1128,80 @@ int ChangeExternalStorageDestMgr::update_inner_table_authorization(common::ObISQ
       LOG_WARN("failed to update log archive dest table", K(ret), K(tenant_id_), K(backup_dest_));
     }
   }
+  return ret;
+}
+
+int ObChangeExternalStorageDestMgr::set_authorization(const common::ObString &access_info)
+{
+  int ret = OB_SUCCESS;
+  ObBackupDestAttribute access_info_option;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObChangeExternalStorageDestMgr not init", K(ret));
+  } else if (access_info.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("access_info is empty", K(ret));
+  } else if (OB_FAIL(ObBackupDestAttributeParser::parse_access_info(access_info, access_info_option))) {
+    LOG_WARN("failed to parse access_info", K(ret), K(access_info));
+  } else if (OB_FAIL(update_and_validate_authorization(
+                    access_info_option.access_id_, access_info_option.access_key_))) {
+    LOG_WARN("failed to reset access id and access key", K(ret), K(access_info_option));
+  } else {
+    change_access_info_ = true;
+  }
+
+  return ret;
+}
+
+int ObChangeExternalStorageDestMgr::change_external_storage_dest()
+{
+  int ret = OB_SUCCESS;
+  ObMySQLTransaction trans;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObChangeExternalStorageDestMgr not init", KR(ret));
+  } else if (OB_FAIL(trans.start(sql_proxy_, gen_meta_tenant_id(tenant_id_)))) {
+    LOG_WARN("failed to start trans", KR(ret), K_(tenant_id));
+  } else if (change_access_info_ && OB_FAIL(update_inner_table_authorization(trans))) {
+    LOG_WARN("failed to update inner table authorization", KR(ret), K_(tenant_id));
+  } else if (change_option_.change_qosattr()) {
+    if (OB_FAIL(ObBackupStorageInfoOperator::update_backup_dest_attribute(trans, tenant_id_, backup_dest_,
+                                                    change_option_.max_iops_, change_option_.max_bandwidth_))) {
+      LOG_WARN("failed to update backup dest attribute", KR(ret), K_(tenant_id));
+    }
+  }
+
+  if (OB_SUCC(ret) && change_option_.change_src_info()) {
+    if (OB_FAIL(ObBackupChangeExternalStorageDestUtil::change_src_info(trans, gen_user_tenant_id(tenant_id_),
+                                                                          change_option_, backup_dest_))) {
+      LOG_WARN("failed to change src info", KR(ret), K_(tenant_id));
+    }
+  }
+
+  if (trans.is_started()) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(trans.end(OB_SUCC(ret)))) {
+      LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(tmp_ret));
+      ret = COVER_SUCC(tmp_ret);
+    }
+  }
+  return ret;
+}
+
+int ObChangeExternalStorageDestMgr::set_attribute(const common::ObString &attribute)
+{
+  int ret = OB_SUCCESS;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObChangeExternalStorageDestMgr not init", K(ret));
+  } else if (attribute.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("attribute is empty", K(ret));
+  } else if (OB_FAIL(ObBackupDestAttributeParser::parse(attribute, change_option_))) {
+    LOG_WARN("failed to parse attribute", K(ret), K(attribute));
+  }
+
   return ret;
 }

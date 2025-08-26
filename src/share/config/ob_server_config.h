@@ -32,6 +32,7 @@ const char* const __MIN_FULL_RESOURCE_POOL_MEMORY = "__min_full_resource_pool_me
 const char* const SERVER_BALANCE_CRITICAL_DISK_WATERLEVEL = "server_balance_critical_disk_waterlevel";
 const char* const ENABLE_REBALANCE = "enable_rebalance";
 const char* const ENABLE_REREPLICATION = "enable_rereplication";
+const char* const ENABLE_DATABASE_SHARDING_NONE = "enable_database_sharding_none";
 const char* const MERGER_CHECK_INTERVAL = "merger_check_interval";
 const char* const ENABLE_MAJOR_FREEZE = "enable_major_freeze";
 const char* const ENABLE_DDL = "enable_ddl";
@@ -72,7 +73,9 @@ const char* const LOG_DISK_THROTTLING_PERCENTAGE = "log_disk_throttling_percenta
 const char* const ARCHIVE_LAG_TARGET = "archive_lag_target";
 const char* const OB_VECTOR_MEMORY_LIMIT_PERCENTAGE = "ob_vector_memory_limit_percentage";
 const char* const _TRANSFER_TASK_TABLET_COUNT_THRESHOLD = "_transfer_task_tablet_count_threshold";
-const char* const DEFAULT_TABLE_ORAGNIZATION = "default_table_organization";
+const char* const DEFAULT_TABLE_ORGANIZATION = "default_table_organization";
+const char* const LOGSERVICE_ACCESS_POINT = "logservice_access_point";
+const char* const DEFAULT_TABLE_STORE_FORMAT = "default_table_store_format";
 
 class ObServerMemoryConfig;
 

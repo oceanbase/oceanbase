@@ -86,7 +86,7 @@ int ObInsertResolver::resolve(const ParseNode &parse_tree)
 
   // resolve outline data hints first
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(resolve_outline_data_hints())) {
+    if (OB_FAIL(pre_process_hints(parse_tree))) {
       LOG_WARN("resolve outline data hints failed", K(ret));
     } else if (OB_FAIL(resolve_hints(parse_tree.children_[HINT_NODE]))) {
       LOG_WARN("failed to resolve hints", K(ret));
@@ -275,46 +275,42 @@ int ObInsertResolver::add_column_conv_for_diagnosis(ObInsertStmt *insert_stmt,
     is_diagnosis = session_info_->is_diagnosis_enabled();
   }
 
-  if (OB_SUCC(ret)) {
-    if (is_diagnosis) {
-      if (OB_ISNULL(select_stmt)) {
+  if (OB_SUCC(ret) && is_diagnosis) {
+    if (OB_ISNULL(select_stmt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid select stmt", K(ret), K(select_stmt));
+    } else {
+      ObIArray<SelectItem> &select_items = select_stmt->get_select_items();
+      uint64_t table_id = insert_stmt->get_insert_table_info().table_id_;
+
+      if (insert_stmt->get_values_desc().count() != select_items.count()) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid select stmt", K(ret), K(select_stmt));
-      } else {
-        ObIArray<SelectItem> &select_items = select_stmt->get_select_items();
-        uint64_t table_id = insert_stmt->get_insert_table_info().table_id_;
-
-        if (insert_stmt->get_values_desc().count() != select_items.count()) {
+        LOG_WARN("unexpected insert target column and select items",
+                K(ret), K(insert_stmt->get_values_desc()), K(select_items));
+      }
+      for (int64_t i = 0; i < insert_stmt->get_values_desc().count() && OB_SUCC(ret); ++i) {
+        ColumnItem *column_item = NULL;
+        uint64_t column_id = OB_INVALID_ID;
+        const ObColumnRefRawExpr *tbl_col = NULL;
+        if (OB_ISNULL(tbl_col = insert_stmt->get_values_desc().at(i))) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected insert target column and select items",
-                  K(ret), K(insert_stmt->get_values_desc()), K(select_items));
+          LOG_WARN("invalid table column", K(ret), K(i), K(insert_stmt->get_values_desc()));
+        } else if (FALSE_IT(column_id = tbl_col->get_column_id())) {
+        } else if (OB_ISNULL(column_item = get_del_upd_stmt()->get_column_item_by_id(table_id,
+                                                                                    column_id))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null column item", K(ret));
         }
-        for (int64_t i = 0; i < insert_stmt->get_values_desc().count() && OB_SUCC(ret); ++i) {
-          ColumnItem *column_item = NULL;
-          uint64_t column_id = OB_INVALID_ID;
-          const ObColumnRefRawExpr *tbl_col = NULL;
-          if (OB_ISNULL(tbl_col = insert_stmt->get_values_desc().at(i))) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("invalid table column", K(ret), K(i), K(insert_stmt->get_values_desc()));
-          } else if (FALSE_IT(column_id = tbl_col->get_column_id())) {
-          } else if (OB_ISNULL(column_item = get_del_upd_stmt()->get_column_item_by_id(table_id,
-                                                                                      column_id))) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected null column item", K(ret));
-          }
 
-          if (OB_SUCC(ret)) {
-            if (OB_FAIL(add_additional_function_according_to_type(
-                                              column_item, select_items.at(i).expr_, T_INSERT_SCOPE,
-                                              ObObjMeta::is_binary(tbl_col->get_data_type(),
-                                                                  tbl_col->get_collation_type())))) {
-              LOG_WARN("failed to build column conv expr", K(ret));
-            }
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(add_additional_function_according_to_type(
+                                            column_item, select_items.at(i).expr_, T_INSERT_SCOPE,
+                                            ObObjMeta::is_binary(tbl_col->get_data_type(),
+                                                                tbl_col->get_collation_type())))) {
+            LOG_WARN("failed to build column conv expr", K(ret));
           }
         }
       }
-    } else {
-      // do nothing
     }
   }
   return ret;
@@ -468,13 +464,22 @@ int ObInsertResolver::replace_column_ref(ObArray<ObRawExpr*> *value_row,
         } else if (OB_FAIL(add_additional_function_according_to_type(column_item,
                                                                      value_expr,
                                                                      T_INSERT_SCOPE,
-                                                                     true))) {
+                                                                     true,
+                                                                     true/*in_insert_value_list*/))) {
           LOG_WARN("fail to build column conv expr", K(ret));
         }
         if (OB_SUCC(ret)) {
           expr = insert_stmt->get_values_desc().at(value_index);
-          insert_stmt->set_is_all_const_values(false);
-          SQL_RESV_LOG(DEBUG, "replace column ref to value", K(*expr), K(value_index));
+          if (OB_FAIL(ObRawExprUtils::build_column_conv_expr(*params_.expr_factory_,
+                                                             *params_.allocator_,
+                                                             *column_item->get_expr(),
+                                                             expr,
+                                                             session_info_))) {
+            LOG_WARN("fail to add column_convert expr", K(ret), K(column_item));
+          } else {
+            insert_stmt->set_is_all_const_values(false);
+            SQL_RESV_LOG(DEBUG, "replace column ref to value", K(*expr), K(value_index));
+          }
         }
       }
     }
@@ -547,6 +552,12 @@ int ObInsertResolver::resolve_insert_field(const ParseNode &insert_into, TableIt
 
   OZ(remove_dup_dep_cols_for_heap_table(insert_stmt->get_insert_table_info().part_generated_col_dep_cols_,
                                         insert_stmt->get_values_desc()));
+
+  if (OB_ISNULL(table_item) || session_info_->is_inner() ) {
+  } else if (OB_UNLIKELY(table_item->is_system_table_ && table_item->table_name_.case_compare(OB_ALL_LICENSE_TNAME) == 0)) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("modify license table is not allowed", KR(ret), K(table_item->table_name_), K(table_item->is_system_table_));
+  }
   return ret;
 }
 

@@ -16,17 +16,22 @@
 #include "share/ob_ddl_common.h"
 #include "share/scheduler/ob_tenant_dag_scheduler.h"
 #include "share/schema/ob_table_param.h"
+#include "storage/access/ob_multiple_scan_merge.h"
 #include "storage/access/ob_table_access_context.h"
 #include "storage/access/ob_store_row_iterator.h"
 #include "storage/access/ob_sstable_row_whole_scanner.h"
 #include "storage/blocksstable/index_block/ob_index_block_builder.h"
-#include "storage/ddl/ob_complement_data_task.h"
 #include "storage/ddl/ob_ddl_merge_task.h"
+#include "storage/ddl/ob_tablet_split_util.h"
+#include "storage/ob_micro_block_index_iterator.h"
 
 namespace oceanbase
 {
 namespace storage
 {
+
+bool is_data_split_dag(const ObDagType::ObDagTypeEnum &dag_type);
+
 struct ObSplitSSTableTaskKey final
 {
 public:
@@ -35,7 +40,11 @@ public:
   ObSplitSSTableTaskKey(const ObITable::TableKey &src_key, const ObTabletID &dst_tablet_id)
     : src_sst_key_(src_key), dest_tablet_id_(dst_tablet_id)
   { }
-  ~ObSplitSSTableTaskKey() = default;
+  ~ObSplitSSTableTaskKey() { reset(); }
+  void reset() {
+    src_sst_key_.reset();
+    dest_tablet_id_.reset();
+  }
   int64_t hash() const { return src_sst_key_.hash() + dest_tablet_id_.hash(); }
   int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   bool operator== (const ObSplitSSTableTaskKey &other) const {
@@ -94,7 +103,16 @@ public:
   ~ObTabletSplitCtx();
   int init(const ObTabletSplitParam &param);
   bool is_valid() const;
-  TO_STRING_KV(K_(is_inited), K_(data_split_ranges), K_(complement_data_ret), K_(row_inserted), K_(physical_row_count), K_(skipped_split_major_keys));
+  TO_STRING_KV(
+    K_(is_inited), K_(is_split_finish_with_meta_flag), K_(data_split_ranges), K_(complement_data_ret),
+    K_(skipped_split_major_keys), K_(split_point_major_macros), K_(split_point_minor_macros),
+    K_(parallel_cnt_of_each_sstable), K_(split_scn), K_(row_inserted),
+    K_(physical_row_count), K_(split_scn), K_(reorg_scn),
+    K(ls_rebuild_seq_), K_(split_majors_count), K_(max_major_snapshot)
+#ifdef OB_BUILD_SHARED_STORAGE
+    , K_(is_data_split_executor)
+#endif
+    );
 
 private:
   template <typename KEY, typename VALUE>
@@ -118,19 +136,33 @@ private:
   };
 public:
   // generate index tree.
-  int prepare_index_builder(const ObTabletSplitParam &param);
+  int prepare_index_builder(
+      const ObTabletSplitParam &param);
   int get_clipped_storage_schema_on_demand(
       const ObTabletID &src_tablet_id,
       const ObSSTable &src_sstable,
       const ObStorageSchema &latest_schema,
       const bool try_create,
       const ObStorageSchema *&storage_schema);
+  // get ith from majors or minors.
+  int get_index_in_source_sstables(
+      const ObSSTable &src_sstable,
+      int64_t &sstable_index/*start from 0*/);
+  int append_split_point_macros(
+      const bool is_major_macros,
+      const ObIArray<blocksstable::MacroBlockId> &additional_macros);
+private:
+  int get_split_majors_infos();
 private:
   common::ObArenaAllocator range_allocator_; // for datum range.
+  common::ObArenaAllocator allocator_;
+  ObSpinLock lock_;
 public:
   typedef common::hash::ObHashMap<
     ObSplitSSTableTaskKey, ObSSTableIndexBuilder*> INDEX_BUILDER_MAP;
   bool is_inited_;
+  bool is_split_finish_with_meta_flag_;
+
   ObArray<ObDatumRange> data_split_ranges_;
   int complement_data_ret_;
   ObLSHandle ls_handle_;
@@ -139,21 +171,54 @@ public:
   // for rewrite macro block task.
   INDEX_BUILDER_MAP index_builder_map_; // map between source sstable and dest sstables.
   common::hash::ObHashMap<ObITable::TableKey/*source major sstable*/, ObStorageSchema*> clipped_schemas_map_;
-  common::ObArenaAllocator allocator_;
   ObArray<ObITable::TableKey> skipped_split_major_keys_;
   int64_t row_inserted_;
   int64_t physical_row_count_;
+  // the split point macro blocks in reuse macro split scenario.
+  common::ObArray<blocksstable::MacroBlockId> split_point_major_macros_;
+  common::ObArray<blocksstable::MacroBlockId> split_point_minor_macros_;
+  int64_t parallel_cnt_of_each_sstable_;
+  share::SCN split_scn_;
+  share::SCN reorg_scn_; // transfer_scn.
+  int64_t ls_rebuild_seq_;
+  int64_t split_majors_count_;
+  int64_t max_major_snapshot_;
+#ifdef OB_BUILD_SHARED_STORAGE
+  ObSSDataSplitHelper ss_split_helper_;
+  bool is_data_split_executor_;
+#endif
   DISALLOW_COPY_AND_ASSIGN(ObTabletSplitCtx);
 };
 
-class ObTabletSplitDag final: public share::ObIDag
+class ObIDataSplitDag : public share::ObIDag
+{
+public:
+  explicit ObIDataSplitDag(const ObDagType::ObDagTypeEnum type) :
+    ObIDag(type) { }
+  virtual ~ObIDataSplitDag() { }
+  virtual int report_replica_build_status() const = 0;
+  virtual int get_complement_data_ret() const = 0;
+  virtual void set_complement_data_ret(const int ret_code) = 0;
+protected:
+  int alloc_and_add_common_task(
+    ObITask *last_task,
+    const int64_t rebuild_seq,
+    const ObLSID &ls_id,
+    const ObTabletID &src_tablet_id,
+    const ObIArray<ObTabletID> &dst_tablet_ids,
+    const bool can_reuse_macro_block,
+    const share::SCN &dest_reorg_scn,
+    const share::SCN &split_start_scn);
+};
+
+class ObTabletSplitDag final: public ObIDataSplitDag
 {
 public:
   ObTabletSplitDag();
   virtual ~ObTabletSplitDag();
   virtual int init_by_param(const share::ObIDagInitParam *param) override;
   virtual int create_first_task() override;
-  int64_t hash() const;
+  virtual uint64_t hash() const override;
   bool operator ==(const share::ObIDag &other) const;
   bool is_inited() const { return is_inited_; }
   ObTabletSplitCtx &get_context() { return context_; }
@@ -165,7 +230,14 @@ public:
   virtual uint64_t get_consumer_group_id() const override
   { return consumer_group_id_; }
   virtual bool is_ha_dag() const override { return false; }
-  int report_replica_build_status();
+  virtual int report_replica_build_status() const override;
+  virtual int get_complement_data_ret() const override {
+    return context_.complement_data_ret_;
+  }
+  virtual void set_complement_data_ret(const int ret_code) override {
+    context_.complement_data_ret_ = OB_SUCCESS == context_.complement_data_ret_ ?
+      ret_code : context_.complement_data_ret_;
+  }
   int calc_total_row_count();
 private:
   bool is_inited_;
@@ -203,12 +275,13 @@ public:
 private:
   int generate_next_task(ObITask *&next_task);
   // prepare default_row, write_row.
-  int prepare_context(
-      ObTabletSplitMdsUserData &split_data,
-      const ObStorageSchema *&clipped_storage_schema);
+  int prepare_context(const ObStorageSchema *&clipped_storage_schema);
   // fill nop for minor, and fill orig default value for major.
   int fill_tail_column_datums(
       const blocksstable::ObDatumRow &scan_row);
+  int prepare_macro_seq_param(
+      const int64_t dest_tablet_index, // index at param.dest_tablets_id_
+      ObMacroSeqParam &macro_seq_param);
   int prepare_macro_block_writer(
       const ObStorageSchema &clipped_storage_schema,
       ObIArray<ObWholeDataStoreDesc> &data_desc_arr,
@@ -256,7 +329,9 @@ class ObTabletSplitMergeTask final : public share::ObITask
 {
 public:
   ObTabletSplitMergeTask()
-    : ObITask(TASK_TYPE_DDL_SPLIT_MERGE), is_inited_(false), param_(nullptr), context_(nullptr)
+    : ObITask(TASK_TYPE_DDL_SPLIT_MERGE),
+    allocator_("SplitSSTCreate", OB_MALLOC_NORMAL_BLOCK_SIZE /*8KB*/, MTL_ID()),
+    is_inited_(false), param_(nullptr), context_(nullptr)
     { }
   virtual ~ObTabletSplitMergeTask() = default;
   int init(ObTabletSplitParam &param, ObTabletSplitCtx &ctx);
@@ -275,26 +350,163 @@ public:
       const SCN &end_scn,
       ObTabletCreateSSTableParam &create_sstable_param);
   static int update_table_store_with_batch_tables(
+      const int64_t ls_rebuild_seq,
       const ObLSHandle &ls_handle,
       const ObTabletHandle &src_tablet_handle,
       const ObTabletID &dst_tablet_id,
       const ObTablesHandleArray &tables_handle,
       const compaction::ObMergeType &merge_type,
-      const bool can_reuse_macro_block,
-      const ObIArray<ObITable::TableKey> &skipped_split_major_keys);
+      const ObIArray<ObITable::TableKey> &skipped_split_major_keys,
+      const int64_t op_id,
+      const share::SCN &dest_reorg_scn);
 private:
   int create_sstable(
       const share::ObSplitSSTableType &split_sstable_type);
- int build_create_sstable_param(
+  int build_create_sstable_param(
       const ObSSTable &src_table,
-      const ObTabletID &dst_tablet_id,
+      const int64_t dest_tablet_index, // index at param.dest_tablets_id_
       ObSSTableIndexBuilder *index_builder,
+      const ObIArray<blocksstable::MacroBlockId> &split_point_macros_id,
       ObTabletCreateSSTableParam &create_sstable_param);
+  int check_and_create_mds_sstable(
+      const ObTabletID &dest_tablet_id);
+#ifdef OB_BUILD_SHARED_STORAGE
+  int close_ss_index_builder(
+      const ObSSTable &src_table, // source table.
+      const int64_t dest_tablet_index, // index at param.dest_tablets_id_
+      ObSSTableIndexBuilder *index_builder,
+      ObSSTableMergeRes &res);
+#endif
 private:
+  common::ObArenaAllocator allocator_; // for sstable created.
   bool is_inited_;
   ObTabletSplitParam *param_;
   ObTabletSplitCtx *context_;
   DISALLOW_COPY_AND_ASSIGN(ObTabletSplitMergeTask);
+};
+
+#ifdef OB_BUILD_SHARED_STORAGE
+struct ObMacroEndKey
+{
+public:
+  ObMacroEndKey (const MacroBlockId &id, const ObDatumRowkey &end_key)
+    : macro_id_(id), end_key_(end_key)
+    {}
+  ObMacroEndKey ()
+    : macro_id_(), end_key_()
+    {}
+  void reset()
+  {
+    macro_id_.reset();
+    end_key_.reset();
+  }
+  bool is_valid() const {
+    return macro_id_.is_valid() && end_key_.is_valid();
+  }
+  int assign(const ObMacroEndKey &other);
+  TO_STRING_KV(K_(macro_id), K(end_key_));
+public:
+  MacroBlockId macro_id_;
+  ObDatumRowkey end_key_;
+};
+
+// download sstable, prewarm, and update local table store.
+int check_test_block_downloading();
+class ObSplitDownloadSSTableTask final : public share::ObITask
+{
+public:
+  ObSplitDownloadSSTableTask()
+    : ObITask(TASK_TYPE_DDL_SPLIT_DOWNLOAD_SSTABLE),
+      is_inited_(false), ls_rebuild_seq_(-1), ls_id_(),
+      source_tablet_id_(), dest_tablets_id_(), can_reuse_macro_block_(false),
+      dest_reorg_scn_()
+    { }
+  virtual ~ObSplitDownloadSSTableTask() = default;
+  int init(
+      const int64_t ls_rebuild_seq,
+      const ObLSID &ls_id,
+      const ObTabletID &src_tablet_id,
+      const ObIArray<ObTabletID> &dst_tablets_id,
+      const bool can_reuse_macro_block,
+      const share::SCN &dest_reorg_scn,
+      const share::SCN &split_start_scn);
+  static int prewarm_for_split(
+      const ObTabletHandle &dest_tablet_handle,
+      ObSSTable &sstable);
+  static int is_split_dest_sstable(
+      const ObSSTable &sstable,
+      bool &is_split_dest_sstable);
+  virtual int process() override;
+private:
+  static int prewarm_split_point_macro_if_need(
+      const int64_t dest_tablet_id,
+      const ObSSTable &dest_sstable,
+      const ObIArray<MacroBlockId> &dest_macro_ids/*fist and last macro of dest sstable if any*/);
+  static int iterate_macros_update_eff_id(
+      const ObTabletID &dest_tablet_id,
+      ObDualMacroMetaIterator &meta_iter,
+      ObIArray<MacroBlockId> &dest_macro_ids,
+      ObIAllocator &allocator);
+  static int iterate_micros_update_eff_id(
+      const ObTabletID &dest_tablet_id,
+      ObMicroBlockIndexIterator &micro_iter);
+private:
+  int get_shared_tablet_versions_iter(
+      const ObTabletID &dst_tablet_id,
+      const share::SCN &end_version,
+      ObSSMetaIterGuard<ObSSTabletIterator> &iter_guard,
+      ObSSTabletIterator *&tablet_version_iter);
+  int get_shared_tablet_for_split_major(
+      const ObTabletID &dst_tablet_id,
+      share::SCN &target_tablet_version);
+  int get_shared_tablet_for_split_mds(
+      const ObTabletID &dst_tablet_id,
+      const share::SCN &target_major_tablet_version,
+      share::SCN &target_tablet_version);
+  int get_shared_tablet_for_split_minor(
+      const ObTabletID &dst_tablet_id,
+      const share::SCN &target_major_tablet_version,
+      share::SCN &target_tablet_version);
+  int get_specified_shared_tablet_versions(
+      const ObTabletID &dst_tablet_id,
+      ObIArray<share::SCN> &target_tablet_versions); // order by minor, mds, major.
+  int prewarm(
+      const ObTabletHandle &ss_tablet_handle,
+      const ObTablesHandleArray &batch_sstables_handle);
+  int collect_split_sstables(
+      ObArenaAllocator &allocator,
+      const share::ObSplitSSTableType &split_sstable_type,
+      const ObTableStoreIterator &ss_table_store_iterator,
+      ObTablesHandleArray &batch_sstables_handle);
+  int download_sstables_and_update_local(
+      ObLSHandle &new_ls_handle,
+      const ObTabletHandle &local_source_tablet_hdl);
+
+private:
+  bool is_inited_;
+  int64_t ls_rebuild_seq_;
+  ObLSID ls_id_;
+  ObTabletID source_tablet_id_;
+  ObArray<ObTabletID> dest_tablets_id_;
+  bool can_reuse_macro_block_;
+  share::SCN dest_reorg_scn_;
+  share::SCN split_start_scn_;
+  DISALLOW_COPY_AND_ASSIGN(ObSplitDownloadSSTableTask);
+};
+#endif
+
+class ObSplitFinishTask final : public share::ObITask
+{
+public:
+  ObSplitFinishTask()
+    :ObITask(TASK_TYPE_DDL_SPLIT_FINISH),
+    is_inited_(false)
+  {}
+  virtual ~ObSplitFinishTask() = default;
+  int init();
+  virtual int process() override;
+private:
+  bool is_inited_;
 };
 
 struct ObSplitScanParam final
@@ -425,83 +637,6 @@ private:
   blocksstable::ObRowQueue row_queue_;
   ObArenaAllocator row_queue_allocator_;
   bool row_queue_has_unskippable_row_;
-};
-
-struct ObTabletSplitUtil final
-{
-public:
-  static int get_participants(
-      const share::ObSplitSSTableType &split_sstable_type,
-      const ObTableStoreIterator &table_store_iterator,
-      const bool is_table_restore,
-      const ObIArray<ObITable::TableKey> &skipped_table_keys,
-      ObIArray<ObITable *> &participants);
-  static int split_task_ranges(
-      ObIAllocator &allocator,
-      const share::ObDDLType ddl_type,
-      const share::ObLSID &ls_id,
-      const ObTabletID &tablet_id,
-      const int64_t user_parallelism,
-      const int64_t schema_tablet_size,
-      ObIArray<blocksstable::ObDatumRowkey> &parallel_datum_rowkey_list);
-  static int convert_rowkey_to_range(
-      ObIAllocator &allocator,
-      const ObIArray<blocksstable::ObDatumRowkey> &parallel_datum_rowkey_list,
-      ObIArray<ObDatumRange> &datum_ranges_array);
-
-  // only used for table recovery to build parallel tasks cross tenants.
-  static int convert_datum_rowkey_to_range(
-      ObIAllocator &allocator,
-      const ObIArray<blocksstable::ObDatumRowkey> & datum_rowkey_list,
-      ObIArray<ObDatumRange> &datum_ranges_array);
-  static int check_data_split_finished(
-      const share::ObLSID &ls_id,
-      const ObIArray<ObTabletID> &check_tablets_id,
-      bool &is_finished);
-  static int check_satisfy_split_condition(
-      const ObLSHandle &ls_handle,
-      const ObTabletHandle &source_tablet_handle,
-      const ObArray<ObTabletID> &dest_tablets_id,
-      const int64_t compaction_scn,
-      const share::SCN &min_split_start_scn);
-  static int get_split_dest_tablets_info(
-      const share::ObLSID &ls_id,
-      const ObTabletID &source_tablet_id,
-      ObIArray<ObTabletID> &dest_tablets_id,
-      lib::Worker::CompatMode &compat_mode);
-  static int check_medium_compaction_info_list_cnt(
-      const obrpc::ObCheckMediumCompactionInfoListArg &arg,
-      obrpc::ObCheckMediumCompactionInfoListResult &result);
-  static int check_tablet_restore_status(
-      const ObIArray<ObTabletID> &dest_tablets_id,
-      const ObLSHandle &ls_handle,
-      const ObTabletHandle &source_tablet_handle,
-      bool &is_tablet_status_need_to_split);
-  static int build_mds_sstable(
-      common::ObArenaAllocator &allocator,
-      const ObLSHandle &ls_handle,
-      const ObTabletHandle &source_tablet_handle,
-      const ObTabletID &dest_tablet_id,
-      ObTableHandleV2 &medium_mds_table_handle);
-  static int check_sstables_skip_data_split(
-      const ObLSHandle &ls_handle,
-      const ObTableStoreIterator &source_table_store_iter,
-      const ObIArray<ObTabletID> &dest_tablets_id,
-      const int64_t lob_major_snapshot/*OB_INVALID_VERSION for non lob tablets*/,
-      ObIArray<ObITable::TableKey> &skipped_split_major_keys);
-private:
-  static int check_and_build_mds_sstable_merge_ctx(
-      const ObLSHandle &ls_handle,
-      const ObTabletHandle &dest_tablet_handle,
-      compaction::ObTabletMergeCtx &tablet_merge_ctx);
-  static int check_and_determine_mds_rec_and_end_scn(
-      const ObTabletHandle &dest_tablet_handle,
-      share::SCN &end_scn,
-      share::SCN &rec_scn);
-  static int check_tablet_ha_status(
-      const ObLSHandle &ls_handle,
-      const ObTabletHandle &source_tablet_handle,
-      const ObIArray<ObTabletID> &dest_tablets_id);
 };
 
 }  // end namespace storage

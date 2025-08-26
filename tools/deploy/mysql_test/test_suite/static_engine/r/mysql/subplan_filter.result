@@ -1649,7 +1649,6 @@ Optimization Info:
       table_rows:18
       physical_range_rows:18
       logical_range_rows:18
-      index_back_rows:0
       output_rows:18
       table_dop:1
       dop_method:Table DOP
@@ -1659,10 +1658,9 @@ Optimization Info:
       estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
-      physical_range_rows:7
-      logical_range_rows:7
-      index_back_rows:0
-      output_rows:7
+      physical_range_rows:8
+      logical_range_rows:8
+      output_rows:8
       table_dop:1
       dop_method:DAS DOP
       avaiable_index_name:[t2]
@@ -1752,7 +1750,6 @@ Optimization Info:
       table_rows:18
       physical_range_rows:18
       logical_range_rows:18
-      index_back_rows:0
       output_rows:18
       table_dop:1
       dop_method:Table DOP
@@ -1762,10 +1759,9 @@ Optimization Info:
       estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
-      physical_range_rows:7
-      logical_range_rows:7
-      index_back_rows:0
-      output_rows:4
+      physical_range_rows:8
+      logical_range_rows:8
+      output_rows:5
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t2]
@@ -1858,7 +1854,6 @@ Optimization Info:
       table_rows:18
       physical_range_rows:18
       logical_range_rows:18
-      index_back_rows:0
       output_rows:18
       table_dop:1
       dop_method:Table DOP
@@ -1870,7 +1865,6 @@ Optimization Info:
       table_rows:22
       physical_range_rows:1
       logical_range_rows:1
-      index_back_rows:0
       output_rows:1
       table_dop:1
       dop_method:DAS DOP
@@ -1971,7 +1965,6 @@ Optimization Info:
       table_rows:18
       physical_range_rows:18
       logical_range_rows:18
-      index_back_rows:0
       output_rows:18
       table_dop:1
       dop_method:Table DOP
@@ -1981,10 +1974,9 @@ Optimization Info:
       estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
-      physical_range_rows:7
-      logical_range_rows:7
-      index_back_rows:0
-      output_rows:7
+      physical_range_rows:8
+      logical_range_rows:8
+      output_rows:8
       table_dop:1
       dop_method:DAS DOP
       avaiable_index_name:[t2]
@@ -1993,10 +1985,9 @@ Optimization Info:
       estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
-      physical_range_rows:7
-      logical_range_rows:7
-      index_back_rows:0
-      output_rows:7
+      physical_range_rows:8
+      logical_range_rows:8
+      output_rows:8
       table_dop:1
       dop_method:DAS DOP
       avaiable_index_name:[t2]
@@ -2096,7 +2087,6 @@ Optimization Info:
       table_rows:18
       physical_range_rows:18
       logical_range_rows:18
-      index_back_rows:0
       output_rows:18
       table_dop:1
       dop_method:Table DOP
@@ -2106,10 +2096,9 @@ Optimization Info:
       estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
-      physical_range_rows:7
-      logical_range_rows:7
-      index_back_rows:0
-      output_rows:7
+      physical_range_rows:8
+      logical_range_rows:8
+      output_rows:8
       table_dop:1
       dop_method:DAS DOP
       avaiable_index_name:[t2]
@@ -2118,10 +2107,9 @@ Optimization Info:
       estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
-      physical_range_rows:7
-      logical_range_rows:7
-      index_back_rows:0
-      output_rows:7
+      physical_range_rows:8
+      logical_range_rows:8
+      output_rows:8
       table_dop:1
       dop_method:DAS DOP
       avaiable_index_name:[t2]
@@ -2221,7 +2209,6 @@ Optimization Info:
       table_rows:18
       physical_range_rows:18
       logical_range_rows:18
-      index_back_rows:0
       output_rows:18
       table_dop:1
       dop_method:Table DOP
@@ -2231,10 +2218,9 @@ Optimization Info:
       estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
-      physical_range_rows:7
-      logical_range_rows:7
-      index_back_rows:0
-      output_rows:7
+      physical_range_rows:8
+      logical_range_rows:8
+      output_rows:8
       table_dop:1
       dop_method:DAS DOP
       avaiable_index_name:[t2]
@@ -2243,10 +2229,9 @@ Optimization Info:
       estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
-      physical_range_rows:7
-      logical_range_rows:7
-      index_back_rows:0
-      output_rows:7
+      physical_range_rows:8
+      logical_range_rows:8
+      output_rows:8
       table_dop:1
       dop_method:DAS DOP
       avaiable_index_name:[t2]
@@ -2346,7 +2331,6 @@ Optimization Info:
       table_rows:18
       physical_range_rows:18
       logical_range_rows:18
-      index_back_rows:0
       output_rows:18
       table_dop:1
       dop_method:Table DOP
@@ -2356,10 +2340,9 @@ Optimization Info:
       estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
-      physical_range_rows:7
-      logical_range_rows:7
-      index_back_rows:0
-      output_rows:7
+      physical_range_rows:8
+      logical_range_rows:8
+      output_rows:8
       table_dop:1
       dop_method:DAS DOP
       avaiable_index_name:[t2]
@@ -2368,10 +2351,9 @@ Optimization Info:
       estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
-      physical_range_rows:7
-      logical_range_rows:7
-      index_back_rows:0
-      output_rows:7
+      physical_range_rows:8
+      logical_range_rows:8
+      output_rows:8
       table_dop:1
       dop_method:DAS DOP
       avaiable_index_name:[t2]
@@ -2480,7 +2462,6 @@ Optimization Info:
       table_rows:18
       physical_range_rows:18
       logical_range_rows:18
-      index_back_rows:0
       output_rows:18
       table_dop:1
       dop_method:Table DOP
@@ -2490,10 +2471,9 @@ Optimization Info:
       estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
-      physical_range_rows:7
-      logical_range_rows:7
-      index_back_rows:0
-      output_rows:7
+      physical_range_rows:8
+      logical_range_rows:8
+      output_rows:8
       table_dop:1
       dop_method:DAS DOP
       avaiable_index_name:[t2]
@@ -2502,10 +2482,9 @@ Optimization Info:
       estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
-      physical_range_rows:7
-      logical_range_rows:7
-      index_back_rows:0
-      output_rows:7
+      physical_range_rows:8
+      logical_range_rows:8
+      output_rows:8
       table_dop:1
       dop_method:DAS DOP
       avaiable_index_name:[t2]
@@ -2516,7 +2495,6 @@ Optimization Info:
       table_rows:22
       physical_range_rows:1
       logical_range_rows:1
-      index_back_rows:0
       output_rows:1
       table_dop:1
       dop_method:DAS DOP
@@ -2667,7 +2645,6 @@ Optimization Info:
       table_rows:18
       physical_range_rows:18
       logical_range_rows:18
-      index_back_rows:0
       output_rows:18
       table_dop:1
       dop_method:Table DOP
@@ -2679,7 +2656,6 @@ Optimization Info:
       table_rows:22
       physical_range_rows:1
       logical_range_rows:1
-      index_back_rows:0
       output_rows:1
       table_dop:1
       dop_method:DAS DOP
@@ -2689,10 +2665,9 @@ Optimization Info:
       estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
-      physical_range_rows:7
-      logical_range_rows:7
-      index_back_rows:0
-      output_rows:7
+      physical_range_rows:8
+      logical_range_rows:8
+      output_rows:8
       table_dop:1
       dop_method:DAS DOP
       avaiable_index_name:[t2]
@@ -2703,7 +2678,6 @@ Optimization Info:
       table_rows:22
       physical_range_rows:1
       logical_range_rows:1
-      index_back_rows:0
       output_rows:1
       table_dop:1
       dop_method:DAS DOP
@@ -2715,7 +2689,6 @@ Optimization Info:
       table_rows:22
       physical_range_rows:1
       logical_range_rows:1
-      index_back_rows:0
       output_rows:1
       table_dop:1
       dop_method:DAS DOP
@@ -2725,10 +2698,9 @@ Optimization Info:
       estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
-      physical_range_rows:7
-      logical_range_rows:7
-      index_back_rows:0
-      output_rows:7
+      physical_range_rows:8
+      logical_range_rows:8
+      output_rows:8
       table_dop:1
       dop_method:DAS DOP
       avaiable_index_name:[t2]
@@ -2739,7 +2711,6 @@ Optimization Info:
       table_rows:22
       physical_range_rows:1
       logical_range_rows:1
-      index_back_rows:0
       output_rows:1
       table_dop:1
       dop_method:DAS DOP
@@ -2749,10 +2720,9 @@ Optimization Info:
       estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
-      physical_range_rows:7
-      logical_range_rows:7
-      index_back_rows:0
-      output_rows:7
+      physical_range_rows:8
+      logical_range_rows:8
+      output_rows:8
       table_dop:1
       dop_method:DAS DOP
       avaiable_index_name:[t2]
@@ -2904,7 +2874,6 @@ Optimization Info:
       table_rows:18
       physical_range_rows:18
       logical_range_rows:18
-      index_back_rows:0
       output_rows:18
       table_dop:1
       dop_method:Table DOP
@@ -2914,10 +2883,9 @@ Optimization Info:
       estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
-      physical_range_rows:7
-      logical_range_rows:7
-      index_back_rows:0
-      output_rows:7
+      physical_range_rows:8
+      logical_range_rows:8
+      output_rows:8
       table_dop:1
       dop_method:DAS DOP
       avaiable_index_name:[t2]
@@ -2926,10 +2894,9 @@ Optimization Info:
       estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
-      physical_range_rows:7
-      logical_range_rows:7
-      index_back_rows:0
-      output_rows:7
+      physical_range_rows:8
+      logical_range_rows:8
+      output_rows:8
       table_dop:1
       dop_method:DAS DOP
       avaiable_index_name:[t2]
@@ -2940,7 +2907,6 @@ Optimization Info:
       table_rows:22
       physical_range_rows:1
       logical_range_rows:1
-      index_back_rows:0
       output_rows:1
       table_dop:1
       dop_method:DAS DOP
@@ -2952,7 +2918,6 @@ Optimization Info:
       table_rows:22
       physical_range_rows:1
       logical_range_rows:1
-      index_back_rows:0
       output_rows:1
       table_dop:1
       dop_method:DAS DOP
@@ -2962,10 +2927,9 @@ Optimization Info:
       estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
-      physical_range_rows:7
-      logical_range_rows:7
-      index_back_rows:0
-      output_rows:7
+      physical_range_rows:8
+      logical_range_rows:8
+      output_rows:8
       table_dop:1
       dop_method:DAS DOP
       avaiable_index_name:[t2]
@@ -2976,7 +2940,6 @@ Optimization Info:
       table_rows:22
       physical_range_rows:1
       logical_range_rows:1
-      index_back_rows:0
       output_rows:1
       table_dop:1
       dop_method:DAS DOP
@@ -2986,10 +2949,9 @@ Optimization Info:
       estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
-      physical_range_rows:7
-      logical_range_rows:7
-      index_back_rows:0
-      output_rows:7
+      physical_range_rows:8
+      logical_range_rows:8
+      output_rows:8
       table_dop:1
       dop_method:DAS DOP
       avaiable_index_name:[t2]
@@ -3142,7 +3104,6 @@ Optimization Info:
       table_rows:18
       physical_range_rows:18
       logical_range_rows:18
-      index_back_rows:0
       output_rows:18
       table_dop:1
       dop_method:Table DOP
@@ -3152,10 +3113,9 @@ Optimization Info:
       estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
-      physical_range_rows:7
-      logical_range_rows:7
-      index_back_rows:0
-      output_rows:7
+      physical_range_rows:8
+      logical_range_rows:8
+      output_rows:8
       table_dop:1
       dop_method:DAS DOP
       avaiable_index_name:[t2]
@@ -3164,10 +3124,9 @@ Optimization Info:
       estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
-      physical_range_rows:7
-      logical_range_rows:7
-      index_back_rows:0
-      output_rows:7
+      physical_range_rows:8
+      logical_range_rows:8
+      output_rows:8
       table_dop:1
       dop_method:DAS DOP
       avaiable_index_name:[t2]
@@ -3178,7 +3137,6 @@ Optimization Info:
       table_rows:22
       physical_range_rows:1
       logical_range_rows:1
-      index_back_rows:0
       output_rows:1
       table_dop:1
       dop_method:DAS DOP
@@ -3190,7 +3148,6 @@ Optimization Info:
       table_rows:22
       physical_range_rows:1
       logical_range_rows:1
-      index_back_rows:0
       output_rows:1
       table_dop:1
       dop_method:DAS DOP
@@ -3200,10 +3157,9 @@ Optimization Info:
       estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
-      physical_range_rows:7
-      logical_range_rows:7
-      index_back_rows:0
-      output_rows:7
+      physical_range_rows:8
+      logical_range_rows:8
+      output_rows:8
       table_dop:1
       dop_method:DAS DOP
       avaiable_index_name:[t2]
@@ -3214,7 +3170,6 @@ Optimization Info:
       table_rows:22
       physical_range_rows:1
       logical_range_rows:1
-      index_back_rows:0
       output_rows:1
       table_dop:1
       dop_method:DAS DOP
@@ -3224,10 +3179,9 @@ Optimization Info:
       estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
-      physical_range_rows:7
-      logical_range_rows:7
-      index_back_rows:0
-      output_rows:7
+      physical_range_rows:8
+      logical_range_rows:8
+      output_rows:8
       table_dop:1
       dop_method:DAS DOP
       avaiable_index_name:[t2]

@@ -23,6 +23,18 @@ using namespace oceanbase::common::sqlclient;
 using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
 
+static bool isSameGroup(const ObString& str1, const ObString& str2, ObCompatibilityMode mode) {
+    int cmp = 0;
+    if (mode == OCEANBASE_MODE || mode == MYSQL_MODE) {
+      // mysql/ob模式：大小写不敏感
+      cmp = str1.case_compare(str2);
+    } else {
+      // oracle模式：大小写敏感
+      cmp = str1.compare(str2);
+    }
+    return cmp == 0;
+}
+
 // 一个小的 Helper Guard，自动做 trans start 和 commit，避免面条代码，增加可维护性。
 ObResourceManagerProxy::TransGuard::TransGuard(
     ObMySQLTransaction &trans,
@@ -885,7 +897,7 @@ int ObResourceManagerProxy::check_iops_validity(
         } else if (OB_UNLIKELY(!cur_directive.is_valid())) {
           ret = OB_INVALID_CONFIG;
           LOG_WARN("invalid group io config", K(cur_directive));
-        } else if ((0 == group.compare(cur_directive.group_name_.get_value()))) {
+        } else if (isSameGroup(group, cur_directive.group_name_.get_value(), get_compatibility_mode())) {
           //skip cur group
         } else {
           total_min += cur_directive.min_iops_;

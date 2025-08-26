@@ -10,35 +10,42 @@
  * See the Mulan PubL v2 for more details.
  */
 
-static int do_accept(int fd, int is_pipe)
+static listenfd_dispatch_t do_accept(int fd, int is_pipe)
 {
-  int ret = -1;
+  int ret = 0;
+  listenfd_dispatch_t t = {
+    .fd = -1,
+    .tid = -1,
+    .sock_ptr = NULL
+  };
   if (is_pipe) {
-    if (read(fd, &ret, sizeof(ret)) <= 0) {
-      ret = -1;
+    if (read(fd, (char*)&t, sizeof(listenfd_dispatch_t)) <= 0) {
+      t.fd = -1;
     }
   } else {
-    ret = tcp_accept(fd);
+    t.fd = tcp_accept(fd);
   }
-  return ret;
+  return t;
 }
 
-void on_accept(int fd, sf_t* sf, eloop_t* ep)
+void on_accept(listenfd_dispatch_t* lfd, sf_t* sf, eloop_t* ep)
 {
   int err = 0;
   bool add_succ = false;
   sock_t* ns = sf->create(sf);
+  int fd = lfd->fd;
   if (NULL != ns) {
     set_tcp_nodelay(fd);
     update_socket_keepalive_params(fd, pnio_keepalive_timeout);
     ns->fd = fd;
     ns->fty = sf;
     ns->peer = get_remote_addr(fd);
+    ns->tid = lfd->tid;
     if (eloop_regist(ep, ns, EPOLLIN | EPOLLOUT) == 0) {
       add_succ = true;
       char sock_fd_buf[PNIO_NIO_FD_ADDR_LEN] = {'\0'};
-      rk_info("accept new connection, ns=%p, fd=%s",
-          ns, sock_fd_str(ns->fd, sock_fd_buf, sizeof(sock_fd_buf)));
+      rk_info("accept new connection, ns=%p, fd=%s, tid=%d",
+          ns, sock_fd_str(ns->fd, sock_fd_buf, sizeof(sock_fd_buf)), ns->tid);
     } else {
       err = -EIO;
     }
@@ -56,11 +63,63 @@ void on_accept(int fd, sf_t* sf, eloop_t* ep)
   }
 }
 
+void on_dispatch(listenfd_dispatch_t* lfd, sf_t* sf, eloop_t* ep)
+{
+  int err = 0;
+  int fd = lfd->fd;
+  pkts_sk_t* old_sk = (pkts_sk_t*)lfd->sock_ptr;
+
+  bool add_succ = false;
+  sock_t* ns = sf->create(sf);
+  if (NULL != ns) {
+    ns->fd = fd;
+    ns->fty = sf;
+    ns->peer = get_remote_addr(fd);
+    ns->tid = lfd->tid;
+    if (eloop_regist(ep, ns, EPOLLIN | EPOLLOUT) == 0) {
+      add_succ = true;
+      char sock_fd_buf[PNIO_NIO_FD_ADDR_LEN] = {'\0'};
+      // copy sock stuct
+      pkts_sk_t* new_sk = (pkts_sk_t*)ns;
+      new_sk->relocate_status = SOCK_DISABLE_RELOCATE;
+      new_sk->processing_cnt = old_sk->processing_cnt;
+      rk_info("[socket_relocation] accept new connection, s=%p,%s, tid=%d, old_sk=%p",
+              new_sk, sock_fd_str(ns->fd, sock_fd_buf, sizeof(sock_fd_buf)), ns->tid, old_sk);
+      wq_move(&new_sk->wq, &old_sk->wq);
+      memcpy(&new_sk->ib, &old_sk->ib, sizeof(old_sk->ib));
+      new_sk->sk_diag_info.doing_cnt = old_sk->sk_diag_info.doing_cnt;
+      old_sk->relocate_sock_id = new_sk->id;
+      // To avoid dropping events, add socket to handle list
+      eloop_fire(ep, ns);
+    } else {
+      err = -EIO;
+    }
+  } else {
+    err = -ENOMEM;
+  }
+  if (!add_succ) {
+    if (fd >= 0) {
+      ussl_close(fd);
+    }
+    if (NULL != ns) {
+      sf->destroy(sf, ns);
+    }
+    rk_error("accept dispatch fd fail, err=%d", err);
+  }
+  old_sk->relocate_status = SOCK_RELOCATING;
+  rk_futex_wake(&old_sk->relocate_status, 1);
+}
+
 int listenfd_handle_event(listenfd_t* s) {
   int err = 0;
-  int fd = do_accept(s->fd, s->is_pipe);
-  if (fd >= 0) {
-    on_accept(fd, s->sf, s->ep);
+  listenfd_dispatch_t lfd = do_accept(s->fd, s->is_pipe);
+  if (lfd.fd >= 0 ) {
+    if (NULL != lfd.sock_ptr) {
+      // sock is dispathed from other pn thread
+      on_dispatch(&lfd, s->sf, s->ep);
+    } else {
+      on_accept(&lfd, s->sf, s->ep);
+    }
   } else {
     if (EINTR == errno) {
       // do nothing
@@ -70,7 +129,7 @@ int listenfd_handle_event(listenfd_t* s) {
     } else {
       err = EIO;
     }
-    rk_warn("do_accept failed, err=%d, errno=%d, fd=%d", err, errno, fd);
+    rk_warn("do_accept failed, err=%d, errno=%d, fd=%d", err, errno, lfd.fd);
   }
   return err;
 }

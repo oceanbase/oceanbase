@@ -886,6 +886,7 @@ int ObDbmsXplan::get_plan_info_by_id(sql::ObExecContext &ctx,
                     AND sp.SVR_PORT=plan_index.SVR_PORT \
                     AND sp.PLAN_HASH=plan_index.PLAN_HASH \
                     AND sp.SQL_ID=plan_index.SQL_ID \
+                    AND sp.PLAN_ID=plan_index.PLAN_ID \
                     ORDER BY ID")) {
       LOG_WARN("failed to assign string", K(ret));
     } else if (OB_FAIL(inner_get_plan_info(ctx, sql, plan_infos, use_wr))) {
@@ -1050,6 +1051,7 @@ int ObDbmsXplan::get_baseline_plan_info(sql::ObExecContext &ctx,
                     AND sp.SVR_PORT=plan_index.SVR_PORT \
                     AND sp.PLAN_HASH=plan_index.PLAN_HASH \
                     AND sp.SQL_ID=plan_index.SQL_ID \
+                    AND sp.PLAN_ID=plan_index.PLAN_ID \
                     ORDER BY ID")) {
       LOG_WARN("failed to assign string", K(ret));
     } else if (OB_FAIL(inner_get_plan_info(ctx, sql, plan_infos, use_wr))) {
@@ -1598,6 +1600,17 @@ int ObDbmsXplan::read_plan_info_from_result(sql::ObExecContext &ctx,
     plan_info.real_cost_ = 0.0;
     plan_info.cpu_cost_ = 0.0;
     plan_info.io_cost_ = 0.0;
+
+    double cardinality_diff = std::abs(plan_info.real_cardinality_ - plan_info.cardinality_);
+    if (plan_info.real_cardinality_ <= 0 || cardinality_diff < 10.0) {
+      // do nothing
+    } else if (OB_UNLIKELY(plan_info.real_cardinality_ <= 0) ||
+               OB_UNLIKELY(cardinality_diff / std::max(plan_info.real_cardinality_, plan_info.cardinality_) >= 0.50)) {
+      // ignore ret
+      LOG_USER_WARN(OB_EST_DEVIA_TOO_LARGE,
+          plan_info.id_, static_cast<int>(plan_info.operation_len_), plan_info.operation_,
+          plan_info.cardinality_, plan_info.real_cardinality_);
+    }
   }
   return ret;
 }

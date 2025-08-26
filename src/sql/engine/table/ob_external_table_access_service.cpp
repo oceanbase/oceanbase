@@ -26,6 +26,7 @@
 #include "sql/engine/cmd/ob_load_data_file_reader.h"
 #include "sql/engine/table/ob_orc_table_row_iter.h"
 #include "sql/engine/table/ob_csv_table_row_iter.h"
+#include "plugin/external_table/ob_plugin_external_table_row_iter.h"
 #include "sql/engine/expr/ob_expr_regexp_context.h"
 #include "share/config/ob_server_config.h"
 
@@ -43,10 +44,10 @@ class ObExternalTablePartInfoArray;
 using namespace share::schema;
 using namespace common;
 using namespace share;
+using namespace plugin;
+
 namespace sql
 {
-
-static constexpr uint64_t OB_STORAGE_ID_EXTERNAL = 2001;
 
 ObExternalDataAccessDriver::~ObExternalDataAccessDriver() {
   close();
@@ -59,7 +60,7 @@ void ObExternalDataAccessDriver::close()
 {
   if (OB_NOT_NULL(device_handle_) && fd_.is_valid()) {
     int ret = OB_SUCCESS;
-    if (OB_FAIL(ObBackupIoAdapter::close_device_and_fd(device_handle_, fd_))) {
+    if (OB_FAIL(ObExternalIoAdapter::close_device_and_fd(device_handle_, fd_))) {
       LOG_WARN("fail to close device and fd", KR(ret), K_(fd), KP_(device_handle));
     }
   }
@@ -102,11 +103,11 @@ int ObExternalDataAccessDriver::get_file_size(const ObString &url, int64_t &file
 
   if (OB_FAIL(ob_write_string(allocator, url, url_cstring, true/*c_style*/))) {
     LOG_WARN("fail to copy string", KR(ret), K(url));
-  } else if (OB_FAIL(ObBackupIoAdapter::get_file_length(url_cstring, access_info_, file_size))) {
+  } else if (OB_FAIL(ObExternalIoAdapter::get_file_length(url_cstring, access_info_, file_size))) {
     LOG_WARN("fail to get file length", KR(ret), K(url_cstring), K_(access_info));
   }
 
-  if (OB_OBJECT_NOT_EXIST == ret || OB_IO_ERROR == ret) {
+  if (OB_OBJECT_NOT_EXIST == ret || OB_HDFS_PATH_NOT_FOUND == ret || OB_IO_ERROR == ret) {
     file_size = -1;
     ret = OB_SUCCESS;
   }
@@ -119,9 +120,9 @@ int ObExternalDataAccessDriver::open(const char *url)
   if (OB_UNLIKELY(is_opened())) {
     ret = OB_INIT_TWICE;
     LOG_WARN("Data Access Driver has been opened", KR(ret), K(url));
-  } else if (OB_FAIL(ObBackupIoAdapter::open_with_access_type(
+  } else if (OB_FAIL(ObExternalIoAdapter::open_with_access_type(
       device_handle_, fd_, access_info_, url, OB_STORAGE_ACCESS_READER,
-      ObStorageIdMod(OB_STORAGE_ID_EXTERNAL, ObStorageUsedMod::STORAGE_USED_EXTERNAL)))) {
+      ObStorageIdMod::get_default_external_id_mod()))) {
     LOG_WARN("fail to open Data Access Driver", KR(ret), K_(access_info), K(url));
   }
   return ret;
@@ -132,7 +133,7 @@ int ObExternalDataAccessDriver::pread(void *buf, const int64_t count, const int6
   int ret = OB_SUCCESS;
   ObIOHandle io_handle;
   CONSUMER_GROUP_FUNC_GUARD(PRIO_IMPORT);
-  if (OB_FAIL(ObBackupIoAdapter::async_pread(*device_handle_, fd_,
+  if (OB_FAIL(ObExternalIoAdapter::async_pread(*device_handle_, fd_,
       static_cast<char *>(buf), offset, count, io_handle))) {
     LOG_WARN("fail to async pread", KR(ret),
         KP_(device_handle), K_(fd), KP(buf), K(offset), K(count));
@@ -218,6 +219,7 @@ public:
       ObString tmp_file;
       bool is_filtered = false;
       ObString cur_path = path_;
+      ObString filter_path;
       if (file_name.case_compare(".") == 0
           || file_name.case_compare("..") == 0) {
         //do nothing
@@ -228,7 +230,14 @@ public:
         OB_LOG(WARN, "append failed", K(ret)) ;
       } else if (OB_FAIL(full_path.append(file_name))) {
         OB_LOG(WARN, "append file name failed", K(ret));
-      } else if (OB_NOT_NULL(filter_) && OB_FAIL(filter_->is_filtered(full_path.string(), is_filtered))) {
+      } else {
+        filter_path = full_path.string();
+        filter_path += origin_path_.length();  // 只匹配location下的子路径
+      }
+
+      if (OB_FAIL(ret)) {
+        // do nothing
+      } else if (OB_NOT_NULL(filter_) && OB_FAIL(filter_->is_filtered(filter_path, is_filtered))) {
         LOG_WARN("fail check is filtered", K(ret));
       } else if (!is_filtered) {
         ObString target = full_path.string();
@@ -302,7 +311,7 @@ int ObExternalDataAccessDriver::get_file_list(const ObString &path,
       }
     } else {
       // OB_STORAGE_HDFS
-      OZ(ObBackupIoAdapter::is_directory(path_cstring, access_info_, is_dir));
+      OZ(ObExternalIoAdapter::is_directory(path_cstring, access_info_, is_dir));
       if (!is_dir) {
         LOG_INFO("external location is not a directory", K(path_cstring));
       } else {
@@ -317,9 +326,9 @@ int ObExternalDataAccessDriver::get_file_list(const ObString &path,
       ObLocalFileListArrayOpWithFilter file_op(file_urls, file_sizes, file_dir, path_cstring,
                                                pattern.empty() ? NULL : &filter, allocator);
       dir_op.set_dir_flag();
-      if (OB_FAIL(ObBackupIoAdapter::list_files(file_dir, access_info_, file_op))) {
+      if (OB_FAIL(ObExternalIoAdapter::list_files(file_dir, access_info_, file_op))) {
         LOG_WARN("fail to list files", KR(ret), K(file_dir), K_(access_info));
-      } else if (OB_FAIL(ObBackupIoAdapter::list_directories(file_dir, access_info_, dir_op))) {
+      } else if (OB_FAIL(ObExternalIoAdapter::list_directories(file_dir, access_info_, dir_op))) {
         LOG_WARN("fail to list dirs", KR(ret), K(file_dir), K_(access_info));
       } else if (file_dirs.count() + file_urls.count() > MAX_VISIT_COUNT) {
         ret = OB_SIZE_OVERFLOW;
@@ -328,7 +337,7 @@ int ObExternalDataAccessDriver::get_file_list(const ObString &path,
     }
   } else {
     ObExternalFileListArrayOpWithFilter file_op(file_urls, file_sizes, pattern.empty() ? NULL : &filter, allocator);
-    if (OB_FAIL(ObBackupIoAdapter::list_files(path_cstring, access_info_, file_op))) {
+    if (OB_FAIL(ObExternalIoAdapter::list_files(path_cstring, access_info_, file_op))) {
       LOG_WARN("fail to list files", KR(ret), K(path_cstring), K_(access_info));
     }
   }
@@ -342,9 +351,9 @@ int ObExternalDataAccessDriver::init(const ObString &location, const ObString &a
   ObArenaAllocator temp_allocator;
   ObString location_cstr;
   ObString access_info_cstr;
-  ObBackupIoAdapter util;
+  ObExternalIoAdapter util;
 
-  if (OB_FAIL(get_storage_type_from_path(location, device_type))) {
+  if (OB_FAIL(get_storage_type_from_path_for_external_table(location, device_type))) {
     LOG_WARN("fail to resove storage type", K(ret));
   } else {
     storage_type_ = device_type;
@@ -646,6 +655,14 @@ int ObExternalTableAccessService::table_scan(
         LOG_WARN("alloc memory failed", K(ret));
       }
       break;
+    case ObExternalFileFormat::PLUGIN_FORMAT:
+      if (OB_ISNULL(row_iter = OB_NEWx(ObPluginExternalTableRowIterator, (scan_param.allocator_)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate memory", K(ret), K(sizeof(ObPluginExternalTableRowIterator)));
+      } else {
+        LOG_TRACE("success to create plugin row iterator");
+      }
+      break;
     default:
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected format", K(ret), "format", param.external_file_format_.format_type_);
@@ -653,6 +670,7 @@ int ObExternalTableAccessService::table_scan(
 
   if (OB_SUCC(ret)) {
     if (OB_FAIL(row_iter->init(&scan_param))) {
+      row_iter->~ObExternalTableRowIterator();
       LOG_WARN("fail to open iter", K(ret));
     } else {
       result = row_iter;
@@ -691,6 +709,14 @@ int ObExternalTableAccessService::table_rescan(ObVTableScanParam &param, ObNewRo
         LOG_WARN("not support to read odps in opensource", K(ret));
 #endif
         break;
+      case ObExternalFileFormat::PLUGIN_FORMAT: {
+        ObPluginExternalTableRowIterator *iter = static_cast<ObPluginExternalTableRowIterator *>(result);
+        iter->reset();
+        if (OB_FAIL(iter->rescan(static_cast<ObTableScanParam *>(&param)))) {
+          LOG_WARN("failed to do rescan by plugin row iterator", K(ret));
+        }
+        break;
+      }
       default:
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected format", K(ret), "format", param.external_file_format_.format_type_);
@@ -883,20 +909,34 @@ int ObExternalTableRowIterator::calc_exprs_for_rowid(const int64_t read_count, O
   int ret = OB_SUCCESS;
   ObEvalCtx &eval_ctx = scan_param_->op_->get_eval_ctx();
   if (OB_NOT_NULL(file_id_expr_)) {
-    OZ (file_id_expr_->init_vector_for_write(eval_ctx, VEC_FIXED, read_count));
-    for (int i = 0; OB_SUCC(ret) && i < read_count; i++) {
-      ObFixedLengthBase *vec = static_cast<ObFixedLengthBase *>(file_id_expr_->get_vector(eval_ctx));
-      vec->set_int(i, state.cur_file_id_);
+    if (scan_param_->op_->enable_rich_format_) {
+      OZ (file_id_expr_->init_vector_for_write(eval_ctx, VEC_FIXED, read_count));
+      for (int i = 0; OB_SUCC(ret) && i < read_count; i++) {
+        ObFixedLengthBase* vec = static_cast<ObFixedLengthBase*>(file_id_expr_->get_vector(eval_ctx));
+        vec->set_int(i, state.cur_file_id_);
+      }
+    } else {
+      ObDatum* datums = file_id_expr_->locate_batch_datums(eval_ctx);
+      for (int64_t i = 0; i < read_count; i++) {
+        datums[i].set_int(state.cur_file_id_);
+      }
     }
-    file_id_expr_->set_evaluated_flag(eval_ctx);
+    OX (file_id_expr_->set_evaluated_flag(eval_ctx));
   }
   if (OB_NOT_NULL(line_number_expr_)) {
-    OZ (line_number_expr_->init_vector_for_write(eval_ctx, VEC_FIXED, read_count));
-    for (int i = 0; OB_SUCC(ret) && i < read_count; i++) {
-      ObFixedLengthBase *vec = static_cast<ObFixedLengthBase *>(line_number_expr_->get_vector(eval_ctx));
-      vec->set_int(i, state.cur_line_number_ + i);
+    if (scan_param_->op_->enable_rich_format_) {
+      OZ (line_number_expr_->init_vector_for_write(eval_ctx, VEC_FIXED, read_count));
+      for (int i = 0; OB_SUCC(ret) && i < read_count; i++) {
+        ObFixedLengthBase* vec = static_cast<ObFixedLengthBase*>(line_number_expr_->get_vector(eval_ctx));
+        vec->set_int(i, state.cur_line_number_ + i);
+      }
+    } else {
+      ObDatum* datums = line_number_expr_->locate_batch_datums(eval_ctx);
+      for (int64_t i = 0; i < read_count; i++) {
+        datums[i].set_int(state.cur_line_number_ + i);
+      }
     }
-    line_number_expr_->set_evaluated_flag(eval_ctx);
+    OX (line_number_expr_->set_evaluated_flag(eval_ctx));
   }
   state.cur_line_number_ += read_count;
   state.batch_first_row_line_num_ = state.cur_line_number_ - read_count;

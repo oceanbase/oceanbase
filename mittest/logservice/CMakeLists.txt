@@ -12,7 +12,7 @@ target_link_libraries(oblogsvr_test PUBLIC oceanbase)
 
 function(ob_unittest_clog case)
   ob_unittest(${ARGV})
-  target_link_libraries(${case} PRIVATE -static-libstdc++ gtest gmock oblogsvr_test oceanbase)
+  target_link_libraries(${case} PRIVATE gtest gmock oblogsvr_test oceanbase)
   set_tests_properties(${case} PROPERTIES TIMEOUT 600)
 endfunction()
 

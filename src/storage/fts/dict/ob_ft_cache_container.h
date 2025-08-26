@@ -51,12 +51,10 @@ public:
   {
     int ret = OB_SUCCESS;
     ObFTCacheRangeHandle *handle = nullptr;
-    if (OB_ISNULL(handle = static_cast<ObFTCacheRangeHandle *>(
-                      alloc_.alloc(sizeof(ObFTCacheRangeHandle))))) {
+    if (OB_ISNULL(handle = OB_NEWx(ObFTCacheRangeHandle, &alloc_))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-    } else if (FALSE_IT(new (handle) ObFTCacheRangeHandle())) {
-      // never reach
     } else if (OB_FAIL(handles_.push_back(handle))) {
+      OB_DELETEx(ObFTCacheRangeHandle, &alloc_, handle);
       STORAGE_FTS_LOG(WARN, "Failed to push back handle", K(ret));
     } else {
       info = handle;

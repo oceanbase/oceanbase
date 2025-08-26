@@ -237,6 +237,8 @@ int ObSelectStmtPrinter::print_basic_stmt()
     LOG_WARN("fail to print order by", K(ret), K(*stmt_));
   } else if (OB_FAIL(print_limit())) {
     LOG_WARN("fail to print limit", K(ret), K(*stmt_));
+  } else if (OB_FAIL(print_vector_index_query_param())) {
+    LOG_WARN("fail to print vector index query params", K(ret), K(*stmt_));
   } else if (OB_FAIL(print_fetch())) {
     LOG_WARN("fail to print fetch", K(ret), K(*stmt_));
   } else if (OB_FAIL(print_with_check_option())) {
@@ -268,8 +270,6 @@ int ObSelectStmtPrinter::print_select()
       bool is_oracle_mode = lib::is_oracle_mode();
       if (OB_FAIL(print_hint())) { // hint
         LOG_WARN("fail to print hint", K(ret), K(*select_stmt));
-      } else if (select_stmt->is_unpivot_select()) {
-        DATA_PRINTF(" * ");
       } else {
         if (select_stmt->is_select_straight_join()) { // straight_join
           DATA_PRINTF("straight_join ");

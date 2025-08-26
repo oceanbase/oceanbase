@@ -19,6 +19,7 @@
 #include "share/schema/ob_routine_info.h"
 #include "share/schema/ob_package_info.h"
 #include "share/schema/ob_trigger_info.h"
+#include "share/table/ob_ttl_util.h"
 
 namespace oceanbase
 {
@@ -125,6 +126,25 @@ int ObPLDDLService::create_routine(const obrpc::ObCreateRoutineArg &arg,
           }
         }
       }
+
+      if (OB_SUCC(ret) && ObExternalRoutineType::INTERNAL_ROUTINE != routine_info.get_external_routine_type()) {
+        omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+        uint64_t data_version = 0;
+
+        if (!tenant_config.is_valid()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected invalid tenant_config", K(ret), K(tenant_id));
+        } else if (!tenant_config->ob_enable_java_udf) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("ob_enable_java_udf is not enabled", K(ret));
+        } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+          LOG_WARN("failed to GET_MIN_DATA_VERSION", K(ret), K(tenant_id));
+        } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_0_0 || data_version < DATA_VERSION_4_4_0_0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("Java UDF is only supported after 4.4.0", K(ret));
+        }
+      }
+
       if (OB_SUCC(ret)) {
         ObErrorInfo error_info = arg.error_info_;
         ObSArray<ObDependencyInfo> &dep_infos = const_cast<ObSArray<ObDependencyInfo> &>(arg.dependency_infos_);
@@ -234,8 +254,8 @@ int ObPLDDLService::create_routine(ObRoutineInfo &routine_info,
                                                    user_info))) {
               LOG_WARN("failed to get user info", K(ret));
             } else if (OB_ISNULL(user_info)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("user info is unexpeced null", K(ret));
+              ret = OB_ERR_PARALLEL_DDL_CONFLICT;
+              LOG_WARN("user info is null, may be parallel ddl conflict", K(ret));
             } else if (OB_FAIL(pl_operator.grant_routine(routine_key,
                                                           priv_set,
                                                           trans,
@@ -2070,6 +2090,8 @@ int ObPLDDLService::get_object_info(ObSchemaGetterGuard &schema_guard,
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "not create on user table or user view in trigger now");
       LOG_WARN("trigger only support create on user table or user view now", K(ret));
+    } else if (OB_FAIL(ObTTLUtil::check_htable_ddl_supported(*table_schema, false/*by_admin*/))) {
+      LOG_WARN("fail to check htable ddl supported", K(ret));
     } else {
       object_type = table_schema->is_user_table() ? TABLE_SCHEMA : VIEW_SCHEMA;
       object_id = table_schema->get_table_id();
@@ -2290,6 +2312,163 @@ int ObPLDDLService::check_env_before_ddl(share::schema::ObSchemaGetterGuard &sch
   } else if (OB_FAIL(ddl_service.check_parallel_ddl_conflict(schema_guard, arg))) {
     LOG_WARN("check parallel ddl conflict failed", K(ret));
   }
+  return ret;
+}
+
+int ObPLDDLService::create_external_resource(const obrpc::ObCreateExternalResourceArg &arg,
+                                             obrpc::ObCreateExternalResourceRes &result,
+                                             rootserver::ObDDLService &ddl_service)
+{
+  int ret = OB_SUCCESS;
+
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(arg.tenant_id_));
+  uint64_t data_version = 0;
+  ObSchemaGetterGuard schema_guard;
+  const ObDatabaseSchema *db_schema = nullptr;
+  bool is_exist = false;
+
+  if (OB_FAIL(check_env_before_ddl(schema_guard, arg, ddl_service))) {
+    LOG_WARN("failed to check_env_before_ddl", K(ret), K(arg));
+  } else if (!tenant_config.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected invalid tenant_config", K(ret), K(arg));
+  } else if (!tenant_config->ob_enable_java_udf) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("ob_enable_java_udf is not enabled", K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(arg.tenant_id_, data_version))) {
+    LOG_WARN("failed to GET_MIN_DATA_VERSION", K(ret), K(arg));
+  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_0_0 || data_version < DATA_VERSION_4_4_0_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("external resource is only supported after 4.4.0", K(ret));
+  } else if (OB_FAIL(schema_guard.get_database_schema(arg.tenant_id_, arg.database_id_, db_schema))) {
+    LOG_WARN("failed to get_database_schema", K(ret), K(arg));
+  } else if (OB_ISNULL(db_schema)) {
+    ret = OB_ERR_BAD_DATABASE;
+    LOG_WARN("database does not exist", K(ret), K(arg));
+  } else if (db_schema->is_in_recyclebin()) {
+    ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
+    LOG_WARN("Can't not create external resource of db in recyclebin", K(ret), K(arg), KPC(db_schema));
+  } else if (OB_FAIL(schema_guard.check_external_resource_exist(arg.tenant_id_, arg.database_id_, arg.name_, is_exist))) {
+    LOG_WARN("failed to check_external_resource_exist", K(ret), K(arg));
+  } else if (is_exist) {
+    ret = OB_OBJECT_NAME_EXIST;
+    LOG_WARN("external resource with same name already exists", K(ret), K(arg), K(is_exist));
+  } else {
+    ObSimpleExternalResourceSchema new_schema;
+
+    ObDDLSQLTransaction trans(ddl_service.schema_service_);
+    ObPLDDLOperator pl_operator(*ddl_service.schema_service_, *ddl_service.sql_proxy_);
+    int64_t refreshed_schema_version = 0;
+
+    if (OB_FAIL(schema_guard.get_schema_version(arg.tenant_id_, refreshed_schema_version))) {
+      LOG_WARN("failed to get tenant schema version", KR(ret), K(arg));
+    } else if (OB_FAIL(trans.start(ddl_service.sql_proxy_, arg.tenant_id_, refreshed_schema_version))) {
+      LOG_WARN("start transaction failed", KR(ret), K(arg), K(refreshed_schema_version));
+    } else if (OB_FAIL(pl_operator.create_external_resource(arg, new_schema, trans))) {
+      LOG_WARN("failed to create_external_resource", K(ret));
+    } else {
+      result.resource_id_ = new_schema.get_resource_id();
+      result.schema_version_ = new_schema.get_schema_version();
+    }
+
+    if (trans.is_started()) {
+      int temp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
+        ret = (OB_SUCC(ret)) ? temp_ret : ret;
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ddl_service.publish_schema(arg.tenant_id_))) {
+      LOG_WARN("publish schema failed", K(ret));
+    }
+  }
+
+  return ret;
+}
+
+int ObPLDDLService::drop_external_resource(const obrpc::ObDropExternalResourceArg &arg,
+                                           obrpc::ObDropExternalResourceRes &result,
+                                           rootserver::ObDDLService &ddl_service)
+{
+  int ret = OB_SUCCESS;
+
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(arg.tenant_id_));
+  uint64_t data_version = 0;
+  ObSchemaGetterGuard schema_guard;
+  const ObDatabaseSchema *db_schema = nullptr;
+
+  if (OB_FAIL(check_env_before_ddl(schema_guard, arg, ddl_service))) {
+    LOG_WARN("failed to check_env_before_ddl", K(ret), K(arg));
+  } else if (!tenant_config.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected invalid tenant_config", K(ret), K(arg));
+  } else if (!tenant_config->ob_enable_java_udf) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("ob_enable_java_udf is not enabled", K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(arg.tenant_id_, data_version))) {
+    LOG_WARN("failed to GET_MIN_DATA_VERSION", K(ret), K(arg));
+  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_0_0 || data_version < DATA_VERSION_4_4_0_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("external resource is only supported after 4.4.0", K(ret));
+  } else if (OB_FAIL(schema_guard.get_database_schema(arg.tenant_id_, arg.database_id_, db_schema))) {
+    LOG_WARN("failed to get_database_schema", K(ret), K(arg));
+  } else if (OB_ISNULL(db_schema)) {
+    ret = OB_ERR_BAD_DATABASE;
+    LOG_WARN("database does not exist", K(ret), K(arg));
+  } else if (db_schema->is_in_recyclebin()) {
+    ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
+    LOG_WARN("Can't not drop external resource of db in recyclebin", K(ret), K(arg), KPC(db_schema));
+  } else {
+    const ObSimpleExternalResourceSchema *old_schema = nullptr;
+    ObSimpleExternalResourceSchema schema;
+
+    ObDDLSQLTransaction trans(ddl_service.schema_service_);
+    ObPLDDLOperator pl_operator(*ddl_service.schema_service_, *ddl_service.sql_proxy_);
+    int64_t refreshed_schema_version = 0;
+    bool is_exist = false;
+
+    if (OB_FAIL(schema_guard.check_external_resource_exist(arg.tenant_id_, arg.database_id_, arg.name_, is_exist))) {
+      LOG_WARN("failed to check_external_resource_exist", K(ret), K(arg));
+    } else if (OB_UNLIKELY(!is_exist)) {
+      ret = OB_ERR_OBJECT_NOT_EXIST;
+      LOG_WARN("external resource not found in rootservice", K(ret), K(arg));
+    } else if (OB_FAIL(schema_guard.get_external_resource_schema(arg.tenant_id_, arg.database_id_, arg.name_, old_schema))) {
+      LOG_WARN("failed to get_external_resource_schema", K(ret), K(arg));
+    } else if (OB_ISNULL(old_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected NULL old schema after check", K(ret), K(arg), K(is_exist));
+    } else if (OB_FAIL(schema.assign(*old_schema))) {
+      LOG_WARN("failed to assign tp new_schema", K(ret), KPC(old_schema));
+    } else if (OB_FAIL(schema_guard.get_schema_version(arg.tenant_id_, refreshed_schema_version))) {
+      LOG_WARN("failed to get tenant schema version", KR(ret), K(arg));
+    } else if (OB_FAIL(trans.start(ddl_service.sql_proxy_, arg.tenant_id_, refreshed_schema_version))) {
+      LOG_WARN("start transaction failed", KR(ret), K(arg), K(refreshed_schema_version));
+    } else if (OB_FAIL(pl_operator.drop_external_resource(schema, arg.ddl_stmt_str_, trans))) {
+      LOG_WARN("failed to drop_external_resource", K(ret));
+    } else {
+      result.resource_id_ = schema.get_resource_id();
+      result.schema_version_ = schema.get_schema_version();
+      result.type_ = schema.get_type();
+    }
+
+    if (trans.is_started()) {
+      int temp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
+        ret = (OB_SUCC(ret)) ? temp_ret : ret;
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ddl_service.publish_schema(arg.tenant_id_))) {
+      LOG_WARN("publish schema failed", K(ret));
+    }
+  }
+
   return ret;
 }
 

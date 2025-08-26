@@ -113,6 +113,7 @@ enum DynamicFilterType
 {
   JOIN_RUNTIME_FILTER= 0,
   PD_TOPN_FILTER = 1,
+  LOCAL_FILTER = 2,
   MAX_DYNAMIC_FILTER_TYPE
 };
 
@@ -290,7 +291,6 @@ public:
         OR_FILTER == type_ || TRUNCATE_OR_FILTER == type_;
   }
   int check_filter_info(const storage::ObITableReadInfo &read_info,
-                        const bool has_lob_column_out,
                         bool &is_safe_filter_with_di);
 
   VIRTUAL_TO_STRING_KV(K_(type), K_(n_child), K_(col_ids));
@@ -397,6 +397,7 @@ public:
   virtual OB_INLINE int set_op_type(const ObRawExpr &raw_expr);
   OB_INLINE ObWhiteFilterOperatorType get_op_type() const { return op_type_; }
   virtual int get_filter_val_meta(common::ObObjMeta &obj_meta) const;
+  int get_filter_in_val_meta(int64_t arg_idx, common::ObObjMeta &obj_meta) const;
   inline virtual ObObjType get_filter_arg_obj_type(int64_t arg_idx) const
   {
     const ObExpr *expr = WHITE_OP_IN == op_type_ ? expr_->args_[1] : expr_;
@@ -956,8 +957,7 @@ public:
   inline bool operator==(const ObWhiteFilterParam &other) const
   {
     bool equal_ret = true;
-    if (datum_->is_null() && other.datum_->is_null()) {
-    } else if (datum_->is_null() || other.datum_->is_null()) {
+    if (datum_->is_null() || other.datum_->is_null()) {
       equal_ret = false;
     } else {
       int cmp_ret = 0;
@@ -1374,6 +1374,7 @@ public:
   int64_t ext_tbl_filter_pd_level_;
   ExprFixedArray ext_mapping_column_exprs_;
   ObFixedArray<uint64_t, ObIAllocator> ext_mapping_column_ids_;
+  bool ext_enable_late_materialization_;
 };
 
 //下压到存储层的表达式执行依赖的op ctx

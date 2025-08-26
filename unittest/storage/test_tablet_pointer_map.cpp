@@ -37,7 +37,7 @@ int ObTenantMetaMemMgr::fetch_tenant_config()
 
 int ObTabletPointerMap::load_meta_obj(
     const ObTabletMapKey &key,
-    ObTabletBasePointer *meta_pointer,
+    ObTabletPointer *meta_pointer,
     common::ObArenaAllocator &allocator,
     ObMetaDiskAddr &load_addr,
     ObTablet *t)

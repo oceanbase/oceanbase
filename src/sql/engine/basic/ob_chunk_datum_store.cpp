@@ -572,7 +572,7 @@ ObChunkDatumStore::ObChunkDatumStore(const ObLabel &label, common::ObIAllocator 
     tmp_dump_blk_(nullptr)
 {
   io_.fd_ = -1;
-  io_.dir_id_ = -1;
+  dir_id_ = -1;
 }
 
 int ObChunkDatumStore::init(int64_t mem_limit,
@@ -607,7 +607,6 @@ void ObChunkDatumStore::reset()
 {
   int ret = OB_SUCCESS;
   if (is_file_open()) {
-    aio_write_handle_.reset();
     if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.remove(tenant_id_, io_.fd_))) {
       LOG_WARN("remove file failed", K(ret), K_(io_.fd));
     } else {
@@ -1629,8 +1628,6 @@ int ObChunkDatumStore::finish_add_row(bool need_dump)
       uint64_t begin_io_dump_time = rdtsc();
       if (OB_FAIL(get_timeout(timeout_ms))) {
         LOG_WARN("get timeout failed", K(ret));
-      } else if (OB_FAIL(aio_write_handle_.wait())) { // last buffer
-        LOG_WARN("failed to wait write", K(ret));
       }
       if (OB_LIKELY(nullptr != get_io_event_observer())) {
         get_io_event_observer()->on_write_io(rdtsc() - begin_io_dump_time);
@@ -2105,7 +2102,7 @@ int ObChunkDatumStore::get_timeout(int64_t &timeout_ms)
 int ObChunkDatumStore::alloc_dir_id()
 {
   int ret = OB_SUCCESS;
-  if (-1 == io_.dir_id_ && OB_FAIL(ObChunkStoreUtil::alloc_dir_id(tenant_id_, io_.dir_id_))) {
+  if (-1 == dir_id_ && OB_FAIL(ObChunkStoreUtil::alloc_dir_id(tenant_id_, dir_id_))) {
     LOG_WARN("allocate file directory failed", K(ret));
   }
   return ret;
@@ -2125,25 +2122,23 @@ int ObChunkDatumStore::write_file(void *buf, int64_t size)
     LOG_WARN("get timeout failed", K(ret));
   } else {
     if (!is_file_open()) {
-      if (-1 == io_.dir_id_) {
+      if (-1 == dir_id_) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("temp file dir id is not init", K(ret), K(io_.dir_id_));
-      } else if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.open(tenant_id_, io_.fd_, io_.dir_id_))) {
+        LOG_WARN("temp file dir id is not init", K(ret), K(dir_id_));
+      } else if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.open(tenant_id_, io_.fd_, dir_id_))) {
         LOG_WARN("open file failed", K(ret));
       } else {
         file_size_ = 0;
         io_.io_desc_.set_wait_event(ObWaitEventIds::ROW_STORE_DISK_WRITE);
         io_.io_timeout_ms_ = timeout_ms;
-        LOG_INFO("open file success", K_(io_.fd), K_(io_.dir_id));
+        LOG_INFO("open file success", K_(io_.fd), K_(dir_id));
       }
     }
     ret = OB_E(EventTable::EN_8) ret;
   }
   if (OB_SUCC(ret) && size > 0) {
     set_io(size, static_cast<char *>(buf));
-    if (aio_write_handle_.is_valid() && OB_FAIL(aio_write_handle_.wait())) {
-      LOG_WARN("failed to wait write", K(ret));
-    } else if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.aio_write(tenant_id_, io_, aio_write_handle_))) {
+    if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.write(tenant_id_, io_))) {
       LOG_WARN("write to file failed", K(ret), K_(io), K(timeout_ms));
     }
   }
@@ -2175,10 +2170,6 @@ int ObChunkDatumStore::read_file(
     LOG_WARN("invalid argument", K(size), K(offset), KP(buf));
   } else if (OB_FAIL(get_timeout(timeout_ms))) {
     LOG_WARN("get timeout failed", K(ret));
-  } else if (!handle.is_valid()) {
-    if (OB_FAIL(aio_write_handle_.wait())) {
-      LOG_WARN("failed to wait write", K(ret));
-    }
   }
   int64_t read_size = file_size - cur_pos;
   if (OB_FAIL(ret)) {
@@ -2755,8 +2746,6 @@ int ObChunkDatumStore::Iterator::aio_read(char *buf, const int64_t size)
     int64_t timeout_ms = 0;
     if (OB_FAIL(store_->get_timeout(timeout_ms))) {
       LOG_WARN("fail to exec store_->get_timeout", K(ret));
-    } else if (store_->aio_write_handle_.is_valid() && OB_FAIL(store_->aio_write_handle_.wait())) {
-      LOG_WARN("fail to exec store_->aio_write_handle_.wait", K(ret));
     }
   }
   if (OB_SUCC(ret)) {

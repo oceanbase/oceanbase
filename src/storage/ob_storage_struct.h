@@ -477,7 +477,11 @@ struct ObUpdateTableStoreParam
   TO_STRING_KV(KP_(sstable), K_(snapshot_version), K_(multi_version_start),
                KPC_(storage_schema), K_(rebuild_seq),
                K_(compaction_info), K_(ha_info),
-               K_(ddl_info), K_(allow_duplicate_sstable), K_(upper_trans_param));
+               K_(ddl_info), K_(allow_duplicate_sstable),
+               K_(allow_adjust_next_start_scn),
+               K_(update_tablet_ss_change_version),
+               K_(tablet_ss_change_fully_applied),
+               K_(upper_trans_param));
   ObCompactionTableStoreParam compaction_info_;
   ObDDLTableStoreParam ddl_info_;
   ObHATableStoreParam ha_info_;
@@ -488,7 +492,10 @@ struct ObUpdateTableStoreParam
   int64_t rebuild_seq_;
   const blocksstable::ObSSTable *sstable_;
   bool allow_duplicate_sstable_;
-  UpdateUpperTransParam upper_trans_param_; // set upper_trans_param_ only when update upper_trans_version
+  bool allow_adjust_next_start_scn_;           // wheter can adjust start_scn of next sibling sstable
+  share::SCN update_tablet_ss_change_version_; // for shared storage tablet change sync
+  bool tablet_ss_change_fully_applied_;        // wheter the specified version is fully applied
+  UpdateUpperTransParam upper_trans_param_;    // set upper_trans_param_ only when update upper_trans_version
 };
 
 struct ObSplitTableStoreParam final
@@ -498,7 +505,8 @@ public:
   ~ObSplitTableStoreParam();
   bool is_valid() const;
   void reset();
-  TO_STRING_KV(K_(snapshot_version), K_(multi_version_start), K_(merge_type), K_(skip_split_keys));
+  TO_STRING_KV(K_(snapshot_version), K_(multi_version_start), K_(merge_type),
+    K_(skip_split_keys));
 
 public:
   int64_t snapshot_version_;
@@ -518,7 +526,7 @@ struct ObBatchUpdateTableStoreParam final
 
   TO_STRING_KV(K_(tables_handle), K_(rebuild_seq), K_(is_transfer_replace),
       K_(start_scn), KP_(tablet_meta), K_(restore_status), K_(tablet_split_param),
-      K_(need_replace_remote_sstable), K_(release_mds_scn));
+      K_(need_replace_remote_sstable), K_(release_mds_scn), K_(reorg_scn));
 
   ObTablesHandleArray tables_handle_;
 #ifdef ERRSIM
@@ -532,6 +540,7 @@ struct ObBatchUpdateTableStoreParam final
   ObSplitTableStoreParam tablet_split_param_;
   bool need_replace_remote_sstable_;
   share::SCN release_mds_scn_;
+  share::SCN reorg_scn_;
 
   DISALLOW_COPY_AND_ASSIGN(ObBatchUpdateTableStoreParam);
 };

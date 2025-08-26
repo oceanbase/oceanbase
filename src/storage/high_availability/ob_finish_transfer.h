@@ -79,7 +79,6 @@ private:
   // @param[in]: member_list
   // @param[in]: tablet_list
   // @param[in]: quorum
-  // @param[in]: majority_backfilled
   int check_ls_logical_table_replaced(const uint64_t tenant_id, const share::ObLSID &dest_ls_id,
       const common::ObMemberList &member_list, const common::ObArray<share::ObTransferTabletInfo> &tablet_list,
       const int64_t quorum, bool &all_backfilled);
@@ -117,11 +116,10 @@ private:
   int check_all_ls_replica_replay_scn_(const share::ObTransferTaskID &task_id, const uint64_t tenant_id,
       const share::ObLSID &ls_id, const common::ObIArray<common::ObAddr> &total_addr_list, const share::SCN &finish_scn,
       ObTimeoutCtx &timeout_ctx, common::ObIArray<common::ObAddr> &finished_addr_list);
-
 private:
   /* helper functions */
 
-  // get ls member list
+  // get ls ls handle
   // @param[in]: tenant_id
   // @param[in]: ls_id
   // @param[out]: ls handle
@@ -148,7 +146,9 @@ private:
   // @param[in]: lock timeout
   // @param[in]: lock_owner
   int unlock_ls_member_list_(const uint64_t tenant_id, const share::ObLSID &ls_id,
-      const common::ObMemberList &member_list, const ObTransferLockStatus &status, const int64_t lock_timeout);
+      const common::ObMemberList &member_list, const ObTransferLockStatus &status,
+      const bool need_check_palf_leader, const share::ObLSID &need_check_palf_leader_ls_id,
+      const int64_t lock_timeout);
 
   // lock ls member list
   // @param[in]: tenant_id

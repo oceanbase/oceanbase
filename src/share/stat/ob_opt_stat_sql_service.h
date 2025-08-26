@@ -98,11 +98,15 @@ public:
                        const ObOptTableStat::Key &key,
                        ObIArray<ObOptTableStat> &all_part_stats);
 
-  int batch_fetch_table_stats(sqlclient::ObISQLConnection *conn,
-                              const uint64_t tenant_id,
+  int fetch_table_stat(const uint64_t tenant_id,
+                       const ObIArray<const ObOptTableStat::Key *> &keys,
+                       ObIArray<ObOptTableStat *> &all_part_stats);
+
+  int batch_fetch_table_stats(const uint64_t tenant_id,
                               const uint64_t table_id,
                               const ObIArray<int64_t> &part_ids,
-                              ObIArray<ObOptTableStat*> &all_part_stats);
+                              ObIArray<ObOptTableStat *> &all_part_stats,
+                              sqlclient::ObISQLConnection *conn = NULL);
 
   int fill_table_stat(sqlclient::ObMySQLResult &result, ObOptTableStat &stat);
 

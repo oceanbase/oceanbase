@@ -14,6 +14,7 @@
 #include "share/object/ob_obj_cast_util.h"
 
 #include "lib/number/ob_number_v2.h"
+#include "sql/engine/ob_diagnosis_manager.h"
 
 namespace oceanbase
 {

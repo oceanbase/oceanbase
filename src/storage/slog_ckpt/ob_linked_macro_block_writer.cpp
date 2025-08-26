@@ -26,16 +26,14 @@ using namespace oceanbase::blocksstable;
 
 ObLinkedMacroBlockWriter::ObLinkedMacroBlockWriter()
   : is_inited_(false),
-    type_(WriteType::MAX_TYPE),
+    type_(WriteType::LMI_MAX_TYPE),
     write_ctx_(),
     handle_(),
     entry_block_id_(),
     tenant_id_(OB_INVALID_TENANT_ID),
     tenant_epoch_id_(0),
     fd_dispenser_(nullptr),
-    tablet_id_(0),
-    tablet_transfer_seq_(0),
-    cur_macro_seq_(-1)
+    macro_info_param_()
 {
 }
 
@@ -61,29 +59,19 @@ int ObLinkedMacroBlockWriter::init_for_slog_ckpt(
   return ret;
 }
 
-int ObLinkedMacroBlockWriter::init_for_macro_info(
-  const uint64_t tablet_id,
-  const int64_t tablet_transfer_seq,
-  const int64_t snapshot_version,
-  const int64_t start_macro_seq)
+int ObLinkedMacroBlockWriter::init_for_macro_info(const ObLinkedMacroInfoWriteParam &param)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObLinkedMacroBlockWriter has not been inited", K(ret));
-  } else if (OB_UNLIKELY(0 == tablet_id || (snapshot_version > 0 && start_macro_seq < 0))) {
+  } else if (OB_UNLIKELY(!param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(tablet_id), K(snapshot_version), K(start_macro_seq));
+    LOG_WARN("invalid arguments", K(ret), K(param));
   } else {
-    tenant_id_ = is_valid_tenant_id(MTL_ID()) ? MTL_ID() : OB_SERVER_TENANT_ID;
-    tablet_id_ = tablet_id;
-    if (snapshot_version > 0) {
-      type_ = WriteType::SHARED_MACRO_INFO;
-    } else {
-      type_ = WriteType::PRIV_MACRO_INFO;
-    }
-    cur_macro_seq_ = start_macro_seq;
-    tablet_transfer_seq_ = tablet_transfer_seq;
+    tenant_id_        = is_valid_tenant_id(MTL_ID()) ? MTL_ID() : OB_SERVER_TENANT_ID;
+    type_             = param.type_;
+    macro_info_param_ = param;
     is_inited_ = true;
   }
   return ret;
@@ -100,9 +88,9 @@ int ObLinkedMacroBlockWriter::write_block(
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObLinkedMacroBlockWriter has not been inited", K(ret));
-  } else if (GCTX.is_shared_storage_mode() && (0 == tablet_id_ && nullptr == fd_dispenser_)) {
+  } else if (GCTX.is_shared_storage_mode() && (WriteType::PRIV_SLOG_CKPT == type_ && nullptr == fd_dispenser_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("in shared_storage_mode, tablet_id should not be 0 and fd dispenser is nullptr", K(ret), K(type_));
+    LOG_WARN("in shared_storage_mode, type is private slog checkpoint and fd dispenser is nullptr", K(ret), K(type_));
   } else if (OB_UNLIKELY(nullptr == buf || buf_len < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(buf), K(buf_len));
@@ -112,16 +100,25 @@ int ObLinkedMacroBlockWriter::write_block(
         if (OB_NOT_NULL(fd_dispenser_)) {
           opt.set_private_ckpt_opt(tenant_id_, tenant_epoch_id_, fd_dispenser_->acquire_new_file_id());
         } else {
-          opt.set_private_meta_macro_object_opt(tablet_id_, tablet_transfer_seq_);
+          opt.set_private_ckpt_opt(tenant_id_, tenant_epoch_id_, 0);
         }
         break;
       }
-      case WriteType::SHARED_MACRO_INFO: {
-        opt.set_ss_share_meta_macro_object_opt(tablet_id_, cur_macro_seq_++, 0);
+      case WriteType::SHARED_MAJOR_MACRO_INFO: {
+        opt.set_ss_share_meta_macro_object_opt(macro_info_param_.tablet_id_.id(), macro_info_param_.start_macro_seq_++, 0);
+        break;
+      }
+      case WriteType::SHARED_INC_MACRO_INFO : {
+        opt.set_ss_tablet_sub_meta_opt(macro_info_param_.ls_id_.id(),
+                                       macro_info_param_.tablet_id_.id(),
+                                       macro_info_param_.op_id_,
+                                       macro_info_param_.start_macro_seq_++,
+                                       macro_info_param_.tablet_id_.is_ls_inner_tablet(),
+                                       macro_info_param_.reorganization_scn_);
         break;
       }
       case WriteType::PRIV_MACRO_INFO: {
-        opt.set_private_meta_macro_object_opt(tablet_id_, tablet_transfer_seq_);
+        opt.set_private_meta_macro_object_opt(macro_info_param_.tablet_id_.id(), macro_info_param_.tablet_transfer_seq_);
         break;
       }
       default: {
@@ -233,16 +230,14 @@ int64_t ObLinkedMacroBlockWriter::get_meta_block_cnt() const
 void ObLinkedMacroBlockWriter::reset()
 {
   is_inited_ = false;
-  type_ = WriteType::MAX_TYPE;
+  type_ = WriteType::LMI_MAX_TYPE;
   write_ctx_.reset();
   handle_.reset();
   entry_block_id_.reset();
   tenant_id_ = OB_INVALID_TENANT_ID;
   tenant_epoch_id_ = 0;
   fd_dispenser_ = nullptr;
-  tablet_id_ = 0;
-  tablet_transfer_seq_ = 0;
-  cur_macro_seq_ = -1;
+  macro_info_param_.reset();
 }
 
 void ObLinkedMacroBlockWriter::reuse_for_next_round()
@@ -250,7 +245,7 @@ void ObLinkedMacroBlockWriter::reuse_for_next_round()
   is_inited_ = false;
   handle_.reset();
   entry_block_id_.reset();
-  OB_ASSERT(-1 == cur_macro_seq_); // for shared macro, can't reuse sequence
+  OB_ASSERT(-1 == macro_info_param_.start_macro_seq_); // for shared macro, can't reuse sequence
 }
 
 //================== ObLinkedMacroBlockItemWriter =============================
@@ -293,11 +288,7 @@ int ObLinkedMacroBlockItemWriter::init_for_slog_ckpt(
 }
 
 int ObLinkedMacroBlockItemWriter::init_for_macro_info(
-  const uint64_t tablet_id,
-  const int64_t tablet_transfer_seq,
-  const int64_t snapshot_version,
-  const int64_t start_macro_seq,
-  ObIMacroBlockFlushCallback *write_callback)
+  const ObLinkedMacroInfoWriteParam &param)
 {
   int ret = OB_SUCCESS;
   const int64_t macro_block_size = OB_STORAGE_OBJECT_MGR.get_macro_block_size();
@@ -307,11 +298,11 @@ int ObLinkedMacroBlockItemWriter::init_for_macro_info(
     ret = OB_INIT_TWICE;
     LOG_WARN("ObLinkedMacroBlockItemWriter has already been inited", K(ret));
   } else if (FALSE_IT(allocator_.set_attr(mem_attr))) {
-  } else if (OB_UNLIKELY(0 == tablet_id || (snapshot_version > 0 && start_macro_seq < 0))) {
+  } else if (OB_UNLIKELY(!param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(tablet_id), K(snapshot_version), K(start_macro_seq));
-  } else if (OB_FAIL(block_writer_.init_for_macro_info(tablet_id, tablet_transfer_seq, snapshot_version, start_macro_seq))) {
-    LOG_WARN("fail to init meta block writer", K(ret));
+    LOG_WARN("invalid arguments", K(ret), K(param));
+  } else if (OB_FAIL(block_writer_.init_for_macro_info(param))) {
+    LOG_WARN("fail to init meta block writer", K(ret), K(param));
   } else if (OB_ISNULL(io_buf_ = static_cast<char *>(allocator_.alloc(macro_block_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate memory", K(ret), K(macro_block_size));
@@ -322,7 +313,7 @@ int ObLinkedMacroBlockItemWriter::init_for_macro_info(
     io_buf_size_ = macro_block_size;
     io_buf_pos_ = ObMacroBlockCommonHeader::get_serialize_size() + linked_header_.get_serialize_size();
     written_items_cnt_ = 0;
-    write_callback_ = write_callback;
+    write_callback_ = param.write_callback();
     is_inited_ = true;
     is_closed_ = false;
   }

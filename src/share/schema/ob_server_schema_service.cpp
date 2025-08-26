@@ -346,10 +346,14 @@ void ObServerSchemaService::AllSchemaKeys::reset()
   del_sys_priv_keys_.clear();
   new_obj_priv_keys_.clear();
   del_obj_priv_keys_.clear();
+  new_obj_mysql_priv_keys_.clear();
+  del_obj_mysql_priv_keys_.clear();
   new_dblink_keys_.clear();
   del_dblink_keys_.clear();
   new_directory_keys_.clear();
   del_directory_keys_.clear();
+  new_location_keys_.clear();
+  del_location_keys_.clear();
   new_context_keys_.clear();
   del_context_keys_.clear();
   new_mock_fk_parent_table_keys_.clear();
@@ -364,6 +368,10 @@ void ObServerSchemaService::AllSchemaKeys::reset()
   del_catalog_keys_.clear();
   new_catalog_priv_keys_.clear();
   del_catalog_priv_keys_.clear();
+  new_external_resource_keys_.clear();
+  del_external_resource_keys_.clear();
+  new_ccl_rule_keys_.clear();
+  del_ccl_rule_keys_.clear();
 }
 
 int ObServerSchemaService::AllSchemaKeys::create(int64_t bucket_size)
@@ -490,6 +498,10 @@ int ObServerSchemaService::AllSchemaKeys::create(int64_t bucket_size)
     LOG_WARN("failed to create new_obj_priv_keys hashset", K(bucket_size), K(ret));
   } else if (OB_FAIL(del_obj_priv_keys_.create(bucket_size))) {
     LOG_WARN("failed to create del_obj_priv_keys hashset", K(bucket_size), K(ret));
+  } else if (OB_FAIL(new_obj_mysql_priv_keys_.create(bucket_size))) {
+    LOG_WARN("failed to create new_obj_mysql_priv_keys hashset", K(bucket_size), K(ret));
+  } else if (OB_FAIL(del_obj_mysql_priv_keys_.create(bucket_size))) {
+    LOG_WARN("failed to create del_obj_mysql_priv_keys hashset", K(bucket_size), K(ret));
   } else if (OB_FAIL(new_dblink_keys_.create(bucket_size))) {
     LOG_WARN("failed to create new_dblink_keys hashset", K(bucket_size), K(ret));
   } else if (OB_FAIL(del_dblink_keys_.create(bucket_size))) {
@@ -498,6 +510,10 @@ int ObServerSchemaService::AllSchemaKeys::create(int64_t bucket_size)
     LOG_WARN("failed to create new_directory_keys hashset", K(bucket_size), K(ret));
   } else if (OB_FAIL(del_directory_keys_.create(bucket_size))) {
     LOG_WARN("failed to create del_directory_keys hashset", K(bucket_size), K(ret));
+  } else if (OB_FAIL(new_location_keys_.create(bucket_size))) {
+    LOG_WARN("failed to create new_location_keys hashset", K(bucket_size), K(ret));
+  } else if (OB_FAIL(del_location_keys_.create(bucket_size))) {
+    LOG_WARN("failed to create del_location_keys hashset", K(bucket_size), K(ret));
   } else if (OB_FAIL(new_context_keys_.create(bucket_size))) {
     LOG_WARN("failed to create new_context_keys hashset", K(bucket_size), K(ret));
   } else if (OB_FAIL(del_context_keys_.create(bucket_size))) {
@@ -526,6 +542,14 @@ int ObServerSchemaService::AllSchemaKeys::create(int64_t bucket_size)
     LOG_WARN("failed to create add_catalog_priv_keys hashset", K(bucket_size), K(ret));
   } else if (OB_FAIL(del_catalog_priv_keys_.create(bucket_size))) {
     LOG_WARN("failed to create del_catalog_priv_keys hashset", K(bucket_size), K(ret));
+  } else if (OB_FAIL(new_external_resource_keys_.create(bucket_size))) {
+    LOG_WARN("failed to create new_external_resource_keys hashset", K(bucket_size), K(ret));
+  } else if (OB_FAIL(del_external_resource_keys_.create(bucket_size))) {
+    LOG_WARN("failed to create del_external_resource_keys hashset", K(bucket_size), K(ret));
+  } else if (OB_FAIL(new_ccl_rule_keys_.create(bucket_size))) {
+    LOG_WARN("failed to create new_ccl_rule_keys hashset", K(bucket_size), K(ret));
+  } else if (OB_FAIL(del_ccl_rule_keys_.create(bucket_size))) {
+    LOG_WARN("failed to create del_ccl_rule_keys hashset", K(bucket_size), K(ret));
   }
   return ret;
 }
@@ -628,9 +652,15 @@ int ObServerSchemaService::del_tenant_operation(
              new_flag ? schema_keys.new_obj_priv_keys_ : schema_keys.del_obj_priv_keys_))) {
     LOG_WARN("fail to del obj_priv operation", KR(ret), K(tenant_id));
   } else if (OB_FAIL(del_operation(tenant_id,
+             new_flag ? schema_keys.new_obj_mysql_priv_keys_ : schema_keys.del_obj_mysql_priv_keys_))) {
+    LOG_WARN("fail to del obj_mysql_priv operation", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(del_operation(tenant_id,
              new_flag ? schema_keys.new_directory_keys_ : schema_keys.del_directory_keys_))) {
     LOG_WARN("fail to del directory operation", KR(ret), K(tenant_id));
   } else if (OB_FAIL(del_operation(tenant_id,
+             new_flag ? schema_keys.new_location_keys_ : schema_keys.del_location_keys_))) {
+    LOG_WARN("fail to del location operation", KR(ret), K(tenant_id));
+  }  else if (OB_FAIL(del_operation(tenant_id,
              new_flag ? schema_keys.new_context_keys_ : schema_keys.del_context_keys_))) {
     LOG_WARN("fail to del context operation", KR(ret), K(tenant_id));
   } else if (OB_FAIL(del_operation(tenant_id,
@@ -651,6 +681,12 @@ int ObServerSchemaService::del_tenant_operation(
   } else if (OB_FAIL(del_operation(tenant_id,
              new_flag ? schema_keys.new_catalog_priv_keys_ : schema_keys.del_catalog_priv_keys_))) {
     LOG_WARN("fail to del catalog_priv operation", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(del_operation(tenant_id,
+             new_flag ? schema_keys.new_external_resource_keys_ : schema_keys.del_external_resource_keys_))) {
+    LOG_WARN("fail to del external_resource operation", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(del_operation(tenant_id,
+             new_flag ? schema_keys.new_ccl_rule_keys_ : schema_keys.del_ccl_rule_keys_))) {
+    LOG_WARN("fail to del ccl_rule operation", KR(ret), K(tenant_id));
   }
   return ret;
 }
@@ -2401,6 +2437,104 @@ int ObServerSchemaService::get_increment_obj_priv_keys_reversely(
   return ret;
 }
 
+int ObServerSchemaService::get_increment_obj_mysql_priv_keys(
+  const ObSchemaMgr &schema_mgr,
+  const ObSchemaOperation &schema_operation,
+  AllSchemaKeys &schema_keys)
+{
+  int ret = OB_SUCCESS;
+
+  if (!(schema_operation.op_type_ > OB_DDL_OBJ_MYSQL_PRIV_OPERATION_BEGIN
+        && schema_operation.op_type_ < OB_DDL_OBJ_MYSQL_PRIV_OPERATION_END)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", K(schema_operation.op_type_), KR(ret));
+  } else {
+    const uint64_t tenant_id = schema_operation.tenant_id_;
+    const uint64_t user_id = schema_operation.user_id_;
+    const ObString &obj_name = schema_operation.obj_name_;
+    const int64_t obj_type = schema_operation.obj_type_;
+    const int64_t schema_version = schema_operation.schema_version_;
+    int hash_ret = OB_SUCCESS;
+    SchemaKey obj_mysql_priv_key;
+    obj_mysql_priv_key.tenant_id_ = tenant_id;
+    obj_mysql_priv_key.user_id_ = user_id;
+    obj_mysql_priv_key.obj_name_ = obj_name;
+    obj_mysql_priv_key.obj_type_ = obj_type;
+    obj_mysql_priv_key.schema_version_ = schema_version;
+    if (OB_DDL_DEL_OBJ_MYSQL_PRIV == schema_operation.op_type_) { //delete
+      hash_ret = schema_keys.new_obj_mysql_priv_keys_.erase_refactored(obj_mysql_priv_key);
+      if (OB_SUCCESS != hash_ret && OB_HASH_NOT_EXIST != hash_ret) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Failed to del obj_mysql_priv_key from new_obj_mysql_priv_keys", KR(ret));
+      } else {
+        const ObObjMysqlPriv *obj_mysql_priv = NULL;
+        if (OB_FAIL(schema_mgr.priv_mgr_.get_obj_mysql_priv(
+          ObObjMysqlPrivSortKey(tenant_id, user_id, obj_name, obj_type), obj_mysql_priv))) {
+          LOG_WARN("get obj mysql priv failed", KR(ret));
+        } else if (NULL != obj_mysql_priv) {
+          hash_ret = schema_keys.del_obj_mysql_priv_keys_.set_refactored_1(obj_mysql_priv_key, 1);
+          if (OB_SUCCESS != hash_ret) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("Failed to add obj_mysql_priv_key to del_obj_mysql_priv_keys", KR(ret));
+          }
+        }
+      }
+    } else {
+      hash_ret = schema_keys.new_obj_mysql_priv_keys_.set_refactored_1(obj_mysql_priv_key, 1);
+      if (OB_SUCCESS != hash_ret) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Failed to add new obj_mysql_priv_key", KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObServerSchemaService::get_increment_obj_mysql_priv_keys_reversely(
+  const ObSchemaMgr &schema_mgr,
+  const ObSchemaOperation &schema_operation,
+  AllSchemaKeys &schema_keys)
+{
+  int ret = OB_SUCCESS;
+  if (!(schema_operation.op_type_ > OB_DDL_OBJ_MYSQL_PRIV_OPERATION_BEGIN
+        && schema_operation.op_type_ < OB_DDL_OBJ_MYSQL_PRIV_OPERATION_END)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", K(schema_operation.op_type_), KR(ret));
+  } else {
+    const uint64_t tenant_id = schema_operation.tenant_id_;
+    const uint64_t user_id = schema_operation.user_id_;
+    const ObString &obj_name = schema_operation.obj_name_;
+    const int64_t obj_type = schema_operation.obj_type_;
+    const int64_t schema_version = schema_operation.schema_version_;
+    int hash_ret = OB_SUCCESS;
+    SchemaKey obj_mysql_priv_key;
+    obj_mysql_priv_key.tenant_id_ = tenant_id;
+    obj_mysql_priv_key.user_id_ = user_id;
+    obj_mysql_priv_key.obj_name_ = obj_name;
+    obj_mysql_priv_key.obj_type_ = obj_type;
+    obj_mysql_priv_key.schema_version_ = schema_version;
+
+    bool is_delete = (OB_DDL_GRANT_OBJ_MYSQL_PRIV == schema_operation.op_type_);
+    bool is_exist = false;
+    const ObObjMysqlPriv *obj_mysql_priv = NULL;
+    if (OB_FAIL(schema_mgr.priv_mgr_.get_obj_mysql_priv(obj_mysql_priv_key.get_obj_mysql_priv_key(),
+                                                    obj_mysql_priv))) {
+      LOG_WARN("get obj_mysql_priv failed",
+               "obj_mysql_priv_key", obj_mysql_priv_key.get_obj_mysql_priv_key(),
+               KR(ret));
+    } else if (NULL != obj_mysql_priv) {
+      is_exist = true;
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(REPLAY_OP(obj_mysql_priv_key, schema_keys.del_obj_mysql_priv_keys_,
+          schema_keys.new_obj_mysql_priv_keys_, is_delete, is_exist))) {
+        LOG_WARN("replay operation failed", KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObServerSchemaService::get_increment_udf_keys(
   const ObSchemaMgr &schema_mgr,
   const ObSchemaOperation &schema_operation,
@@ -3664,6 +3798,89 @@ int ObServerSchemaService::get_increment_directory_keys_reversely(
   return ret;
 }
 
+int ObServerSchemaService::get_increment_location_keys(
+  const ObSchemaMgr &schema_mgr,
+  const ObSchemaOperation &schema_operation,
+  AllSchemaKeys &schema_keys)
+{
+  int ret = OB_SUCCESS;
+  if (!(schema_operation.op_type_ > OB_DDL_LOCATION_OPERATION_BEGIN
+        && schema_operation.op_type_ < OB_DDL_LOCATION_OPERATION_END)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", K(schema_operation.op_type_), KR(ret));
+  } else {
+    uint64_t tenant_id = schema_operation.tenant_id_;
+    uint64_t location_id = schema_operation.location_id_;
+    int64_t schema_version = schema_operation.schema_version_;
+    int hash_ret = OB_SUCCESS;
+    SchemaKey schema_key;
+    schema_key.tenant_id_ = tenant_id;
+    schema_key.location_id_ = location_id;
+    schema_key.schema_version_ = schema_version;
+    if (schema_operation.op_type_ == OB_DDL_DROP_LOCATION) {
+      hash_ret = schema_keys.new_location_keys_.erase_refactored(schema_key);
+      if (OB_SUCCESS != hash_ret && OB_HASH_NOT_EXIST != hash_ret) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to del dropped location id", K(hash_ret), KR(ret));
+      } else {
+        const ObLocationSchema *schema = NULL;
+        if (OB_FAIL(schema_mgr.location_mgr_.get_location_schema_by_id(location_id, schema))) {
+          LOG_WARN("failed to get location schema", K(location_id), KR(ret));
+        } else if (NULL != schema) {
+          hash_ret = schema_keys.del_location_keys_.set_refactored_1(schema_key, 1);
+          if (OB_SUCCESS != hash_ret) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("failed to add del location id", K(hash_ret), KR(ret));
+          }
+        }
+      }
+    } else {
+      hash_ret = schema_keys.new_location_keys_.set_refactored_1(schema_key, 1);
+      if (OB_SUCCESS != hash_ret) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to add new location id", K(hash_ret), KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObServerSchemaService::get_increment_location_keys_reversely(
+  const ObSchemaMgr &schema_mgr,
+  const ObSchemaOperation &schema_operation,
+  AllSchemaKeys &schema_keys)
+{
+int ret = OB_SUCCESS;
+if (!(schema_operation.op_type_ > OB_DDL_LOCATION_OPERATION_BEGIN
+      && schema_operation.op_type_ < OB_DDL_LOCATION_OPERATION_END)) {
+  ret = OB_ERR_UNEXPECTED;
+  LOG_WARN("invalid argument", K(schema_operation.op_type_), KR(ret));
+} else {
+  const uint64_t tenant_id = schema_operation.tenant_id_;
+  const uint64_t location_id = schema_operation.location_id_;
+  const int64_t schema_version = schema_operation.schema_version_;
+  SchemaKey schema_key;
+  schema_key.tenant_id_ = tenant_id;
+  schema_key.location_id_ = location_id;
+  schema_key.schema_version_ = schema_version;
+  bool is_delete = (OB_DDL_CREATE_LOCATION == schema_operation.op_type_);
+  bool is_exist = false;
+  const ObLocationSchema *location_schema = NULL;
+  if (OB_FAIL(schema_mgr.location_mgr_.get_location_schema_by_id(location_id, location_schema))) {
+    LOG_WARN("get location schema failed", K(location_id), KR(ret));
+  } else if (NULL != location_schema) {
+    is_exist = true;
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(REPLAY_OP(schema_key, schema_keys.del_location_keys_,
+        schema_keys.new_location_keys_, is_delete, is_exist))) {
+      LOG_WARN("replay operation failed", KR(ret));
+    }
+  }
+}
+return ret;
+}
+
 int ObServerSchemaService::get_increment_rls_policy_keys(
     const ObSchemaMgr &schema_mgr,
     const ObSchemaOperation &schema_operation,
@@ -4087,6 +4304,178 @@ int ObServerSchemaService::get_increment_catalog_priv_keys_reversely(
   return ret;
 }
 
+int ObServerSchemaService::get_increment_external_resource_keys(
+    const ObSchemaMgr &schema_guard,
+    const ObSchemaOperation &schema_operation,
+    AllSchemaKeys &schema_ids)
+{
+  int ret = OB_SUCCESS;
+
+  if (!(schema_operation.op_type_ > OB_DDL_EXTERNAL_RESOURCE_OPERATION_BEGIN &&
+        schema_operation.op_type_ < OB_DDL_EXTERNAL_RESOURCE_OPERATION_END)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", K(schema_operation.op_type_), KR(ret));
+  } else {
+    uint64_t tenant_id = schema_operation.tenant_id_;
+    uint64_t resource_id = schema_operation.external_resource_id_;
+    int64_t schema_version = schema_operation.schema_version_;
+    int hash_ret = OB_SUCCESS;
+    SchemaKey schema_key;
+    schema_key.tenant_id_ = tenant_id;
+    schema_key.database_id_ = schema_operation.database_id_;
+    schema_key.external_resource_id_ = resource_id;
+    schema_key.schema_version_ = schema_version;
+
+    if (OB_DDL_DROP_EXTERNAL_RESOURCE == schema_operation.op_type_) {
+      hash_ret = schema_ids.new_external_resource_keys_.erase_refactored(schema_key);
+      if (OB_SUCCESS != hash_ret && OB_HASH_NOT_EXIST != hash_ret) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to del dropped external_resource id", K(hash_ret), K(ret));
+      } else {
+        const ObSimpleExternalResourceSchema *schema = nullptr;
+        if (OB_FAIL(schema_guard.external_resource_mgr_.get_external_resource_schema(resource_id, schema))) {
+          LOG_WARN("failed to get external_resource schema", K(resource_id), K(ret));
+        } else if (OB_NOT_NULL(schema)) {
+          hash_ret = schema_ids.del_external_resource_keys_.set_refactored_1(schema_key, 1);
+          if (OB_SUCCESS != hash_ret) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("failed to add del external_resource id", K(hash_ret), K(ret));
+          }
+        }
+      }
+    } else {
+      hash_ret = schema_ids.new_external_resource_keys_.set_refactored_1(schema_key, 1);
+      if (OB_SUCCESS != hash_ret) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to add new external_resource id", K(hash_ret), K(ret));
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObServerSchemaService::get_increment_external_resource_keys_reversely(
+    const ObSchemaMgr &schema_guard,
+    const ObSchemaOperation &schema_operation,
+    AllSchemaKeys &schema_ids)
+{
+  int ret = OB_SUCCESS;
+
+  if (!(schema_operation.op_type_ > OB_DDL_EXTERNAL_RESOURCE_OPERATION_BEGIN &&
+        schema_operation.op_type_ < OB_DDL_EXTERNAL_RESOURCE_OPERATION_END)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", K(schema_operation.op_type_), KR(ret));
+  } else {
+    uint64_t tenant_id = schema_operation.tenant_id_;
+    uint64_t resource_id = schema_operation.external_resource_id_;
+    int64_t schema_version = schema_operation.schema_version_;
+    SchemaKey schema_key;
+    schema_key.tenant_id_ = tenant_id;
+    schema_key.external_resource_id_ = resource_id;
+    schema_key.schema_version_ = schema_version;
+    bool is_delete = (OB_DDL_CREATE_EXTERNAL_RESOURCE == schema_operation.op_type_);
+    bool is_exist = false;
+    const ObSimpleExternalResourceSchema *schema = nullptr;
+    if (OB_FAIL(schema_guard.external_resource_mgr_.get_external_resource_schema(resource_id, schema))) {
+      LOG_WARN("failed to get_external_resource_schema", K(resource_id), KR(ret));
+    } else if (OB_NOT_NULL(schema)) {
+      is_exist = true;
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(REPLAY_OP(schema_key, schema_ids.del_external_resource_keys_,
+          schema_ids.new_external_resource_keys_, is_delete, is_exist))) {
+        LOG_WARN("replay operation failed", KR(ret));
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObServerSchemaService::get_increment_ccl_rule_keys(
+    const ObSchemaMgr &schema_mgr,
+    const ObSchemaOperation &schema_operation,
+    AllSchemaKeys &schema_keys)
+{
+  int ret = OB_SUCCESS;
+  if (!(schema_operation.op_type_ > OB_DDL_CCL_RULE_OPERATION_BEGIN
+        && schema_operation.op_type_ < OB_DDL_CCL_RULE_OPERATION_END)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", K(schema_operation.op_type_), K(ret));
+  } else {
+    uint64_t tenant_id = schema_operation.tenant_id_;
+    uint64_t ccl_rule_id = schema_operation.ccl_rule_id_;
+    int64_t schema_version = schema_operation.schema_version_;
+    int hash_ret = OB_SUCCESS;
+    SchemaKey schema_key;
+    schema_key.tenant_id_ = tenant_id;
+    schema_key.ccl_rule_id_ = ccl_rule_id;
+    schema_key.schema_version_ = schema_version;
+    if (schema_operation.op_type_ == OB_DDL_DROP_CCL_RULE) {
+      hash_ret = schema_keys.new_ccl_rule_keys_.erase_refactored(schema_key);
+      if (OB_SUCCESS != hash_ret && OB_HASH_NOT_EXIST != hash_ret) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to del dropped ccl_rule id", K(hash_ret), K(ret));
+      } else {
+        const ObSimpleCCLRuleSchema *schema = NULL;
+        if (OB_FAIL(schema_mgr.ccl_rule_mgr_.get_schema_by_id(ccl_rule_id, schema))) {
+          LOG_WARN("failed to get ccl_rule schema", K(ccl_rule_id), K(ret));
+        } else if (NULL != schema) {
+          hash_ret = schema_keys.del_ccl_rule_keys_.set_refactored_1(schema_key, 1);
+          if (OB_SUCCESS != hash_ret) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("failed to add del ccl_rule id", K(hash_ret), K(ret));
+          }
+        }
+      }
+    } else {
+      hash_ret = schema_keys.new_ccl_rule_keys_.set_refactored_1(schema_key, 1);
+      if (OB_SUCCESS != hash_ret) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to add new ccl_rule id", K(hash_ret), K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObServerSchemaService::get_increment_ccl_rule_keys_reversely(
+    const ObSchemaMgr &schema_mgr,
+    const ObSchemaOperation &schema_operation,
+    AllSchemaKeys &schema_keys)
+{
+  int ret = OB_SUCCESS;
+  if (!(schema_operation.op_type_ > OB_DDL_CCL_RULE_OPERATION_BEGIN
+        && schema_operation.op_type_ < OB_DDL_CCL_RULE_OPERATION_END)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", K(schema_operation.op_type_), KR(ret));
+  } else {
+    const uint64_t tenant_id = schema_operation.tenant_id_;
+    const uint64_t ccl_rule_id = schema_operation.ccl_rule_id_;
+    const int64_t schema_version = schema_operation.schema_version_;
+    SchemaKey schema_key;
+    schema_key.tenant_id_ = tenant_id;
+    schema_key.ccl_rule_id_ = ccl_rule_id;
+    schema_key.schema_version_ = schema_version;
+    bool is_delete = (OB_DDL_CREATE_CCL_RULE == schema_operation.op_type_);
+    bool is_exist = false;
+    const ObSimpleCCLRuleSchema *simple_ccl_rule_schema = NULL;
+    if (OB_FAIL(schema_mgr.ccl_rule_mgr_.get_schema_by_id(ccl_rule_id, simple_ccl_rule_schema))) {
+      LOG_WARN("get ccl_rule schema failed", K(ccl_rule_id), KR(ret));
+    } else if (NULL != simple_ccl_rule_schema) {
+      is_exist = true;
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(REPLAY_OP(schema_key, schema_keys.del_ccl_rule_keys_,
+          schema_keys.new_ccl_rule_keys_, is_delete, is_exist))) {
+        LOG_WARN("replay operation failed", KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 // Currently only the full tenant schema of the system tenant is cached
 int ObServerSchemaService::add_tenant_schemas_to_cache(const TenantKeys &tenant_keys,
                                                        ObISQLClient &sql_client)
@@ -4243,6 +4632,7 @@ int ObServerSchemaService::fetch_increment_schemas(
   GET_BATCH_SCHEMAS(audit, ObSAuditSchema, AuditKeys);
   GET_BATCH_SCHEMAS(sys_priv, ObSysPriv, SysPrivKeys);
   GET_BATCH_SCHEMAS(obj_priv, ObObjPriv, ObjPrivKeys);
+  GET_BATCH_SCHEMAS(obj_mysql_priv, ObObjMysqlPriv, ObjMysqlPrivKeys);
   GET_BATCH_SCHEMAS(column_priv, ObColumnPriv, ColumnPrivKeys);
 
   // After the schema is split, because the operation_type has not been updated,
@@ -4253,12 +4643,15 @@ int ObServerSchemaService::fetch_increment_schemas(
   GET_BATCH_SCHEMAS(sys_variable, ObSimpleSysVariableSchema, SysVariableKeys);
   GET_BATCH_SCHEMAS(dblink, ObDbLinkSchema, DbLinkKeys);
   GET_BATCH_SCHEMAS(directory, ObDirectorySchema, DirectoryKeys);
+  GET_BATCH_SCHEMAS(location, ObLocationSchema, LocationKeys);
   GET_BATCH_SCHEMAS(context, ObContextSchema, ContextKeys);
   GET_BATCH_SCHEMAS(mock_fk_parent_table, ObSimpleMockFKParentTableSchema, MockFKParentTableKeys);
   GET_BATCH_SCHEMAS(rls_policy, ObRlsPolicySchema, RlsPolicyKeys);
   GET_BATCH_SCHEMAS(rls_group, ObRlsGroupSchema, RlsGroupKeys);
   GET_BATCH_SCHEMAS(rls_context, ObRlsContextSchema, RlsContextKeys);
   GET_BATCH_SCHEMAS(catalog, ObCatalogSchema, CatalogKeys);
+  GET_BATCH_SCHEMAS(external_resource, ObSimpleExternalResourceSchema, ExternalResourceKeys);
+  GET_BATCH_SCHEMAS(ccl_rule, ObSimpleCCLRuleSchema, CCLRuleKeys);
 
   // After the schema is split, ordinary tenants do not refresh the tenant schema and system table schema
   const uint64_t tenant_id = schema_status.tenant_id_;
@@ -4389,6 +4782,9 @@ int ObServerSchemaService::apply_increment_schema_to_cache(
   } else if (OB_FAIL(apply_obj_priv_schema_to_cache(
              tenant_id, all_keys, simple_incre_schemas, schema_mgr.priv_mgr_))) {
     LOG_WARN("fail to apply obj_priv schema to cache", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(apply_obj_mysql_priv_schema_to_cache(
+            tenant_id, all_keys, simple_incre_schemas, schema_mgr.priv_mgr_))) {
+    LOG_WARN("fail to apply obj_priv schema to cache", KR(ret), K(tenant_id));
   } else if (OB_FAIL(apply_dblink_schema_to_cache(
              tenant_id, all_keys, simple_incre_schemas, schema_mgr.dblink_mgr_))) {
     LOG_WARN("fail to apply dblink schema to cache", KR(ret), K(tenant_id));
@@ -4413,7 +4809,17 @@ int ObServerSchemaService::apply_increment_schema_to_cache(
   } else if (OB_FAIL(apply_catalog_schema_to_cache(
              tenant_id, all_keys, simple_incre_schemas, schema_mgr))) {
     LOG_WARN("fail to apply catalog schema to cache", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(apply_ccl_rule_schema_to_cache(
+             tenant_id, all_keys, simple_incre_schemas, schema_mgr))) {
+    LOG_WARN("fail to apply rls_context schema to cache", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(apply_external_resource_schema_to_cache(
+             tenant_id, all_keys, simple_incre_schemas, schema_mgr.external_resource_mgr_))) {
+    LOG_WARN("fail to apply external_resource schema to cache", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(apply_location_schema_to_cache(
+             tenant_id, all_keys, simple_incre_schemas, schema_mgr))) {
+    LOG_WARN("fail to apply location schema to cache", KR(ret), K(tenant_id));
   }
+
   return ret;
 }
 
@@ -4561,14 +4967,18 @@ APPLY_SCHEMA_TO_CACHE_IMPL(ObProfileMgr, profile, ObProfileSchema, ProfileKeys);
 APPLY_SCHEMA_TO_CACHE_IMPL(ObSAuditMgr, audit, ObSAuditSchema, AuditKeys);
 APPLY_SCHEMA_TO_CACHE_IMPL(ObPrivMgr, sys_priv, ObSysPriv, SysPrivKeys);
 APPLY_SCHEMA_TO_CACHE_IMPL(ObPrivMgr, obj_priv, ObObjPriv, ObjPrivKeys);
+APPLY_SCHEMA_TO_CACHE_IMPL(ObPrivMgr, obj_mysql_priv, ObObjMysqlPriv, ObjMysqlPrivKeys);
 APPLY_SCHEMA_TO_CACHE_IMPL(ObDbLinkMgr, dblink, ObDbLinkSchema, DbLinkKeys);
 APPLY_SCHEMA_TO_CACHE_IMPL(ObDirectoryMgr, directory, ObDirectorySchema, DirectoryKeys);
+APPLY_SCHEMA_TO_CACHE_IMPL(ObSchemaMgr, location, ObLocationSchema, LocationKeys);
 APPLY_SCHEMA_TO_CACHE_IMPL(ObContextMgr, context, ObContextSchema, ContextKeys);
 APPLY_SCHEMA_TO_CACHE_IMPL(ObMockFKParentTableMgr, mock_fk_parent_table, ObSimpleMockFKParentTableSchema, MockFKParentTableKeys);
 APPLY_SCHEMA_TO_CACHE_IMPL(ObRlsPolicyMgr, rls_policy, ObRlsPolicySchema, RlsPolicyKeys);
 APPLY_SCHEMA_TO_CACHE_IMPL(ObRlsGroupMgr, rls_group, ObRlsGroupSchema, RlsGroupKeys);
 APPLY_SCHEMA_TO_CACHE_IMPL(ObRlsContextMgr, rls_context, ObRlsContextSchema, RlsContextKeys);
 APPLY_SCHEMA_TO_CACHE_IMPL(ObSchemaMgr, catalog, ObCatalogSchema, CatalogKeys);
+APPLY_SCHEMA_TO_CACHE_IMPL(ObExternalResourceMgr, external_resource, ObSimpleExternalResourceSchema, ExternalResourceKeys);
+APPLY_SCHEMA_TO_CACHE_IMPL(ObSchemaMgr, ccl_rule, ObSimpleCCLRuleSchema, CCLRuleKeys);
 
 int ObServerSchemaService::update_schema_mgr(ObISQLClient &sql_client,
                                              const ObRefreshSchemaStatus &schema_status,
@@ -4983,6 +5393,11 @@ int ObServerSchemaService::replay_log(
                                                   schema_operation, schema_keys))) {
             LOG_WARN("fail to get increment obj priv keys", K(ret));
           }
+        } else if (schema_operation.op_type_ > OB_DDL_OBJ_MYSQL_PRIV_OPERATION_BEGIN
+                   && schema_operation.op_type_ < OB_DDL_OBJ_MYSQL_PRIV_OPERATION_END) {
+            if (OB_FAIL(get_increment_obj_mysql_priv_keys(schema_mgr, schema_operation, schema_keys))) {
+              LOG_WARN("fail to get increment obj mysql priv id", K(ret));
+            }
         } else if (schema_operation.op_type_ > OB_DDL_DBLINK_OPERATION_BEGIN &&
             schema_operation.op_type_ < OB_DDL_DBLINK_OPERATION_END) {
           if (OB_FAIL(get_increment_dblink_keys(schema_mgr, schema_operation, schema_keys))) {
@@ -4992,6 +5407,11 @@ int ObServerSchemaService::replay_log(
             schema_operation.op_type_ < OB_DDL_DIRECTORY_OPERATION_END) {
           if (OB_FAIL(get_increment_directory_keys(schema_mgr, schema_operation, schema_keys))) {
             LOG_WARN("fail to get increment directory id", K(ret));
+          }
+        } else if (schema_operation.op_type_ > OB_DDL_LOCATION_OPERATION_BEGIN
+                   && schema_operation.op_type_ < OB_DDL_LOCATION_OPERATION_END) {
+          if (OB_FAIL(get_increment_location_keys(schema_mgr, schema_operation, schema_keys))) {
+            LOG_WARN("fail to get increment location id", K(ret));
           }
         } else if (schema_operation.op_type_ > OB_DDL_CONTEXT_OPERATION_BEGIN
                    && schema_operation.op_type_ < OB_DDL_CONTEXT_OPERATION_END) {
@@ -5032,6 +5452,16 @@ int ObServerSchemaService::replay_log(
             schema_operation.op_type_ < OB_DDL_CATALOG_PRIV_OPERATION_END) {
           if (OB_FAIL(get_increment_catalog_priv_keys(schema_mgr, schema_operation, schema_keys))) {
             LOG_WARN("fail to get increment catalog id", K(ret));
+          }
+        } else if (schema_operation.op_type_ > OB_DDL_EXTERNAL_RESOURCE_OPERATION_BEGIN &&
+            schema_operation.op_type_ < OB_DDL_EXTERNAL_RESOURCE_OPERATION_END) {
+          if (OB_FAIL(get_increment_external_resource_keys(schema_mgr, schema_operation, schema_keys))) {
+            LOG_WARN("fail to get increment external resource keys", KR(ret));
+          }
+        } else if (schema_operation.op_type_ > OB_DDL_CCL_RULE_OPERATION_BEGIN &&
+            schema_operation.op_type_ < OB_DDL_CCL_RULE_OPERATION_END) {
+          if (OB_FAIL(get_increment_ccl_rule_keys(schema_mgr, schema_operation, schema_keys))) {
+            LOG_WARN("fail to get increment ccl rule id", K(ret));
           }
         }
       }
@@ -5196,6 +5626,11 @@ int ObServerSchemaService::replay_log_reversely(
         if (OB_FAIL(get_increment_obj_priv_keys_reversely(schema_mgr, schema_operation, schema_keys))) {
           LOG_WARN("fail to get increment obj_priv keys reversely", KR(ret));
         }
+      } else if (schema_operation.op_type_ > OB_DDL_OBJ_MYSQL_PRIV_OPERATION_BEGIN
+                 && schema_operation.op_type_ < OB_DDL_OBJ_MYSQL_PRIV_OPERATION_END) {
+        if (OB_FAIL(get_increment_obj_mysql_priv_keys_reversely(schema_mgr, schema_operation, schema_keys))) {
+          LOG_WARN("fail to get increment obj_mysql_priv keys reversely", KR(ret));
+        }
       } else if (schema_operation.op_type_ > OB_DDL_DBLINK_OPERATION_BEGIN &&
                  schema_operation.op_type_ < OB_DDL_DBLINK_OPERATION_END) {
         if (OB_FAIL(get_increment_dblink_keys_reversely(schema_mgr, schema_operation, schema_keys))) {
@@ -5205,6 +5640,11 @@ int ObServerSchemaService::replay_log_reversely(
                  schema_operation.op_type_ < OB_DDL_DIRECTORY_OPERATION_END) {
         if (OB_FAIL(get_increment_directory_keys_reversely(schema_mgr, schema_operation, schema_keys))) {
           LOG_WARN("fail to get increment directory keys reversely", KR(ret));
+        }
+      } else if (schema_operation.op_type_ > OB_DDL_LOCATION_OPERATION_BEGIN &&
+                 schema_operation.op_type_ < OB_DDL_LOCATION_OPERATION_END) {
+        if (OB_FAIL(get_increment_location_keys_reversely(schema_mgr, schema_operation, schema_keys))) {
+          LOG_WARN("fail to get increment location keys reversely", KR(ret));
         }
       } else if (schema_operation.op_type_ > OB_DDL_CONTEXT_OPERATION_BEGIN
                  && schema_operation.op_type_ < OB_DDL_CONTEXT_OPERATION_END) {
@@ -5245,6 +5685,16 @@ int ObServerSchemaService::replay_log_reversely(
                  && schema_operation.op_type_ < OB_DDL_CATALOG_PRIV_OPERATION_END) {
         if (OB_FAIL(get_increment_catalog_priv_keys_reversely(schema_mgr, schema_operation, schema_keys))) {
           LOG_WARN("fail to get increment catalog keys reversely", KR(ret));
+        }
+      } else if (schema_operation.op_type_ > OB_DDL_EXTERNAL_RESOURCE_OPERATION_BEGIN &&
+                 schema_operation.op_type_ < OB_DDL_EXTERNAL_RESOURCE_OPERATION_END) {
+        if (OB_FAIL(get_increment_external_resource_keys_reversely(schema_mgr, schema_operation, schema_keys))) {
+          LOG_WARN("fail to get increment external resource keys reversely", KR(ret));
+        }
+      } else if (schema_operation.op_type_ > OB_DDL_CCL_RULE_OPERATION_BEGIN &&
+                 schema_operation.op_type_ < OB_DDL_CCL_RULE_OPERATION_END) {
+        if (OB_FAIL(get_increment_ccl_rule_keys_reversely(schema_mgr, schema_operation, schema_keys))) {
+          LOG_WARN("fail to get increment ccl rule keys reversely", KR(ret));
         }
       } else {
         // ingore other operaton.
@@ -6557,6 +7007,7 @@ int ObServerSchemaService::refresh_tenant_full_normal_schema(
       INIT_ARRAY(ObRoutinePriv, routine_privs);
       INIT_ARRAY(ObColumnPriv, column_privs);
       INIT_ARRAY(ObObjPriv, obj_privs);
+      INIT_ARRAY(ObObjMysqlPriv, obj_mysql_privs);
       INIT_ARRAY(ObSimpleUDFSchema, simple_udfs);
       INIT_ARRAY(ObSimpleUDTSchema, simple_udts);
       INIT_ARRAY(ObSequenceSchema, simple_sequences);
@@ -6570,12 +7021,15 @@ int ObServerSchemaService::refresh_tenant_full_normal_schema(
       INIT_ARRAY(ObTablespaceSchema, simple_tablespaces);
       INIT_ARRAY(ObDbLinkSchema, simple_dblinks);
       INIT_ARRAY(ObDirectorySchema, simple_directories);
+      INIT_ARRAY(ObLocationSchema, simple_locations);
       INIT_ARRAY(ObContextSchema, simple_contexts);
       INIT_ARRAY(ObSimpleMockFKParentTableSchema, simple_mock_fk_parent_tables);
       INIT_ARRAY(ObRlsPolicySchema, simple_rls_policys);
       INIT_ARRAY(ObRlsGroupSchema, simple_rls_groups);
       INIT_ARRAY(ObRlsContextSchema, simple_rls_contexts);
       INIT_ARRAY(ObCatalogSchema, simple_catalogs);
+      INIT_ARRAY(ObSimpleExternalResourceSchema, simple_external_resources);
+      INIT_ARRAY(ObSimpleCCLRuleSchema, simple_ccl_rules);
       #undef INIT_ARRAY
       ObSimpleSysVariableSchema simple_sys_variable;
 
@@ -6754,6 +7208,54 @@ int ObServerSchemaService::refresh_tenant_full_normal_schema(
         }
       }
 
+      if (OB_SUCC(ret)) {
+        const ObSimpleTableSchemaV2 *tmp_table = NULL;
+        if (OB_FAIL(schema_mgr_for_cache->get_table_schema(tenant_id, OB_ALL_TENANT_LOCATION_HISTORY_TID, tmp_table))) {
+          LOG_WARN("fail to get table schema", KR(ret), K(tenant_id));
+        } else if (OB_ISNULL(tmp_table)) {
+          // for compatibility
+        } else if (OB_FAIL(schema_service_->get_all_locations(
+          sql_client, schema_status, schema_version, tenant_id, simple_locations))) {
+          LOG_WARN("get all location schema failed", K(ret), K(schema_version), K(tenant_id));
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        const ObSimpleTableSchemaV2 *tmp_table = NULL;
+        if (OB_FAIL(schema_mgr_for_cache->get_table_schema(tenant_id, OB_ALL_TENANT_OBJAUTH_MYSQL_HISTORY_TID, tmp_table))) {
+          LOG_WARN("fail to get table schema", KR(ret), K(tenant_id));
+        } else if (OB_ISNULL(tmp_table)) {
+          // for compatibility
+        } else if (OB_FAIL(schema_service_->get_all_obj_mysql_privs(
+          sql_client, schema_status, schema_version, tenant_id, obj_mysql_privs))) {
+          LOG_WARN("get all obj mysql priv failed", K(ret), K(schema_version), K(tenant_id));
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        const ObSimpleTableSchemaV2 *tmp_table = NULL;
+        if (OB_FAIL(schema_mgr_for_cache->get_table_schema(tenant_id, OB_ALL_EXTERNAL_RESOURCE_HISTORY_TID, tmp_table))) {
+          LOG_WARN("fail to get table schema", KR(ret), K(tenant_id));
+        } else if (OB_ISNULL(tmp_table)) {
+          // for compatibility
+        } else if (OB_FAIL(schema_service_->get_all_external_resources(
+          sql_client, schema_status, schema_version, tenant_id, simple_external_resources))) {
+          LOG_WARN("get all external_resources failed", K(ret), K(schema_version), K(tenant_id));
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        const ObSimpleTableSchemaV2 *tmp_table = NULL;
+        if (OB_FAIL(schema_mgr_for_cache->get_table_schema(tenant_id, OB_ALL_CCL_RULE_HISTORY_TID, tmp_table))) {
+          LOG_WARN("fail to get table schema", KR(ret), K(tenant_id));
+        } else if (OB_ISNULL(tmp_table)) {
+          // for compatibility
+        } else if (OB_FAIL(schema_service_->get_all_ccl_rules(
+          sql_client, schema_status, schema_version, tenant_id, simple_ccl_rules))) {
+          LOG_WARN("get all table priv failed", K(ret), K(schema_version), K(tenant_id));
+        }
+      }
+
       const bool refresh_full_schema = true;
       // add simple schema for cache
       if (OB_FAIL(ret)) {
@@ -6788,6 +7290,8 @@ int ObServerSchemaService::refresh_tenant_full_normal_schema(
         LOG_WARN("add table privs failed", K(ret));
       } else if (OB_FAIL(schema_mgr_for_cache->priv_mgr_.add_obj_privs(obj_privs))) {
         LOG_WARN("add obj privs failed", K(ret));
+      } else if (OB_FAIL(schema_mgr_for_cache->priv_mgr_.add_obj_mysql_privs(obj_mysql_privs))) {
+        LOG_WARN("add obj mysql privs failed", K(ret));
       } else if (OB_FAIL(schema_mgr_for_cache->udf_mgr_.add_udfs(simple_udfs))) {
         LOG_WARN("add udfs privs failed", K(ret));
       } else if (OB_FAIL(schema_mgr_for_cache->udt_mgr_.add_udts(simple_udts))) {
@@ -6833,6 +7337,12 @@ int ObServerSchemaService::refresh_tenant_full_normal_schema(
         LOG_WARN("add column privs failed", K(ret));
       } else if (OB_FAIL(schema_mgr_for_cache->add_catalogs(simple_catalogs))) {
         LOG_WARN("add catalogs failed", K(ret));
+      } else if (OB_FAIL(schema_mgr_for_cache->external_resource_mgr_.add_external_resources(simple_external_resources))) {
+        LOG_WARN("add external_resources failed", K(ret));
+      } else if (OB_FAIL(schema_mgr_for_cache->add_locations(simple_locations))) {
+        LOG_WARN("add locations failed", K(ret));
+      } else if (OB_FAIL(schema_mgr_for_cache->add_ccl_rules(simple_ccl_rules))) {
+        LOG_WARN("add ccl rules failed", K(ret));
       }
 
       LOG_INFO("add schemas for tenant finish",
@@ -6861,13 +7371,16 @@ int ObServerSchemaService::refresh_tenant_full_normal_schema(
       LOG_INFO("add schemas for tenant finish",
                K(tenant_id), K(schema_version), K(schema_status),
                "sys_privs", sys_privs.count(),
+               "obj_mysql_privs", obj_mysql_privs.count(),
                "dblinks", simple_dblinks.count(),
                "directories", simple_directories.count(),
+               "locations", simple_locations.count(),
                "rls_policys", simple_rls_policys.count(),
                "rls_groups", simple_rls_groups.count(),
                "rls_contexts", simple_rls_contexts.count(),
                "catalogs", simple_catalogs.count(),
-               "catalog_privs", catalog_privs.count()
+               "catalog_privs", catalog_privs.count(),
+               "ccl_rules", simple_ccl_rules.count()
               );
     }
 

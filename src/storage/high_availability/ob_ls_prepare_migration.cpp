@@ -237,9 +237,9 @@ bool ObLSPrepareMigrationDagNet::operator == (const ObIDagNet &other) const
   return is_same;
 }
 
-int64_t ObLSPrepareMigrationDagNet::hash() const
+uint64_t ObLSPrepareMigrationDagNet::hash() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   int tmp_ret = OB_SUCCESS;
   if (!is_inited_) {
     tmp_ret = OB_NOT_INIT;
@@ -379,10 +379,10 @@ bool ObPrepareMigrationDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObPrepareMigrationDag::hash() const
+uint64_t ObPrepareMigrationDag::hash() const
 {
   int ret = OB_SUCCESS;
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   if (OB_ISNULL(ha_dag_net_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("prepare migration ctx should not be NULL", KP(ha_dag_net_ctx_));
@@ -833,21 +833,6 @@ int ObStartPrepareMigrationTask::deal_with_local_ls_()
   return ret;
 }
 
-int ObStartPrepareMigrationTask::build_tablet_backfill_info_(common::ObArray<ObTabletBackfillInfo> &tablet_infos)
-{
-  int ret = OB_SUCCESS;
-  ObTabletBackfillInfo tablet_info;
-  for (int64_t i = 0; OB_SUCC(ret) && i < ctx_->tablet_id_array_.count(); ++i) {
-    ObTabletID tablet_id = ctx_->tablet_id_array_.at(i);
-    if (OB_FAIL(tablet_info.init(tablet_id, true/*is_committed*/))) {
-      LOG_WARN("failed to init tablet info", K(ret), K(tablet_id));
-    } else if (OB_FAIL(tablet_infos.push_back(tablet_info))) {
-      LOG_WARN("failed to push tablet info into array", K(ret), K(tablet_info));
-    }
-  }
-  return ret;
-}
-
 int ObStartPrepareMigrationTask::wait_transfer_tablets_ready_()
 {
   int ret = OB_SUCCESS;
@@ -992,9 +977,12 @@ int ObStartPrepareMigrationTask::wait_transfer_out_tablet_ready_(
             && ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD_WAIT != status
             && ObMigrationStatus::OB_MIGRATION_STATUS_MIGRATE_WAIT != status
             && ObMigrationStatus::OB_MIGRATION_STATUS_ADD_WAIT != status
-            && ObMigrationStatus::OB_MIGRATION_STATUS_HOLD != status) {
+            && ObMigrationStatus::OB_MIGRATION_STATUS_REPLACE_WAIT != status
+            && ObMigrationStatus::OB_MIGRATION_STATUS_HOLD != status
+            && ObMigrationStatus::OB_MIGRATION_STATUS_REPLACE_HOLD != status) {
         if (ObMigrationStatus::OB_MIGRATION_STATUS_ADD_FAIL == status
             || ObMigrationStatus::OB_MIGRATION_STATUS_MIGRATE_FAIL == status
+            || ObMigrationStatus::OB_MIGRATION_STATUS_REPLACE_FAIL == status
             || ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD_FAIL == status) {
           LOG_INFO("dest ls is in migration failed status, no need wait", K(ret), K(status), KPC(dest_ls));
           break;

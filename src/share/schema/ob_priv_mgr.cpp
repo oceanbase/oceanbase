@@ -79,6 +79,12 @@ const char *ObPrivMgr::priv_names_[] = {
     "CREATE CATALOG",             // index 50
     "USE CATALOG",                // index 51
     "CREATE LOCATION",            // index 52
+    "CREATE SENSITIVE RULE",      // index 53
+    "PLAINACCESS",                // index 54
+    "CREATE AI MODEL",            // index 55
+    "ALTER AI MODEL",             // index 56
+    "DROP AI MODEL",              // index 57
+    "ACCESS AI MODEL",            // index 58
 };
 
 ObPrivMgr::ObPrivMgr()
@@ -93,6 +99,8 @@ ObPrivMgr::ObPrivMgr()
     column_privs_sort_by_id_(0, NULL, SET_USE_500("PRIV_COL_ID", ObCtxIds::SCHEMA_SERVICE)),
     obj_privs_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_PRIV_OBJ_PRIVS, ObCtxIds::SCHEMA_SERVICE)),
     obj_priv_map_(SET_USE_500(ObModIds::OB_SCHEMA_PRIV_OBJ_PRIV_MAP, ObCtxIds::SCHEMA_SERVICE)),
+    obj_mysql_privs_(0, NULL, SET_USE_500("PRIV_OBJ_MYSQL", ObCtxIds::SCHEMA_SERVICE)),
+    obj_mysql_priv_map_(SET_USE_500("PRIV_OBJ_MYSQL", ObCtxIds::SCHEMA_SERVICE)),
     sys_privs_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_PRIV_SYS_PRIVS, ObCtxIds::SCHEMA_SERVICE))
 {
   static_assert(ARRAYSIZEOF(ObPrivMgr::priv_names_) == OB_PRIV_MAX_SHIFT_PLUS_ONE,
@@ -111,6 +119,8 @@ ObPrivMgr::ObPrivMgr(ObIAllocator &allocator)
     column_privs_sort_by_id_(0, NULL, SET_USE_500("PRIV_COL_ID", ObCtxIds::SCHEMA_SERVICE)),
     obj_privs_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_PRIV_OBJ_PRIVS, ObCtxIds::SCHEMA_SERVICE)),
     obj_priv_map_(SET_USE_500(ObModIds::OB_SCHEMA_PRIV_OBJ_PRIV_MAP, ObCtxIds::SCHEMA_SERVICE)),
+    obj_mysql_privs_(0, NULL, SET_USE_500("PRIV_OBJ_MYSQL", ObCtxIds::SCHEMA_SERVICE)),
+    obj_mysql_priv_map_(SET_USE_500("PRIV_OBJ_MYSQL", ObCtxIds::SCHEMA_SERVICE)),
     sys_privs_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_PRIV_SYS_PRIVS, ObCtxIds::SCHEMA_SERVICE)),
     catalog_privs_(0, NULL, SET_USE_500("PRIV_CATALOG", ObCtxIds::SCHEMA_SERVICE)),
     catalog_priv_map_(SET_USE_500("PRIV_CATALOG", ObCtxIds::SCHEMA_SERVICE))
@@ -132,6 +142,8 @@ int ObPrivMgr::init()
     LOG_WARN("init obj priv map failed", K(ret));
   } else if (OB_FAIL(catalog_priv_map_.init())) {
     LOG_WARN("init catalog priv map failed", K(ret));
+  } else if (OB_FAIL(obj_mysql_priv_map_.init())) {
+    LOG_WARN("init obj mysql priv map failed", K(ret));
   }
 
   return ret;
@@ -152,6 +164,8 @@ void ObPrivMgr::reset()
   column_privs_sort_by_id_.clear();
   catalog_privs_.clear();
   catalog_priv_map_.clear();
+  obj_mysql_privs_.clear();
+  obj_mysql_priv_map_.clear();
 }
 
 int ObPrivMgr::assign(const ObPrivMgr &other)
@@ -178,6 +192,8 @@ int ObPrivMgr::assign(const ObPrivMgr &other)
     ASSIGN_FIELD(column_privs_sort_by_id_);
     ASSIGN_FIELD(catalog_privs_);
     ASSIGN_FIELD(catalog_priv_map_);
+    ASSIGN_FIELD(obj_mysql_privs_);
+    ASSIGN_FIELD(obj_mysql_priv_map_);
     #undef ASSIGN_FIELD
   }
 
@@ -260,6 +276,16 @@ int ObPrivMgr::deep_copy(const ObPrivMgr &other)
         LOG_WARN("add catalog priv failed", K(*catalog_priv), K(ret));
       }
     }
+    for (ObjMysqlPrivIter iter = other.obj_mysql_privs_.begin();
+        OB_SUCC(ret) && iter != other.obj_mysql_privs_.end(); iter++) {
+      ObObjMysqlPriv *obj_mysql_priv = *iter;
+      if (OB_ISNULL(obj_mysql_priv)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("NULL ptr", K(obj_mysql_priv), K(ret));
+      } else if (OB_FAIL(add_obj_mysql_priv(*obj_mysql_priv))) {
+        LOG_WARN("add obj mysql priv failed", K(*obj_mysql_priv), K(ret));
+      }
+    }
   }
 
   return ret;
@@ -287,7 +313,7 @@ int ObPrivMgr::get_priv_schema_count(int64_t &priv_schema_count) const
 {
   int ret = OB_SUCCESS;
   priv_schema_count = table_privs_.size() + db_privs_.size() 
-                      + sys_privs_.size() + obj_privs_.size();
+                      + sys_privs_.size() + obj_privs_.size() + obj_mysql_privs_.size();
   return ret;
 }
 
@@ -1213,6 +1239,138 @@ int ObPrivMgr::get_column_priv_set(const ObColumnPrivSortKey &column_priv_key,
   return ret;
 }
 
+int ObPrivMgr::add_obj_mysql_privs(const common::ObIArray<ObObjMysqlPriv> &obj_mysql_privs)
+{
+  int ret = OB_SUCCESS;
+
+  FOREACH_CNT_X(obj_mysql_priv, obj_mysql_privs, OB_SUCC(ret)) {
+    if (OB_FAIL(add_obj_mysql_priv(*obj_mysql_priv))) {
+      LOG_WARN("add obj mysql priv failed", K(ret), K(*obj_mysql_priv));
+    }
+  }
+
+  return ret;
+}
+int ObPrivMgr::del_obj_mysql_privs(const common::ObIArray<ObObjMysqlPrivSortKey> &obj_mysql_priv_keys)
+{
+  int ret = OB_SUCCESS;
+
+  FOREACH_CNT_X(obj_mysql_priv, obj_mysql_priv_keys, OB_SUCC(ret)) {
+    if (OB_FAIL(del_obj_mysql_priv(*obj_mysql_priv))) {
+      LOG_WARN("del obj mysql priv failed", K(ret), K(*obj_mysql_priv));
+    }
+  }
+
+  return ret;
+}
+int ObPrivMgr::add_obj_mysql_priv(const ObObjMysqlPriv &obj_mysql_priv)
+{
+  int ret = OB_SUCCESS;
+
+  ObObjMysqlPriv *new_obj_mysql_priv = NULL;
+  ObjMysqlPrivIter iter = NULL;
+  ObObjMysqlPriv *replaced_obj_mysql_priv = NULL;
+
+  if (OB_FAIL(ObSchemaUtils::alloc_schema(allocator_,
+                                          obj_mysql_priv,
+                                          new_obj_mysql_priv))) {
+    LOG_WARN("alloc schema failed", K(ret));
+  } else if (OB_ISNULL(new_obj_mysql_priv)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("NULL ptr", K(ret), K(new_obj_mysql_priv));
+  } else if (OB_FAIL(obj_mysql_privs_.replace(new_obj_mysql_priv,
+                                          iter,
+                                          ObObjMysqlPriv::cmp,
+                                          ObObjMysqlPriv::equal,
+                                          replaced_obj_mysql_priv))) {
+      LOG_WARN("Failed to put obj_mysql_priv into obj_mysql_priv vector", K(ret));
+  } else {
+    int hash_ret = obj_mysql_priv_map_.set_refactored(new_obj_mysql_priv->get_sort_key(), new_obj_mysql_priv, 1);
+    if (OB_SUCCESS != hash_ret && OB_HASH_EXIST != hash_ret) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Failed to build obj_mysql_priv hashmap",
+               "obj_mysql_priv_key", new_obj_mysql_priv->get_sort_key(),
+               K(ret), K(hash_ret));
+    }
+  }
+
+  // ignore ret
+  if (obj_mysql_privs_.count() != obj_mysql_priv_map_.item_count()) {
+    LOG_WARN("obj_mysql priv is non-consistent between map and vector",
+             "obj_mysql_privs vector count", obj_mysql_privs_.count(),
+             "obj_mysql_privs map size", obj_mysql_priv_map_.item_count());
+  }
+
+  return ret;
+}
+
+int ObPrivMgr::del_obj_mysql_priv(const ObObjMysqlPrivSortKey &obj_mysql_priv_key)
+{
+  int ret = OB_SUCCESS;
+
+  ObObjMysqlPriv *obj_mysql_priv = NULL;
+  if (OB_FAIL(obj_mysql_privs_.remove_if(obj_mysql_priv_key,
+          ObObjMysqlPriv::cmp_sort_key,
+          ObObjMysqlPriv::equal_sort_key,
+          obj_mysql_priv))) {
+    LOG_WARN("Fail to remove obj mysql priv",K(obj_mysql_priv_key), K(ret));
+  } else if (OB_ISNULL(obj_mysql_priv)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Removed obj mysql priv return NULL", K(obj_mysql_priv));
+  } else {
+    int hash_ret = obj_mysql_priv_map_.erase_refactored(obj_mysql_priv_key);
+    if (OB_SUCCESS != hash_ret) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Failed to delete obj mysql priv from table priv map", K(ret), K(hash_ret));
+    }
+  }
+  if (obj_mysql_privs_.count() != obj_mysql_priv_map_.item_count()) {
+    LOG_WARN("obj_mysql priv is non-consistent between map and vector",
+             "obj_mysql_privs vector count", obj_mysql_privs_.count(),
+             "obj_mysql_privs map size", obj_mysql_priv_map_.item_count());
+  }
+  return ret;
+}
+
+int ObPrivMgr::get_obj_mysql_priv(const ObObjMysqlPrivSortKey &obj_mysql_priv_key,
+  const ObObjMysqlPriv *&obj_mysql_priv) const
+{
+  int ret = OB_SUCCESS;
+  obj_mysql_priv = NULL;
+  ObObjMysqlPriv *tmp_obj_mysql_priv = NULL;
+  int hash_ret = obj_mysql_priv_map_.get_refactored(obj_mysql_priv_key, tmp_obj_mysql_priv);
+
+  if (OB_SUCCESS == hash_ret) {
+    if (OB_ISNULL(tmp_obj_mysql_priv)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get obj_mysql priv return NULL", K(ret), K(tmp_obj_mysql_priv));
+    } else {
+      obj_mysql_priv = tmp_obj_mysql_priv;
+    }
+  } else if (OB_HASH_NOT_EXIST != hash_ret) {
+    ret = hash_ret;
+    LOG_WARN("get obj_mysql priv not existed", K(ret), K(obj_mysql_priv_key));
+  }
+  return ret;
+}
+
+int ObPrivMgr::get_obj_mysql_priv_set(const ObObjMysqlPrivSortKey &obj_mysql_priv_key,
+                                      ObPrivSet &priv_set) const
+{
+  int ret = OB_SUCCESS;
+  priv_set = OB_PRIV_SET_EMPTY;
+
+  const ObObjMysqlPriv *obj_mysql_priv = NULL;
+  if (OB_FAIL(get_obj_mysql_priv(obj_mysql_priv_key, obj_mysql_priv))) {
+    LOG_WARN("get obj mysql priv failed", K(ret), K(obj_mysql_priv_key));
+  } else if (NULL != obj_mysql_priv) {
+    priv_set = obj_mysql_priv->get_priv_set();
+  } else {
+    LOG_WARN("obj priv is null", K(obj_mysql_priv));
+  }
+  return ret;
+}
+
 int ObPrivMgr::table_grant_in_db(const uint64_t tenant_id,
                                  const uint64_t user_id,
                                  const ObString &db,
@@ -1577,6 +1735,34 @@ int ObPrivMgr::get_routine_privs_in_user(const uint64_t tenant_id,
   return ret;
 }
 
+int ObPrivMgr::get_obj_mysql_privs_in_user(const uint64_t tenant_id,
+                                           const uint64_t user_id,
+                                           ObIArray<const ObObjMysqlPriv *> &obj_mysql_privs) const
+{
+  int ret = OB_SUCCESS;
+  obj_mysql_privs.reset();
+
+  ObTenantUserId tenant_user_id(tenant_id, user_id);
+  ConstObjMysqlPrivIter tenant_obj_mysql_priv_begin =
+      obj_mysql_privs_.lower_bound(tenant_user_id, ObObjMysqlPriv::cmp_tenant_user_id);
+  bool is_stop = false;
+  for (ConstObjMysqlPrivIter iter = tenant_obj_mysql_priv_begin;
+        OB_SUCC(ret) && iter != obj_mysql_privs_.end() && !is_stop; ++iter) {
+    const ObObjMysqlPriv *obj_mysql_priv = NULL;
+    if (OB_ISNULL(obj_mysql_priv = *iter)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("NULL ptr", K(ret), K(obj_mysql_priv));
+    } else if (tenant_id != obj_mysql_priv->get_tenant_id()
+                || user_id != obj_mysql_priv->get_user_id()) {
+      is_stop = true;
+    } else if (OB_FAIL(obj_mysql_privs.push_back(obj_mysql_priv))) {
+      LOG_WARN("push back obj mysql priv failed", K(ret));
+    }
+  }
+
+  return ret;
+}
+
 int ObPrivMgr::get_obj_privs_in_grantee(const uint64_t tenant_id,
                                         const uint64_t grantee_id,
                                         ObIArray<const ObObjPriv *> &obj_privs) const
@@ -1584,9 +1770,14 @@ int ObPrivMgr::get_obj_privs_in_grantee(const uint64_t tenant_id,
   int ret = OB_SUCCESS;
   obj_privs.reset();
 
-  ObTenantUserId tenant_user_id(tenant_id, grantee_id);
+  ObTenantUrObjId tenant_user_id;
+  tenant_user_id.tenant_id_ = tenant_id;
+  tenant_user_id.grantee_id_ = grantee_id;
+  tenant_user_id.obj_id_ = 0;
+  tenant_user_id.obj_type_ = 0;
+  tenant_user_id.col_id_ = 0;
   ConstObjPrivIter tenant_obj_priv_begin =
-      obj_privs_.lower_bound(tenant_user_id, ObObjPriv::cmp_tenant_user_id);
+      obj_privs_.lower_bound(tenant_user_id, ObObjPriv::cmp_tenant_ur_obj_id);
   bool is_stop = false;
   for (ConstObjPrivIter iter = tenant_obj_priv_begin;
       OB_SUCC(ret) && iter != obj_privs_.end() && !is_stop; ++iter) {
@@ -1905,6 +2096,16 @@ void ObPrivMgr::dump() const
       LOG_INFO("CatalogPriv", K(*catalog_priv));
     }
   }
+
+  for (ObjMysqlPrivIter iter = obj_mysql_privs_.begin();
+      iter != obj_mysql_privs_.end(); ++iter) {
+    const ObObjMysqlPriv *obj_mysql_priv = *iter;
+    if (NULL == obj_mysql_priv) {
+      LOG_INFO("NULL ptr", K(obj_mysql_priv));
+    } else {
+      LOG_INFO("ObjMysqlPriv", K(*obj_mysql_priv));
+    }
+  }
 }
 
 int ObPrivMgr::get_schema_statistics(const ObSchemaType schema_type, ObSchemaStatisticsInfo &schema_info) const
@@ -1916,7 +2117,8 @@ int ObPrivMgr::get_schema_statistics(const ObSchemaType schema_type, ObSchemaSta
       && DATABASE_PRIV != schema_type
       && SYS_PRIV != schema_type
       && OBJ_PRIV != schema_type
-      && COLUMN_PRIV != schema_type) {
+      && COLUMN_PRIV != schema_type
+      && OBJ_MYSQL_PRIV != schema_type) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid schema type", K(ret), K(schema_type));
   } else {
@@ -1974,6 +2176,16 @@ int ObPrivMgr::get_schema_statistics(const ObSchemaType schema_type, ObSchemaSta
     } else if (COLUMN_PRIV == schema_type) {
       schema_info.count_ = column_privs_sort_by_id_.size();
       for (ConstColumnPrivIter it = column_privs_sort_by_id_.begin(); OB_SUCC(ret) && it != column_privs_sort_by_id_.end(); it++) {
+        if (OB_ISNULL(*it)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("schema is null", K(ret));
+        } else {
+          schema_info.size_ += (*it)->get_convert_size();
+        }
+      }
+    } else if (OBJ_MYSQL_PRIV == schema_type) {
+      schema_info.count_ = obj_mysql_privs_.size();
+      for (ConstObjMysqlPrivIter it = obj_mysql_privs_.begin(); OB_SUCC(ret) && it != obj_mysql_privs_.end(); it++) {
         if (OB_ISNULL(*it)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("schema is null", K(ret));
@@ -2134,6 +2346,33 @@ int ObPrivMgr::del_catalog_priv(const ObCatalogPrivSortKey &catalog_priv_key)
     LOG_WARN("catalog priv is non-consistent between map and vector",
              "catalog_privs vector count", catalog_privs_.count(),
              "catalog_privs map size", catalog_priv_map_.item_count());
+  }
+  return ret;
+}
+
+int ObPrivMgr::get_obj_mysql_privs_in_obj(const uint64_t tenant_id,
+  const ObString &obj_name,
+  const uint64_t obj_type,
+  ObIArray<const ObObjMysqlPriv *> &obj_privs,
+  bool reset_flag) const
+{
+  int ret = OB_SUCCESS;
+  if (reset_flag) {
+  obj_privs.reset();
+  }
+  for (ConstObjMysqlPrivIter iter = obj_mysql_privs_.begin();
+      OB_SUCC(ret) && iter != obj_mysql_privs_.end(); ++iter) {
+    const ObObjMysqlPriv *obj_priv = NULL;
+    if (OB_ISNULL(obj_priv = *iter)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("NULL ptr", K(ret), K(obj_priv));
+    } else if (tenant_id == obj_priv->get_tenant_id()
+              && obj_name == obj_priv->get_obj_name()
+              && obj_type == obj_priv->get_obj_type()) {
+      if (OB_FAIL(obj_privs.push_back(obj_priv))) {
+        LOG_WARN("push back obj priv failed", K(ret));
+      }
+    }
   }
   return ret;
 }

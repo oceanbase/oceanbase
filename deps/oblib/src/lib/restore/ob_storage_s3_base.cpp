@@ -49,7 +49,7 @@ void *ObS3MemoryManager::AllocateMemory(std::size_t blockSize,
   do {
     ptr = allocator_.alloc_align(blockSize, alignment);
     if (OB_ISNULL(ptr)) {
-      ::usleep(10000); // 10ms
+      ob_usleep(10000); // 10ms
       if (TC_REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         OB_LOG(ERROR, "ObVSliceAlloc failed to allocate memory",
@@ -721,11 +721,6 @@ static bool is_gcs_destination(const OutcomeType &outcome)
   return outcome.GetError().ResponseHeaderExists("x-guploader-uploadid");
 }
 
-const int S3_BAD_REQUEST = 400;
-const int S3_PERMISSION_DENIED = 403;
-const int S3_ITEM_NOT_EXIST = 404;
-const int S3_SLOW_DOWN = 503;
-
 static void convert_http_error(const Aws::S3::S3Error &s3_err, int &ob_errcode)
 {
   const int http_code = static_cast<int>(s3_err.GetResponseCode());
@@ -736,6 +731,8 @@ static void convert_http_error(const Aws::S3::S3Error &s3_err, int &ob_errcode)
     case S3_BAD_REQUEST: {
       if (exception == "InvalidRequest" && err_msg.find("x-amz-checksum") != std::string::npos) {
         ob_errcode = OB_OBJECT_STORAGE_CHECKSUM_ERROR;
+      } else if (exception == "InvalidRequest" && err_msg.find("Appid, Bucket") != std::string::npos) {
+        ob_errcode = OB_INVALID_OBJECT_STORAGE_ENDPOINT;
       } else if (err_msg.find("region") != std::string::npos
                  && err_msg.find("is wrong; expecting") != std::string::npos) {
         ob_errcode = OB_S3_REGION_MISMATCH;
@@ -750,6 +747,8 @@ static void convert_http_error(const Aws::S3::S3Error &s3_err, int &ob_errcode)
       else if (err_msg.find("KeyTooLongError") != std::string::npos
           || err_msg.find("InvalidObjectName") != std::string::npos
           || err_msg.find("InvalidArgument") != std::string::npos) {
+        ob_errcode = OB_INVALID_ARGUMENT;
+      } else if (exception == "InvalidURI") {
         ob_errcode = OB_INVALID_ARGUMENT;
       } else {
         ob_errcode = OB_OBJECT_STORAGE_IO_ERROR;
@@ -820,7 +819,7 @@ static void convert_io_error(const Aws::S3::S3Error &s3_err, int &ob_errcode)
 }
 
 template<typename OutcomeType>
-static void log_s3_status(OutcomeType &outcome, const int ob_errcode)
+static void log_s3_status(OutcomeType &outcome, int &ob_errcode)
 {
   const char *request_id = outcome.GetResult().GetRequestId().c_str();
   if (outcome.GetResult().GetRequestId().empty()) {
@@ -839,6 +838,9 @@ static void log_s3_status(OutcomeType &outcome, const int ob_errcode)
   }
   if (OB_OBJECT_STORAGE_CHECKSUM_ERROR == ob_errcode) {
     OB_LOG_RET(ERROR, ob_errcode, "S3 info", K(request_id), K(code), K(exception), K(err_msg));
+    // checksum error are offten caused by network issues, so we convert it to
+    // io error to make it easier for user to retry.
+    ob_errcode = OB_OBJECT_STORAGE_IO_ERROR;
   } else {
     OB_LOG_RET(WARN, ob_errcode, "S3 info", K(request_id), K(code), K(exception), K(err_msg));
   }
@@ -1152,7 +1154,7 @@ ObStorageS3Base::ObStorageS3Base()
 
 ObStorageS3Base::~ObStorageS3Base()
 {
-  reset();
+  ObStorageS3Base::reset();
 }
 
 void ObStorageS3Base::reset()
@@ -1434,6 +1436,7 @@ ObStorageS3Reader::ObStorageS3Reader()
 
 ObStorageS3Reader::~ObStorageS3Reader()
 {
+  close();
 }
 
 void ObStorageS3Reader::reset()
@@ -1559,6 +1562,7 @@ ObStorageS3Util::ObStorageS3Util() : is_opened_(false), storage_info_(NULL)
 
 ObStorageS3Util::~ObStorageS3Util()
 {
+  close();
 }
 
 int ObStorageS3Util::open(ObObjectStorageInfo *storage_info)
@@ -2186,6 +2190,7 @@ ObStorageS3AppendWriter::ObStorageS3AppendWriter()
 
 ObStorageS3AppendWriter::~ObStorageS3AppendWriter()
 {
+  close();
 }
 
 int ObStorageS3AppendWriter::open_(const ObString &uri, ObObjectStorageInfo *storage_info)
@@ -2285,7 +2290,9 @@ ObStorageS3MultiPartWriter::ObStorageS3MultiPartWriter()
 {}
 
 ObStorageS3MultiPartWriter::~ObStorageS3MultiPartWriter()
-{}
+{
+  close();
+}
 
 void ObStorageS3MultiPartWriter::reset()
 {
@@ -2564,7 +2571,9 @@ ObStorageParallelS3MultiPartWriter::ObStorageParallelS3MultiPartWriter()
 {}
 
 ObStorageParallelS3MultiPartWriter::~ObStorageParallelS3MultiPartWriter()
-{}
+{
+  close();
+}
 
 void ObStorageParallelS3MultiPartWriter::reset()
 {

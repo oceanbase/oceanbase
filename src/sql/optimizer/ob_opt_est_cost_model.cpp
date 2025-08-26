@@ -1508,9 +1508,10 @@ int ObOptEstCostModel::cost_column_store_index_back(const ObCostTableScanInfo &e
   SMART_VAR(ObCostTableScanInfo, column_group_est_cost_info, OB_INVALID_ID, OB_INVALID_ID, OB_INVALID_ID) {
     double network_cost = 0.0;
     index_back_cost = 0.0;
-    double prefix_filter_sel = est_cost_info.postfix_filter_sel_;
-    double index_back_row_count = row_count * prefix_filter_sel;
-    if (est_cost_info.table_filters_.empty() && limit_count >= 0.0) {
+    const bool limit_before_indexback = est_cost_info.table_filters_.empty() && limit_count >= 0.0;
+    double apply_filter_sel = est_cost_info.postfix_filter_sel_;
+    double index_back_row_count = row_count * apply_filter_sel;
+    if (limit_before_indexback) {
       index_back_row_count = std::min(index_back_row_count, limit_count);
     }
     if (OB_FAIL(column_group_est_cost_info.assign(est_cost_info))) {
@@ -1522,12 +1523,11 @@ int ObOptEstCostModel::cost_column_store_index_back(const ObCostTableScanInfo &e
       column_group_est_cost_info.use_column_store_ = true;
       column_group_est_cost_info.join_filter_sel_ = 1.0;
     }
-    prefix_filter_sel = 1.0;
     // calc scan cost for each column group
     for (int64_t i = 0; OB_SUCC(ret) && i < est_cost_info.index_back_column_group_infos_.count(); ++i) {
       // prepare est cost info for column group
       const ObCostColumnGroupInfo &cg_info = est_cost_info.index_back_column_group_infos_.at(i);
-      double cg_row_count = index_back_row_count * prefix_filter_sel * cg_info.skip_filter_sel_;
+      double cg_row_count = index_back_row_count;
       column_group_est_cost_info.index_meta_info_.index_micro_block_count_ = cg_info.micro_block_count_;
       column_group_est_cost_info.table_filters_.reuse();
       double column_group_cost = 0.0;
@@ -1543,10 +1543,10 @@ int ObOptEstCostModel::cost_column_store_index_back(const ObCostTableScanInfo &e
       } else {
         index_back_cost += column_group_cost;
         OPT_TRACE_COST_MODEL(KV(index_back_cost), "+=", KV(column_group_cost));
-        LOG_TRACE("OPT:[COST ONE COLUMN GROUP]", K(row_count), K(index_back_row_count), K(prefix_filter_sel), K(column_group_cost), K(cg_info.skip_filter_sel_), K(column_group_cost));
-        prefix_filter_sel *= cg_info.filter_sel_;
-        index_back_row_count = row_count * prefix_filter_sel;
-        if (est_cost_info.table_filters_.empty() && limit_count >= 0.0) {
+        LOG_TRACE("OPT:[COST ONE COLUMN GROUP]", K(row_count), K(index_back_row_count), K(apply_filter_sel), K(column_group_cost), K(cg_info.skip_filter_sel_), K(column_group_cost));
+        apply_filter_sel *= cg_info.filter_sel_;
+        index_back_row_count = row_count * apply_filter_sel;
+        if (limit_before_indexback) {
           index_back_row_count = std::min(index_back_row_count, limit_count);
         }
       }

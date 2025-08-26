@@ -17,7 +17,7 @@ using namespace oceanbase::sql;
 using namespace oceanbase::common;
 int ObInitChannelPieceMsgListener::on_message(
     ObInitChannelPieceMsgCtx &ctx,
-    common::ObIArray<ObPxSqcMeta *> &sqcs,
+    common::ObIArray<ObPxSqcMeta> &sqcs,
     const ObInitChannelPieceMsg &pkt)
 {
   UNUSED(sqcs);
@@ -78,7 +78,7 @@ int ObInitChannelWholeMsg::assign(const ObInitChannelWholeMsg &other, common::Ob
 }
 
 
-int ObInitChannelPieceMsgCtx::send_whole_msg(common::ObIArray<ObPxSqcMeta *> &sqcs)
+int ObInitChannelPieceMsgCtx::send_whole_msg(common::ObIArray<ObPxSqcMeta> &sqcs)
 {
   int ret = OB_SUCCESS;
   // get child transmit op's id.
@@ -86,7 +86,7 @@ int ObInitChannelPieceMsgCtx::send_whole_msg(common::ObIArray<ObPxSqcMeta *> &sq
   //TODO :
   whole_msg_.op_id_ = op_id_ + 1;
   ARRAY_FOREACH_X(sqcs, idx, cnt, OB_SUCC(ret)) {
-    dtl::ObDtlChannel *ch = sqcs.at(idx)->get_qc_channel();
+    dtl::ObDtlChannel *ch = sqcs.at(idx).get_qc_channel();
     if (OB_ISNULL(ch)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("null expected", K(ret));

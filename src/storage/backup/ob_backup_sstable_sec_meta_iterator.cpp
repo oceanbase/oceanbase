@@ -319,6 +319,8 @@ int ObBackupSSTableSecMetaIterator::build_create_empty_sstable_param_(
     ObTabletCreateSSTableParam &param)
 {
   int ret = OB_SUCCESS;
+  common::ObArray<blocksstable::MacroBlockId> data_block_ids;
+  common::ObArray<blocksstable::MacroBlockId> other_block_ids;
   if (!backup_sstable_meta.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("build create sstable param get invalid argument", K(ret),
@@ -326,7 +328,7 @@ int ObBackupSSTableSecMetaIterator::build_create_empty_sstable_param_(
   } else if (0 != backup_sstable_meta.sstable_meta_.basic_meta_.data_macro_block_count_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sstable param has data macro block, can not build sstable from basic meta", K(ret), K(backup_sstable_meta));
-  } else if (OB_FAIL(param.init_for_ha(backup_sstable_meta.sstable_meta_))) {
+  } else if (OB_FAIL(param.init_for_ha(backup_sstable_meta.sstable_meta_, data_block_ids, other_block_ids))) {
     LOG_WARN("failed to init create sstable param", K(ret));
   }
   return ret;

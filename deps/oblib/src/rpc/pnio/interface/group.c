@@ -26,6 +26,8 @@ struct pn_t;
 typedef struct pn_grp_t
 {
   PN_GRP_COMM;
+  int listen_id;
+  int gid;
   struct pn_t* pn_array[MAX_PN_PER_GRP];
 } pn_grp_t;
 
@@ -153,16 +155,23 @@ static int dispatch_fd_to(int fd, uint32_t gid, uint32_t tid)
 {
   int err = 0;
   pn_grp_t* grp = locate_grp(gid);
-  if (NULL == grp || grp->count == 0) {
+  int thread_count = 0;
+  if (NULL == grp || (thread_count = LOAD(&grp->count)) == 0) {
     err = -ENOENT;
   } else {
-    pn_t* pn = grp->pn_array[tid % grp->count];
+    pn_t* pn = grp->pn_array[tid % thread_count];
     int wbytes = 0;
-    while((wbytes = write(pn->accept_qfd, (const char*)&fd, sizeof(fd))) < 0
+    listenfd_dispatch_t listen_fd = {
+      .fd = fd,
+      .tid = (int)tid,
+      .sock_ptr = NULL
+    };
+    while((wbytes = write(pn->accept_qfd, (const char*)&listen_fd, sizeof(listen_fd))) < 0
           && EINTR == errno);
-    if (wbytes != sizeof(fd)) {
+    if (wbytes != sizeof(listen_fd)) {
       err = -EIO;
     }
+    rk_info("fd:%d, gid:0x%ux, tid:%d, actual_tid:%d, err=%d", fd, gid, tid, tid % thread_count, err);
   }
   return err;
 }
@@ -270,6 +279,9 @@ PN_API int pn_provision(int listen_id, int gid, int thread_count)
   } else if (thread_count > MAX_PN_PER_GRP) {
     err = -EINVAL;
     rk_error("thread count is too large, thread_count=%d, MAX_PN_PER_GRP=%d", thread_count, MAX_PN_PER_GRP);
+  } else {
+    pn_grp->gid = gid;
+    pn_grp->listen_id = listen_id;
   }
   count = pn_grp->count;
   // restart stoped threads
@@ -303,9 +315,80 @@ PN_API int pn_provision(int listen_id, int gid, int thread_count)
   int ret = -1;
   if (0 == err) {
     pn_grp->count = count;
+    pn_grp->config_count = count;
+    pn_grp->created_count = count;
     ret = pn_grp->count;
   }
   return ret;
+}
+
+PN_API int pn_update_thread_count(int gid, int thread_count)
+{
+  int err = 0;
+  int count = 0;
+  pn_grp_t* pn_grp = locate_grp(gid);
+  if (pn_grp == NULL) {
+    err = -EINVAL;
+    rk_error("group id not found, gid=%d", gid);
+  } else if (thread_count > MAX_PN_PER_GRP || thread_count <= 0) {
+    err = -EINVAL;
+    rk_error("thread_count invalid, gid=%d, thread_count=%d, MAX_PN_PER_GRP=%d", gid, thread_count, MAX_PN_PER_GRP);
+  } else {
+    int cur_thread_count = LOAD(&pn_grp->count);
+    if (thread_count < cur_thread_count) {
+      rk_warn("The threads will not be deleted after being decreased, but there won't be any new RPC requests sent by these threads."
+               "gid=%d, thread_count=%d, cur=%d", gid, thread_count, cur_thread_count);
+    }
+    STORE(&pn_grp->config_count, thread_count);
+  }
+  return err;
+}
+
+// not thread safety
+int pn_set_thread_count(int listen_id, int gid, int thread_count)
+{
+  int err = 0;
+  int count = 0;
+  pn_grp_t* pn_grp = locate_grp(gid);
+  if (pn_grp == NULL) {
+    err = -EINVAL;
+    rk_error("group id not found, gid=%d", gid);
+  } else {
+    int old_count = LOAD(&pn_grp->count);
+    if (thread_count < old_count) {
+      // decrease thread, only set pn_grp->count and not to delete thread
+      STORE(&pn_grp->count, thread_count);
+      rk_info("gid=%d, old_count:%d, set_count:%d", gid, old_count, thread_count);
+    } else if (thread_count > old_count) {
+      // increase thread
+      int new_created_count = 0;
+      int count = old_count;
+      for (; count < thread_count && err == 0; count++) {
+        pn_t* pn = pn_grp->pn_array[count];
+        if (NULL != pn) {
+          rk_info("pn_thread has been created, gid=%d, idx=%d, pn=%p", gid, count, pn);
+        } else {
+          pn = pn_create(listen_id, gid, count);
+          if (NULL == pn) {
+            err = ENOMEM;
+            rk_warn("pn_create failed, might be memory exhaustion, gid=%d, count=%d", gid, count);
+          } else if (0 != (err = ob_pthread_create(&pn->pd, pn_thread_func, pn))) {
+            pn_destroy(pn);
+          } else {
+            pn_grp->pn_array[count] = pn;
+            new_created_count += 1;
+          }
+        }
+      }
+      STORE(&pn_grp->count, count);
+      if (new_created_count > 0) {
+        AAF(&pn_grp->created_count, new_created_count);
+      }
+      rk_info("gid=%d, old_count:%d, set_count:%d, cur_count:%d, new_created_count:%d, err:%d",
+              gid, old_count, thread_count, count, new_created_count, err);
+    }
+  }
+  return err;
 }
 
 typedef struct pn_pktc_cb_t
@@ -359,10 +442,7 @@ static pktc_req_t* pn_create_pktc_req(pn_t* pn, uint64_t pkt_id, addr_t dest, co
 {
   const char* req = pkt->buf;
   const int64_t req_sz = pkt->sz;
-  pn_client_req_t* pn_req = (typeof(pn_req))cfifo_alloc(&pn->client_req_alloc, sizeof(*pn_req) + req_sz);
-  if (unlikely(NULL == pn_req)) {
-    return NULL;
-  }
+  pn_client_req_t* pn_req = (typeof(pn_req))req - 1;
   struct pn_pktc_cb_t* pn_cb = (typeof(pn_cb))cfifo_alloc(&pn->client_cb_alloc, sizeof(*pn_cb));
   if (unlikely(NULL == pn_cb)) {
     cfifo_free(pn_req);
@@ -457,13 +537,37 @@ PN_API int pn_send(uint64_t gtid, struct sockaddr_storage* sock_addr, const pn_p
   return err;
 }
 
+PN_API void* pn_send_alloc(uint64_t gtid, int64_t sz)
+{
+  pn_grp_t* pgrp = locate_grp(gtid>>32);
+  pn_t* pn = get_pn_for_send(pgrp, gtid & 0xffffffff);
+  pn_client_req_t* pn_req = (typeof(pn_req))cfifo_alloc(&pn->client_req_alloc, sizeof(*pn_req) + sz);
+  void* p = NULL;
+  if (unlikely(NULL != pn_req)) {
+    p = (void*)(pn_req + 1);
+  }
+  return p;
+}
+
+PN_API void pn_send_free(void* p)
+{
+  if (NULL != p) {
+    pn_client_req_t* pn_req =  (pn_client_req_t*)p - 1;
+    cfifo_free(pn_req);
+  }
+}
+
 PN_API void pn_stop(uint64_t gid)
 {
   pn_grp_t *pgrp = locate_grp(gid);
   if (pgrp != NULL) {
-    for (int tid = 0; tid < pgrp->count; tid++) {
-      pn_t *pn = get_pn_for_send(pgrp, tid);
-      ATOMIC_STORE(&pn->is_stop_, true);
+    int created_count = ATOMIC_LOAD(&pgrp->created_count);
+    for (int tid = 0; tid < created_count; tid++) {
+      pn_t *pn = pgrp->pn_array[tid];
+      if (NULL != pn) {
+        rk_info("mark stop, gid=%lu, tid=%d", gid, tid);
+        ATOMIC_STORE(&pn->is_stop_, true);
+      }
     }
   }
 }
@@ -472,9 +576,11 @@ PN_API void pn_wait(uint64_t gid)
 {
   pn_grp_t *pgrp = locate_grp(gid);
   if (pgrp != NULL) {
-    for (int tid = 0; tid < pgrp->count; tid++) {
-      pn_t *pn = get_pn_for_send(pgrp, tid);
-      if (NULL != pn->pd) {
+    int created_count = ATOMIC_LOAD(&pgrp->created_count);
+    for (int tid = 0; tid < created_count; tid++) {
+      pn_t *pn = pgrp->pn_array[tid];
+      if (NULL != pn && NULL != pn->pd) {
+        rk_info("wait pn thread, gid=%lu, tid=%d, pt=%p", gid, tid, pn->pd);
         ob_pthread_join(pn->pd);
         pn->pd = NULL;
       }
@@ -513,6 +619,12 @@ typedef struct pn_resp_ctx_t
   uint64_t sock_id;
   uint64_t pkt_id;
   void* resp_ptr;
+  time_dlink_t time_dlink;
+  uint64_t trace_id[4];
+  int64_t tenant_id;
+  int32_t trace_point;
+  int16_t pcode;
+  int16_t timeout_warn_count;
   char reserve[sizeof(pkts_req_t)];
 } pn_resp_ctx_t;
 
@@ -527,6 +639,11 @@ static pn_resp_ctx_t* create_resp_ctx(pn_t* pn, void* req_handle, uint64_t sock_
     ctx->sock_id = sock_id;
     ctx->pkt_id = pkt_id;
     ctx->resp_ptr = NULL;
+    time_dlink_init(&ctx->time_dlink);
+    ctx->tenant_id = 0;
+    ctx->trace_point = 0;
+    ctx->pcode = 0;
+    ctx->timeout_warn_count = 0;
   }
   return ctx;
 }
@@ -541,6 +658,7 @@ static int pn_pkts_handle_func(pkts_t* pkts, void* req_handle, const char* b, in
     rk_info("create_resp_ctx failed, errno = %d", errno);
   } else {
     PNIO_DELAY_WARN(STAT_TIME_GUARD(eloop_server_process_count, eloop_server_process_time));
+    tw_regist_timeout(&pkts->resp_ctx_hold, &ctx->time_dlink, HOLD_BY_UP_LAYER_TIMEOUT);
     err = pn->serve_cb(pn->gid, b, s, (uint64_t)ctx);
   }
   return err;
@@ -549,6 +667,7 @@ static int pn_pkts_handle_func(pkts_t* pkts, void* req_handle, const char* b, in
 typedef struct pn_resp_t
 {
   pn_resp_ctx_t* ctx;
+  void* resp_ptr; // used for free response buffer
   pkts_req_t req;
   easy_head_t head;
 } pn_resp_t;
@@ -556,22 +675,75 @@ typedef struct pn_resp_t
 static void pn_pkts_flush_cb_func(pkts_req_t* req)
 {
   pn_resp_t* resp = structof(req, pn_resp_t, req);
-  if ((uint64_t)resp->ctx->reserve == (uint64_t)resp) {
-    fifo_free(resp->ctx);
-  } else {
-    void* resp_ptr = resp->ctx->resp_ptr;
-    fifo_free(resp->ctx);
-    if (likely(resp_ptr)) {
-      cfifo_free(resp_ptr);
-    }
+  if (likely(resp->resp_ptr)) {
+    cfifo_free(resp->resp_ptr);
   }
 }
 
 static void pn_pkts_flush_cb_error_func(pkts_req_t* req)
 {
   pn_resp_ctx_t* ctx = (typeof(ctx))structof(req, pn_resp_ctx_t, reserve);
+  dlink_delete(&ctx->time_dlink.dlink);
   fifo_free(ctx);
 }
+
+pkts_t* locate_pn_pkts(int gid, int tid)
+{
+  pkts_t* pkts = NULL;
+  pn_grp_t* pgrp = locate_grp(gid);
+  int created_count = 0;
+  if (NULL != pgrp && tid >= 0 && tid < (created_count = ATOMIC_LOAD(&pgrp->created_count))) {
+    pn_t* pn = pgrp->pn_array[tid];
+    pkts = &pn->pkts;
+  } else {
+    int err = -EINVAL;
+    rk_error("locate_pkts failed, gid=%d, tid=%d, created_count=%d", gid, tid, created_count);
+  }
+  return pkts;
+}
+
+void pn_release_ctx(pkts_req_t* req) {
+  pn_resp_t* resp = structof(req, pn_resp_t, req);
+  pn_resp_ctx_t* ctx = resp->ctx;
+  // When socket relocating and the resp is post to queue seocondly,
+  // ctx is NULL and no need to release ctx again.
+  if (NULL != ctx) {
+    dlink_delete(&ctx->time_dlink.dlink);
+    resp->resp_ptr = ctx->resp_ptr;
+    resp->ctx = NULL;
+    fifo_free(ctx);
+  }
+}
+
+void hold_by_uplayer_timeout(time_wheel_t* tw, dlink_t* l) {
+  time_dlink_t* td = structof(l, time_dlink_t, dlink);
+  pn_resp_ctx_t* ctx = structof(td, pn_resp_ctx_t, time_dlink);
+  char buf[72] = {'\0'};
+  ctx->timeout_warn_count ++;
+  const int16_t trace_point_in_tenant_queue = 3;
+  const int realarm_timeout_us = 2000000;
+  int wait_seconds = 9 + (ctx->timeout_warn_count - 1) * 2;
+  if (ctx->trace_point == trace_point_in_tenant_queue) {
+    // Reduce the frequency of printing logs if the backlog of queues leads to holding for too much time
+    if ((ctx->pkt_id & 0xff) == 0) {
+      rk_warn("reqeust hold by upper-layer for too much time. "
+              "req=%p, pcode=%d, tenant_id=%ld, trace_point=%d, hold_time=%dus, trace_id(%s)",
+              ctx, ctx->pcode, ctx->tenant_id, ctx->trace_point, HOLD_BY_UP_LAYER_TIMEOUT,
+              trace_id_to_str_c(&ctx->trace_id[0], buf, sizeof(buf)));
+    }
+  } else {
+    rk_warn("reqeust hold by upper-layer for too much time. "
+            "req=%p, pcode=%d, tenant_id=%ld, trace_point=%d, hold_time=%dus, trace_id(%s)",
+            ctx, ctx->pcode, ctx->tenant_id, ctx->trace_point,
+            HOLD_BY_UP_LAYER_TIMEOUT + (ctx->timeout_warn_count - 1) * realarm_timeout_us,
+            trace_id_to_str_c(&ctx->trace_id[0], buf, sizeof(buf)));
+    if (ctx->timeout_warn_count < 3) {
+      // print hold by upper-layer log up to 3 times
+      tw_regist_timeout(tw, td, realarm_timeout_us);
+    }
+  }
+}
+
 PN_API void* pn_resp_pre_alloc(uint64_t req_id, int64_t sz)
 {
   void* p = NULL;
@@ -606,6 +778,7 @@ PN_API int pn_resp(uint64_t req_id, const char* buf, int64_t hdr_sz, int64_t pay
   if (NULL != resp) {
     r = &resp->req;
     resp->ctx = ctx;
+    resp->resp_ptr = NULL;
     r->errcode = 0;
     r->flush_cb = pn_pkts_flush_cb_func;
     r->sock_id = ctx->sock_id;
@@ -735,19 +908,31 @@ PN_API int64_t pn_get_pkt_id(uint64_t req_id)
   return pkt_id;
 }
 
+PN_API inline void pn_set_trace_point(uint64_t req_id, int32_t trace_point) {
+  pn_resp_ctx_t* ctx = (typeof(ctx))req_id;
+  ctx->trace_point = trace_point;
+}
+
+PN_API inline void pn_set_trace_info(uint64_t req_id, int64_t tenant_id, int16_t pocde, const uint64_t* trace_id) {
+  pn_resp_ctx_t* ctx = (typeof(ctx))req_id;
+  ctx->tenant_id = tenant_id;
+  ctx->pcode = pocde;
+  ctx->trace_id[0] = trace_id[0];
+  ctx->trace_id[1] = trace_id[1];
+  ctx->trace_id[2] = trace_id[2];
+  ctx->trace_id[3] = trace_id[3];
+}
+
 void pn_print_diag_info(pn_comm_t* pn_comm) {
   pn_t* pn = (pn_t*)pn_comm;
   int64_t client_cnt = 0;
   int64_t server_cnt = 0;
   // print socket diag info
+  char sock_buf[PNIO_NIO_SOCK_ADDR_LEN] = {'\0'};
   dlink_for(&pn->pktc.sk_list, p) {
     pktc_sk_t* s = structof(p, pktc_sk_t, list_link);
-    char local_addr_buf[PNIO_NIO_ADDR_LEN] = {'\0'};
-    char dest_addr_buf[PNIO_NIO_ADDR_LEN] = {'\0'};
-    rk_info("client:%p_%s_%s_%d_%ld_%d, write_queue=%lu/%lu, write=%lu/%lu, read=%lu/%lu, doing=%lu, done=%lu, write_time=%lu, read_time=%lu, process_time=%lu",
-              s, addr_str(s->sk_diag_info.local_addr, local_addr_buf, sizeof(local_addr_buf)),
-              addr_str(s->dest, dest_addr_buf, sizeof(dest_addr_buf)),
-              s->fd, s->sk_diag_info.establish_time, s->conn_ok,
+    rk_info("client:%p_%s, write_queue=%lu/%lu, write=%lu/%lu, read=%lu/%lu, doing=%lu, done=%lu, write_time=%lu, read_time=%lu, process_time=%lu",
+              s, my_sock_t_str(s, sock_buf, sizeof(sock_buf)),
               s->wq.cnt, s->wq.sz,
               s->sk_diag_info.write_cnt, s->sk_diag_info.write_size,
               s->sk_diag_info.read_cnt, s->sk_diag_info.read_size,
@@ -755,17 +940,20 @@ void pn_print_diag_info(pn_comm_t* pn_comm) {
               s->sk_diag_info.write_wait_time, s->sk_diag_info.read_time, s->sk_diag_info.read_process_time);
     client_cnt++;
   }
+  int ttid = get_current_pnio()->tid;
   if (pn->pkts.sk_list.next != NULL) {
     dlink_for(&pn->pkts.sk_list, p) {
       pkts_sk_t* s = structof(p, pkts_sk_t, list_link);
       char peer_addr_buf[PNIO_NIO_ADDR_LEN] = {'\0'};
-      rk_info("server:%p_%s_%d_%ld, write_queue=%lu/%lu, write=%lu/%lu, read=%lu/%lu, doing=%lu, done=%lu, write_time=%lu, read_time=%lu, process_time=%lu",
-                s, addr_str(s->peer, peer_addr_buf, sizeof(peer_addr_buf)), s->fd, s->sk_diag_info.establish_time,
+      rk_info("[%d]server:%p_%s, write_queue=%lu/%lu, write=%lu/%lu, read=%lu/%lu, doing=%lu, done=%lu, write_time=%lu, read_time=%lu, process_time=%lu, "
+                "relocate_status:%d",
+                ttid, s, my_sock_t_str(s, sock_buf, sizeof(sock_buf)),
                 s->wq.cnt, s->wq.sz,
                 s->sk_diag_info.write_cnt, s->sk_diag_info.write_size,
                 s->sk_diag_info.read_cnt, s->sk_diag_info.read_size,
                 s->sk_diag_info.doing_cnt, s->sk_diag_info.done_cnt,
-                s->sk_diag_info.write_wait_time, s->sk_diag_info.read_time, s->sk_diag_info.read_process_time);
+                s->sk_diag_info.write_wait_time, s->sk_diag_info.read_time, s->sk_diag_info.read_process_time,
+                s->relocate_status);
       server_cnt++;
     }
   }
@@ -773,4 +961,110 @@ void pn_print_diag_info(pn_comm_t* pn_comm) {
   rk_info("client_send:%lu/%lu, client_queue_time=%lu, cnt=%ld, server_send:%lu/%lu, server_queue_time=%lu, cnt=%ld",
             pn->pktc.diag_info.send_cnt, pn->pktc.diag_info.send_size, pn->pktc.diag_info.sc_queue_time, client_cnt,
             pn->pkts.diag_info.send_cnt, pn->pkts.diag_info.send_size, pn->pkts.diag_info.sc_queue_time, server_cnt);
+  int64_t current_time_us = rk_get_us();
+  if (current_time_us - pn->pktc.cb_tw.finished_us > 10 * 1000000) {
+    int err = -EIO;
+    rk_error("timer fd has been blocked for too long, check the timerfd has been closed unexpectedly or os error,"
+             "finished_us=%ld, timer_fd=%d, err=%d",
+             pn->pktc.cb_tw.finished_us, pn->pktc.cb_timerfd.fd, err);
+  }
+}
+
+void pn_check_thread_count() {
+  // TODO:@fangwu.lcc assuming that there are only two pn_groups in the observer process,
+  // fix here when supporting more pn groups
+  const int default_pn_group = 1;
+  const int ratelimit_pn_group = 2;
+  for (int i = default_pn_group; i <= ratelimit_pn_group; i++) {
+    pn_grp_t* pn_grp = locate_grp(i);
+    if (pn_grp != NULL) {
+      int cur_count = LOAD(&pn_grp->count);
+      int config_count = LOAD(&pn_grp->config_count);
+      if ( cur_count != config_count) {
+        int err = pn_set_thread_count(pn_grp->listen_id, pn_grp->gid, config_count);
+        if (err != 0) {
+          rk_error("pn_set_thread_count failed, err=%d", err);
+        }
+      }
+    }
+  }
+}
+
+static int relocate_sk_and_wait(pkts_sk_t* s, uint32_t gid)
+{
+  int err = 0;
+  pn_grp_t* grp = locate_grp(gid);
+  int fd = s->fd;
+  int tid = s->tid;
+  if (NULL == grp) {
+    err = -ENOENT;
+    rk_error("locate pn failed, gid=%d,tid=%d", gid, tid);
+  } else {
+    pn_t* pn = grp->pn_array[tid];
+    int wbytes = 0;
+    listenfd_dispatch_t listen_fd = {
+      .fd = fd,
+      .tid = (int)tid,
+      .sock_ptr = s
+    };
+    while((wbytes = write(pn->accept_qfd, (const char*)&listen_fd, sizeof(listen_fd))) < 0
+          && EINTR == errno);
+    if (wbytes != sizeof(listen_fd)) {
+      err = -EIO;
+      rk_error("write pipe fd faild, errno=%d", errno);
+    }
+    // sync wait dst thread has received and processed the dispatch task;
+    while(ATOMIC_LOAD(&s->relocate_status) == SOCK_NORMAL) {
+      rk_futex_wait(&s->relocate_status, SOCK_NORMAL, NULL);
+    }
+  }
+  char sock_fd_buf[PNIO_NIO_FD_ADDR_LEN] = {'\0'};
+  rk_info("[socket_relocation] dispatch connection, s=%p,%s, gid=%d, tid=%d, status=%d, relocate_sock_id=%lu",
+          s, sock_fd_str(fd, sock_fd_buf, sizeof(sock_fd_buf)), gid, tid, s->relocate_status, s->relocate_sock_id);
+  return err;
+}
+
+static int pkts_sk_relocate(pkts_sf_t* sf, pkts_sk_t* s, uint32_t gid) {
+  int err = 0;
+  // similar to sock_destroy but not free memory
+  err = epoll_ctl(s->ep_fd, EPOLL_CTL_DEL, s->fd, NULL);
+  if (0 != err) {
+    // the fd might be closed, unneed to relocate
+    rk_warn("[socket_relocation] epoll_ctl delete fd faild, s=%p, s->fd=%d, errno=%d", s, s->fd, errno);
+  } else if ((err = relocate_sk_and_wait(s, gid)) != 0) {
+    rk_error("relocate_sk_and_wait failed, try to add the socket again, err=%d", err);
+    int tmp_err = 0;
+    struct epoll_event event;
+    uint32_t flag = EPOLLIN | EPOLLOUT | EPOLLERR | EPOLLET;
+    if (0 != (tmp_err = epoll_ctl(s->ep_fd, EPOLL_CTL_ADD, s->fd, __make_epoll_event(&event, flag, s)))) {
+      rk_error("eloop_regist failed, tmp_err=%d, s=%p, fd=%d", tmp_err, s, s->fd);
+    }
+  } else {
+    rk_info("[socket_relocation] s=%p, processing_cnt=%ld", s, s->processing_cnt);
+    dlink_delete(&s->ready_link);
+    pkts_t* pkts = structof(sf, pkts_t, sf);
+    // not to delete from sk_map until there are no rpc requests being processing
+    if (0 == s->processing_cnt) {
+      idm_del(&pkts->sk_map, s->id);
+    }
+    dlink_delete(&s->list_link);
+    dlink_delete(&s->rl_ready_link);
+  }
+  return err;
+}
+
+void pkts_sk_rebalance() {
+  pn_t* pn = (pn_t*)get_current_pnio();
+  pn_grp_comm_t* pn_grp = pn->pn_grp;
+  int running_thread_conut = ATOMIC_LOAD(&pn_grp->count);
+  int tid = pn->tid;
+  if (pn->pkts.sk_list.next != NULL) { // the pkts.sk_list is NULL if the pn is only used as client end
+    dlink_for(&pn->pkts.sk_list, p) {
+      pkts_sk_t *sk = structof(p, pkts_sk_t, list_link);
+      if (sk->tid != tid && sk->tid < running_thread_conut && SOCK_NORMAL == sk->relocate_status) {
+        // the socket is imbalanced and its target thread has been created
+        IGNORE_RETURN pkts_sk_relocate(&pn->pkts.sf, sk, pn->gid);
+      }
+    }
+  }
 }

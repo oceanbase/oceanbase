@@ -33,13 +33,25 @@ void opendal_bytes_init(opendal_bytes &bytes, const char *buf, const int64_t buf
 class ObDalWrapper
 {
 public:
-  static opendal_error *obdal_init_env(void *malloc, void *free, void *log_handler, const int32_t log_level, const int64_t thread_cnt, const int64_t pool_max_idle_per_host, const int64_t pool_max_idle_time_s)
+  static opendal_error *obdal_init_env(
+      void *malloc,
+      void *free,
+      void *log_handler,
+      const int32_t log_level,
+      const int64_t thread_cnt,
+      const int64_t pool_max_idle_per_host,
+      const int64_t pool_max_idle_time_s,
+      const int64_t connect_timeout_s)
   {
-    return opendal_init_env(malloc, free, log_handler, log_level, thread_cnt, pool_max_idle_per_host, pool_max_idle_time_s);
+    return opendal_init_env(malloc, free, log_handler, log_level, thread_cnt, pool_max_idle_per_host, pool_max_idle_time_s, connect_timeout_s);
   }
   static void obdal_fin_env()
   {
     opendal_fin_env();
+  }
+  static void obdal_get_tenant_id(int64_t &tenant_id)
+  {
+    tenant_id = opendal_get_tenant_id();
   }
   // span
   static void obdal_span_new(ObSpan *&span, const int64_t tenant_id, const char *trace_id)
@@ -80,6 +92,12 @@ public:
     opendal_bytes_init(bytes, buf, buf_size, buf_size);
 
     return opendal_operator_write(op, path, &bytes);
+  }
+  static opendal_error *obdal_operator_write_with_if_not_exists(const opendal_operator *op, const char *path, const char *buf, const int64_t buf_size)
+  {
+    opendal_bytes bytes;
+    opendal_bytes_init(bytes, buf, buf_size, buf_size);
+    return opendal_operator_write_with_if_not_exists(op, path, &bytes);
   }
   static opendal_error *obdal_operator_reader(const opendal_operator *op, const char *path, opendal_reader *&reader)
   {
@@ -326,8 +344,9 @@ public:
   using ObStorageIORetryStrategy<OutcomeType>::start_time_us_;
   using ObStorageIORetryStrategy<OutcomeType>::timeout_us_;
 
-  ObStorageObdalRetryStrategy(const int64_t timeout_us = ObObjectStorageTenantGuard::get_timeout_us())
-      : ObStorageIORetryStrategy<OutcomeType>(timeout_us)
+  ObStorageObdalRetryStrategy(const int64_t timeout_us = ObObjectStorageTenantGuard::get_timeout_us(), const int64_t errsim_enable = true)
+      : ObStorageIORetryStrategy<OutcomeType>(timeout_us),
+        errsim_enable_(errsim_enable)
   {}
   virtual ~ObStorageObdalRetryStrategy() {}
 
@@ -340,7 +359,7 @@ public:
       ObString message(outcome->message.len, (char *) outcome->message.data);
       OB_LOG(WARN, "ObDal log error", K(ret),
           K(start_time_us_), K(timeout_us_), K(attempted_retries),
-          K(outcome->code), K(message));
+          K(outcome->code), K(message), K(outcome->is_temporary));
       ObDalWrapper::obdal_error_free(outcome);
     }
   }
@@ -350,7 +369,7 @@ protected:
       const RetType &outcome, const int64_t attempted_retries) const override
   {
     bool bret = false;
-    if (OB_SUCCESS != EventTable::EN_OBJECT_STORAGE_IO_RETRY) {
+    if (errsim_enable_ && OB_SUCCESS != EventTable::EN_OBJECT_STORAGE_IO_RETRY) {
       bret = true;
       if (outcome == nullptr) {
         OB_LOG(INFO, "errsim object storage IO retry");
@@ -364,6 +383,8 @@ protected:
     }
     return bret;
   }
+private:
+  bool errsim_enable_;
 };
 
 // @brief ObDalRetryLayer is responsible for:
@@ -377,16 +398,24 @@ public:
     if (OB_NOT_NULL(error)) {
       convert_obdal_error(error, ob_errcode);
       ObString message(error->message.len, (char *) error->message.data);
-      OB_LOG_RET(WARN, ob_errcode, "obdal fail", K(error->code), K(message));
+      OB_LOG_RET(WARN, ob_errcode, "obdal fail", K(error->code), K(message), K(error->is_temporary));
       ObDalWrapper::obdal_error_free(error);
       error = nullptr;
     }
   }
 public:
-  static int obdal_init_env(void *malloc, void *free, void *log_handler, const int32_t log_level, const int64_t thread_cnt, const int64_t pool_max_idle_per_host, const int64_t pool_max_idle_time_s)
+  static int obdal_init_env(
+      void *malloc,
+      void *free,
+      void *log_handler,
+      const int32_t log_level,
+      const int64_t thread_cnt,
+      const int64_t pool_max_idle_per_host,
+      const int64_t pool_max_idle_time_s,
+      const int64_t connect_timeout_s)
   {
     int ret = OB_SUCCESS;
-    opendal_error *error = ObDalWrapper::obdal_init_env(malloc, free, log_handler, log_level, thread_cnt, pool_max_idle_per_host, pool_max_idle_time_s);
+    opendal_error *error = ObDalWrapper::obdal_init_env(malloc, free, log_handler, log_level, thread_cnt, pool_max_idle_per_host, pool_max_idle_time_s, connect_timeout_s);
     if (OB_UNLIKELY(error != nullptr)) {
       handle_obdal_error_and_free(error, ret);
     }
@@ -449,6 +478,18 @@ public:
     }
     return ret;
   }
+
+  static int obdal_operator_write_with_if_not_exists(const opendal_operator *op, const char *path, const char *buf, const int64_t buf_size)
+  {
+    int ret = OB_SUCCESS;
+    ObStorageObdalRetryStrategy<> strategy;
+    opendal_error *error = execute_until_timeout(strategy, ObDalWrapper::obdal_operator_write_with_if_not_exists, op, path, buf, buf_size);
+    if (OB_UNLIKELY(error != nullptr)) {
+      handle_obdal_error_and_free(error, ret);
+    }
+    return ret;
+  }
+
   static int obdal_operator_reader(const opendal_operator *op, const char *path, opendal_reader *&reader)
   {
     int ret = OB_SUCCESS;
@@ -571,8 +612,12 @@ public:
   static int obdal_lister_next(opendal_lister *lister, struct opendal_entry *&entry)
   {
     int ret = OB_SUCCESS;
-    // The operation is not idempotent, so it is not retried
-    opendal_error *error = ObDalWrapper::obdal_lister_next(lister, entry);
+    // Each call to obdal_lister_next does not necessarily involve I/O operations.
+    // When I/O does not occur, ignoring the return value (is_temporary) and retrying is not idempotent.
+    // Therefore, it is important to disregard the errsim test in this context.
+    // As a result, the errsim retry tests in ob_admin will ignore the error injection for this function.
+    ObStorageObdalRetryStrategy<> strategy(ObObjectStorageTenantGuard::get_timeout_us(), false/* errsim_enable */);
+    opendal_error *error = execute_until_timeout(strategy, ObDalWrapper::obdal_lister_next, lister, std::ref(entry));
     if (OB_UNLIKELY(error != nullptr)) {
       handle_obdal_error_and_free(error, ret);
     }
@@ -822,14 +867,16 @@ void convert_obdal_error(const opendal_error *error, int &ob_errcode)
       ob_errcode = OB_OBJECT_STORAGE_IO_ERROR;
     } else if (error->code == OPENDAL_CONDITION_NOT_MATCH) {
       // The condition of this operation is not match.
-      ob_errcode = OB_OBJECT_STORAGE_IO_ERROR;
+      ob_errcode = OB_OBJECT_STORAGE_CONDITION_NOT_MATCH;
     } else if (error->code == OPENDAL_RANGE_NOT_SATISFIED) {
       // The range of the content is not satisfied.
       ob_errcode = OB_OBJECT_STORAGE_IO_ERROR;
     } else if (error->code == OPENDAL_INVALID_OBJECT_STORAGE_ENDPOINT) {
       ob_errcode = OB_INVALID_OBJECT_STORAGE_ENDPOINT;
     } else if (error->code == OPENDAL_CHECKSUM_ERROR) {
-      ob_errcode = OB_OBJECT_STORAGE_CHECKSUM_ERROR;
+      // checksum error are offten caused by network issues, so we convert it to
+      // io error to make it easier for user to retry.
+      ob_errcode = OB_OBJECT_STORAGE_IO_ERROR;
     } else if (error->code == OPENDAL_REGION_MISMATCH) {
       ob_errcode = OB_S3_REGION_MISMATCH;
     } else if (error->code == OPENDAL_TIMED_OUT) {
@@ -879,15 +926,16 @@ int ObDalAccessor::init_env(
     const int32_t log_level,
     const int64_t thread_cnt,
     const int64_t pool_max_idle_per_host,
-    const int64_t pool_max_idle_time_s)
+    const int64_t pool_max_idle_time_s,
+    const int64_t connect_timeout_s)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(malloc) || OB_ISNULL(free) || OB_ISNULL(log_handler)
       || OB_UNLIKELY(log_level < 0 || log_level >= OB_LOG_LEVEL_MAX)
-      || OB_UNLIKELY(thread_cnt <= 0 || pool_max_idle_per_host <= 0 || pool_max_idle_time_s <= 0)) {
+      || OB_UNLIKELY(thread_cnt <= 0 || pool_max_idle_per_host <= 0 || pool_max_idle_time_s <= 0 || connect_timeout_s <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    OB_LOG(WARN, "invalid argument", K(ret), KP(malloc), KP(free), KP(log_handler), K(log_level), K(thread_cnt), K(pool_max_idle_per_host), K(pool_max_idle_time_s));
-  } else if (OB_FAIL(do_safely(ObDalRetryLayer::obdal_init_env, malloc, free, log_handler, log_level, thread_cnt, pool_max_idle_per_host, pool_max_idle_time_s))) {
+    OB_LOG(WARN, "invalid argument", K(ret), KP(malloc), KP(free), KP(log_handler), K(log_level), K(thread_cnt), K(pool_max_idle_per_host), K(pool_max_idle_time_s), K(connect_timeout_s));
+  } else if (OB_FAIL(do_safely(ObDalRetryLayer::obdal_init_env, malloc, free, log_handler, log_level, thread_cnt, pool_max_idle_per_host, pool_max_idle_time_s, connect_timeout_s))) {
     OB_LOG(WARN, "failed init obdal env", K(ret), KP(malloc), KP(free), KP(log_handler), K(log_level), K(thread_cnt), K(pool_max_idle_per_host), K(pool_max_idle_time_s));
   }
   return ret;
@@ -899,6 +947,13 @@ void ObDalAccessor::fin_env()
   if (OB_FAIL(do_safely_without_ret(ObDalRetryLayer::obdal_fin_env))) {
     OB_LOG(WARN, "failed to fin obdal env", K(ret));
   }
+}
+
+int64_t ObDalAccessor::obdal_get_tenant_id()
+{
+  int64_t tenant_id = OB_SERVER_TENANT_ID;
+  ObDalWrapper::obdal_get_tenant_id(tenant_id);
+  return tenant_id;
 }
 
 int ObDalAccessor::obdal_operator_options_new(opendal_operator_options *&options)
@@ -993,6 +1048,24 @@ int ObDalAccessor::obdal_operator_write(
   }
   return ret;
 }
+
+int ObDalAccessor::obdal_operator_write_with_if_not_exists(
+    const opendal_operator *op,
+    const char *path,
+    const char *buf,
+    const int64_t buf_size)
+{
+  ObDalLogSpanGuard obdal_span;
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(op) || OB_ISNULL(path) || OB_ISNULL(buf) || OB_UNLIKELY(buf_size < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid argument", K(ret), KP(op), KP(path), KP(buf), K(buf_size));
+  } else if (OB_FAIL(do_safely(ObDalRetryLayer::obdal_operator_write_with_if_not_exists, op, path, buf, buf_size))) {
+    OB_LOG(WARN, "failed to exec operator write with if match", K(ret), K(path), K(buf_size));
+  }
+  return ret;
+}
+
 int ObDalAccessor::obdal_operator_reader(
     const opendal_operator *op,
     const char *path,

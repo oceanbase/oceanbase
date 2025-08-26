@@ -275,7 +275,7 @@ int ObBackupComplementLogDagNet::start_running()
   } else if (OB_ISNULL(dag_scheduler = MTL(ObTenantDagScheduler *))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag scheduler must not be NULL", K(ret));
-  } else if (OB_FAIL(dag_scheduler->alloc_dag(complement_dag))) {
+  } else if (OB_FAIL(dag_scheduler->alloc_dag(complement_dag, true/*is_ha_dag*/))) {
     LOG_WARN("failed to alloc rebuild index dag", K(ret));
   } else if (OB_FAIL(complement_dag->init(ctx_.ls_id_, &ctx_, GCTX.bandwidth_throttle_))) {
     LOG_WARN("failed to init child dag", K(ret), K_(ctx));
@@ -283,7 +283,7 @@ int ObBackupComplementLogDagNet::start_running()
     LOG_WARN("failed to create first task for child dag", K(ret), KPC(complement_dag));
   } else if (OB_FAIL(add_dag_into_dag_net(*complement_dag))) {
     LOG_WARN("failed to add dag into dag_net", K(ret), KPC(complement_dag));
-  } else if (OB_FAIL(dag_scheduler->alloc_dag(finish_dag))) {
+  } else if (OB_FAIL(dag_scheduler->alloc_dag(finish_dag, true/*is_ha_dag*/))) {
     LOG_WARN("failed to create dag", K(ret));
   } else if (OB_FAIL(finish_dag->init(&ctx_))) {
     LOG_WARN("failed to init finish dag", K(ret), K_(ctx));
@@ -366,10 +366,10 @@ bool ObBackupComplementLogDagNet::is_valid() const
   return ctx_.is_valid();
 }
 
-int64_t ObBackupComplementLogDagNet::hash() const
+uint64_t ObBackupComplementLogDagNet::hash() const
 {
   int ret = OB_SUCCESS;
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   const int64_t type = ObBackupDagNetSubType::LOG_STREAM_BACKUP_COMPLEMENT_LOG_DAG_NET;
   hash_value = common::murmurhash(&type, sizeof(type), hash_value);
   hash_value = ctx_.calc_hash(hash_value);
@@ -496,10 +496,10 @@ bool ObBackupLSLogGroupDag::operator==(const ObIDag &other) const
   return bret;
 }
 
-int64_t ObBackupLSLogGroupDag::hash() const
+uint64_t ObBackupLSLogGroupDag::hash() const
 {
   int ret = OB_SUCCESS;
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   if (IS_NOT_INIT) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("backup ls group dag do not init", K(ret));
@@ -614,7 +614,7 @@ int ObBackupLSLogGroupTask::generate_ls_dag_()
       if (OB_ISNULL(dag_net = this->get_dag()->get_dag_net())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("ls migration dag net should not be NULL", K(ret), KP(dag_net));
-      } else if (OB_FAIL(scheduler->alloc_dag(ls_dag))) {
+      } else if (OB_FAIL(scheduler->alloc_dag(ls_dag, true/*is_ha_dag*/))) {
         LOG_WARN("failed to alloc ls dag ", K(ret));
       } else if (OB_FAIL(ls_dag_array.push_back(ls_dag))) {
         LOG_WARN("failed to push tablet restore dag into array", K(ret), K(*ctx_));
@@ -768,10 +768,10 @@ bool ObBackupLSLogDag::operator==(const ObIDag &other) const
   return bret;
 }
 
-int64_t ObBackupLSLogDag::hash() const
+uint64_t ObBackupLSLogDag::hash() const
 {
   int ret = OB_SUCCESS;
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   if (IS_NOT_INIT) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("backup ls group dag do not init", K(ret));
@@ -2318,7 +2318,8 @@ int ObBackupLSLogGroupFinishDag::fill_info_param(compaction::ObIBasicInfoParam *
 int ObBackupLSLogGroupFinishDag::fill_dag_key(char *buf, const int64_t buf_len) const
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(databuff_printf(buf, buf_len, "ls_id=%s", to_cstring(ctx_->ls_id_)))) {
+  ObCStringHelper helper;
+  if (OB_FAIL(databuff_printf(buf, buf_len, "ls_id=%s", helper.convert(ctx_->ls_id_)))) {
     LOG_WARN("failed to fill dag_key", K(ret), KPC_(ctx));
   }
   return ret;
@@ -2343,10 +2344,10 @@ bool ObBackupLSLogGroupFinishDag::operator==(const ObIDag &other) const
   return bret;
 }
 
-int64_t ObBackupLSLogGroupFinishDag::hash() const
+uint64_t ObBackupLSLogGroupFinishDag::hash() const
 {
   int ret = OB_SUCCESS;
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   if (IS_NOT_INIT) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("backup ls group dag do not init", K(ret));

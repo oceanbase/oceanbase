@@ -24,6 +24,7 @@ namespace oceanbase
 namespace sql
 {
 
+
 void ObParallelBlockRangeTaskParams::reset()
 {
   parallelism_ = 0;
@@ -63,6 +64,114 @@ bool ObGranuleUtil::is_partition_granule(int64_t partition_count,
   return partition_granule;
 }
 
+int ObGranuleUtil::split_granule_by_partition_line_tunnel(ObIAllocator &allocator, const ObIArray<ObDASTabletLoc *> &tablets,
+    const ObIArray<ObExternalFileInfo> &external_table_files, ObIArray<ObDASTabletLoc *> &granule_tablets,
+    ObIArray<ObNewRange> &granule_ranges, ObIArray<int64_t> &granule_idx)
+{
+  int ret = OB_SUCCESS;
+  int64_t task_idx = 0;
+  for (int64_t i = 0; OB_SUCC(ret) && i < external_table_files.count(); ++i) {
+    const ObExternalFileInfo &external_info = external_table_files.at(i);
+    ObNewRange new_range;
+    int64_t file_start = external_info.row_count_ != 0 ? external_info.row_start_ : 0;
+    int64_t file_end = 0;
+    if (external_info.row_count_ == INT64_MAX) {
+      file_end = INT64_MAX;
+    } else if (external_info.row_count_ == 0) {
+      file_end = external_info.file_size_ > 0 ? external_info.file_size_ : INT64_MAX;
+    } else {
+      file_end = file_start + external_info.row_count_;
+    }
+    if (OB_FAIL(ObExternalTableUtils::make_external_table_scan_range(external_info.file_url_,
+            external_info.file_id_,
+            external_info.part_id_,
+            file_start,
+            file_end,
+            ObString::make_empty_string(),
+            0,
+            0,
+            allocator,
+            new_range))) {
+      LOG_WARN("failed to make external table scan range", K(ret));
+    } else if ((OB_FAIL(granule_ranges.push_back(new_range)) || OB_FAIL(granule_idx.push_back(task_idx++)) ||
+                   OB_FAIL(granule_tablets.push_back(tablets.at(0))))) {
+      LOG_WARN("fail to push back", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObGranuleUtil::split_granule_by_total_byte(ObIAllocator &allocator, int64_t parallelism, const ObIArray<ObDASTabletLoc *> &tablets,
+    const ObIArray<ObExternalFileInfo> &external_table_files, ObIArray<ObDASTabletLoc *> &granule_tablets,
+    ObIArray<ObNewRange> &granule_ranges, ObIArray<int64_t> &granule_idx)
+{
+  int ret = OB_SUCCESS;
+  int64_t task_idx = 0;
+  for (int64_t i = 0; OB_SUCC(ret) && i < external_table_files.count(); ++i) {
+    ObString session_str = external_table_files.at(i).session_id_;
+    ObString part_str = external_table_files.at(i).file_url_;
+    int64_t start_split_idx = external_table_files.at(i).file_id_;
+    int64_t split_count = external_table_files.at(i).file_size_;
+    ObNewRange *range = NULL;
+    if (OB_ISNULL(range = OB_NEWx(ObNewRange, (&allocator)))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to new a ptr", K(ret));
+    } else if (OB_FAIL(ObExternalTableUtils::make_external_table_scan_range(part_str,  // file 实际上不需要
+                    0,  // external_info.part_id_ 原来part id会存在列中可以反解出分区列的值, 现在不需要了
+                    0,          // table id不需要用外表的参数
+                    0,          // 开始位置 这个数值这理不使用
+                    INT64_MAX,  // 到结束为止 这个数值这里不使用
+                    session_str,
+                    start_split_idx,  // split 左闭右开
+                    start_split_idx + split_count,
+                    allocator,
+                    *range))) {
+      LOG_WARN("failed to make external table scan range", K(ret));
+    } else {
+      OZ(granule_ranges.push_back(*range));
+      OZ(granule_idx.push_back(task_idx++));
+      OZ(granule_tablets.push_back(tablets.at(0)));
+    }
+  }
+  return ret;
+}
+
+int ObGranuleUtil::split_granule_by_total_row(ObIAllocator &allocator, int64_t parallelism, const ObIArray<ObDASTabletLoc *> &tablets,
+    const ObIArray<ObExternalFileInfo> &external_table_files, ObIArray<ObDASTabletLoc *> &granule_tablets,
+    ObIArray<ObNewRange> &granule_ranges, ObIArray<int64_t> &granule_idx)
+{
+  int ret = OB_SUCCESS;
+  int64_t task_idx = 0;
+  // split by rows
+  for (int64_t i = 0; OB_SUCC(ret) && i < external_table_files.count(); ++i) {
+    ObString session_str = external_table_files.at(i).session_id_;
+    ObString part_str = external_table_files.at(i).file_url_;
+    int64_t start_row_count = external_table_files.at(i).row_start_;
+    int64_t end_row_count = start_row_count + external_table_files.at(i).row_count_;
+    ObNewRange *range = NULL;
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(range = OB_NEWx(ObNewRange, (&allocator)))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to new a ptr", K(ret));
+    } else if (OB_FAIL(ObExternalTableUtils::make_external_table_scan_range(part_str,  // session has kown partition
+                    0,  // external_info.part_id_ 原来partid会存在列中可以反解出分区列的值, 现在不需要了
+                    0,                // table id不需要用外表的参数
+                    start_row_count,  // start index of all table
+                    end_row_count,        // number of records
+                    session_str,
+                    0,  // split by size won't use in this branch
+                    0,  // split by size won't use in this branch
+                    allocator,
+                    *range))) {
+      LOG_WARN("failed to make external table scan range", K(ret));
+    } else {
+      OZ(granule_ranges.push_back(*range));
+      OZ(granule_idx.push_back(task_idx++));
+      OZ(granule_tablets.push_back(tablets.at(0)));
+    }
+  }
+  return ret;
+}
 int ObGranuleUtil::split_granule_for_external_table(ObIAllocator &allocator,
                                                     const ObTableScanSpec *tsc,
                                                     const ObIArray<ObNewRange> &ranges,
@@ -99,33 +208,43 @@ int ObGranuleUtil::split_granule_for_external_table(ObIAllocator &allocator,
     }
   } else if (!external_table_files.empty() &&
              ObExternalFileFormat::ODPS_FORMAT == external_file_format.format_type_) {
-#if defined (OB_BUILD_CPP_ODPS) || defined (OB_BUILD_JNI_ODPS)
-    int64_t task_idx = 0;
     LOG_TRACE("odps external table granule switch", K(ret), K(external_table_files.count()), K(external_table_files));
-    for (int64_t i = 0; OB_SUCC(ret) && i < external_table_files.count(); ++i) {
-      const ObExternalFileInfo& external_info = external_table_files.at(i);
-      ObNewRange new_range;
-      int64_t file_row_count = external_info.row_count_ ? external_info.row_count_ : (external_info.file_size_ > 0 ? external_info.file_size_ : INT64_MAX);
-      int64_t file_start = external_info.row_count_ ? external_info.row_start_ : 0;
-      if (OB_FAIL(ObExternalTableUtils::make_external_table_scan_range(external_info.file_url_,
-                                                  external_info.file_id_,
-                                                  external_info.part_id_,
-                                                  file_start,
-                                                  file_row_count,
-                                                  allocator,
-                                                  new_range))) {
-        LOG_WARN("failed to make external table scan range", K(ret));
-      } else if ((OB_FAIL(granule_ranges.push_back(new_range)) ||
-              OB_FAIL(granule_idx.push_back(task_idx++)) ||
-              OB_FAIL(granule_tablets.push_back(tablets.at(0))))) {
-        LOG_WARN("fail to push back", K(ret));
+    if (!GCONF._use_odps_jni_connector) {
+#if defined(OB_BUILD_CPP_ODPS)
+      if (OB_FAIL(split_granule_by_partition_line_tunnel(allocator, tablets, external_table_files, granule_tablets, granule_ranges, granule_idx))) {
+        LOG_WARN("failed to split granule by partition line", K(ret));
       }
-    }
 #else
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "external odps table");
     LOG_WARN("not support odps table in opensource", K(ret));
 #endif
+    } else {
+#if defined (OB_BUILD_JNI_ODPS)
+      if (external_file_format.odps_format_.api_mode_ != ObODPSGeneralFormat::ApiMode::TUNNEL_API) {
+        if (external_file_format.odps_format_.api_mode_ == ObODPSGeneralFormat::ApiMode::BYTE) {
+          if (OB_FAIL(split_granule_by_total_byte(allocator, parallelism, tablets, external_table_files, granule_tablets, granule_ranges, granule_idx))) {
+            LOG_WARN("failed to split granule by total byte", K(ret));
+          }
+        } else {
+          if (OB_FAIL(split_granule_by_total_row(allocator, parallelism, tablets, external_table_files, granule_tablets, granule_ranges, granule_idx))) {
+            LOG_WARN("failed to split granule by total row", K(ret));
+          }
+        }
+      } else {
+        // tunnel api
+        if (OB_FAIL(split_granule_by_partition_line_tunnel(
+                allocator, tablets, external_table_files, granule_tablets, granule_ranges, granule_idx))) {
+          LOG_WARN("failed to split granule by partition line", K(ret));
+        }
+      }
+#else
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "external odps table");
+    LOG_WARN("not support odps table in opensource", K(ret));
+#endif
+    }
+
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < ranges.count(); ++i) {
       for (int64_t j = 0; OB_SUCC(ret) && j < external_table_files.count(); ++j) {

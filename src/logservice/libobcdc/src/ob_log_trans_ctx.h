@@ -90,8 +90,9 @@ private:
   transaction::ObTransID    trans_id_;
   int64_t                   trans_commit_version_;  // Transaction commit version
 };
+typedef common::LinkHashValue<TenantTransID> TransCtxValue;
 
-class TransCtx
+class TransCtx : public TransCtxValue
 {
 public:
   enum
@@ -190,17 +191,26 @@ public:
   /// Request status of committed: COMMITTED
   ///
   /// @param [out] all_participant_revertable  Are all participants recoverable
+  /// @param [out] can_recycle_trans_ctx       Can TransCtx be recycled
   ///
   /// @retval OB_SUCCESS        Success
   /// @retval other_error_code  Fail
-  int inc_revertable_participant_count(bool &all_participant_revertable);
+  int inc_revertable_participant_count(bool &all_participant_revertable, bool &can_recycle_trans_ctx, volatile bool &stop_flag);
+
+  /// Mark BEGIN/COMMIT BR as released and check if TransCtx can be recycled
+  /// @param [in] is_begin_br     True if BEGIN BR, false if COMMIT BR
+  /// @param [out] can_recycle_trans_ctx  Can TransCtx be recycled
+  /// @retval OB_SUCCESS        Success
+  /// @retval other_error_code  Fail
+  int mark_begin_commit_br_released(bool is_begin_br, bool &can_recycle_trans_ctx, volatile bool &stop_flag);
+  int mark_dont_have_begin_commit_br(bool &can_recycle_trans_ctx, volatile bool &stop_flag);
 
   /// Reclaim all participants
   /// Requires a status of COMMITTED and that all participants can be reclaimed, i.e. the number of reclaimed participants is equal to the number of all participants
   ///
   /// @retval OB_SUCCESS        Success
   /// @retval other_error_code  Fail
-  int revert_participants();
+  int revert_participants(volatile bool &stop_flag);
 
 public:
   static bool is_state_valid(const int state) { return state >= TRANS_CTX_STATE_DISCARDED && state < TRANS_CTX_STATE_MAX; }
@@ -218,9 +228,14 @@ public:
   int64_t get_total_br_count() const { return ATOMIC_LOAD(&total_br_count_); }
   void inc_total_br_count_() { ATOMIC_INC(&total_br_count_); }
   void set_total_br_count(const int64_t total_br_count) { ATOMIC_SET(&total_br_count_, total_br_count); }
-  bool is_all_br_committed() const { return is_trans_sorted() && (ATOMIC_LOAD(&total_br_count_) == ATOMIC_LOAD(&committed_br_count_)); }
-  void inc_committed_br_count() { ATOMIC_INC(&committed_br_count_); }
-  int get_committed_br_count() const { return ATOMIC_LOAD(&committed_br_count_); }
+  OB_INLINE bool is_all_br_committed() const
+  {
+    MEM_BARRIER();
+    return ATOMIC_LOAD(&total_br_count_) == ATOMIC_LOAD(&committed_br_count_);
+  }
+  OB_INLINE void inc_committed_br_count() { ATOMIC_INC(&committed_br_count_); }
+  OB_INLINE int64_t get_committed_br_count() const { return ATOMIC_LOAD(&committed_br_count_); }
+  OB_INLINE bool is_trans_commit_finish() const { return is_trans_sorted() && is_all_br_committed(); }
   int64_t get_valid_part_trans_task_count() const { return ATOMIC_LOAD(&valid_part_trans_task_count_); }
   void set_valid_part_trans_task_count(const int64_t valid_part_trans_task_count) { ATOMIC_SET(&valid_part_trans_task_count_, valid_part_trans_task_count); }
 
@@ -237,12 +252,12 @@ public:
 
   int set_state(const int target_state);
   int set_ready_participant_count(const int64_t count);
-  int64_t get_revertable_participant_count() const;
+
   int set_ready_participant_objs(PartTransTask *part_trans_task);
   int append_sorted_br(ObLogBR *br);
-  void set_trans_redo_dispatched() { ATOMIC_SET(&is_trans_redo_dispatched_, true); }
-  bool is_trans_sorted() const { return ATOMIC_LOAD(&is_trans_sorted_); }
-  void set_trans_sorted() { ATOMIC_SET(&is_trans_sorted_, true); }
+  OB_INLINE void set_trans_redo_dispatched() { ATOMIC_SET(&is_trans_redo_dispatched_, true); }
+  OB_INLINE bool is_trans_sorted() const { return ATOMIC_LOAD(&is_trans_sorted_); }
+  OB_INLINE void set_trans_sorted() { ATOMIC_SET(&is_trans_sorted_, true); }
   /// check if trans has valid br
   /// note: call this function before any br output
   /// @retval OB_SUCCESS      trans has valid br to output
@@ -297,11 +312,13 @@ public:
       K_(participant_count),
       KP_(ready_participant_objs),
       K_(ready_participant_count),
+      K_(is_trans_redo_dispatched),
+      K_(is_trans_sorted),
       K_(total_br_count),
       K_(committed_br_count),
-      K_(revertable_participant_count),
-      K_(is_trans_redo_dispatched),
-      K_(is_trans_sorted));
+      "revertable_participant_count", get_revertable_participant_count_(revertable_ref_info_),
+      "begin_commit_br_released", is_begin_and_commit_br_released_(revertable_ref_info_),
+      K_(revertable_ref_info));
 
 private:
   // Prepare the transaction context
@@ -329,8 +346,21 @@ private:
   int init_trans_id_str_();
   // only init major version str for observer version less than 2_0_0
   int init_major_version_str_(const common::ObVersion &freeze_version);
+  OB_INLINE int64_t get_revertable_participant_count_(uint64_t revertable_info) const
+  {
+    // 0011 1111 ... 1111
+    // 62 bits for participant count
+    // 2 bits for begin_br_released and commit_br_released
+    return revertable_info & 0x3FFFFFFFFFFFFFFF;
+  }
+  OB_INLINE bool is_begin_and_commit_br_released_(uint64_t revertable_info) const
+  {
+    // 1100 0000 ... 0000
+    // 2 bits for begin_br_released and commit_br_released
+    return (revertable_info & 0xC000000000000000) == 0xC000000000000000;
+  }
   // wait until trans redo dispatched.
-  void wait_trans_redo_dispatched_();
+  void wait_trans_redo_dispatched_(volatile bool &stop_flag);
 
 private:
   IObLogTransCtxMgr         *host_;
@@ -356,7 +386,7 @@ private:
   int64_t                   valid_part_trans_task_count_;   // Number of valid participants count
 
   // status info
-  int64_t                   revertable_participant_count_;  // Number of participants able to be released
+  uint64_t revertable_ref_info_;  // Low 62 bits: participant count, High 2 bits: begin/commit BR released flags
   bool                      is_trans_redo_dispatched_ CACHE_ALIGNED;
   bool                      is_trans_sorted_ CACHE_ALIGNED;
   common::ObSpLinkQueue     br_out_queue_;

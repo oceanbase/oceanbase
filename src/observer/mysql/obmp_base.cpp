@@ -347,6 +347,9 @@ int ObMPBase::init_process_var(sql::ObSqlCtx &ctx,
         LOG_WARN("set session debug sync actions to thread local actions failed", K(tmp_ret));
       }
     }
+#ifdef OB_BUILD_SPM
+    ctx.spm_ctx_.baseline_plan_hash_array_.set_allocator(&CURRENT_CONTEXT->get_arena_allocator());
+#endif
     // construct sql context
     ctx.multi_stmt_item_ = multi_stmt_item;
     ctx.session_info_ = &session;
@@ -369,7 +372,6 @@ int ObMPBase::init_process_var(sql::ObSqlCtx &ctx,
 //外层调用会忽略do_after_process的错误码，因此这里将set_session_state的错误码返回也没有意义。
 //因此这里忽略set_session_state错误码，warning buffer的reset和trace log 记录的流程不收影响。
 int ObMPBase::do_after_process(sql::ObSQLSessionInfo &session,
-                               sql::ObSqlCtx &ctx,
                                bool async_resp_used) const
 {
   int ret = OB_SUCCESS;

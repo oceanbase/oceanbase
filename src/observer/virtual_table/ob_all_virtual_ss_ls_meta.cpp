@@ -155,11 +155,6 @@ int ObAllVirtualSSLSMeta::fill_in_row_(const VirtualSSLSMetaRow &row_data, commo
       cur_row_.cells_[i].set_int(v);
       break;
     }
-    case SSLOG_CHECKPOINT_SCN: {
-      int64_t v = row_data.sslog_checkpoint_scn_.get_val_for_inner_table_field();
-      cur_row_.cells_[i].set_int(v);
-      break;
-    }
     case SS_CLOG_ACCUM_CHECKSUM:
       cur_row_.cells_[i].set_int(row_data.clog_checksum_);
       break;
@@ -175,31 +170,118 @@ int ObAllVirtualSSLSMeta::fill_in_row_(const VirtualSSLSMetaRow &row_data, commo
   return ret;
 }
 
+int ObAllVirtualSSLSMeta::extract_result_(
+    common::sqlclient::ObMySQLResult &res,
+    VirtualSSLSMetaRow &row)
+{
+  int ret = OB_SUCCESS;
+  int64_t tenant_id = 0;
+  int64_t ls_id = ObLSID::INVALID_LS_ID;
+  int64_t meta_version = 0;
+  int64_t ss_checkpoint_scn = 0;
+  int64_t ss_checkpoint_lsn = 0;
+  int64_t ss_clog_accum_checksum = 0;
+  (void)GET_COL_IGNORE_NULL(res.get_int, "tenant_id", tenant_id);
+  (void)GET_COL_IGNORE_NULL(res.get_int, "ls_id", ls_id);
+  (void)GET_COL_IGNORE_NULL(res.get_int, "meta_version", meta_version);
+  (void)GET_COL_IGNORE_NULL(res.get_int, "ss_checkpoint_scn", ss_checkpoint_scn);
+  (void)GET_COL_IGNORE_NULL(res.get_int, "ss_checkpoint_lsn", ss_checkpoint_lsn);
+  (void)GET_COL_IGNORE_NULL(res.get_int, "ss_clog_accum_checksum", ss_clog_accum_checksum);
+  if (OB_FAIL(ret)) {
+  } else {
+    row.version_ = SCN::min_scn();   // TODO: use the real version
+    row.ss_checkpoint_scn_.convert_for_sql(ss_checkpoint_scn);
+    row.ss_checkpoint_lsn_.val_ = ss_checkpoint_lsn;
+    row.clog_checksum_ = ss_clog_accum_checksum;
+    SERVER_LOG(DEBUG, "generate row succeed", K(row));
+  }
+  return ret;
+}
+
+int ObAllVirtualSSLSMeta::get_virtual_row_remote_(
+    common::sqlclient::ObMySQLResult &res,
+    VirtualSSLSMetaRow &row)
+{
+  int ret = OB_SUCCESS;
+  while (OB_SUCC(ret)) {
+    if (OB_FAIL(res.next())) {
+      if (OB_ITER_END == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        SERVER_LOG(WARN, "get next result failed", KR(ret));
+      }
+      break;
+    } else if (OB_FAIL(extract_result_(res, row))) {
+      SERVER_LOG(WARN, "fail to extract result", KR(ret));
+    }
+  } // end while
+  return ret;
+}
+
+int ObAllVirtualSSLSMeta::get_virtual_row_remote_(
+    const uint64_t tenant_id,
+    const share::ObLSID ls_id,
+    VirtualSSLSMetaRow &row)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
+    ret = OB_ERR_UNEXPECTED;
+    SERVER_LOG(WARN, "operation is not valid", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    SERVER_LOG(WARN, "lst operator ptr or sql proxy is null", KR(ret), KP(GCTX.sql_proxy_));
+  } else {
+    SMART_VAR(ObISQLClient::ReadResult, result) {
+      ObSqlString sql;
+      if (OB_FAIL(sql.assign_fmt(
+                     "SELECT * FROM %s WHERE tenant_id = %lu and ls_id = %lu",
+                     OB_ALL_VIRTUAL_SS_LS_META_TNAME, tenant_id, ls_id.id()))) {
+        SERVER_LOG(WARN, "failed to assign sql", KR(ret), K(sql), K(tenant_id), K(ls_id));
+       } else if (OB_FAIL(GCTX.sql_proxy_->read(result, tenant_id, sql.ptr()))) {
+        SERVER_LOG(WARN, "execute sql failed", KR(ret), K(tenant_id), K(sql));
+      } else if (OB_ISNULL(result.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        SERVER_LOG(WARN, "get mysql result failed", KR(ret), K(sql));
+      } else if (OB_FAIL(get_virtual_row_remote_(
+          *result.get_result(),
+          row))) {
+        SERVER_LOG(WARN, "generate virtual row remote failed", KR(ret), K(row));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObAllVirtualSSLSMeta::generate_virtual_row_(VirtualSSLSMetaRow &row)
 {
   int ret = OB_SUCCESS;
-  MTL_SWITCH(tenant_id_)
-  {
-    SMART_VAR(ObSSLSMeta, ls_meta) {
-      ObSSMetaService *meta_service = MTL(ObSSMetaService *);
-      if (OB_UNLIKELY(!ls_id_.is_valid())) {
-        ret = OB_INVALID_ARGUMENT;
-        SERVER_LOG(WARN, "invalid argument", K(ret), K(ls_id_));
-      } else if (OB_FAIL(meta_service->get_ls_meta(ls_id_, ls_meta))) {
-        if (OB_TABLET_NOT_EXIST == ret) {
-          ret = OB_ITER_END;
+  if (is_sys_tenant(effective_tenant_id_) && effective_tenant_id_ != tenant_id_) {
+    if (OB_FAIL(get_virtual_row_remote_(tenant_id_, ls_id_, row))) {
+      SERVER_LOG(WARN, "generate virtual row remote failed", KR(ret), K_(tenant_id), K_(ls_id));
+    }
+  } else {
+    MTL_SWITCH(tenant_id_)
+    {
+      SMART_VAR(ObSSLSMeta, ls_meta) {
+        ObSSMetaService *meta_service = MTL(ObSSMetaService *);
+        if (OB_UNLIKELY(!ls_id_.is_valid())) {
+          ret = OB_INVALID_ARGUMENT;
+          SERVER_LOG(WARN, "invalid argument", K(ret), K(ls_id_));
+        } else if (OB_FAIL(meta_service->get_ls_meta(ls_id_, ls_meta))) {
+          if (OB_TABLET_NOT_EXIST == ret) {
+            ret = OB_ITER_END;
+          } else {
+            SERVER_LOG(WARN, "get ls meta from meta service failed", KR(ret), K(ls_id_));
+          }
         } else {
-          SERVER_LOG(WARN, "get ls meta from meta service failed", KR(ret), K(ls_id_));
+          row.version_ = SCN::min_scn();   // TODO: use the real version
+          row.ss_checkpoint_scn_ = ls_meta.get_ss_checkpoint_scn();
+          row.ss_checkpoint_lsn_ = ls_meta.get_ss_base_lsn();
+          palf::PalfBaseInfo palf_meta;
+          (void)ls_meta.get_palf_meta(palf_meta);
+          row.clog_checksum_ = palf_meta.prev_log_info_.accum_checksum_;
+          SERVER_LOG(DEBUG, "generate row succeed", K(ls_meta), K(row));
         }
-      } else {
-        row.version_ = SCN::min_scn();   // TODO: use the real version
-        row.ss_checkpoint_scn_ = ls_meta.get_ss_checkpoint_scn();
-        row.ss_checkpoint_lsn_ = ls_meta.get_ss_base_lsn();
-        palf::PalfBaseInfo palf_meta;
-        (void)ls_meta.get_palf_meta(palf_meta);
-        row.clog_checksum_ = palf_meta.prev_log_info_.accum_checksum_;
-        row.sslog_checkpoint_scn_ = ls_meta.get_sslog_checkpoint_scn();
-        SERVER_LOG(DEBUG, "generate row succeed", K(ls_meta), K(row));
       }
     }
   }

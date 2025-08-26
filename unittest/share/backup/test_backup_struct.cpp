@@ -11,6 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SHARE
+#define OB_BUILD_UNITTEST
 
 #include <gtest/gtest.h>
 #define private public
@@ -173,7 +174,7 @@ TEST(ObBackupDest, oss)
 
 TEST(ObBackupDest, oss_encrypt)
 {
-  const char *backup_test = "oss://backup_dir?host=xxx.com&access_id=111&encrypt_key=9B6FDE7E1E54CD292CDE5494CEB86B6F";
+  const char *backup_test = "oss://backup_dir?host=xxx.com&access_id=111&encrypt_key=9B6FDE7E1E54CD292CDE5494CEB86B6F&dest_id=1001";
   ObBackupDest dest;
   EXPECT_EQ(OB_SUCCESS, ObMasterKeyGetter::instance().init(NULL));
   EXPECT_EQ(OB_SUCCESS, ObMasterKeyGetter::instance().set_root_key(OB_SYS_TENANT_ID,
@@ -186,9 +187,24 @@ TEST(ObBackupDest, oss_encrypt)
   const char *endpoint = "host=xxx.com";
   const char *authorization = "access_id=111&encrypt_key=9B6FDE7E1E54CD292CDE5494CEB86B6F";
   const char *extension = "";
+  const int64_t dest_id = 1001;
   ObBackupDest dest1;
-  ASSERT_EQ(OB_SUCCESS, dest1.set(path, endpoint, authorization, extension));
+  ObBackupDest dest3;
+  ASSERT_EQ(OB_SUCCESS, dest1.set(path, endpoint, authorization, extension, dest_id));
+  ASSERT_EQ(OB_SUCCESS, dest3.set(path, endpoint, authorization, extension, OB_INVALID_DEST_ID));
   ASSERT_TRUE(dest == dest1);
+  ASSERT_TRUE(dest != dest3);
+
+  ObBackupStorageInfo *storage_info1 = dest.get_storage_info();
+  ObBackupStorageInfo *storage_info2 = dest3.get_storage_info();
+  ASSERT_TRUE(storage_info1 != nullptr && storage_info2 != nullptr);
+
+  ObBackupStorageInfo storage_info3;
+  storage_info3.assign(*storage_info2);
+  ASSERT_TRUE(*storage_info1 != *storage_info2);
+  ASSERT_TRUE(*storage_info2 == storage_info3);
+  ASSERT_TRUE(*storage_info1 != storage_info3);
+
   ObString backup_test_str(backup_test);
   ObBackupDest dest2;
   ASSERT_EQ(OB_INVALID_BACKUP_DEST, dest2.set_without_decryption(backup_test_str));
@@ -196,12 +212,12 @@ TEST(ObBackupDest, oss_encrypt)
   char backup_dest_str[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
   char backup_path_str[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
   ASSERT_EQ(OB_SUCCESS, dest.get_backup_dest_str(backup_dest_str, sizeof(backup_dest_str)));
-  ASSERT_EQ(0, strcmp(backup_dest_str, "oss://backup_dir?host=xxx.com&access_id=111&encrypt_key=9B6FDE7E1E54CD292CDE5494CEB86B6F"));
+  ASSERT_EQ(0, strcmp(backup_dest_str, "oss://backup_dir?host=xxx.com&access_id=111&encrypt_key=9B6FDE7E1E54CD292CDE5494CEB86B6F&dest_id=1001"));
   ASSERT_EQ(OB_SUCCESS, dest.get_backup_path_str(backup_path_str, sizeof(backup_path_str)));
   ASSERT_EQ(0, strcmp(backup_path_str, "oss://backup_dir?host=xxx.com"));
 
   dest1.reset();
-  ASSERT_EQ(OB_SUCCESS, dest1.set(path, endpoint, authorization, extension));
+  ASSERT_EQ(OB_SUCCESS, dest1.set(path, endpoint, authorization, extension, dest_id));
   ASSERT_TRUE(dest == dest1);
   ObMasterKeyGetter::instance().stop();
   ObMasterKeyGetter::instance().wait();
@@ -218,40 +234,10 @@ TEST(ObBackupDest, cos)
   ObBackupDest dest3;
   char backup_dest_str[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
   char backup_path_str[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
-  ASSERT_EQ(OB_SUCCESS, dest.set(backup_test));
-  ASSERT_EQ(OB_SUCCESS, dest1.set(backup_test));
-  ASSERT_EQ(OB_SUCCESS, dest2.set_storage_path(ObString(backup_test)));
-  ASSERT_EQ(OB_SUCCESS, dest3.set_storage_path(ObString(backup_test1)));
-  LOG_INFO("dump backup dest", K(dest), K(dest.get_root_path()), KPC(dest.get_storage_info()));
-  LOG_INFO("dump backup dest", K(dest2), K(dest.get_root_path()), KPC(dest.get_storage_info()));
-  LOG_INFO("dump backup dest", K(dest3), K(dest.get_root_path()), KPC(dest.get_storage_info()));
-  ASSERT_EQ(0, strcmp(dest.root_path_, "cos://backup_dir"));
-  ASSERT_TRUE(dest.storage_info_->device_type_ == 2);
-
-  EXPECT_EQ(OB_SUCCESS, ObMasterKeyGetter::instance().init(NULL));
-  EXPECT_EQ(OB_SUCCESS, ObMasterKeyGetter::instance().set_root_key(OB_SYS_TENANT_ID,
-                                                        obrpc::RootKeyType::DEFAULT, ObString()));
-  ASSERT_EQ(OB_SUCCESS, dest.get_backup_dest_str(backup_dest_str, sizeof(backup_dest_str)));
-  ASSERT_EQ(0, strcmp(backup_dest_str, "cos://backup_dir?host=xxx.com&access_id=111&encrypt_key=9B6FDE7E1E54CD292CDE5494CEB86B6F&delete_mode=tagging&appid=333"));
-  ASSERT_EQ(OB_SUCCESS, dest.get_backup_path_str(backup_path_str, sizeof(backup_path_str)));
-  ASSERT_EQ(0, strcmp(backup_path_str, "cos://backup_dir?host=xxx.com"));
-  ASSERT_TRUE(dest.is_root_path_equal(dest1));
-  bool is_equal = false;
-  ASSERT_EQ(OB_SUCCESS, dest.is_backup_path_equal(dest1, is_equal));
-  ASSERT_TRUE(is_equal);
-  is_equal = false;
-  ASSERT_EQ(OB_SUCCESS, dest.is_backup_path_equal(dest2, is_equal));
-  ASSERT_TRUE(is_equal);
-  is_equal = false;
-  ASSERT_EQ(OB_SUCCESS, dest.is_backup_path_equal(dest3, is_equal));
-  ASSERT_TRUE(is_equal);
-  ASSERT_TRUE(dest == dest1);
-  dest1.reset();
-  ASSERT_EQ(OB_SUCCESS, dest1.set(dest.get_root_path().ptr(), dest.get_storage_info()));
-  ASSERT_TRUE(dest == dest1);
-  ObMasterKeyGetter::instance().stop();
-  ObMasterKeyGetter::instance().wait();
-  ObMasterKeyGetter::instance().reset();
+  ASSERT_EQ(OB_INVALID_BACKUP_DEST, dest.set(backup_test));
+  ASSERT_EQ(OB_INVALID_BACKUP_DEST, dest1.set(backup_test));
+  ASSERT_EQ(OB_INVALID_BACKUP_DEST, dest2.set_storage_path(ObString(backup_test)));
+  ASSERT_EQ(OB_INVALID_BACKUP_DEST, dest3.set_storage_path(ObString(backup_test1)));
 }
 
 TEST(ObBackupDest, cos_encrypt)
@@ -261,34 +247,7 @@ TEST(ObBackupDest, cos_encrypt)
   EXPECT_EQ(OB_SUCCESS, ObMasterKeyGetter::instance().init(NULL));
   EXPECT_EQ(OB_SUCCESS, ObMasterKeyGetter::instance().set_root_key(OB_SYS_TENANT_ID,
                                                         obrpc::RootKeyType::DEFAULT, ObString()));
-  ASSERT_EQ(OB_SUCCESS, dest.set(backup_test));
-  LOG_INFO("dump backup dest", K(dest.get_root_path()), KPC(dest.get_storage_info()));
-  ASSERT_EQ(0, strcmp(dest.root_path_, "cos://backup_dir"));
-  ASSERT_TRUE(dest.storage_info_->device_type_ == 2);
-  const char *path = "cos://backup_dir/";
-  const char *endpoint = "host=xxx.com";
-  const char *authorization = "access_id=111&encrypt_key=9B6FDE7E1E54CD292CDE5494CEB86B6F";
-  const char *extension = "appid=333";
-  ObBackupDest dest1;
-  ASSERT_EQ(OB_SUCCESS, dest1.set(path, endpoint, authorization, extension));
-  ASSERT_TRUE(dest == dest1);
-  ObString backup_test_str(backup_test);
-  ObBackupDest dest2;
-  ASSERT_EQ(OB_INVALID_BACKUP_DEST, dest2.set_without_decryption(backup_test_str));
-
-  char backup_dest_str[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
-  char backup_path_str[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
-  ASSERT_EQ(OB_SUCCESS, dest.get_backup_dest_str(backup_dest_str, sizeof(backup_dest_str)));
-  ASSERT_EQ(0, strcmp(backup_dest_str, "cos://backup_dir?host=xxx.com&access_id=111&encrypt_key=9B6FDE7E1E54CD292CDE5494CEB86B6F&appid=333"));
-  ASSERT_EQ(OB_SUCCESS, dest.get_backup_path_str(backup_path_str, sizeof(backup_path_str)));
-  ASSERT_EQ(0, strcmp(backup_path_str, "cos://backup_dir?host=xxx.com"));
-
-  dest1.reset();
-  ASSERT_EQ(OB_SUCCESS, dest1.set(path, endpoint, authorization, extension));
-  ASSERT_TRUE(dest == dest1);
-  ObMasterKeyGetter::instance().stop();
-  ObMasterKeyGetter::instance().wait();
-  ObMasterKeyGetter::instance().reset();
+  ASSERT_EQ(OB_INVALID_BACKUP_DEST, dest.set(backup_test));
 }
 #endif
 

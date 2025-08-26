@@ -251,6 +251,8 @@ bool ObDbmsStatsUtils::is_no_stat_virtual_table(const int64_t table_id)
          table_id == share::OB_ALL_VIRTUAL_TRANS_SCHEDULER_TID ||
          table_id == share::OB_ALL_VIRTUAL_SQL_AUDIT_TID ||
          table_id == share::OB_TENANT_VIRTUAL_SHOW_RESTORE_PREVIEW_TID ||
+         table_id == share::OB_TENANT_VIRTUAL_SHOW_CREATE_LOCATION_TID ||
+         table_id == share::OB_TENANT_VIRTUAL_LIST_FILE_TID ||
          table_id == share::OB_ALL_VIRTUAL_SESSTAT_ORA_TID ||
          table_id == share::OB_TENANT_VIRTUAL_SHOW_CREATE_CATALOG_ORA_TID ||
          table_id == share::OB_TENANT_VIRTUAL_SHOW_CREATE_TABLE_ORA_TID ||
@@ -274,7 +276,19 @@ bool ObDbmsStatsUtils::is_no_stat_virtual_table(const int64_t table_id)
          table_id == share::OB_ALL_VIRTUAL_TRANS_SCHEDULER_ORA_TID ||
          table_id == share::OB_ALL_VIRTUAL_MDS_NODE_STAT_TID ||
          table_id == share::OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_MEMTABLE_INFO_TID ||
-         table_id == share::OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_CHECKPOINT_UNIT_INFO_TID;
+         table_id == share::OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_CHECKPOINT_UNIT_INFO_TID ||
+         table_id == share::OB_TENANT_VIRTUAL_LIST_FILE_ORA_TID ||
+         table_id == share::OB_ALL_VIRTUAL_SS_LS_META_TID ||
+         table_id == share::OB_ALL_VIRTUAL_SS_LS_META_ORA_TID ||
+         table_id == share::OB_ALL_VIRTUAL_SS_TABLET_META_TID ||
+         table_id == share::OB_ALL_VIRTUAL_SS_TABLET_META_ORA_TID ||
+         table_id == share::OB_ALL_VIRTUAL_SS_SSTABLE_MGR_TID ||
+         table_id == share::OB_ALL_VIRTUAL_SS_SSTABLE_MGR_ORA_TID ||
+         table_id == share::OB_ALL_VIRTUAL_SS_EXISTING_TABLET_META_TID ||
+         table_id == share::OB_ALL_VIRTUAL_SS_EXISTING_TABLET_META_ORA_TID ||
+         table_id == share::OB_ALL_VIRTUAL_SS_EXISTING_SSTABLE_MGR_TID ||
+         table_id == share::OB_ALL_VIRTUAL_SS_EXISTING_SSTABLE_MGR_ORA_TID ||
+         table_id == share::OB_ALL_VIRTUAL_SS_NOTIFY_TABLETS_STAT_TID;
 }
 
 bool ObDbmsStatsUtils::is_virtual_index_table(const int64_t table_id)
@@ -1176,11 +1190,11 @@ int ObDbmsStatsUtils::get_current_opt_stats(ObIAllocator &allocator,
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(stat_manager.get_stat_service().get_sql_service().batch_fetch_table_stats(conn,
-                                                                                            param.tenant_id_,
+      if (OB_FAIL(stat_manager.get_stat_service().get_sql_service().batch_fetch_table_stats(param.tenant_id_,
                                                                                             param.table_id_,
                                                                                             part_ids,
-                                                                                            table_stats))) {
+                                                                                            table_stats,
+                                                                                            conn))) {
         LOG_WARN("failed to batch fetch table stats", K(ret));
       } else if (OB_FAIL(stat_manager.get_stat_service().get_sql_service().fetch_column_stat(param.tenant_id_,
                                                                                              allocator,

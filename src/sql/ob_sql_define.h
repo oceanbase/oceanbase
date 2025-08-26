@@ -335,6 +335,7 @@ enum ExplainType
   EXPLAIN_EXTENDED,
   EXPLAIN_PARTITIONS,
   EXPLAIN_TRADITIONAL,
+  EXPLAIN_FORMAT_OBJECT_NAME_DISPLAY,
   EXPLAIN_FORMAT_JSON,
   EXPLAIN_BASIC,
   EXPLAIN_PLANREGRESS,
@@ -408,6 +409,12 @@ DECLARE_ENUM(Type, type, PQ_DIST_METHOD_DEF, static);
     return print_method;
   }
 };
+
+#define IS_PKEY_DIST_METHOD(type)                                                                  \
+  (((type) == ObPQDistributeMethod::Type::PARTITION)                                               \
+   || ((type) == ObPQDistributeMethod::Type::PARTITION_RANDOM)                                     \
+   || ((type) == ObPQDistributeMethod::Type::PARTITION_HASH)                                       \
+   || ((type) == ObPQDistributeMethod::Type::PARTITION_RANGE))
 
 struct ObNullDistributeMethod
 {
@@ -529,6 +536,7 @@ enum PXParallelRule
   // force disable parallel below
   PL_UDF_DAS_FORCE_SERIALIZE, //stmt has_pl_udf will use das, force serialize;
   DBLINK_FORCE_SERIALIZE, //stmt has dblink will use das, force seialize;
+  LICENSE_NOT_ALLOW_OLAP, // current license does not support olap
   MAX_OPTION
 };
 
@@ -544,6 +552,7 @@ inline const char *ob_px_parallel_rule_str(PXParallelRule px_parallel_ruel)
     "AUTO_DOP",
     "PL_UDF_DAS_FORCE_SERIALIZE",
     "DBLINK_FORCE_SERIALIZE",
+    "LICENSE_NOT_ALLOW_OLAP",
     "MAX_OPTION",
   };
   if (OB_LIKELY(px_parallel_ruel >= USE_PX_DEFAULT)

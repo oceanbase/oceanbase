@@ -845,7 +845,7 @@ int ObVectorIndexLookupOp::call_pva_interface(const ObVidAdaLookupStatus& cur_st
       ObVectorQueryConditions query_cond;
       if (OB_FAIL(set_vector_query_condition(query_cond))) {
         LOG_WARN("fail to set query condition.", K(ret));
-      } else if (OB_FAIL(adaptor.query_result(&ada_ctx, &query_cond, adaptor_vid_iter_))) {
+      } else if (OB_FAIL(adaptor.query_result(ls_id_, &ada_ctx, &query_cond, adaptor_vid_iter_))) {
         LOG_WARN("fail to query result.", K(ret));
       }
       break;

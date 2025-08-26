@@ -84,6 +84,8 @@ struct VectorCasterHelper
     } else if (OB_SUCCESS != ret && CM_IS_WARN_ON_FAIL(cast_mode)) {
       warning = ret;
       ret = OB_SUCCESS;
+    } else if (ret == OB_INVALID_ZERO_DATE) {
+      ret = OB_INVALID_DATE_VALUE;
     }
     return ret;
   }
@@ -254,6 +256,7 @@ struct VectorCasterUtil
           || OB_DATA_OUT_OF_RANGE == warning                      \
           || OB_ERR_DATA_TRUNCATED == warning                     \
           || OB_ERR_DOUBLE_TRUNCATED == warning                   \
+          || OB_INVALID_ZERO_DATE == warning                      \
           || OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD == warning) { \
         res_vec_->set_##func_val(idx, value);                      \
       } else if (CM_IS_ZERO_ON_WARN(cast_mode)) {                 \

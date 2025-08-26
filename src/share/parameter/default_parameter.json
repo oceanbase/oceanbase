@@ -45,6 +45,11 @@
           "name": "default_table_merge_engine",
           "value": "PARTIAL_UPDATE",
           "comment": "use partial_update merge engine for simple oltp workloads"
+        },
+        {
+          "name": "default_micro_block_format_version",
+          "value": 1,
+          "comment": "use old micro block format version for simple oltp workloads"
         }
       ]
     }
@@ -100,6 +105,11 @@
           "name": "default_table_merge_engine",
           "value": "PARTIAL_UPDATE",
           "comment": "use partial_update merge engine for complex oltp workloads"
+        },
+        {
+          "name": "default_micro_block_format_version",
+          "value": 1,
+          "comment": "use old micro block format version for complex oltp workloads"
         }
       ]
     }
@@ -178,8 +188,18 @@
         },
         {
           "name": "default_table_merge_engine",
-          "value": "PARTIAL_UPDATE",
-          "comment": "use partial_update merge engine for olap workloads, modify to delete_insert later"
+          "value": "DELETE_INSERT",
+          "comment": "use delete_insert merge engine for olap workloads"
+        },
+        {
+          "name": "default_micro_block_format_version",
+          "value": 1,
+          "comment": "use old micro block format version for olap workloads"
+        },
+        {
+          "name": "_force_subquery_unnest",
+          "value": true,
+          "comment": "aggressively unnest all subqueries that can be unnested for olap mode"
         }
       ]
     }
@@ -225,6 +245,16 @@
           "name": "default_table_merge_engine",
           "value": "PARTIAL_UPDATE",
           "comment": "use partial_update merge engine for kv mode"
+        },
+        {
+          "name": "default_micro_block_format_version",
+          "value": 1,
+          "comment": "use old micro block format version for kv mode"
+        },
+        {
+          "name": "enable_auto_split",
+          "value": true,
+          "comment": "open auto split for kv mode"
         }
       ]
     }
@@ -275,6 +305,11 @@
           "name": "default_table_merge_engine",
           "value": "PARTIAL_UPDATE",
           "comment": "use partial_update merge engine for htap workloads"
+        },
+        {
+          "name": "default_micro_block_format_version",
+          "value": 1,
+          "comment": "use old micro block format version for htap workloads"
         }
       ]
     }
@@ -335,6 +370,11 @@
           "name": "default_table_merge_engine",
           "value": "PARTIAL_UPDATE",
           "comment": "use partial_update merge engine for oltp perf workloads"
+        },
+        {
+          "name": "default_micro_block_format_version",
+          "value": 1,
+          "comment": "use old micro block format version for oltp perf workloads"
         }
       ]
     }

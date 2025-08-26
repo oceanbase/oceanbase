@@ -37,6 +37,8 @@ public:
   bool is_valid() const;
 public:
   uint64_t get_tenant_id() const { return tenant_id_; }
+  uint64_t get_real_tenant_id() const { return GTS_REAL_TENANT_ID_MASK & tenant_id_; }
+  bool is_sslog_request() const { return ~GTS_REAL_TENANT_ID_MASK & tenant_id_; }
   MonotonicTs get_srr() const { return srr_; }
   const common::ObAddr &get_sender() const { return sender_; }
   TO_STRING_KV(K_(tenant_id), K_(srr), K_(range_size), K_(sender));
@@ -58,6 +60,8 @@ public:
   bool is_valid() const;
 public:
   uint64_t get_tenant_id() const { return tenant_id_; }
+  uint64_t get_real_tenant_id() const { return GTS_REAL_TENANT_ID_MASK & tenant_id_; }
+  bool is_sslog_response() const { return ~GTS_REAL_TENANT_ID_MASK & tenant_id_; }
   MonotonicTs get_srr() const { return srr_; }
   int get_status() const { return status_; }
   const common::ObAddr &get_sender() const { return sender_; }

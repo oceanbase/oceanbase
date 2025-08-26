@@ -36,7 +36,9 @@ int ObTableQueryAndMutateP::deserialize()
   arg_.query_and_mutate_.set_entity_factory(&default_entity_factory_);
 
   int ret = ParentType::deserialize();
-  if (OB_SUCC(ret) && ObTableEntityType::ET_HKV == arg_.entity_type_) {
+  if(OB_FAIL(ret)) {
+    // do nothing and return
+  } else if (ObTableEntityType::ET_HKV == arg_.entity_type_) {
     // For HKV table, modify the timestamp value to be negative
     ObTableBatchOperation &mutations = arg_.query_and_mutate_.get_mutations();
     const int64_t N = mutations.count();
@@ -49,6 +51,18 @@ int ObTableQueryAndMutateP::deserialize()
       } else if (OB_FAIL(ObTableRpcProcessorUtil::negate_htable_timestamp(*entity))) {
         LOG_WARN("failed to negate timestamp value", K(ret));
       }
+    } // end for
+  } else if (ObTableEntityType::ET_KV == arg_.entity_type_) {
+    // For KV table, set entity allocator
+    ObTableBatchOperation &mutations = arg_.query_and_mutate_.get_mutations();
+    const int64_t N = mutations.count();
+    for (int64_t i = 0; OB_SUCCESS == ret && i < N; ++i) {
+      ObITableEntity *entity = nullptr;
+      table::ObTableOperation &mutation = const_cast<table::ObTableOperation &>(mutations.at(i));
+      if (OB_FAIL(mutation.get_entity(entity))) {
+        LOG_WARN("failed to get entity", K(ret), K(i));
+      }
+      entity->set_allocator(&allocator_);
     } // end for
   }
   return ret;
@@ -228,7 +242,7 @@ int ObTableQueryAndMutateP::new_try_process()
   int ret = OB_SUCCESS;
   ObLSID ls_id(ObLSID::INVALID_LS_ID);
 
-  if (OB_FAIL(init_schema_info(arg_.table_name_, table_id_))) {
+  if (OB_FAIL(init_table_schema_info(arg_.table_name_, table_id_))) {
     LOG_WARN("fail to init schema info", K(ret), K(arg_.table_name_));
   } else if (schema_cache_guard_.get_hbase_mode_type() == OB_HBASE_SERIES_TYPE) {
     ret = OB_NOT_SUPPORTED;
@@ -240,6 +254,7 @@ int ObTableQueryAndMutateP::new_try_process()
     exec_ctx_.set_table_name(arg_.table_name_);
     exec_ctx_.set_table_id(arg_.table_id_);
     exec_ctx_.set_audit_ctx(audit_ctx_);
+    exec_ctx_.set_table_schema(table_schema_);
     ObModelGuard model_guard;
     ObIModel *model = nullptr;
     if (OB_FAIL(ObModelFactory::get_model_guard(allocator_, arg_.entity_type_, model_guard))) {

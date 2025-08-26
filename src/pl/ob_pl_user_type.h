@@ -193,7 +193,8 @@ public:
                                    char *dst,
                                    const int64_t dst_len,
                                    int64_t &dst_pos,
-                                   bool &has_serialized) const;
+                                   bool &has_serialized,
+                                   const sql::ObSQLSessionInfo &session) const;
 
   VIRTUAL_TO_STRING_KV(K_(type), K_(user_type_id), K_(type_name));
 protected:
@@ -438,6 +439,7 @@ public:
   const ObRecordMember *get_record_member(int64_t index) const;
 
   int is_compatble(const ObRecordType &other, bool &is_comp) const;
+  int check_record_cursor_member() const;
   int record_members_init(common::ObIAllocator *alloc, int64_t size);
   void reset_record_member() { record_members_.reset(); }
 
@@ -586,6 +588,7 @@ public:
                                         const ObPLINS &ns,
                                         jit::ObLLVMValue &allocator,
                                         jit::ObLLVMValue &dest) const;
+  virtual int convert(ObPLResolveCtx &ctx, ObObj *&src, ObObj *&dst) const;
 };
 #endif
 //---------- for ObCollectionType ----------
@@ -1122,7 +1125,9 @@ public:
   static uint32_t last_offset_bits() { return offsetof(ObPLCollection, last_) * 8; }
   static uint32_t data_offset_bits() { return offsetof(ObPLCollection, data_) * 8; }
   void print() const;
-  int deep_copy(ObPLCollection *src, common::ObIAllocator *allocator, bool ignore_del_element = false);
+  int deep_copy(ObPLCollection *src,
+                common::ObIAllocator *allocator,
+                bool ignore_del_element = false);
   int assign(ObPLCollection *src, ObIAllocator *allocator);
   int64_t get_init_size() const
   {

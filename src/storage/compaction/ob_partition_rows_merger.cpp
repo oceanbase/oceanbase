@@ -15,6 +15,7 @@
 #include "storage/compaction/ob_partition_rows_merger.h"
 #include "storage/compaction/ob_tablet_merge_ctx.h"
 #include "storage/compaction/ob_mview_compaction_util.h"
+#include "storage/compaction/ob_compaction_util.h"
 
 namespace oceanbase
 {
@@ -1004,6 +1005,24 @@ int ObPartitionMinorMergeHelper::collect_tnode_dml_stat(
   return ret;
 }
 
+// for local minor merge under shared-storage mode, disable reuse shared-macro-block
+static bool is_ss_local_minor_with_shared_sstable(const ObStaticMergeParam &static_param, const ObITable *table)
+{
+  bool bret = false;
+  int ret = OB_SUCCESS;
+  if (GCTX.is_shared_storage_mode() && is_local_exec_mode(static_param.get_exec_mode()) && table->is_sstable()) {
+     const ObSSTable *sstable = static_cast<const ObSSTable *>(table);
+     ObSSTableMetaHandle meta_handle;
+     if (OB_FAIL(sstable->get_meta(meta_handle))) {
+       LOG_ERROR("failed to get sstable meta, will disable reuse macro-block", K(ret), KPC(sstable));
+       bret = true;
+     } else {
+       bret = meta_handle.get_sstable_meta().get_table_shared_flag().is_shared_sstable();
+     }
+  }
+  return bret;
+}
+
 ObPartitionMergeIter *ObPartitionMinorMergeHelper::alloc_merge_iter(const ObMergeParameter &merge_param, const ObITable *table)
 {
   int ret = OB_SUCCESS;
@@ -1014,7 +1033,8 @@ ObPartitionMergeIter *ObPartitionMinorMergeHelper::alloc_merge_iter(const ObMerg
   } else if (!(table->is_sstable() && static_cast<const ObSSTable*>(table)->is_small_sstable())
       && !is_mini_merge(static_param.get_merge_type())
       && !static_param.is_full_merge_
-      && static_param.sstable_logic_seq_ < ObMacroDataSeq::MAX_SSTABLE_SEQ) {
+      && static_param.sstable_logic_seq_ < ObMacroDataSeq::MAX_SSTABLE_SEQ
+      && !is_ss_local_minor_with_shared_sstable(static_param, table)) {
     ObSSTableMetaHandle meta_handle;
     bool reuse_uncommit_row = false;
     //we only have the tx_id on sstable meta, without seq_no, the tuples in the macro block could still be abort

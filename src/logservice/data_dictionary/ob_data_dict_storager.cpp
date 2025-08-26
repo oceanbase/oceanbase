@@ -653,7 +653,7 @@ int ObDataDictStorage::wait_palf_callback_(bool &is_any_cb_fail, volatile bool &
       if (REACH_TIME_INTERVAL_THREAD_LOCAL(PRINT_CB_STATUS_INTERVAL)) {
         print_cb_status = true;
       }
-      usleep(CHECK_CB_INTERVAL);
+      ob_usleep(CHECK_CB_INTERVAL);
     }
   } while (OB_SUCC(ret) && ! is_all_cb_invoked);
 

@@ -123,21 +123,13 @@ public:
     common::ObMySQLProxy &sql_proxy,
     share::schema::ObSchemaGetterGuard &schema_guard,
     const compaction::ObTabletLSPairCache &tablet_ls_pair_cache);
-#ifdef OB_BUILD_SHARED_STORAGE
-  int build_for_s2(
-    const uint64_t table_id,
-    const share::SCN &compaction_scn,
-    common::ObMySQLProxy &sql_proxy,
-    share::schema::ObSchemaGetterGuard &schema_guard,
-    const compaction::ObTabletLSPairCache &tablet_ls_pair_cache);
-#endif
   int build_column_ckm_sum_array(
     const bool is_data_table,
     const share::SCN &compaction_scn,
     const share::schema::ObTableSchema &table_schema,
     int64_t &row_cnt);
   typedef int (*VALIDATE_CKM_FUNC)(
-    const share::SCN &compaction_scn,
+    const share::ObFreezeInfo &freeze_info,
     common::ObMySQLProxy &sql_proxy,
     ObTableCkmItems &data_ckm,
     ObTableCkmItems &index_ckm);
@@ -149,12 +141,12 @@ public:
 
 private:
   static int validate_column_ckm_sum(
-    const share::SCN &compaction_scn,
+    const share::ObFreezeInfo &freeze_info,
     common::ObMySQLProxy &sql_proxy,
     ObTableCkmItems &data_ckm,
     ObTableCkmItems &index_ckm);
   static int validate_tablet_column_ckm(
-    const share::SCN &compaction_scn,
+    const share::ObFreezeInfo &freeze_info,
     common::ObMySQLProxy &sql_proxy,
     ObTableCkmItems &data_ckm,
     ObTableCkmItems &index_ckm);
@@ -175,7 +167,10 @@ private:
     const bool is_data_table,
     const ObIArray<int64_t> &base_column_checksums,
     const ObIArray<int64_t> &check_column_checksums);
-
+  static int check_schema_change_after_major_freeze(
+    const share::ObFreezeInfo &freeze_info,
+    ObTableCkmItems &data_ckm,
+    ObTableCkmItems &index_ckm);
   static const int64_t DEFAULT_COLUMN_CNT = 64;
   static const int64_t DEFAULT_TABLET_CNT = 16;
   bool is_inited_;

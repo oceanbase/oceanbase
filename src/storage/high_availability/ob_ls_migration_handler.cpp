@@ -23,11 +23,16 @@
 #include "observer/omt/ob_tenant.h"
 #include "ob_ha_rebuild_tablet.h"
 
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/high_availability/ob_ss_ls_migration.h"
+#endif
+
 namespace oceanbase
 {
 using namespace share;
 namespace storage
 {
+ERRSIM_POINT_DEF(EN_MIGRATION_INIT_STATUS_FAIL);
 
 /******************ObLSMigrationHandlerStatusHelper*********************/
 bool ObLSMigrationHandlerStatusHelper::is_valid(
@@ -164,6 +169,34 @@ int ObLSMigrationHandlerStatusHelper::get_next_change_status(
   return ret;
 }
 
+//TODO(jyx441808): add unit test for this function
+const char *ObLSMigrationHandlerStatusHelper::get_status_str(
+    const ObLSMigrationHandlerStatus &status)
+{
+  static const char *status_strs[] = {
+    "INIT",
+    "PREPARE_LS",
+    "WAIT_PREPARE_LS",
+    "BUILD_LS",
+    "WAIT_BUILD_LS",
+    "COMPLETE_LS",
+    "WAIT_COMPLETE_LS",
+    "FINISH"
+  };
+  STATIC_ASSERT(ARRAYSIZEOF(status_strs) == (int64_t)ObLSMigrationHandlerStatus::MAX_STATUS,
+                "ls_migration_handler_status string array size mismatch enum ObLSMigrationHandlerStatus count");
+
+  const char *str = "UNKNOWN";
+
+  if (status < ObLSMigrationHandlerStatus::INIT || status >= ObLSMigrationHandlerStatus::MAX_STATUS) {
+    str = "UNKNOWN";
+  } else {
+    str = status_strs[static_cast<int>(status)];
+  }
+  return str;
+}
+
+
 /******************ObLSMigrationTask*********************/
 ObLSMigrationTask::ObLSMigrationTask()
   : arg_(),
@@ -205,6 +238,11 @@ ObLSMigrationHandler::ObLSMigrationHandler()
     is_cancel_(false),
     chosen_src_(),
     is_complete_(false)
+#ifdef OB_BUILD_SHARED_STORAGE
+    , switch_leader_cond_()
+    , switch_leader_cnt_(0)
+    , leader_proposal_id_(0)
+#endif
 {
 }
 
@@ -226,6 +264,10 @@ int ObLSMigrationHandler::init(
   } else if (OB_ISNULL(ls)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("ls migration handler init get invalid argument", K(ret), KP(ls));
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (OB_FAIL(switch_leader_cond_.init(ObWaitEventIds::HA_SERVICE_COND_WAIT))) {
+    LOG_WARN("failed to init switch leader thread cond", K(ret));
+#endif
   } else {
     ls_ = ls;
     bandwidth_throttle_ = bandwidth_throttle;
@@ -539,6 +581,26 @@ int ObLSMigrationHandler::check_task_exist(const share::ObTaskId &task_id, bool 
   return ret;
 }
 
+int ObLSMigrationHandler::get_migration_task_and_handler_status(
+    ObLSMigrationTask &task,
+    ObLSMigrationHandlerStatus &status)
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls migration handler do not init", K(ret));
+  } else {
+    common::SpinRLockGuard guard(lock_);
+    if (task_list_.empty()) {
+      ret = OB_ENTRY_NOT_EXIST;
+    } else {
+      task = task_list_.at(0);
+      status = status_;
+    }
+  }
+  return ret;
+}
+
 void ObLSMigrationHandler::destroy()
 {
   if (is_inited_) {
@@ -679,28 +741,79 @@ int ObLSMigrationHandler::do_init_status_()
     start_ts_ = ObTimeUtil::current_time();
     if (OB_FAIL(ls_->get_migration_status(migration_status))) {
       LOG_WARN("failed to get migration status", K(ret), KPC(ls_));
+    } else if (ls_->get_persistent_state().is_need_gc()) {
+      // ls persistent state is not ha state, which means ls hasn't been completely created / failed to create
+      // do nothing
+      FLOG_INFO("ls persistent state is not ha state", K(migration_status), KPC(ls_));
+#ifdef ERRSIM
+      if (migration_status == ObMigrationStatus::OB_MIGRATION_STATUS_MIGRATE) {
+        SERVER_EVENT_ADD("storage_ha", "migration_when_ls_is_initializing",
+            "tenant_id", ls_->get_tenant_id(),
+            "ls_id", ls_->get_ls_id().id(),
+            "migration_status", migration_status);
+      }
+#endif
     } else if (OB_FAIL(check_task_list_empty_(is_empty))) {
       LOG_WARN("failed to check task list empty", K(ret), KPC(ls_));
     } else if (is_empty) {
       if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE == migration_status
           || ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD == migration_status) {
         //do nothing
+      } else if (ObMigrationStatus::OB_MIGRATION_STATUS_REPLACE_HOLD == migration_status) {
+        ObMigrationStatus new_migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
+        bool is_valid_member = false;
+        if (OB_FAIL(ObStorageHADagUtils::check_self_is_valid_member_after_inc_config_version(ls_->get_ls_id(),
+                                                                                             false /* with_leader */,
+                                                                                             is_valid_member))) {
+          LOG_WARN("failed check self valid member after inc config version", K(ret), K(migration_status));
+        } else if (is_valid_member) {
+          new_migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_NONE;
+          LOG_INFO("self is valid member after inc config version", "ls_id", ls_->get_ls_id(),
+            K(migration_status), K(new_migration_status));
+        } else if (OB_FAIL(ObMigrationStatusHelper::trans_fail_status(migration_status, new_migration_status))) {
+          LOG_WARN("failed to trans fail status", K(ret), "ls_id", ls_->get_ls_id(), K(migration_status));
+        } else {
+          LOG_INFO("self is not valid member after inc config version", "ls_id", ls_->get_ls_id(),
+            K(migration_status), K(new_migration_status));
+        }
+
+        if (FAILEDx(ls_->set_migration_status(new_migration_status, ls_->get_rebuild_seq()))) {
+          LOG_WARN("failed to set migration status", K(ret), "ls_id", ls_->get_ls_id(), K(new_migration_status));
+        }
+
+        if (OB_SUCC(ret)) {
+          SERVER_EVENT_ADD("storage_ha", "check_self_is_valid_member_after_inc_config_version",
+                           "tenant_id", MTL_ID(),
+                           "ls_id", ls_->get_ls_id().id(),
+                           "current_migration_status", migration_status,
+                           "new_migration_status", new_migration_status,
+                           "ret", ret);
+        }
       } else if (ObMigrationStatus::OB_MIGRATION_STATUS_ADD_FAIL != migration_status
           && ObMigrationStatus::OB_MIGRATION_STATUS_MIGRATE_FAIL != migration_status
+          && ObMigrationStatus::OB_MIGRATION_STATUS_REPLACE_FAIL != migration_status
           && ObMigrationStatus::OB_MIGRATION_STATUS_GC != migration_status) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("ls migration handler in init status but ls migration status is in failed status",
+        LOG_WARN("ls migration handler in init status but ls migration status is not in failed status",
             K(ret), K(is_empty), K(migration_status), KPC(ls_));
       }
     } else {
       new_status = ObLSMigrationHandlerStatus::PREPARE_LS;
       ObLSMigrationTask task;
-      if (OB_FAIL(check_before_do_task_())) {
+#ifdef ERRSIM
+      if (OB_SUCC(ret)) {
+        ret = EN_MIGRATION_INIT_STATUS_FAIL ? : OB_SUCCESS;
+        if (OB_FAIL(ret)) {
+          STORAGE_LOG(ERROR, "[ERRSIM] fake EN_MIGRATION_INIT_STATUS_FAIL", K(ret));
+        }
+      }
+#endif
+      if (FAILEDx(check_before_do_task_())) {
         LOG_WARN("failed to check before do task", K(ret), KPC(ls_));
-      } else if (OB_FAIL(change_status_(new_status))) { // INIT -> PREPARE_LS
-        LOG_WARN("failed to change status", K(ret), K(new_status), KPC(ls_));
       } else if (OB_FAIL(get_ls_migration_task_(task))) {
         LOG_WARN("failed to get ls migration task", K(ret), KPC(ls_));
+      } else if (OB_FAIL(change_status_(new_status))) { // INIT -> PREPARE_LS
+        LOG_WARN("failed to change status", K(ret), K(new_status), KPC(ls_));
       } else {
         SERVER_EVENT_ADD("storage_ha", "ls_ha_start",
             "tenant_id", ls_->get_tenant_id(),
@@ -712,11 +825,14 @@ int ObLSMigrationHandler::do_init_status_()
             ObMigrationOpType::get_str(task.arg_.type_));
         wakeup_();
       }
+
+      // INIT -> COMPLETE_LS
+      if (OB_FAIL(ret)) {
+        if (OB_TMP_FAIL(switch_next_stage(ret))) {
+          LOG_WARN("failed to report result at init status", K(tmp_ret), K(ret));
+        }
+      }
     }
-  }
-  // need_to_abort = true
-  else if (OB_TMP_FAIL(switch_next_stage(ret))) { // INIT -> COMPLETE_LS
-    LOG_WARN("failed to report result at init status", K(tmp_ret), K(ret));
   }
 
   return ret;
@@ -924,6 +1040,7 @@ int ObLSMigrationHandler::schedule_build_ls_dag_net_(
     const ObLSMigrationTask &task)
 {
   int ret = OB_SUCCESS;
+  const bool is_shared_storage = GCTX.is_shared_storage_mode();
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls migration handler do not init", K(ret));
@@ -946,6 +1063,25 @@ int ObLSMigrationHandler::schedule_build_ls_dag_net_(
       if (OB_FAIL(switch_next_stage_with_nolock_(cancel_result))) {
         LOG_WARN("failed to swicth next stage cancel", K(ret));
       }
+#ifdef OB_BUILD_SHARED_STORAGE
+    } else if (is_shared_storage
+        && (ObMigrationOpType::REPLACE_LS_OP == task.arg_.type_
+          || ObMigrationOpType::ADD_LS_OP == task.arg_.type_
+          || ObMigrationOpType::MIGRATE_LS_OP == task.arg_.type_)) {
+      ObTenantDagScheduler *scheduler = nullptr;
+      ObSSMigrationDagNetInitParam param;
+      param.arg_ = task.arg_;
+      param.task_id_ = task.task_id_;
+
+      if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret), KP(scheduler));
+      } else if (OB_FAIL(scheduler->create_and_add_dag_net<ObSSMigrationDagNet>(&param))) {
+        LOG_WARN("failed to create and add ss migration dag net", K(ret), K(task), KPC(ls_));
+      } else {
+        LOG_INFO("success to create ss migration dag net", K(ret), K(task));
+      }
+#endif
     } else {
       ObTenantDagScheduler *scheduler = nullptr;
       ObMigrationDagNetInitParam param;
@@ -1216,7 +1352,7 @@ int ObLSMigrationHandler::report_to_disaster_recovery_()
     } else if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, sys_data_version))) {
       LOG_WARN("fail to get min data version", KR(ret));
     } else if (sys_data_version >= DATA_VERSION_4_3_5_1) {
-      if (OB_FAIL(rootserver::DisasterRecoveryUtils::report_to_meta_tenant(res))) {
+      if (OB_FAIL(rootserver::DisasterRecoveryUtils::report_to_disaster_recovery(res))) {
         LOG_WARN("failed to report to meta tenant", KR(ret), K(res));
       }
     } else if (OB_FAIL(rootserver::DisasterRecoveryUtils::report_to_rs(res))) {
@@ -1280,8 +1416,10 @@ int ObLSMigrationHandler::check_disk_space_(const ObMigrationOpArg &arg)
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls migration handler do not inited", K(ret));
-  } else if (ObMigrationOpType::MIGRATE_LS_OP != arg.type_ && ObMigrationOpType::ADD_LS_OP != arg.type_) {
-    LOG_INFO("only migration or add ls need check disk space, others skip it",
+  } else if (ObMigrationOpType::MIGRATE_LS_OP != arg.type_
+             && ObMigrationOpType::ADD_LS_OP != arg.type_
+             && ObMigrationOpType::REPLACE_LS_OP != arg.type_) {
+    LOG_INFO("only migration or add or replace ls need check disk space, others skip it",
         K(arg));
   } else if (!ObReplicaTypeCheck::is_replica_with_ssstore(arg.dst_.get_replica_type())) {
     LOG_INFO("dst has no ssstore, no need check disk space", K(arg));
@@ -1301,13 +1439,13 @@ int ObLSMigrationHandler::check_disk_space_(const ObMigrationOpArg &arg)
             KR(ret), K(required_size));
       }
     } else {
-// #ifdef OB_BUILD_SHARED_STORAGE
-//       if (OB_FAIL(OB_SERVER_DISK_SPACE_MGR.check_ls_migration_space_full(arg, required_size))) {
-//         // if disk space is not enough, return OB_SERVER_OUTOF_DISK_SPACE. if auto expand data_disk_size, need wait OBCloud platform expand datafile_size
-//         FLOG_ERROR( "failed to check ls migration space full, cannot migrate in",
-//             KR(ret), K(required_size));
-//       }
-// #endif
+#ifdef OB_BUILD_SHARED_STORAGE
+      if (OB_FAIL(OB_SERVER_DISK_SPACE_MGR.check_ls_migration_space_full(arg, required_size))) {
+        // if disk space is not enough, return OB_SERVER_OUTOF_DISK_SPACE. if auto expand data_disk_size, need wait OBCloud platform expand datafile_size
+        FLOG_ERROR( "failed to check ls migration space full, cannot migrate in",
+            KR(ret), K(required_size));
+      }
+#endif
     }
   }
   return ret;
@@ -1404,9 +1542,15 @@ void ObLSMigrationHandler::stop()
   }
 
 #ifdef ERRSIM
+  uint64_t tenant_id = OB_INVALID_TENANT_ID;
+  ObLSID ls_id(ObLSID::INVALID_LS_ID);
+  if (OB_NOT_NULL(ls_)) {
+    tenant_id = ls_->get_tenant_id();
+    ls_id = ls_->get_ls_id();
+  }
   SERVER_EVENT_ADD("storage_ha", "migration_handler_stop",
-      "tenant_id", ls_->get_tenant_id(),
-      "ls_id", ls_->get_ls_id().id(),
+      "tenant_id", tenant_id,
+      "ls_id", ls_id.id(),
       "is_failed", ret,
       "result", result_);
 #endif
@@ -1625,6 +1769,105 @@ int ObLSMigrationHandler::check_need_to_abort_(bool &need_to_abort)
 
   return ret;
 }
+
+#ifdef OB_BUILD_SHARED_STORAGE
+int ObLSMigrationHandler::notify_switch_to_leader_and_wait_replace_complete(const int64_t new_proposal_id)
+{
+  int ret = OB_SUCCESS;
+  ObLSMigrationTask task;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls migration handler do not init", K(ret));
+  } else if (OB_FAIL(get_ls_migration_task_(task))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      // skip when no migration task exist
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to get ls migration task", K(ret), KPC(ls_));
+    }
+  } else if (ObMigrationOpType::REPLACE_LS_OP != task.arg_.type_) {
+    // skip when migration task is not replace ls
+  } else {
+
+    // notify switch to leader
+    {
+      ObThreadCondGuard cond_guard(switch_leader_cond_);
+      leader_proposal_id_ = new_proposal_id;
+      switch_leader_cnt_++;
+      switch_leader_cond_.signal();
+      LOG_INFO("notify switch to leader", "ls_id", ls_->get_ls_id(), K_(leader_proposal_id), K_(switch_leader_cnt));
+    }
+
+    // wait replace complete
+    const int64_t start_ts = ObTimeUtility::current_time();
+    ObTimeoutCtx timeout_ctx;
+    int64_t timeout = 10_s;
+    const ObLSID ls_id = ls_->get_ls_id();
+    ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
+    const uint64_t CHECK_CONDITION_INTERVAL = 200_ms;
+
+    if (OB_FAIL(timeout_ctx.set_timeout(timeout))) {
+      LOG_WARN("failed to set timeout", K(ret), K(timeout));
+    }
+
+    while(OB_SUCC(ret)) {
+      if (timeout_ctx.is_timeouted()) {
+        ret = OB_WAIT_LS_REPLACE_COMPLETE_TIMEOUT;
+        LOG_WARN("wait replace complete timeout", K(ret), K(ls_id), K(timeout));
+      } else if (OB_FAIL(ls_->get_migration_status(migration_status))) {
+        LOG_WARN("failed to get migration status", K(ret), KPC(ls_));
+      } else if (OB_MIGRATION_STATUS_REPLACE_FAIL == migration_status) {
+        ret = OB_LS_REPLACE_FAILED;
+        LOG_WARN("ls replace failed, switch to leader is not allowed", K(ret),
+          K(ls_id), K(migration_status));
+      } else if (OB_MIGRATION_STATUS_NONE == migration_status) {
+        LOG_INFO("ls replace complete, switch to leader is allowed", K(ls_id));
+        break;
+      } else {
+        ob_usleep(CHECK_CONDITION_INTERVAL);
+        LOG_INFO("ls replace not complete, need wait", K(ls_id), K(migration_status));
+      }
+    }
+
+    const int64_t cost = ObTimeUtility::current_time() - start_ts;
+    LOG_INFO("notify switch to leader and wait replace complete", K(ret), K(ls_id), K(cost), K_(switch_leader_cnt));
+  }
+
+  return ret;
+}
+
+int ObLSMigrationHandler::wait_notified_switch_to_leader(
+    const ObTimeoutCtx &timeout_ctx,
+    int64_t &leader_proposal_id)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t CHECK_CONDITION_INTERVAL_MS = 200;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls migration handler do not init", K(ret));
+  }
+
+  while(OB_SUCC(ret)) {
+    if (timeout_ctx.is_timeouted()) {
+      ret = OB_WAIT_ELEC_LEADER_TIMEOUT;
+      LOG_WARN("wait ls elect leader timeout", K(ret), K(timeout_ctx));
+    } else {
+      ObThreadCondGuard cond_guard(switch_leader_cond_);
+      if (switch_leader_cnt_ > 0) {
+        leader_proposal_id = leader_proposal_id_;
+        switch_leader_cnt_ = 0;
+        LOG_INFO("wait elect as leader success", "ls_id", ls_->get_ls_id(), K_(switch_leader_cnt), K_(leader_proposal_id));
+        break;
+      } else {
+        switch_leader_cond_.wait(CHECK_CONDITION_INTERVAL_MS);
+      }
+    }
+  }
+
+  return ret;
+}
+#endif
 
 }
 }

@@ -99,10 +99,9 @@ int ObTxTable::check_with_tx_data(ObReadTxDataArg &read_tx_data_arg, ObITxDataCh
   return ret;
 }
 
-int clear_tx_data()
+void clear_tx_data()
 {
   TX_DATA_ARR.reset();
-  return OB_SUCCESS;
 };
 
 
@@ -155,6 +154,7 @@ void TestMultiVersionDIMerge::SetUpTestCase()
 
 void TestMultiVersionDIMerge::TearDownTestCase()
 {
+  clear_tx_data();
   ObMultiVersionSSTableTest::TearDownTestCase();
   // reset sequence no
   ObClockGenerator::destroy();
@@ -236,8 +236,10 @@ void TestMultiVersionDIMerge::prepare_merge_context(const ObMergeType &merge_typ
                                                   ObTabletMergeCtx &merge_context)
 {
   TestMergeBasic::prepare_merge_context(merge_type, is_full_merge, trans_version_range, merge_context);
+  merge_context.merge_dag_ = &merge_dag_;
+  merge_context.static_param_.for_unittest_ = true;
   merge_context.static_param_.is_delete_insert_merge_ = true;
-  merge_context.static_param_.data_version_ = DATA_VERSION_4_3_5_0;
+  merge_context.static_param_.data_version_ = DATA_VERSION_4_3_5_2;
   ASSERT_EQ(OB_SUCCESS, merge_context.cal_merge_param());
   ASSERT_EQ(OB_SUCCESS, merge_context.init_parallel_merge_ctx());
   ASSERT_EQ(OB_SUCCESS, merge_context.static_param_.init_static_info(merge_context.tablet_handle_));
@@ -247,8 +249,6 @@ void TestMultiVersionDIMerge::prepare_merge_context(const ObMergeType &merge_typ
   ASSERT_EQ(OB_SUCCESS, merge_context.merge_info_.prepare_sstable_builder());
   ASSERT_EQ(OB_SUCCESS, merge_context.merge_info_.sstable_builder_.data_store_desc_.init(merge_context.static_desc_, table_merge_schema_));
   ASSERT_EQ(OB_SUCCESS, merge_context.merge_info_.prepare_index_builder());
-  merge_context.merge_dag_ = &merge_dag_;
-  merge_context.static_param_.for_unittest_ = true;
 }
 
 void TestMultiVersionDIMerge::build_sstable(
@@ -628,7 +628,7 @@ TEST_F(TestMultiVersionDIMerge, uncommit_rowkey_committed_in_minor)
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -858,7 +858,7 @@ TEST_F(TestMultiVersionDIMerge, uncommit_rowkey_in_one_macro_committed_following
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -992,7 +992,7 @@ TEST_F(TestMultiVersionDIMerge, uncommit_rowkey_in_one_macro_committed_following
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -1284,7 +1284,7 @@ TEST_F(TestMultiVersionDIMerge, test_merge_with_multi_trans)
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -1460,7 +1460,7 @@ TEST_F(TestMultiVersionDIMerge, test_merge_with_multi_trans_can_compact)
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -1648,7 +1648,7 @@ TEST_F(TestMultiVersionDIMerge, test_merge_with_multi_trans_can_not_compact)
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -1914,7 +1914,7 @@ TEST_F(TestMultiVersionDIMerge, test_merge_with_macro_reused_without_shadow)
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -2117,7 +2117,7 @@ TEST_F(TestMultiVersionDIMerge, test_merge_with_greater_multi_version_and_uncomm
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -2255,7 +2255,7 @@ TEST_F(TestMultiVersionDIMerge, test_merge_with_ghost_row)
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -2681,7 +2681,7 @@ TEST_F(TestMultiVersionDIMerge, rowkey_cross_macro_with_last_shadow_version_less
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -2922,7 +2922,7 @@ TEST_F(TestMultiVersionDIMerge, rowkey_cross_macro_without_open_next_macro)
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -3189,7 +3189,7 @@ TEST_F(TestMultiVersionDIMerge, test_merge_base_iter_have_ghost_row)
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -3310,7 +3310,7 @@ TEST_F(TestMultiVersionDIMerge, test_trans_cross_macro_with_ghost_row)
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -3439,7 +3439,7 @@ TEST_F(TestMultiVersionDIMerge, test_trans_cross_macro_with_ghost_row2)
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -3563,7 +3563,7 @@ TEST_F(TestMultiVersionDIMerge, test_running_trans_cross_macro_with_abort_sql_se
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -3676,7 +3676,7 @@ TEST_F(TestMultiVersionDIMerge, check_shadow_row_fuse)
   ObMockDirectReadIterator sstable_iter;
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -3902,7 +3902,7 @@ TEST_F(TestMultiVersionDIMerge, check_mv_start_compact_committing_multi_sstables
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -4237,7 +4237,7 @@ TEST_F(TestMultiVersionDIMerge, uncommit_row_sql_sequence_check_order_error)
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -4851,7 +4851,7 @@ TEST_F(TestMultiVersionDIMerge, compact_old_row_with_base_version)
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
   scanner->~ObStoreRowIterator();
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   handle1.reset();
   handle2.reset();
   merger.reset();
@@ -5040,7 +5040,7 @@ TEST_F(TestMultiVersionDIMerge, single_trans_replayed_in_multi_sst)
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -5238,7 +5238,7 @@ TEST_F(TestMultiVersionDIMerge, lock_row_replayed_in_multi_sst)
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();

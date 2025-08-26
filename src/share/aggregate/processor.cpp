@@ -38,6 +38,8 @@ int Processor::init()
       SQL_LOG(WARN, "init aggregates failed", K(ret));
     } else if (OB_FAIL(add_one_row_fns_.prepare_allocate(agg_ctx_.aggr_infos_.count()))) {
       SQL_LOG(WARN, "prepare allocate elements failed", K(ret));
+    } else if (OB_FAIL(reuse_aggrow_mgr_.init(agg_ctx_))) {
+      SQL_LOG(WARN, "init reuse manager failed", K(ret));
     } else {
       clear_add_one_row_fns();
     }
@@ -1057,53 +1059,46 @@ int Processor::reuse_group(const int64_t group_id)
 {
   int ret = OB_SUCCESS;
   AggrRowPtr agg_row = agg_ctx_.agg_rows_.at(group_id);
-  const AggrRowMeta &row_meta = agg_ctx_.row_meta();
-  int32_t extra_idx = 0;
-  ObSEArray<char *, 5> group_concat_str_arr;
-  ObSEArray<int32_t, 5> group_concat_buffer_size_arr;
-  // backup extra_idx and group_concat_str_arr
-  if (agg_ctx_.has_extra_) {
-    extra_idx = *reinterpret_cast<const int32_t *>(agg_row + row_meta.extra_idx_offset_);
+  if (OB_FAIL(reuse_agg_row(agg_row, agg_ctx_, reuse_aggrow_mgr_))) {
+    LOG_WARN("reuse agg row failed", K(ret));
   }
   for (int col_id = 0; OB_SUCC(ret) && col_id < agg_ctx_.aggr_infos_.count(); col_id++) {
-    ObAggrInfo &aggr_info = agg_ctx_.aggr_infos_.at(col_id);
-    if (aggr_info.get_expr_type() != T_FUN_GROUP_CONCAT) {
-      continue;
-    }
-    char *agg_cell = agg_ctx_.row_meta().locate_cell_payload(col_id, agg_row);
-    int32_t buffer_size = *reinterpret_cast<int32_t *>(agg_cell + sizeof(char **));
-    char *string_ptr = *reinterpret_cast<char **>(agg_cell);
-    if (OB_FAIL(group_concat_str_arr.push_back(string_ptr))) {
-    } else if (OB_FAIL(group_concat_buffer_size_arr.push_back(buffer_size))) {
+    if (agg_ctx_.has_extra_ && helper::has_extra_info(agg_ctx_.aggr_infos_.at(col_id))) {
+      char *curr_agg_cell = agg_ctx_.row_meta().locate_cell_payload(col_id, agg_row);
+      ExtraStores *&extra = agg_ctx_.get_extra_stores(col_id, curr_agg_cell);
+      if (OB_ISNULL(extra)) {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_LOG(WARN, "is null", K(col_id));
+      } else {
+        extra->reuse();
+      }
     }
   }
-  MEMSET(agg_row, 0, agg_ctx_.row_meta().row_size_);
-  // restore extra_idx and group_concat_str_arr
-  if (agg_ctx_.has_extra_) {
-    *reinterpret_cast<int32_t *>(agg_row + agg_ctx_.row_meta().extra_idx_offset_) = extra_idx;
+  return ret;
+}
+
+int Processor::reuse_agg_row(AggrRowPtr agg_row, RuntimeContext &agg_ctx, ReuseAggCellMgr &reuse_mgr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(reuse_mgr.save(agg_ctx, agg_row))) {
+    LOG_WARN("save cell info failed", K(ret));
   }
-  int idx = 0;
-  for (int col_id = 0; OB_SUCC(ret) && col_id < agg_ctx_.aggr_infos_.count(); col_id++) {
-    ObAggrInfo &aggr_info = agg_ctx_.aggr_infos_.at(col_id);
-    if (aggr_info.get_expr_type() != T_FUN_GROUP_CONCAT) {
-      continue;
-    }
-    char *agg_cell = agg_ctx_.row_meta().locate_cell_payload(col_id, agg_row);
-    *reinterpret_cast<char **>(agg_cell) = group_concat_str_arr.at(idx);
-    *reinterpret_cast<int32_t *>(agg_cell + sizeof(char **)) = group_concat_buffer_size_arr.at(idx);
-    idx += 1;
+  if (OB_SUCC(ret)) {
+    MEMSET(agg_row, 0, agg_ctx.row_meta().row_size_);
   }
-  for (int col_id = 0; OB_SUCC(ret) && col_id < agg_ctx_.aggr_infos_.count(); col_id++) {
-    ObAggrInfo &aggr_info = agg_ctx_.aggr_infos_.at(col_id);
+  // reset result values
+  for (int col_id = 0; OB_SUCC(ret) && col_id < agg_ctx.aggr_infos_.count(); col_id++) {
+    ObAggrInfo &aggr_info = agg_ctx.aggr_infos_.at(col_id);
     ObDatumMeta &res_meta = aggr_info.expr_->datum_meta_;
-    VecValueTypeClass res_tc = get_vec_value_tc(res_meta.type_, res_meta.scale_, res_meta.precision_);
+    VecValueTypeClass res_tc =
+      get_vec_value_tc(res_meta.type_, res_meta.scale_, res_meta.precision_);
     char *cell = nullptr;
     int32_t cell_len = 0;
-    agg_ctx_.row_meta().locate_cell_payload(col_id, agg_row, cell, cell_len);
+    agg_ctx.row_meta().locate_cell_payload(col_id, agg_row, cell, cell_len);
     switch (res_tc) {
     case VEC_TC_NUMBER: {
-      if (aggr_info.get_expr_type() != T_FUN_COUNT &&
-          aggr_info.get_expr_type() != T_FUN_SUM_OPNSIZE) {
+      if (aggr_info.get_expr_type() != T_FUN_COUNT
+          && aggr_info.get_expr_type() != T_FUN_SUM_OPNSIZE) {
         ObNumberDesc &d = *reinterpret_cast<ObNumberDesc *>(cell);
         // set zero number
         d.len_ = 0;
@@ -1125,16 +1120,9 @@ int Processor::reuse_group(const int64_t group_id)
       break;
     }
     }
-    if (agg_ctx_.has_extra_ && helper::has_extra_info(aggr_info)) {
-      char *curr_agg_cell = agg_ctx_.row_meta().locate_cell_payload(col_id, agg_row);
-      ExtraStores *&extra = agg_ctx_.get_extra_stores(col_id, curr_agg_cell);
-      if (OB_ISNULL(extra)) {
-        ret = OB_ERR_UNEXPECTED;
-        SQL_LOG(WARN, "is null", K(col_id));
-      } else {
-        extra->reuse();
-      }
-    }
+  }
+  if (OB_SUCC(ret) && OB_FAIL(reuse_mgr.restore(agg_ctx, agg_row))) {
+    LOG_WARN("restore cell infos failed", K(ret));
   }
   return ret;
 }
@@ -1240,8 +1228,12 @@ int Processor::llc_init_empty(ObExpr &expr, ObEvalCtx &eval_ctx) const
 {
   int ret = OB_SUCCESS;
   char *llc_bitmap_buf = nullptr;
-  const int64_t llc_bitmap_size = ObAggregateProcessor::get_llc_size();
-  if (OB_ISNULL(llc_bitmap_buf = expr.get_str_res_mem(eval_ctx, llc_bitmap_size))) {
+
+  int64_t llc_bitmap_size = ObAggrInfo::get_approx_cnt_llc_buck_num(expr.extra_);
+  if (OB_UNLIKELY(!ObExprEstimateNdv::llc_is_num_buckets_valid(llc_bitmap_size))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected bitmap size", K(ret), K(llc_bitmap_size));
+  } else if (OB_ISNULL(llc_bitmap_buf = expr.get_str_res_mem(eval_ctx, llc_bitmap_size))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     SQL_LOG(WARN, "allocate memory failed", K(ret));
   } else {

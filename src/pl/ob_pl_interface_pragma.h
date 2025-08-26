@@ -78,10 +78,14 @@
 #include "pl/sys_package/ob_dbms_mview_stats_mysql.h"
 #include "pl/sys_package/ob_pl_dbms_trusted_certificate_manager.h"
 #include "pl/sys_package/ob_dbms_limit_calculator_mysql.h"
+#include "pl/sys_package/ob_dbms_balance.h"
 #include "pl/sys_package/ob_dbms_external_table.h"
 #include "pl/sys_package/ob_dbms_vector_mysql.h"
 #include "pl/pl_recompile/ob_pl_recompile_task_helper.h"
 #include "pl/sys_package/ob_dbms_partition.h"
+#include "pl/sys_package/ob_dbms_java.h"
+#include "pl/sys_package/ob_dbms_xprofile.h"
+#include "pl/sys_package/ob_dbms_data_dict.h"
 
 #ifdef INTERFACE_DEF
   INTERFACE_DEF(INTERFACE_START, "TEST", (ObPLInterfaceImpl::call))
@@ -299,6 +303,8 @@
   INTERFACE_DEF(INTERFACE_GET_TIME, "GET_TIME", (DbmsUtilityHelper::get_time))
   INTERFACE_DEF(INTERFACE_INVALIDATE, "INVALIDATE", (DbmsUtilityHelper::invalidate))
   INTERFACE_DEF(INTERFACE_VALIDATE, "VALIDATE", (DbmsUtilityHelper::validate))
+  INTERFACE_DEF(INTERFACE_INNER_CHECK_DISK_CACHE_OBJ_EXPIRED, "INNER_CHECK_DISK_CACHE_OBJ_EXPIRED", (DbmsUtilityHelper::check_disk_cache_obj_expired))
+  INTERFACE_DEF(INTERFACE_INNER_CHECK_PL_CACHE_OBJ_EXPIRED, "INNER_CHECK_PL_CACHE_OBJ_EXPIRED", (DbmsUtilityHelper::check_pl_cache_obj_expired))
   INTERFACE_DEF(INTERFACE_PSDANAM, "PSDANAM", (DbmsUtilityHelper::psdanam))
   INTERFACE_DEF(INTERFACE_RECOMPILE, "PL_RECOMPILE", (ObPLRecompileTaskHelper::recompile_pl_objs))
   // end dbms_utility
@@ -375,6 +381,10 @@
   INTERFACE_DEF(INTERFACE_DBMS_XPLAN_DISPLAY_SQL_PLAN_BASELINE, "DISPLAY_SQL_PLAN_BASELINE", (ObDbmsXplan::display_sql_plan_baseline))
   INTERFACE_DEF(INTERFACE_DBMS_XPLAN_DISPLAY_ACTIVE_SESSION_PLAN, "DISPLAY_ACTIVE_SESSION_PLAN", (ObDbmsXplan::display_active_session_plan))
   //end of dbms xplan
+
+  //start of dbms xprofile
+  INTERFACE_DEF(INTERFACE_DBMS_XPROFILE_DISPLAY_PROFILE, "DISPLAY_PROFILE", (ObDbmsXprofile::display_profile))
+  //end of dbms xprofile
 
 #ifdef OB_BUILD_ORACLE_PL
 
@@ -753,6 +763,13 @@
   INTERFACE_DEF(INTERFACE_JSON_ARRAY_GET_TYPE, "JSON_ARRAY_GET_TYPE", (ObPlJsonArray::get_type))
   INTERFACE_DEF(INTERFACE_JSON_ARRAY_CONSTRUCTOR, "JSON_ARRAY_CONSTRUCTOR", (ObPlJsonArray::constructor))
   INTERFACE_DEF(INTERFACE_JSON_ARRAY_CLONE, "JSON_ARRAY_CLONE", (ObPlJsonArray::clone))
+  INTERFACE_DEF(INTERFACE_JSON_ARRAY_APPEND_NULL, "JSON_ARRAY_APPEND_NULL", (ObPlJsonArray::append_Null))
+  INTERFACE_DEF(INTERFACE_JSON_ARRAY_APPEND, "JSON_ARRAY_APPEND", (ObPlJsonArray::append))
+  INTERFACE_DEF(INTERFACE_JSON_ARRAY_APPEND_BOOLEAN, "JSON_ARRAY_APPEND_BOOLEAN", (ObPlJsonArray::append_boolean))
+  INTERFACE_DEF(INTERFACE_JSON_ARRAY_APPEND_BLOB, "JSON_ARRAY_APPEND_BLOB", (ObPlJsonArray::append_blob))
+  INTERFACE_DEF(INTERFACE_JSON_ARRAY_APPEND_CLOB, "JSON_ARRAY_APPEND_CLOB", (ObPlJsonArray::append_clob))
+  INTERFACE_DEF(INTERFACE_JSON_ARRAY_APPEND_JSON, "JSON_ARRAY_APPEND_JSON", (ObPlJsonArray::append_json))
+  INTERFACE_DEF(INTERFACE_JSON_ARRAY_APPEND_ALL, "JSON_ARRAY_APPEND_ALL", (ObPlJsonArray::append_all))
   // end of json_array_t
 #endif
 
@@ -834,6 +851,8 @@
   DEFINE_DBMS_VECTOR_MYSQL_INTERFACE(DBMS_VECTOR_MYSQL_REBUILD_INDEX, ObDBMSVectorMySql::rebuild_index)
   DEFINE_DBMS_VECTOR_MYSQL_INTERFACE(DBMS_VECTOR_MYSQL_REFRESH_INDEX_INNER, ObDBMSVectorMySql::refresh_index_inner)
   DEFINE_DBMS_VECTOR_MYSQL_INTERFACE(DBMS_VECTOR_MYSQL_REBUILD_INDEX_INNER, ObDBMSVectorMySql::rebuild_index_inner)
+  DEFINE_DBMS_VECTOR_MYSQL_INTERFACE(DBMS_VECTOR_MYSQL_INDEX_VECTOR_MEMORY_ADVISOR, ObDBMSVectorMySql::index_vector_memory_advisor)
+  DEFINE_DBMS_VECTOR_MYSQL_INTERFACE(DBMS_VECTOR_MYSQL_INDEX_VECTOR_MEMORY_ESTIMATE, ObDBMSVectorMySql::index_vector_memory_estimate)
 
 #undef DEFINE_DBMS_VECTOR_MYSQL_INTERFACE
   // end of dbms_vector_mysql
@@ -851,6 +870,14 @@
   INTERFACE_DEF(INTERFACE_DBMS_OB_LIMIT_CALCULATOR_PHY_RES_CALCULATE_BY_UNIT, "PHY_RES_CALCULATE_BY_UNIT", (ObDBMSLimitCalculator::phy_res_calculate_by_unit))
   INTERFACE_DEF(INTERFACE_DBMS_OB_LIMIT_CALCULATOR_PHY_RES_CALCULATE_BY_STADNBY_TENANT, "PHY_RES_CALCULATE_BY_STANDBY_TENANT", (ObDBMSLimitCalculator::phy_res_calculate_by_standby_tenant))
   // end of dbms_ob_limit_calculator
+
+  // start of dbms_balance
+  INTERFACE_DEF(INTERFACE_DBMS_BALANCE_TRIGGER_PARTITION_BALANCE, "DBMS_BALANCE_TRIGGER_PARTITION_BALANCE", (ObDBMSBalance::trigger_partition_balance))
+  INTERFACE_DEF(INTERFACE_DBMS_BALANCE_SET_BALANCE_WEIGHT, "DBMS_BALANCE_SET_BALANCE_WEIGHT", (ObDBMSBalance::set_balance_weight))
+  INTERFACE_DEF(INTERFACE_DBMS_BALANCE_CLEAR_BALANCE_WEIGHT, "DBMS_BALANCE_CLEAR_BALANCE_WEIGHT", (ObDBMSBalance::clear_balance_weight))
+  INTERFACE_DEF(INTERFACE_DBMS_BALANCE_SET_TABLEGROUP_BALANCE_WEIGHT, "DBMS_BALANCE_SET_TABLEGROUP_BALANCE_WEIGHT", (ObDBMSBalance::set_tablegroup_balance_weight))
+  INTERFACE_DEF(INTERFACE_DBMS_BALANCE_CLEAR_TABLEGROUP_BALANCE_WEIGHT, "DBMS_BALANCE_CLEAR_TABLEGROUP_BALANCE_WEIGHT", (ObDBMSBalance::clear_tablegroup_balance_weight))
+  // end of dbms_balance
 
   // start of dbms_external_table
   INTERFACE_DEF(INTERFACE_DBMS_EXTERNAL_TABLE_AUTO_REFRESH_EXTERNAL_TABLE, "AUTO_REFRESH_EXTERNAL_TABLE", (ObDBMSExternalTable::auto_refresh_external_table))
@@ -870,6 +897,21 @@
   // start of dbms_partition
   INTERFACE_DEF(INTERFACE_DBMS_PARTITION_MANAGE_DYNAMIC_PARTITION, "DBMS_PARTITION_MANAGE_DYNAMIC_PARTITION", (ObDBMSPartition::manage_dynamic_partition))
   // end of dbms_partition
+
+  // start of dbms_java
+  INTERFACE_DEF(INTERFACE_DBMS_JAVA_LOADJAVA_MYSQL, "DBMS_JAVA_LOADJAVA_MYSQL", (ObDBMSJava::loadjava_mysql))
+  INTERFACE_DEF(INTERFACE_DBMS_JAVA_DROPJAVA_MYSQL, "DBMS_JAVA_DROPJAVA_MYSQL", (ObDBMSJava::dropjava_mysql))
+  // end of dbms_java
+
+  // start of dbms_data_dict
+  INTERFACE_DEF(INTERFACE_DBMS_DATA_DICT_TRIGGER_DUMP, "DBMS_DATA_DICT_TRIGGER_DUMP", (ObDBMSDataDict::trigger_dump_data_dict))
+  INTERFACE_DEF(INTERFACE_DBMS_DATA_DICT_ENABLE_DUMP, "DBMS_DATA_DICT_ENABLE", (ObDBMSDataDict::enable_dump))
+  INTERFACE_DEF(INTERFACE_DBMS_DATA_DICT_DISABLE_DUMP, "DBMS_DATA_DICT_DISABLE", (ObDBMSDataDict::disable_dump))
+  INTERFACE_DEF(INTERFACE_DBMS_DATA_DICT_MODIFY_JOB_INTERVAL, "DBMS_DATA_DICT_MODIFY_DUMP_INTERVAL", (ObDBMSDataDict::modify_interval))
+  INTERFACE_DEF(INTERFACE_DBMS_DATA_DICT_MODIFY_JOB_DURATION, "DBMS_DATA_DICT_MODIFY_RUN_DURATION", (ObDBMSDataDict::modify_duration))
+  INTERFACE_DEF(INTERFACE_DBMS_DATA_DICT_MODIFY_DICT_ITEM_RETENTION, "DBMS_DATA_DICT_MODIFY_RETENTION", (ObDBMSDataDict::modify_retention))
+
+  // end of dbms_data_dict
 
   INTERFACE_DEF(INTERFACE_END, "INVALID", (nullptr))
 #endif

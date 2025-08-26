@@ -169,10 +169,40 @@ int ObSequenceSqlService::get_lastest_local_cache(ObFixedArray<SequenceCacheNode
   return ret;
 }
 
+int ObSequenceSqlService::send_rpc_clean_sequence_cache(
+  uint64_t tenant_id, uint64_t sequence_id, const uint64_t timeout, const common::ObAddr &server,
+  const ObSrvRpcProxy &srv_rpc_proxy, ObSeqCleanCacheRes& cache_res, bool clear_self)
+{
+  int ret = OB_SUCCESS;
+  if (!clear_self && GCTX.self_addr() == server) {
+    // do nothing
+  } else if (OB_FAIL(srv_rpc_proxy
+            .to(server)
+            .by(tenant_id)
+            .timeout(timeout)
+            .clean_sequence_cache(sequence_id, cache_res))) {
+    if (is_timeout_err(ret) || is_server_down_error(ret)) {
+      LOG_WARN("rpc call time out, ignore the error", "server", server,
+                K(tenant_id), K(sequence_id), K(ret));
+      ret = OB_SUCCESS;
+    } else if (ret == OB_NOT_SUPPORTED) {
+      // The new and old rpc are incompatible. The old rpc may not return results, but the cache
+      // will be cleared.
+      LOG_WARN("During upgrade, new and old rpc are incompatible, ignore the error",
+        "server", server, K(tenant_id), K(sequence_id), K(ret));
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("clean sequnece cache failed", K(ret), K(sequence_id), K(server));
+    }
+  }
+  return ret;
+}
+
 int ObSequenceSqlService::clean_sequence_cache(uint64_t tenant_id, uint64_t sequence_id,
-                                              ObNumber &inner_next_value,
+                                               ObNumber &inner_next_value,
                                                ObSeqCleanCacheRes &cache_res,
-                                               ObIAllocator &allocator)
+                                               ObIAllocator &allocator,
+                                               const bool clear_self)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObAddr, 8> server_list;
@@ -201,25 +231,10 @@ int ObSequenceSqlService::clean_sequence_cache(uint64_t tenant_id, uint64_t sequ
     for (int i = 0; OB_SUCC(ret) && i < server_list.count(); ++i) {
       temp_cache_res.inited_ = false;
       const uint64_t timeout = THIS_WORKER.get_timeout_remain();
-      if (OB_FAIL(srv_rpc_proxy
-                  .to(server_list.at(i))
-                  .by(tenant_id)
-                  .timeout(timeout)
-                  .clean_sequence_cache(sequence_id, temp_cache_res))) {
-        if (is_timeout_err(ret) || is_server_down_error(ret)) {
-          LOG_WARN("rpc call time out, ignore the error", "server", server_list.at(i),
-                    K(tenant_id), K(sequence_id), K(ret));
-          ret = OB_SUCCESS;
-        } else if (ret == OB_NOT_SUPPORTED) {
-          // The new and old rpc are incompatible. The old rpc may not return results, but the cache
-          // will be cleared.
-          LOG_WARN("During upgrade, new and old rpc are incompatible, ignore the error",
-            "server", server_list.at(i), K(tenant_id), K(sequence_id), K(ret));
-          ret = OB_SUCCESS;
-        } else {
-          LOG_WARN("clean sequnece cache failed", K(ret), K(sequence_id), K(server_list.at(i)));
-        }
-      } else if (!temp_cache_res.inited_) {
+      if (OB_FAIL(send_rpc_clean_sequence_cache(tenant_id, sequence_id, timeout, server_list.at(i),
+                                                srv_rpc_proxy, temp_cache_res, clear_self))) {
+        LOG_WARN("clean sequence cache failed", K(ret), K(sequence_id), K(server_list.at(i)));
+      } else if (!temp_cache_res.inited_ || !clear_self) {
         // do nothing
       } else if (temp_cache_res.with_prefetch_node_
                  && OB_FAIL(prefetch_nodes.push_back(temp_cache_res.prefetch_node_))) {
@@ -235,7 +250,7 @@ int ObSequenceSqlService::clean_sequence_cache(uint64_t tenant_id, uint64_t sequ
         }
       }
     }
-    if (OB_SUCC(ret)
+    if (OB_SUCC(ret) && clear_self
         && OB_FAIL(get_lastest_local_cache(prefetch_nodes, target_cache_node, inner_next_value,
                                           cache_res, allocator))) {
       LOG_WARN("fail to get lastest local cache", K(ret));
@@ -296,12 +311,12 @@ int ObSequenceSqlService::clean_and_write_back_cache(common::ObISQLClient *sql_c
     }
   }
   ObNumber write_val;
-  if (OB_FAIL(ret) || !need_write_back) {
+  if (OB_FAIL(ret)) {
     // do nothing
   } else if (OB_FAIL(clean_sequence_cache(tenant_id, sequence_id, inner_next_value, cache_res,
                                           allocator))) {
     LOG_WARN("clean sequence cache failed", K(ret));
-  } else if (!cache_res.inited_) {
+  } else if (!need_write_back || !cache_res.inited_) {
     // do nothing
   } else if (OB_FAIL(cache_res.cache_node_.start().add(sequence_schema.get_increment_by(),
                                                        write_val, allocator))) {

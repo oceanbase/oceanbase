@@ -216,6 +216,7 @@ typedef enum ObItemType
   T_OP_OUTPUT_PACK = 186,
   T_FUN_GET_TEMP_TABLE_SESSID = 187,
   T_OP_PUSHDOWN_TOPN_FILTER = 188,
+  T_OP_LOCAL_DYNAMIC_FILTER = 189,
   ///< @note add new operator before this line
 
   // system functions
@@ -912,6 +913,9 @@ typedef enum ObItemType
   T_FUN_SYS_MAP = 1783,
   T_FUN_SYS_MAP_KEYS = 1784,
   T_FUN_SYS_MAP_VALUES = 1785,
+  T_FUN_SYS_L2_SQUARED = 1786,
+  T_FUN_SYS_SEMANTIC_DISTANCE = 1787,
+  T_FUN_SYS_SEMANTIC_VECTOR_DISTANCE = 1788,
   ///< @note add new oracle only function type before this line
 
   T_FUN_SYS_TABLET_AUTOINC_NEXTVAL = 1801, // add only for heap table
@@ -957,6 +961,14 @@ typedef enum ObItemType
   T_FUN_SYS_SPIV_VALUE = 1918,
   T_FUN_SYS_CHECK_LOCATION_ACCESS = 1919,
   T_FUN_STARTUP_MODE = 1920,
+  T_FUN_SYS_HIDDEN_CLUSTERING_KEY = 1921,
+  T_FUN_SYS_TMP_FILE_OPEN = 1922,
+  T_FUN_SYS_TMP_FILE_CLOSE = 1923,
+  T_FUN_SYS_TMP_FILE_WRITE = 1924,
+  T_FUN_SYS_TMP_FILE_READ = 1925,
+  T_FUN_SYS_HYBRID_VEC_CHUNK = 1926, // hybrid vector index
+  T_FUN_SYS_FORMAT_PROFILE = 1927, // format query profile
+  T_FUN_SYS_EMBEDDED_VEC = 1928,
 
   ///< @note add new sys function type before this line
   T_FUN_SYS_END = 2000,
@@ -1026,6 +1038,17 @@ typedef enum ObItemType
   T_FUN_INNER_PREFIX_MIN = 2073,
   T_FUN_INNER_PREFIX_MAX = 2074,
   T_FUN_SYS_INNER_INFO_COLS_COLUMN_KEY_PRINTER = 2075,
+  T_FUN_ARG_MIN = 2076,
+  T_FUN_ARG_MAX = 2077,
+  T_FUN_TMP_FILE_OPEN = 2078,
+  T_FUN_TMP_FILE_CLOSE = 2079,
+  T_FUN_TMP_FILE_WRITE = 2080,
+  T_FUN_TMP_FILE_READ = 2081,
+  T_FUN_SYS_AI_COMPLETE = 2082,
+  T_FUN_SYS_AI_EMBED = 2083,
+  T_FUN_SYS_AI_RERANK = 2084,
+  T_FUN_MD5_CNN_WS = 2085,
+  T_FUN_SYS_BUCKET = 2086,
   T_MAX_OP = 3000,
 
   //pseudo column, to mark the group iterator id
@@ -2554,7 +2577,7 @@ typedef enum ObItemType
   T_FLUSH_PRIVILEGES = 4629,
   T_SCHEMA_ID = 4630,
   T_CANCEL_TRANSFER_PARTITION = 4631,
-  T_CANCEL_BALANCE_JOB = 4632, //FARM COMPAT WHITELIST
+  T_BALANCE_JOB_OP = 4632, //FARM COMPAT WHITELIST
   T_AUTO_SPLIT_TABLET_SIZE = 4633,
 
   T_DATA_DISK_SIZE = 4634,
@@ -2859,6 +2882,59 @@ typedef enum ObItemType
   T_UDF_PROPERTY_LIST = 4866,
 
   T_MICRO_BLOCK_FORMAT_VERSION = 4867,
+  T_MV_NESTED_REFRESH_CLAUSE = 4868, // placeholder for mview
+  T_ALTER_SUBPARTITION_EXCHANGE = 4869,
+  T_CREATE_SENSITIVE_RULE       = 4870,
+  T_DROP_SENSITIVE_RULE         = 4871,
+  T_ALTER_SENSITIVE_RULE        = 4872,
+  T_ALTER_SENSITIVE_RULE_ACTION = 4873,
+  T_SENSITIVE_FIELD             = 4874,
+  T_SENSITIVE_FIELD_LIST        = 4875,
+  T_SENSITIVE_PROTECTION_SPEC   = 4876,
+  T_SENSITIVE_ENCRYPTION_SPEC   = 4877,
+  T_SENSITIVE_MASKING_SPEC      = 4878,
+  T_SHOW_SENSITIVE_RULES        = 4879,
+  T_SHOW_SENSITIVE_RULES_OPTION = 4880,
+
+  // catalog
+  T_URI = 4881, // FARM COMPAT WHITELIST
+  T_ACCESS_INFO = 4882,
+  T_WAREHOUSE = 4883,
+  T_SEQUENCE_NAME = 4884,
+  T_STORAGE_CACHE_POLICY_IN_PART_LIST = 4885,
+  T_COLUMN_INDEX_TYPE = 4886,
+  T_FREQ_THRESHOLD = 4887,
+  T_SEMISTRUCT_PROPERTIES = 4888,
+  T_CLUSTERING_KEY = 4889,
+  T_CLUSTERING_KEY_DROP = 4890,
+
+  // optimizer hint
+  T_INDEX_MERGE_HINT = 4891,
+  T_NO_INDEX_MERGE_HINT = 4892,
+
+  T_TABLE_FLASHBACK_PROCTIME = 4893,
+  // hint for disable rich format of operators
+  T_DISABLE_OP_RICH_FORMAT = 4894,
+
+  T_PRINCIPAL = 4895,
+  T_KEYTAB = 4896,
+  T_KRB5CONF = 4897,
+  T_MAX_CLIENT_POOL_SIZE = 4898,
+  T_SOCKET_TIMEOUT = 4899,
+  // erase ss local_cache
+  T_FLUSH_SS_LOCAL_CACHE = 4900,
+    // alter type
+  T_TYPE_ALTER = 4901,
+  T_TYPE_ALTER_CLAUSE = 4902,
+  T_TYPE_ALTER_COMPILE = 4903,
+  T_TYPE_ALTER_ATTR = 4904,
+  T_TYPE_ALTER_ATTR_LIST = 4905,
+  T_COMMON_IDENTIFIER_LIST = 4906,
+  T_ALTER_ATTRIBUTE_DEFINITION_LIST = 4907,
+  T_REPLACE_TENANT = 4908,
+  T_FORMAT_OBJECT_NAME_DISPLAY = 4909,
+  T_CACHE_REFRESH_INTERVAL_SEC = 4910,
+  T_BACKUP_VALIDATE = 4911,
 
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
@@ -2882,6 +2958,8 @@ typedef enum ObCacheType
   CACHE_TYPE_PL_OBJ,
   CACHE_TYPE_PS_OBJ,
   CACHE_TYPE_LIB_CACHE,
+  CACHE_TYPE_RESULT,
+  CACHE_TYPE_SEQUENCE,
   CACHE_TYPE_MAX //Attention: add a new type before CACHE_TYPE_MAX
 } ObCacheType;
 
@@ -3000,7 +3078,10 @@ typedef enum ObOutlineType
                            || (op) == T_SHOW_PROCEDURE_CODE || (op) == T_SHOW_FUNCTION_CODE \
                            || (op) == T_SHOW_ENGINE || (op) == T_SHOW_OPEN_TABLES \
                            || (op) == T_SHOW_PLUGINS || (op) == T_SHOW_CHECK_TABLE \
-                           || (op) == T_SHOW_OLAP_ASYNC_JOB_STATUS)
+                           || (op) == T_SHOW_OLAP_ASYNC_JOB_STATUS                \
+                           || (op) == T_SHOW_CREATE_LOCATION \
+                           || (op) == T_SHOW_LOCATIONS       \
+                           || (op) == T_LOCATION_UTILS_LIST)
 
 #define EXPR_OP_NUM (T_MAX_OP-T_MIN_OP-1)
 extern const char *get_type_name(int type);

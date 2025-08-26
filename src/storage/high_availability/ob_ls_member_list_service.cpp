@@ -203,7 +203,7 @@ int ObLSMemberListService::get_max_tablet_transfer_scn(share::SCN &transfer_scn)
       } else if (OB_FALSE_IT(key.tablet_id_ = tablet_id)) {
       } else if (OB_FAIL(t3m->get_tablet(priority, key, tablet_handle))) {
         STORAGE_LOG(WARN, "failed to get tablet", K(ret), K(key));
-      } else if (OB_FAIL(tablet_handle.get_obj()->get_latest_committed(mds_data))) {
+      } else if (OB_FAIL(tablet_handle.get_obj()->get_latest_committed_tablet_status(mds_data))) {
         if (OB_EMPTY_RESULT == ret) {
           STORAGE_LOG(INFO, "committed tablet_status does not exist", K(ret), K(key));
           ret = OB_SUCCESS;

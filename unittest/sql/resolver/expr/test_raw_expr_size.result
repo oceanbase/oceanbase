@@ -19,7 +19,7 @@
 | ObNormalDllUdfRawExpr | 712 |
 | ObCollectionConstructRawExpr | 584 |
 | ObObjectConstructRawExpr | 712 |
-| ObUDFRawExpr | 1544 |
+| ObUDFRawExpr | 1552 |
 | ObPLIntegerCheckerRawExpr | 248 |
 | ObPLGetCursorAttrRawExpr | 280 |
 | ObPLSQLCodeSQLErrmRawExpr | 256 |

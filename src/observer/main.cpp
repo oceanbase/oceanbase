@@ -26,6 +26,7 @@
 #include "objit/ob_llvm_symbolizer.h"
 #include "observer/ob_server.h"
 #include "observer/ob_server_utils.h"
+#include "observer/omt/ob_tenant_config.h"
 #include "share/config/ob_server_config.h"
 #include "share/ob_tenant_mgr.h"
 #include "share/ob_version.h"
@@ -42,7 +43,9 @@
 #ifdef __NEED_PERF__
 #include "lib/profile/gperf.h"
 #endif
-
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+#include "palf_ffi.h"
+#endif
 using namespace oceanbase::obsys;
 using namespace oceanbase;
 using namespace oceanbase::lib;
@@ -50,6 +53,7 @@ using namespace oceanbase::common;
 using namespace oceanbase::diagnose;
 using namespace oceanbase::observer;
 using namespace oceanbase::share;
+using namespace oceanbase::omt;
 
 #define MPRINT(format, ...) fprintf(stderr, format "\n", ##__VA_ARGS__)
 #define MPRINTx(format, ...)                                                   \
@@ -91,8 +95,50 @@ static void print_version()
   MPRINT("BUILD_TIME: %s %s", build_date(), build_time());
   MPRINT("BUILD_FLAGS: %s%s", build_flags(), extra_flags);
   MPRINT("BUILD_INFO: %s\n", build_info());
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  MPRINT("LIBPALF_VERSION: %s (%s)\n",
+    oceanbase::libpalf::libpalf_get_version(),
+    oceanbase::libpalf::libpalf_get_release_version());
+#endif
   MPRINT("Copyright (c) 2011-present OceanBase Inc.");
   MPRINT();
+}
+
+static int dump_config_to_json()
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator(g_config_mem_attr);
+  ObJsonArray j_arr(&allocator);
+  omt::ObTenantConfig *tenant_config = OB_NEW(ObTenantConfig, SET_USE_UNEXPECTED_500("TenantConfig"), OB_SYS_TENANT_ID);
+  ObJsonBuffer j_buf(&allocator);
+  FILE *out_file = nullptr;
+  const char *out_path = "./ob_all_available_parameters.json";
+  if (OB_ISNULL(tenant_config)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    MPRINT("new tenant config failed! ret=%d\n", ret);
+  } else if (OB_FAIL(ObServerConfig::get_instance().to_json_array(allocator, j_arr))) {
+    MPRINT("dump cluster config to json failed, ret=%d\n", ret);
+  } else if (OB_FAIL(tenant_config->to_json_array(allocator, j_arr))) {
+    MPRINT("dump tenant config to json failed, ret=%d\n", ret);
+  } else if (OB_FAIL(j_arr.print(j_buf, false))) {
+    MPRINT("print json array to buffer failed, ret=%d\n", ret);
+  } else if (nullptr == j_buf.ptr()) {
+    ret = OB_ERR_NULL_VALUE;
+    MPRINT("json buffer is null, ret=%d\n", ret);
+  } else if (nullptr == (out_file = fopen(out_path, "w"))) {
+    ret = OB_IO_ERROR;
+    MPRINT("failed to open file, errno=%d, ret=%d\n", errno, ret);
+  } else if (EOF == fputs(j_buf.ptr(), out_file)) {
+    ret = OB_IO_ERROR;
+    MPRINT("write json buffer to file failed, errno=%d, ret=%d\n", errno, ret);
+  }
+  if (nullptr != tenant_config) {
+    OB_DELETE(ObTenantConfig, SET_USE_UNEXPECTED_500("TenantConfig"), tenant_config);
+  }
+  if (nullptr != out_file) {
+    fclose(out_file);
+  }
+  return ret;
 }
 
 static void print_args(int argc, char *argv[])
@@ -164,6 +210,7 @@ static void get_opts_setting(
       {"mode", 'm', 1},
       {"scn", 'f', 1},
       {"version", 'V', 0},
+      {"dump_config_to_json", 'C', 0},
       {"ipv6", '6', 0},
       {"local_ip", 'I', 1},
       {"plugins_load", 'L', 1},
@@ -276,6 +323,13 @@ parse_short_opt(const int c, const char *value, ObServerOptions &opts)
 
   case 'V':
     print_version();
+    exit(0);
+    break;
+
+  case 'C':
+    if (OB_SUCCESS != dump_config_to_json()) {
+      MPRINT("dump config to json failed");
+    }
     exit(0);
     break;
 
@@ -459,9 +513,6 @@ int inner_main(int argc, char *argv[])
   }
   ObStackHeaderGuard stack_header_guard;
   // just take effect in observer
-#ifndef OB_USE_ASAN
-  init_malloc_hook();
-#endif
   int64_t memory_used = get_virtual_memory_used();
 #ifndef OB_USE_ASAN
   /**

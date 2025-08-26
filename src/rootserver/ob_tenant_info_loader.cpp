@@ -143,8 +143,12 @@ void ObTenantInfoLoader::run2()
       share::ObAllTenantInfo tenant_info;
       bool content_changed = false;
       bool is_sys_ls_leader = is_sys_ls_leader_();
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
+      const int64_t STANDBY_REFRESH_TIME_US = tenant_config.is_valid() ?
+          tenant_config->_keepalive_interval :
+          ObTenantRoleTransitionConstants::STS_TENANT_INFO_REFRESH_TIME_US;
       const int64_t refresh_time_interval_us = act_as_standby_() && is_sys_ls_leader ?
-                ObTenantRoleTransitionConstants::STS_TENANT_INFO_REFRESH_TIME_US :
+                STANDBY_REFRESH_TIME_US :
                 ObTenantRoleTransitionConstants::DEFAULT_TENANT_INFO_REFRESH_TIME_US;
       bool need_refresh_tenant_info = need_refresh(refresh_time_interval_us);
       if (need_refresh_tenant_info
@@ -482,6 +486,23 @@ int ObTenantInfoLoader::get_readable_scn(share::SCN &readable_scn)
     LOG_WARN("failed to get gts as readable_scn", KR(ret));
   }
 
+  return ret;
+}
+
+int ObTenantInfoLoader::get_switchover_epoch(int64_t &switchover_epoch)
+{
+  int ret = OB_SUCCESS;
+  share::ObAllTenantInfo tenant_info;
+  if (OB_SYS_TENANT_ID == MTL_ID() || is_meta_tenant(MTL_ID())) {
+    switchover_epoch = 0;
+  } else {
+    // user tenant
+    if (OB_FAIL(tenant_info_cache_.get_tenant_info(tenant_info))) {
+      LOG_WARN("failed to get tenant info", KR(ret));
+    } else {
+      switchover_epoch = tenant_info.get_switchover_epoch();
+    }
+  }
   return ret;
 }
 

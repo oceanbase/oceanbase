@@ -2417,7 +2417,7 @@ int ObDDLRedefinitionTask::check_and_do_sync_tablet_autoinc_seq(ObSchemaGetterGu
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("error unexpected, table schema must not be nullptr", K(ret), K(target_object_id_));
-  } else if (OB_FAIL(table_schema->check_has_fts_index(new_schema_guard, has_fts_index))) {
+  } else if (OB_FAIL(table_schema->check_has_fts_index_aux(new_schema_guard, has_fts_index))) {
     LOG_WARN("failed to check has fts index", K(ret), KPC(table_schema));
   } else if (has_fts_index && table_schema->is_table_with_hidden_pk_column()
       && !(DDL_ALTER_PARTITION_BY == task_type_ || DDL_DROP_PRIMARY_KEY == task_type_)
@@ -2553,7 +2553,7 @@ int ObDDLRedefinitionTask::generate_rebuild_index_arg_list(
         } else if (OB_ISNULL(index_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected schema nullptr", K(ret), KP(index_schema));
-        } else if (!index_schema->is_global_index_table()) { // skip
+        } else if (!index_schema->is_global_index_table() || !index_schema->is_partitioned_table()) { // skip
         } else if (OB_FAIL(new_index_schema.assign(*index_schema))) {
           LOG_WARN("fail to assign schema", K(ret));
         } else if (OB_FAIL(pre_split.do_table_pre_split_if_need(database_name, ObDDLType::DDL_CREATE_INDEX, false, *table_schema, *index_schema, new_index_schema))) {

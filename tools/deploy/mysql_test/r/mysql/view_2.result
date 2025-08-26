@@ -427,25 +427,24 @@ Query Plan
 ==================================================
 |ID|OPERATOR          |NAME|EST.ROWS|EST.TIME(us)|
 --------------------------------------------------
-|0 |MERGE JOIN        |    |1       |5           |
+|0 |NESTED-LOOP JOIN  |    |1       |4           |
 |1 |├─TABLE RANGE SCAN|t11 |1       |3           |
-|2 |└─TABLE RANGE SCAN|t21 |1       |3           |
+|2 |└─TABLE GET       |t21 |1       |16          |
 ==================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t11.a], [t21.a]), filter(nil), rowset=16
-      equal_conds([t11.a = t21.a]), other_conds(nil)
-      merge_directions([ASC])
+      conds(nil), nl_params_([t11.a(:0)]), use_batch=true
   1 - output([t11.a]), filter(nil), rowset=16
       access([t11.a]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t11.a]), range(10 ; MAX), 
       range_cond([t11.a > 10])
   2 - output([t21.a]), filter(nil), rowset=16
-      access([t21.a]), partitions(p0)
+      access([GROUP_ID], [t21.a]), partitions(p0)
       is_index_back=false, is_global_index=false, 
-      range_key([t21.a]), range(10 ; MAX), 
-      range_cond([t21.a > 10])
+      range_key([t21.a]), range(MIN ; MAX), 
+      range_cond([:0 = t21.a])
 Used Hint:
 -------------------------------------
   /*+
@@ -461,7 +460,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       LEADING(@"SEL$21AFC505" ("view"."t11"@"SEL$2" "view"."t21"@"SEL$2"))
-      USE_MERGE(@"SEL$21AFC505" "view"."t21"@"SEL$2")
+      USE_NL(@"SEL$21AFC505" "view"."t21"@"SEL$2")
       INDEX(@"SEL$21AFC505" "view"."t11"@"SEL$2" "primary")
       INDEX(@"SEL$21AFC505" "view"."t21"@"SEL$2" "primary")
       MERGE(@"SEL$2" > "SEL$1")
@@ -477,7 +476,6 @@ Optimization Info:
       table_rows:1
       physical_range_rows:1
       logical_range_rows:1
-      index_back_rows:0
       output_rows:1
       table_dop:1
       dop_method:Table DOP
@@ -489,14 +487,13 @@ Optimization Info:
       table_rows:1
       physical_range_rows:1
       logical_range_rows:1
-      index_back_rows:0
       output_rows:1
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t21]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING FULL]
+      estimation method:[DEFAULT]
   Plan Type:
       LOCAL
   Parameters:

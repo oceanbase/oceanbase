@@ -115,6 +115,7 @@ protected:
 protected:
   static const int64_t DEFAULT_DECODER_CNT = 16;
 
+  ObMicroBlockAddr block_addr_;
   int64_t request_cnt_; // request column count
   const ObMicroBlockHeader *header_;
   const ObColumnHeader *col_header_;
@@ -138,7 +139,6 @@ protected:
   common::ObObjMeta *column_type_array_;
   int64_t default_store_ids_[DEFAULT_DECODER_CNT];
   common::ObObjMeta default_column_types_[DEFAULT_DECODER_CNT];
-  bool need_cast_;
   static ObNoneExistColumnDecoder none_exist_column_decoder_;
   static ObColumnDecoderCtx none_exist_column_decoder_ctx_;
 };
@@ -150,6 +150,7 @@ public:
   ObEncodeBlockGetReader() = default;
   virtual ~ObEncodeBlockGetReader() = default;
   virtual int get_row(
+      const ObMicroBlockAddr &block_addr,
       const ObMicroBlockData &block_data,
       const ObDatumRowkey &rowkey,
       const ObITableReadInfo &read_info,
@@ -161,11 +162,13 @@ public:
       bool &exist,
       bool &found);
   virtual int get_row(
+      const ObMicroBlockAddr &block_addr,
       const ObMicroBlockData &block_data,
       const ObITableReadInfo &read_info,
       const uint32_t row_idx,
       ObDatumRow &row) final;
   int get_row_id(
+      const ObMicroBlockAddr &block_addr,
       const ObMicroBlockData &block_data,
       const ObDatumRowkey &rowkey,
       const ObITableReadInfo &read_info,
@@ -178,8 +181,10 @@ protected:
       ObDatumRow &row);
 private:
   int init_by_read_info(
+      const ObMicroBlockAddr &block_addr,
       const ObMicroBlockData &block_data,
       const storage::ObITableReadInfo &read_info);
+  int init_if_need(const ObMicroBlockAddr &block_addr, const ObMicroBlockData &block_data, const ObITableReadInfo &read_info);
   int init_by_columns_desc(
       const ObMicroBlockData &block_data,
       const int64_t schema_rowkey_cnt,
@@ -332,11 +337,15 @@ public:
       const int64_t row_cap,
       storage::ObGroupByCellBase &group_by_cell) const override;
   virtual int get_group_by_aggregate_result(
+      const ObTableIterParam &iter_param,
+      const ObTableAccessContext &context,
       const int32_t *row_ids,
       const char **cell_datas,
       const int64_t row_cap,
       storage::ObGroupByCell &group_by_cell) override;
   virtual int get_group_by_aggregate_result(
+      const ObTableIterParam &iter_param,
+      const ObTableAccessContext &context,
       const int32_t *row_ids,
       const char **cell_datas,
       const int64_t row_cap,
@@ -344,7 +353,8 @@ public:
       const common::ObIArray<blocksstable::ObStorageDatum> &default_datums,
       uint32_t *len_array,
       sql::ObEvalCtx &eval_ctx,
-      storage::ObGroupByCellVec &group_by_cell) override;
+      storage::ObGroupByCellVec &group_by_cell,
+      const bool enable_rich_format) override;
   virtual int get_rows(
       const common::ObIArray<int32_t> &cols,
       const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
@@ -425,7 +435,6 @@ private:
   const ObBlockCachedDecoderHeader *cached_decoder_;
   ObIRowIndex *row_index_;
   ObColumnDecoder *decoders_;
-  ObRowReader flat_row_reader_;
   ObColumnDecoderCtx *ctxs_;
   static ObNoneExistColumnDecoder none_exist_column_decoder_;
   static ObColumnDecoderCtx none_exist_column_decoder_ctx_;

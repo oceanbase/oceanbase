@@ -994,7 +994,6 @@ int ObRARowStore::read_file(void *buf, const int64_t size, const int64_t offset)
   if (OB_SUCC(ret) && size > 0) {
     tmp_file::ObTmpFileIOInfo io;
     io.fd_ = fd_;
-    io.dir_id_ = dir_id_;
     io.buf_ = static_cast<char *>(buf);
     io.size_ = size;
     io.io_desc_.set_wait_event(ObWaitEventIds::ROW_STORE_DISK_READ);

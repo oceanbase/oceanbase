@@ -65,7 +65,7 @@ public:
   int init_by_param(const share::ObIDagInitParam *param) override;
   int start_running() override;
   bool operator == (const share::ObIDagNet &other) const override;
-  int64_t hash() const override;
+  virtual uint64_t hash() const override;
   int fill_comment(char *buf, const int64_t buf_len) const override;
   int fill_dag_net_key(char *buf, const int64_t buf_len) const override;
   bool is_valid() const override { return param_.is_valid(); }
@@ -92,7 +92,7 @@ public:
   ObLSBackupCleanDag();
   virtual ~ObLSBackupCleanDag();
   virtual bool operator == (const ObIDag &other) const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   virtual int init(share::ObIDagNet *dag_net);
   virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
@@ -100,6 +100,7 @@ public:
   { return lib::Worker::CompatMode::MYSQL; }
   virtual uint64_t get_consumer_group_id() const override
   { return consumer_group_id_; }
+  virtual bool is_ha_dag() const override { return true; }
   int create_first_task();
 
   INHERIT_TO_STRING_KV("ObIDag", ObIDag, KP(this), K_(param), K_(result));
@@ -127,12 +128,16 @@ protected:
   int check_can_do_task_(bool &can);
   int do_ls_task();
   int delete_backup_piece_ls_files_(const share::ObBackupPath &path);
-  int delete_backup_set_ls_files_(const share::ObBackupPath &path); 
+  int delete_backup_set_ls_files_(const share::ObBackupPath &path);
+  int delete_backup_complement_log_files_();
+  int delete_backup_complement_log_piece_(const share::ObBackupDest &complement_log_dest);
+  int delete_backup_complement_log_ls_(const share::ObBackupPath &piece_dir,
+      const share::ObBackupDest &complement_log_dest, const int64_t dest_id,
+      const int64_t round_id, const int64_t piece_id);
   int get_set_ls_path_(share::ObBackupPath &path);
   int get_piece_ls_path(share::ObBackupPath &path);
   int delete_piece_ls_meta_files_(const share::ObBackupPath &path);
   int delete_piece_log_files_(const share::ObBackupPath &path);
-  int delete_complement_log_(const share::ObBackupPath &path);
   int delete_sys_data_(const share::ObBackupPath &path);
   int delete_major_data_(const share::ObBackupPath &path);
   int delete_minor_data_(const share::ObBackupPath &path);

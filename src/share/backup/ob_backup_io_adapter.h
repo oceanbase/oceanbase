@@ -22,6 +22,7 @@ namespace oceanbase
 {
 namespace common
 {
+int switch_cos_to_s3(ObIAllocator &allocator, const common::ObString &src_uri, common::ObString &dest_uri);
 
 class ObBackupIoAdapter
 {
@@ -253,6 +254,7 @@ private:
       char *buf, const int64_t offset, const int64_t size,
       const common::ObIOFd &fd,
       int64_t &read_size);
+  static int is_io_prohibited(const common::ObObjectStorageInfo *storage_info);
   static int io_manager_write(
       const char *buf, const int64_t offset, const int64_t size,
       const common::ObIOFd &fd,
@@ -275,6 +277,223 @@ private:
       const uint64_t sys_module_id=OB_INVALID_ID);
   
   DISALLOW_COPY_AND_ASSIGN(ObBackupIoAdapter);
+};
+
+#define DECLARE_PARAMS_(N, ...) CONCAT(DECLARE_PARAMS_, N)(__VA_ARGS__)
+#define DECLARE_PARAMS(...) DECLARE_PARAMS_(ARGS_NUM(__VA_ARGS__), __VA_ARGS__)
+
+#define DECLARE_PARAM(type, name) type name
+#define DECLARE_PARAMS_0()
+#define DECLARE_PARAMS_2(type, name)           DECLARE_PARAM(type, name)
+#define DECLARE_PARAMS_4(type, name, args...)  DECLARE_PARAM(type, name),  DECLARE_PARAMS_2(args)
+#define DECLARE_PARAMS_6(type, name, args...)  DECLARE_PARAM(type, name),  DECLARE_PARAMS_4(args)
+#define DECLARE_PARAMS_8(type, name, args...)  DECLARE_PARAM(type, name),  DECLARE_PARAMS_6(args)
+#define DECLARE_PARAMS_10(type, name, args...) DECLARE_PARAM(type, name), DECLARE_PARAMS_8(args)
+#define DECLARE_PARAMS_12(type, name, args...) DECLARE_PARAM(type, name), DECLARE_PARAMS_10(args)
+#define DECLARE_PARAMS_14(type, name, args...) DECLARE_PARAM(type, name), DECLARE_PARAMS_12(args)
+#define DECLARE_PARAMS_16(type, name, args...) DECLARE_PARAM(type, name), DECLARE_PARAMS_14(args)
+#define DECLARE_PARAMS_18(type, name, args...) DECLARE_PARAM(type, name), DECLARE_PARAMS_16(args)
+
+#define SHIFT_PARAMS_(N, ...) CONCAT(SHIFT_PARAMS_, N)(__VA_ARGS__)
+#define SHIFT_PARAMS(...) SHIFT_PARAMS_(ARGS_NUM(__VA_ARGS__), __VA_ARGS__)
+
+#define SHIFT_PARAM(type, name) name
+#define SHIFT_PARAMS_0()
+#define SHIFT_PARAMS_2(type, name)           name
+#define SHIFT_PARAMS_4(type, name, args...)  SHIFT_PARAM(type, name), SHIFT_PARAMS_2(args)
+#define SHIFT_PARAMS_6(type, name, args...)  SHIFT_PARAM(type, name), SHIFT_PARAMS_4(args)
+#define SHIFT_PARAMS_8(type, name, args...)  SHIFT_PARAM(type, name), SHIFT_PARAMS_6(args)
+#define SHIFT_PARAMS_10(type, name, args...) SHIFT_PARAM(type, name), SHIFT_PARAMS_8(args)
+#define SHIFT_PARAMS_12(type, name, args...) SHIFT_PARAM(type, name), SHIFT_PARAMS_10(args)
+#define SHIFT_PARAMS_14(type, name, args...) SHIFT_PARAM(type, name), SHIFT_PARAMS_12(args)
+#define SHIFT_PARAMS_16(type, name, args...) SHIFT_PARAM(type, name), SHIFT_PARAMS_14(args)
+#define SHIFT_PARAMS_18(type, name, args...) SHIFT_PARAM(type, name), SHIFT_PARAMS_16(args)
+
+#define EXTERNAL_IO_ADAPTER_FUNCTION(fun_name, uri_type, uri, ...) \
+  static int fun_name(uri_type uri, DECLARE_PARAMS(__VA_ARGS__))                      \
+  {                                                                                   \
+    int ret = OB_SUCCESS;                                                             \
+    ObArenaAllocator allocator;                                                       \
+    ObString new_uri;                                                                 \
+    if (OB_FAIL(switch_cos_to_s3(allocator, uri, new_uri))) {         \
+      OB_LOG(WARN, "fail to switch cos to s3", K(ret), K(uri));       \
+    } else if (OB_FAIL(ObBackupIoAdapter::fun_name(new_uri, SHIFT_PARAMS(__VA_ARGS__)))) { \
+      OB_LOG(WARN, "fail to get and init device", K(ret)); \
+    }                                                                                 \
+    return ret;                                                                       \
+  }                                                                                   \
+
+
+// After removing the cos c sdk, since some modules (e.g., external file) still have the need to access the driver using cos://,
+// this class is specifically provided to convert cos:// to s3://.
+class ObExternalIoAdapter: public ObBackupIoAdapter
+{
+public:
+  explicit ObExternalIoAdapter() {}
+  virtual ~ObExternalIoAdapter() {}
+
+
+  static int open_with_access_type(ObIODevice *&device_handle, ObIOFd &fd,
+                                   const common::ObObjectStorageInfo *storage_info,
+                                   const common::ObString &uri,
+                                   ObStorageAccessType access_type,
+                                   const common::ObStorageIdMod &storage_id_mod)
+  {
+    int ret = OB_SUCCESS;
+    ObArenaAllocator allocator;
+    ObString new_uri;
+    if (OB_FAIL(switch_cos_to_s3(allocator, uri, new_uri))) {
+      OB_LOG(WARN, "fail to switch cos to s3", K(ret), K(uri));
+    } else if (OB_FAIL(ObBackupIoAdapter::open_with_access_type(device_handle, fd, storage_info, new_uri, access_type, storage_id_mod))) {
+      OB_LOG(WARN, "fail to open with access type", K(ret), KPC(storage_info), K(new_uri), K(access_type), K(storage_id_mod));
+    }
+    return ret;
+  }
+  static int get_and_init_device(ObIODevice *&device_handle,
+                                 const common::ObObjectStorageInfo *storage_info,
+                                 const common::ObString &storage_type_prefix,
+                                 const common::ObStorageIdMod &storage_id_mod)
+  {
+    int ret = OB_SUCCESS;
+    ObArenaAllocator allocator;
+    ObString new_uri;
+    if (OB_FAIL(switch_cos_to_s3(allocator, storage_type_prefix, new_uri))) {
+      OB_LOG(WARN, "fail to switch cos to s3", K(ret), K(storage_type_prefix));
+    } else if (OB_FAIL(ObBackupIoAdapter::get_and_init_device(device_handle, storage_info, new_uri, storage_id_mod))) {
+      OB_LOG(WARN, "fail to get and init device", K(ret), KPC(storage_info), K(new_uri), K(storage_id_mod));
+    }
+    return ret;
+  }
+  EXTERNAL_IO_ADAPTER_FUNCTION(is_exist, const common::ObString &, uri, const common::ObObjectStorageInfo *, storage_info, bool &, exist)
+  EXTERNAL_IO_ADAPTER_FUNCTION(adaptively_is_exist, const common::ObString &, uri,
+                                                    const common::ObObjectStorageInfo *, storage_info,
+                                                    bool &, exist)
+  EXTERNAL_IO_ADAPTER_FUNCTION(is_tagging, const common::ObString &, uri,
+                                           const common::ObObjectStorageInfo *, storage_info,
+                                           bool &, is_tagging)
+  EXTERNAL_IO_ADAPTER_FUNCTION(get_file_length, const common::ObString &, uri,
+                                                const common::ObObjectStorageInfo *, storage_info,
+                                                int64_t &, file_length)
+  EXTERNAL_IO_ADAPTER_FUNCTION(adaptively_get_file_length, const common::ObString &, uri,
+                                                           const common::ObObjectStorageInfo *, storage_info,
+                                                           int64_t &, file_length)
+  EXTERNAL_IO_ADAPTER_FUNCTION(del_file, const common::ObString &, uri,
+                                         const common::ObObjectStorageInfo *, storage_info)
+  EXTERNAL_IO_ADAPTER_FUNCTION(adaptively_del_file, const common::ObString &, uri,
+                                                    const common::ObObjectStorageInfo *, storage_info)
+  static int batch_del_files(const common::ObObjectStorageInfo *storage_info, const ObIArray<ObString> &files_to_delete, ObIArray<int64_t> &failed_files_idx)
+  {
+    return OB_NOT_SUPPORTED;
+  }
+
+  EXTERNAL_IO_ADAPTER_FUNCTION(mkdir, const common::ObString &, uri,
+                                      const common::ObObjectStorageInfo *, storage_info)
+  EXTERNAL_IO_ADAPTER_FUNCTION(mk_parent_dir, const common::ObString &, uri,
+                                              const common::ObObjectStorageInfo *, storage_info)
+  EXTERNAL_IO_ADAPTER_FUNCTION(is_empty_directory, const common::ObString &, uri,
+                                                   const common::ObObjectStorageInfo *, storage_info,
+                                                   bool &, is_empty_directory)
+  EXTERNAL_IO_ADAPTER_FUNCTION(is_directory, const common::ObString &, uri,
+                                             const common::ObObjectStorageInfo *, storage_info,
+                                             bool &, is_directory)
+  EXTERNAL_IO_ADAPTER_FUNCTION(list_files, const common::ObString &, dir_path,
+                                            const common::ObObjectStorageInfo *, storage_info,
+                                            common::ObBaseDirEntryOperator &, op)
+  EXTERNAL_IO_ADAPTER_FUNCTION(adaptively_list_files, const common::ObString &, dir_path,
+                                                      const common::ObObjectStorageInfo *, storage_info,
+                                                      common::ObBaseDirEntryOperator &, op)
+  EXTERNAL_IO_ADAPTER_FUNCTION(list_directories, const common::ObString &, uri,
+                                                 const common::ObObjectStorageInfo *, storage_info,
+                                                 common::ObBaseDirEntryOperator &, op)
+  static int del_dir(const common::ObString & uri, const common::ObObjectStorageInfo * storage_info, const bool recursive = false)
+  {
+    int ret = OB_SUCCESS;
+    ObArenaAllocator allocator;
+    ObString new_uri;
+    if (OB_FAIL(switch_cos_to_s3(allocator, uri, new_uri))) {
+      OB_LOG(WARN, "fail to switch cos to s3", K(ret));
+    } else if (OB_FAIL(ObBackupIoAdapter::del_dir(uri, storage_info, recursive))) {
+      OB_LOG(WARN, "fail to get and init device", K(ret), KPC(storage_info), K(recursive));
+    }
+    return ret;
+  }
+
+  EXTERNAL_IO_ADAPTER_FUNCTION(write_single_file, const common::ObString &, uri,
+                                                  const common::ObObjectStorageInfo *, storage_info,
+                                                  const char *, buf,
+                                                  const int64_t , size,
+                                                  const common::ObStorageIdMod &, storage_id_mod)
+  EXTERNAL_IO_ADAPTER_FUNCTION(pwrite, const common::ObString &, uri,
+                                       const common::ObObjectStorageInfo *, storage_info,
+                                       const char *, buf,
+                                       const int64_t, offset,
+                                       const int64_t, size,
+                                       const common::ObStorageAccessType, access_type,
+                                       int64_t &, write_size,
+                                       const bool, is_can_seal,
+                                       const common::ObStorageIdMod &, storage_id_mod)
+
+  EXTERNAL_IO_ADAPTER_FUNCTION(seal_file, const common::ObString &, uri,
+                                          const share::ObBackupStorageInfo *, storage_info,
+                                          const common::ObStorageIdMod &, storage_id_mod)
+  static int pwrite(common::ObIODevice &device_handle,
+                    common::ObIOFd &fd,
+                    const char *buf,
+                    const int64_t offset,
+                    const int64_t size,
+                    int64_t &write_size,
+                    const bool is_can_seal)
+  {
+    return ObBackupIoAdapter::pwrite(device_handle, fd, buf, offset, size, write_size, is_can_seal);
+  }
+
+  EXTERNAL_IO_ADAPTER_FUNCTION(read_single_file, const common::ObString &,uri,
+                                                 const common::ObObjectStorageInfo *, storage_info,
+                                                 char *, buf,
+                                                 const int64_t, buf_size,
+                                                 int64_t &, read_size,
+                                                 const common::ObStorageIdMod &, storage_id_mod)
+  EXTERNAL_IO_ADAPTER_FUNCTION(adaptively_read_single_file, const common::ObString &, uri,
+                                                            const common::ObObjectStorageInfo *, storage_info,
+                                                            char *, buf,
+                                                            const int64_t, buf_size,
+                                                            int64_t &, read_size,
+                                                            const common::ObStorageIdMod &, storage_id_mod)
+  EXTERNAL_IO_ADAPTER_FUNCTION(read_single_text_file, const common::ObString &, uri,
+                                                      const common::ObObjectStorageInfo *, storage_info,
+                                                      char *, buf,
+                                                      const int64_t, buf_size,
+                                                      const common::ObStorageIdMod &, storage_id_mod)
+  EXTERNAL_IO_ADAPTER_FUNCTION(adaptively_read_single_text_file, const common::ObString &,uri,
+                                                                 const common::ObObjectStorageInfo *, storage_info,
+                                                                 char *, buf,
+                                                                 const int64_t, buf_size,
+                                                                 const common::ObStorageIdMod &, storage_id_mod)
+  EXTERNAL_IO_ADAPTER_FUNCTION(read_part_file, const common::ObString &,uri,
+                                               const common::ObObjectStorageInfo *, storage_info,
+                                               char *, buf,
+                                               const int64_t, buf_size,
+                                               const int64_t, offset,
+                                               int64_t &, read_size,
+                                               const common::ObStorageIdMod &, storage_id_mod)
+  EXTERNAL_IO_ADAPTER_FUNCTION(adaptively_read_part_file, const common::ObString &,uri,
+                                                          const common::ObObjectStorageInfo *, storage_info,
+                                                          char *, buf,
+                                                          const int64_t, buf_size,
+                                                          const int64_t, offset,
+                                                          int64_t &, read_size,
+                                                          const common::ObStorageIdMod &, storage_id_mod)
+  EXTERNAL_IO_ADAPTER_FUNCTION(pread, const common::ObString &, uri,
+                                      const common::ObObjectStorageInfo *, storage_info,
+                                      char *, buf,
+                                      const int64_t, buf_size,
+                                      const int64_t, offset,
+                                      int64_t &, read_size,
+                                      const common::ObStorageIdMod &, storage_id_mod)
+  EXTERNAL_IO_ADAPTER_FUNCTION(del_unmerged_parts, const common::ObString &, uri, const common::ObObjectStorageInfo *, storage_info)
+  EXTERNAL_IO_ADAPTER_FUNCTION(delete_tmp_files, const common::ObString &, uri, const common::ObObjectStorageInfo *, storage_info)
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObExternalIoAdapter);
 };
 
 class ObCntFileListOp : public ObBaseDirEntryOperator
@@ -324,6 +543,27 @@ private:
   common::ObIArray<ObIODirentEntry> &d_entrys_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDirPrefixEntryNameFilter);
+};
+
+class ObDirPrefixLSIDFilter final : public ObBaseDirEntryOperator
+{
+  public:
+  ObDirPrefixLSIDFilter(common::ObIArray<share::ObLSID> &d_entrys)
+      : is_inited_(false),
+        d_entrys_(d_entrys)
+  {
+    filter_str_[0] = '\0';
+    format_buffer_[0] = '\0';
+  }
+  virtual ~ObDirPrefixLSIDFilter() = default;
+  int init(const char *filter_str, const int32_t filter_str_len);
+  virtual int func(const dirent *entry) override;
+private:
+  bool is_inited_;
+  char filter_str_[common::MAX_PATH_SIZE];
+  char format_buffer_[share::OB_BACKUP_LS_DIR_NAME_LENGTH];
+  common::ObIArray<share::ObLSID> &d_entrys_;
+  DISALLOW_COPY_AND_ASSIGN(ObDirPrefixLSIDFilter);
 };
 
 }

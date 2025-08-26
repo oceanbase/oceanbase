@@ -130,6 +130,16 @@ int ObDDLSqlGenerator::get_priv_name(const int64_t priv, const char *&name)
       name = "CREATE CATALOG"; break;
     case OB_PRIV_USE_CATALOG:
       name = "USE CATALOG"; break;
+    case OB_PRIV_CREATE_LOCATION:
+      name = "CREATE LOCATION"; break;
+    case OB_PRIV_CREATE_AI_MODEL:
+      name = "CREATE AI MODEL"; break;
+    case OB_PRIV_ALTER_AI_MODEL:
+      name = "ALTER AI MODEL"; break;
+    case OB_PRIV_DROP_AI_MODEL:
+      name = "DROP AI MODEL"; break;
+    case OB_PRIV_ACCESS_AI_MODEL:
+      name = "ACCESS AI MODEL"; break;
     default: {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid priv", K(ret), K(priv));
@@ -1006,6 +1016,67 @@ int ObDDLSqlGenerator::gen_db_priv_sql(const obrpc::ObAccountArg &account,
                                         account.user_name_.ptr(),
                                         account.host_name_.length(),
                                         account.host_name_.ptr()))) {
+        LOG_WARN("append sql failed", K(ret));
+      }
+    }
+  }
+
+  if (OB_SUCC(ret) && is_grant) {
+    if (need_priv.priv_set_ & OB_PRIV_GRANT) {
+      if (OB_FAIL(sql_string.append(" WITH GRANT OPTION"))) {
+        LOG_WARN("append sql failed", K(ret));
+      }
+    }
+  }
+  LOG_INFO("mingyin gen db priv sql", K(sql_string.string()), K(is_grant), K(need_priv));
+  return ret;
+}
+
+int ObDDLSqlGenerator::gen_object_priv_sql(const obrpc::ObAccountArg &account,
+                                          const ObNeedPriv &need_priv,
+                                          const bool is_grant,
+                                          ObSqlString &sql_string)
+{
+  int ret = OB_SUCCESS;
+  char GRANT_OBJECT_SQL[] = "GRANT %s ON %s `%.*s`.* TO `%.*s`";
+  char REVOKE_OBJECT_SQL[] = "REVOKE %s ON %s `%.*s`.* FROM `%.*s`";
+  char NEW_GRANT_OBJECT_SQL[] = "GRANT %s ON %s `%.*s`.* TO `%.*s`@`%.*s`";
+  char NEW_REVOKE_OBJECT_SQL[] = "REVOKE %s ON %s `%.*s`.* FROM `%.*s`@`%.*s`";
+  ObSqlString priv_string;
+  if (OB_UNLIKELY(need_priv.table_.empty()) || OB_UNLIKELY(!account.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN(" or user_name is empty", K(ret), K(need_priv), K(account));
+  } else if (need_priv.priv_level_ != OB_PRIV_OBJECT_LEVEL) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("priv level is invalid", K(need_priv), K(ret));
+  } else if (need_priv.priv_set_ & (~(OB_PRIV_OBJECT_ACC | OB_PRIV_GRANT))) {
+    ret = OB_ILLEGAL_GRANT_FOR_TABLE;
+    LOG_WARN("Grant/Revoke privilege than can not be used",
+            "priv_type", ObPrintPrivSet(need_priv.priv_set_), K(ret));
+  } else if (OB_FAIL(priv_to_name(need_priv.priv_set_, priv_string))) {
+    LOG_WARN("get priv to name failed", K(ret));
+  }
+  if (OB_SUCC(ret)) {
+    if (0 == account.host_name_.compare(OB_DEFAULT_HOST_NAME)) {
+      if (OB_FAIL(sql_string.append_fmt(adjust_ddl_format_str(is_grant ? GRANT_OBJECT_SQL : REVOKE_OBJECT_SQL),
+        priv_string.string().ptr(),
+        ob_object_type_str(need_priv.obj_type_),
+        need_priv.table_.length(),
+        need_priv.table_.ptr(),
+        account.user_name_.length(),
+        account.user_name_.ptr()))) {
+        LOG_WARN("append sql failed", K(ret));
+      }
+    } else {
+      if (OB_FAIL(sql_string.append_fmt(adjust_ddl_format_str(is_grant ? NEW_GRANT_OBJECT_SQL : NEW_REVOKE_OBJECT_SQL),
+        priv_string.string().ptr(),
+        ob_object_type_str(need_priv.obj_type_),
+        need_priv.table_.length(),
+        need_priv.table_.ptr(),
+        account.user_name_.length(),
+        account.user_name_.ptr(),
+        account.host_name_.length(),
+        account.host_name_.ptr()))) {
         LOG_WARN("append sql failed", K(ret));
       }
     }

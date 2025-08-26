@@ -11,6 +11,9 @@
 #include "share/compaction/ob_table_ckm_items.h"
 #include "rootserver/freeze/ob_major_merge_progress_util.h"
 #include "share/resource_manager/ob_cgroup_ctrl.h"
+#ifdef ERRSIM
+#include "observer/ob_server_event_history_table_operator.h"
+#endif
 namespace oceanbase
 {
 using namespace oceanbase::common;
@@ -259,42 +262,6 @@ int ObTableCkmItems::build(
   return ret;
 }
 
-#ifdef OB_BUILD_SHARED_STORAGE
-int ObTableCkmItems::build_for_s2(
-    const uint64_t table_id,
-    const share::SCN &compaction_scn,
-    common::ObMySQLProxy &sql_proxy,
-    schema::ObSchemaGetterGuard &schema_guard,
-    const compaction::ObTabletLSPairCache &tablet_ls_pair_cache)
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<ObTabletID, 64> tablet_id_array;
-
-  if (OB_FAIL(prepare_build(table_id, schema_guard, tablet_ls_pair_cache, tablet_id_array))) {
-    LOG_WARN("failed to prepare build ckm items", K(ret));
-  } else if (OB_FAIL(ckm_items_.init(tenant_id_, tablet_pairs_.count()))) {
-    STORAGE_LOG(WARN, "failed to init ckm array", K(ret), K_(tenant_id), K(tablet_pairs_.count()));
-  } else if (OB_FAIL(ObTabletReplicaChecksumOperator::batch_get(tenant_id_,
-                                                                tablet_pairs_,
-                                                                compaction_scn,
-                                                                sql_proxy,
-                                                                ckm_items_,
-                                                                true/*include_larger_than*/,
-                                                                share::OBCG_DEFAULT))) {
-    LOG_WARN("failed to get table column checksum items", KR(ret));
-  } else if (!table_schema_->is_index_table() && OB_FAIL(sort_col_id_array_.build(tenant_id_, *table_schema_))) {
-    LOG_WARN("failed to build column id array for data table", KR(ret), KPC(table_schema_));
-  } else {
-    table_id_ = table_id;
-    is_inited_ = true;
-  }
-
-  if (OB_FAIL(ret)) {
-    reset();
-  }
-  return ret;
-}
-#endif
 
 // For partition split ddl, the scenario will generate major sstables with more columns expectedly.
 // 1. multi parts compact with columns cnt A.
@@ -407,8 +374,9 @@ int ObTableCkmItems::build_column_ckm_sum_array(
     ckm_error_info.index_tablet_id_ = index_ckm.tablet_pairs_.at(tablet_array_idx).get_tablet_id(); \
   }
 
+// for global index
 int ObTableCkmItems::validate_column_ckm_sum(
-    const share::SCN &compaction_scn,
+    const share::ObFreezeInfo &freeze_info,
     common::ObMySQLProxy &sql_proxy,
     ObTableCkmItems &data_ckm,
     ObTableCkmItems &index_ckm)
@@ -419,6 +387,7 @@ int ObTableCkmItems::validate_column_ckm_sum(
   ObColumnChecksumErrorInfo ckm_error_info;
   int64_t data_row_cnt = 0;
   int64_t index_row_cnt = 0;
+  const share::SCN compaction_scn = freeze_info.frozen_scn_;
   const schema::ObTableSchema *data_table_schema = data_ckm.table_schema_;
   const schema::ObTableSchema *index_table_schema = index_ckm.table_schema_;
   if (OB_UNLIKELY(!index_ckm.is_fts_index_
@@ -433,7 +402,8 @@ int ObTableCkmItems::validate_column_ckm_sum(
     LOG_WARN("failed to build column ckm sum map for index table", KR(ret));
   } else if (OB_UNLIKELY(data_row_cnt != index_row_cnt)) {
     ret = OB_CHECKSUM_ERROR;
-    LOG_ERROR("sum row count in data & global index is not equal", KR(ret), K(data_row_cnt), K(index_row_cnt));
+    LOG_WARN("sum row count in data & global index is not equal", KR(ret), "data_table_id", data_table_schema->get_table_id(),
+      "index_table_id", index_table_schema->get_table_id(), K(data_row_cnt), K(index_row_cnt));
   } else if (OB_FAIL(compare_ckm_by_column_ids(
                  data_ckm,
                  index_ckm,
@@ -446,6 +416,11 @@ int ObTableCkmItems::validate_column_ckm_sum(
       LOG_WARN("failed to compare column checksum for global index", KR(ret),
                K(ckm_error_info), K(data_ckm.ckm_items_),
                K(index_ckm.ckm_items_));
+    }
+  }
+  if (OB_CHECKSUM_ERROR == ret) { // check if exist truncate/drop partition after major freeze
+    if (OB_FAIL(check_schema_change_after_major_freeze(freeze_info, data_ckm, index_ckm))) {
+      LOG_WARN("failed to check schema change after major freeze", KR(ret));
     }
   }
   if (OB_CHECKSUM_ERROR == ret) {
@@ -461,7 +436,7 @@ int ObTableCkmItems::validate_column_ckm_sum(
 }
 
 int ObTableCkmItems::validate_tablet_column_ckm(
-    const share::SCN &compaction_scn,
+    const share::ObFreezeInfo &freeze_info,
     common::ObMySQLProxy &sql_proxy,
     ObTableCkmItems &data_ckm,
     ObTableCkmItems &index_ckm)
@@ -472,6 +447,7 @@ int ObTableCkmItems::validate_tablet_column_ckm(
   ObColumnChecksumErrorInfo ckm_error_info;
   const schema::ObTableSchema *data_table_schema = data_ckm.table_schema_;
   const schema::ObTableSchema *index_table_schema = index_ckm.table_schema_;
+  const share::SCN compaction_scn = freeze_info.frozen_scn_;
   if (OB_UNLIKELY(!index_ckm.is_fts_index_
     && (nullptr == data_table_schema || nullptr == index_table_schema
     || data_table_schema->get_table_id() != index_table_schema->get_data_table_id()))) {
@@ -645,6 +621,50 @@ void ObTableCkmItems::reset()
   ckm_items_.reset();
   sort_col_id_array_.reset();
   ckm_sum_array_.reset();
+}
+
+int ObTableCkmItems::check_schema_change_after_major_freeze(
+    const share::ObFreezeInfo &freeze_info,
+    ObTableCkmItems &data_ckm,
+    ObTableCkmItems &index_ckm)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard(ObSchemaMgrItem::MOD_RS_MAJOR_CHECK);
+  const uint64_t tenant_id = data_ckm.tenant_id_;
+  const ObTableSchema *old_table_schema = nullptr;
+  const ObTableSchema *old_index_schema = nullptr;
+  if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
+          tenant_id, schema_guard, freeze_info.schema_version_, OB_INVALID_VERSION,
+          ObMultiVersionSchemaService::RefreshSchemaMode::FORCE_LAZY))) {
+    LOG_WARN("fail to get schema guard", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, data_ckm.table_id_, old_table_schema))) {
+    LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(data_ckm));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, index_ckm.table_id_, old_index_schema))) {
+    if (OB_TABLE_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+      FLOG_INFO("[IGNORE CHECKSUM_ERROR] index not exist when major freeze", KR(ret), K(index_ckm.table_id_));
+    } else {
+      LOG_WARN("fail to get table schema", KR(ret), K(index_ckm));
+    }
+  } else {
+    const int64_t old_part_num = old_table_schema->get_all_part_num();
+    if (OB_UNLIKELY(-1 == old_part_num)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("get_all_part_num returned unexpected value", KR(ret), K(old_part_num), K(data_ckm));
+    } else if (old_part_num != data_ckm.tablet_pairs_.count()) {
+      FLOG_INFO("[IGNORE CHECKSUM_ERROR] partition num changed in data table", KR(ret),
+        "old_partition_num", old_part_num,
+        "new_partition_num", data_ckm.tablet_pairs_.count(),
+        K(data_ckm));
+#ifdef ERRSIM
+      SERVER_EVENT_SYNC_ADD("merge_errsim", "ignore_checksum_error", K(tenant_id), "reason", "partition_num_changed");
+#endif
+    } else {
+      ret = OB_CHECKSUM_ERROR;
+      LOG_WARN("schema not changed after major freeze", KR(ret), K(data_ckm), K(index_ckm));
+    }
+  }
+  return ret;
 }
 
 } // namespace compaction

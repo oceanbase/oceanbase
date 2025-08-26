@@ -63,12 +63,9 @@ public:
   bool is_valid_with_tenant(const uint64_t tenant_id) const
   {
     // 1. User tenant have SYS LS and User LS
-    // 2. SYS tenant and Meta tenant have SYS LS
-    // 3. Meta tenant have SSLOG LS
-    // TODO:jinqian.zzy, in future, sys tenant has SSLOG LS
+    // 2. SYS tenant and Meta tenant have SYS LS and SSLOG LS.
     return (is_user_tenant(tenant_id) && (is_sys_ls() || is_user_ls()))
-        || ((is_sys_tenant(tenant_id) || is_meta_tenant(tenant_id)) && is_sys_ls())
-        || (is_meta_tenant(tenant_id) && is_sslog_ls());
+        || ((is_sys_tenant(tenant_id) || is_meta_tenant(tenant_id)) && (is_sys_ls() || is_sslog_ls()));
   }
 
   // compare operator
@@ -110,8 +107,6 @@ static const ObLSID LOCK_SERVICE_LS(ObLSID::LOCK_SERVICE_LS_ID);
 static const ObLSID DAS_ID_LS(ObLSID::DAS_ID_LS_ID);
 static const ObLSID MAJOR_FREEZE_LS(ObLSID::MAJOR_FREEZE_LS_ID);
 static const ObLSID WRS_LS_ID(ObLSID::WRS_LS_ID);
-
-bool is_tenant_sslog_ls(const uint64_t tenant_id, const share::ObLSID &ls_id);
 
 static const int64_t OB_DEFAULT_LS_COUNT = 3;
 typedef common::ObSEArray<share::ObLSID, OB_DEFAULT_LS_COUNT> ObLSArray;

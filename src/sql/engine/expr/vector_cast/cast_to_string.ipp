@@ -38,14 +38,23 @@ struct ToStringCastImpl
           if (is_ieee754_nan_inf(in_val, buf_, length)) {
             SQL_LOG(DEBUG, "Infinity or NaN value is", K(in_val));
           } else { // float/double -> string
-            int buf_len = sizeof(buf_);
+            const int buf_len = sizeof(buf_);
             ob_gcvt_arg_type arg_type = std::is_same<IN_TYPE, float>::value
                                        ? OB_GCVT_ARG_FLOAT : OB_GCVT_ARG_DOUBLE;
             if (0 <= in_scale_) {
               length = ob_fcvt(in_val, in_scale_, buf_len - 1, buf_, NULL);
             } else {
+              int32_t double_width = buf_len - 1;
+              if (lib::is_mysql_mode() && CM_IS_COLUMN_CONVERT(expr.extra_) &&
+                  ob_is_double_tc(expr.args_[0]->datum_meta_.type_) && expr.max_length_ > 0) {
+                double_width = min(double_width, expr.max_length_);
+              }
               length = ob_gcvt_opt(
-                  in_val, arg_type, static_cast<int32_t>(buf_len - 1), buf_, NULL, lib::is_oracle_mode(), TRUE);
+                  in_val, arg_type, double_width, buf_, NULL, lib::is_oracle_mode(), TRUE);
+              if (length == 0 && double_width < buf_len - 1) {
+                length = double_width;
+                buf_[length] = '\0';
+              }
             }
           }
           const ObCharsetInfo *cs = NULL;

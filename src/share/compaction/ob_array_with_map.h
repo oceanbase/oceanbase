@@ -66,7 +66,7 @@ int ObArrayWithMap<ITEM>::init(
   array_.set_attr(ObMemAttr(tenant_id, "ArrayIdxArr"));
   if (OB_FAIL(array_.reserve(expect_val_cnt))) {
     STORAGE_LOG(WARN, "failed to reserve array", K(ret), K(expect_val_cnt));
-  } else if (need_index_map_ && expect_val_cnt > BUILD_HASH_MAP_THRESHOLD) {
+  } else if (need_index_map_ && expect_val_cnt > BUILD_HASH_MAP_THRESHOLD && !map_.created()) {
     if (OB_FAIL(map_.create(expect_val_cnt, "ArrayIdxMap", "ArrayIdxMap", tenant_id))) {
       STORAGE_LOG(WARN, "failed to build map", K(ret), K(expect_val_cnt));
     }

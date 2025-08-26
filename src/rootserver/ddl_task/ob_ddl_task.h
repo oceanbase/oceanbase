@@ -697,6 +697,7 @@ public:
     ObDDLTask(share::DDL_INVALID)
   {}
   virtual ~ObDDLTask() {}
+  virtual int init(const ObDDLTaskRecord &task_record) { return common::OB_NOT_IMPLEMENT; }
   virtual int on_child_task_finish(const uint64_t child_task_key, const int ret_code) { return common::OB_NOT_SUPPORTED; }
   virtual int process() { return OB_NOT_SUPPORTED; }
   virtual bool is_valid() const { return is_inited_; }
@@ -813,9 +814,11 @@ protected:
   }
   int init_ddl_task_monitor_info(const uint64_t target_table_id);
   virtual bool is_ddl_retryable() const { return true; }
+  virtual int refresh_task_context(const share::ObDDLTaskStatus status) { return OB_SUCCESS; }
 private:
   virtual int cleanup_impl() { return OB_NOT_SUPPORTED; }
   virtual bool task_can_retry() const { return true; }
+  int inner_refresh_task_context(const share::ObDDLTaskStatus status);
 protected:
   virtual void clear_old_status_context();
 protected:

@@ -79,6 +79,7 @@ protected:
                              ObAssignment &assign);
   int check_need_assignment(const common::ObIArray<ObAssignment> &assigns,
                             uint64_t table_id,
+                            uint64_t ref_table_id,
                             bool before_update_row_trigger_exist,
                             const share::schema::ObColumnSchemaV2 &column,
                             bool &need_assign);
@@ -294,6 +295,7 @@ protected:
   int is_external_table_partition_column(const TableItem &table_item,
                                          uint64_t column_id,
                                          bool &is_part_column);
+  int check_value_row_all_simple_const(const ObIArray<ObRawExpr*> &value_row, bool &all_const);
 
 private:
   common::hash::ObPlacementHashSet<uint64_t, 4229> insert_column_ids_;

@@ -27,6 +27,17 @@ namespace blocksstable
 namespace storage
 {
 
+struct ObTabletPersisterParam;
+
+enum ObLinkedMacroBlockWriteType : int8_t
+{
+  PRIV_SLOG_CKPT          = 0,
+  PRIV_MACRO_INFO         = 1,
+  SHARED_MAJOR_MACRO_INFO = 2,
+  SHARED_INC_MACRO_INFO   = 3,
+  LMI_MAX_TYPE            = 4,
+};
+
 struct ObLinkedMacroBlockHeader final
 {
   static const int32_t LINKED_MACRO_BLOCK_HEADER_VERSION_V1 = 1;
@@ -119,46 +130,45 @@ private:
   int64_t cur_handle_pos_;
 };
 
-struct ObSSTableLinkBlockWriteInfo
+class ObLinkedMacroInfoWriteParam final
 {
 public:
-  ObSSTableLinkBlockWriteInfo(const int64_t start_macro_seq):
-    start_macro_seq_(start_macro_seq),
-    ddl_redo_callback_(nullptr),
-    written_macro_cnt_(0)
+  ObLinkedMacroInfoWriteParam()
+    : type_(ObLinkedMacroBlockWriteType::LMI_MAX_TYPE),
+      ls_id_(),
+      tablet_id_(),
+      tablet_transfer_seq_(-1),
+      start_macro_seq_(-1),
+      reorganization_scn_(-1),
+      op_id_(0),
+      write_callback_(nullptr)
   {}
-  ~ObSSTableLinkBlockWriteInfo() = default;
-  int assign(const ObSSTableLinkBlockWriteInfo& other)
-  {
-    int ret = OB_SUCCESS;
-    if (&other == this) {
-      // do nothing
-    } else {
-      ddl_redo_callback_ = other.ddl_redo_callback_;
-      written_macro_cnt_ = other.written_macro_cnt_;
-    }
-    return ret;
-  }
-  int init(blocksstable::ObIMacroBlockFlushCallback *ddl_redo_cb)
-  {
-    int ret = OB_SUCCESS;
-    ddl_redo_callback_ = ddl_redo_cb;
-    written_macro_cnt_ = 0;
-    return ret;
-  }
-  void reset_written_macro_cnt()
-  {
-    written_macro_cnt_ = 0;
-  }
-  TO_STRING_KV(KP_(ddl_redo_callback), K_(start_macro_seq), K_(written_macro_cnt));
-  const int64_t start_macro_seq_;
-  inline int64_t get_written_macro_cnt() const { return written_macro_cnt_; }
-  inline void set_written_macro_cnt(const int64_t written_macro_cnt) { written_macro_cnt_ = written_macro_cnt; }
-  inline blocksstable::ObIMacroBlockFlushCallback* get_ddl_redo_callback() const { return ddl_redo_callback_; }
+  ~ObLinkedMacroInfoWriteParam() = default;
+  bool is_valid() const;
+  int build_linked_marco_info_param(
+      const ObTabletPersisterParam &persist_param,
+      const int64_t cur_macro_seq);
+  void reset();
+  blocksstable::ObIMacroBlockFlushCallback *write_callback() const { return write_callback_; }
+  TO_STRING_KV(K_(type),
+               K_(ls_id),
+               K_(tablet_id),
+               K_(tablet_transfer_seq),
+               K_(start_macro_seq),
+               K_(reorganization_scn),
+               K_(op_id),
+               KP_(write_callback));
 private:
-  blocksstable::ObIMacroBlockFlushCallback *ddl_redo_callback_;
-  int64_t written_macro_cnt_; // default is zero, do not modify
-  DISALLOW_COPY_AND_ASSIGN(ObSSTableLinkBlockWriteInfo);
+  friend class ObLinkedMacroBlockWriter;
+private:
+  ObLinkedMacroBlockWriteType type_;
+  share::ObLSID ls_id_;
+  ObTabletID tablet_id_;
+  int64_t tablet_transfer_seq_;
+  int64_t start_macro_seq_;
+  int64_t reorganization_scn_;
+  uint64_t op_id_;
+  blocksstable::ObIMacroBlockFlushCallback *write_callback_;
 };
 
 class ObSlogCheckpointFdDispenser final
@@ -173,7 +183,7 @@ public:
   void set_cur_max_file_id(const int64_t cur_file_id) {  min_file_id_ = max_file_id_ = cur_file_id + 1; }
   int64_t get_min_file_id() const { return min_file_id_; }
   int64_t get_max_file_id() const { return max_file_id_; }
-  int64_t acquire_new_file_id() { return ATOMIC_AAF(&max_file_id_, 1); }
+  int64_t acquire_new_file_id() { return ATOMIC_FAA(&max_file_id_, 1); }
 
   TO_STRING_KV(K_(min_file_id), K_(max_file_id));
 private :

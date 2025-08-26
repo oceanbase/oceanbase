@@ -53,7 +53,9 @@ ObTableSchemaParam::ObTableSchemaParam(ObIAllocator &allocator)
     vec_dim_(0),
     vec_vector_col_id_(OB_INVALID_ID),
     mv_mode_(),
-    is_delete_insert_(false)
+    is_delete_insert_(false),
+    merge_engine_type_(ObMergeEngineType::OB_MERGE_ENGINE_MAX),
+    inc_pk_doc_id_col_id_(OB_INVALID_ID)
 {
 }
 
@@ -94,6 +96,8 @@ void ObTableSchemaParam::reset()
   vec_vector_col_id_ = OB_INVALID_ID;
   mv_mode_.reset();
   is_delete_insert_ = false;
+  merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_MAX;
+  inc_pk_doc_id_col_id_ = OB_INVALID_ID;
 }
 
 int ObTableSchemaParam::convert(const ObTableSchema *schema)
@@ -375,6 +379,26 @@ int ObTableSchemaParam::is_column_nullable_for_write(const uint64_t column_id,
     LOG_WARN("column not exist", K(ret), K(column_id));
   } else {
     is_nullable_for_write = columns_.at(idx)->is_nullable_for_write();
+    // Becasue of the mlog's primary key is composed of the base table's partition key, we skip the null check.
+    //
+    // The base table itself is responsible for enforcing constraints on its partition key.
+    // Trusting the upstream source (the base table) simplifies logic and prevents unnecessary failures like index.
+    if (!is_nullable_for_write && OB_UNLIKELY(get_table_type() == ObTableType::MATERIALIZED_VIEW_LOG)) {
+      bool is_hidden = false;
+      bool is_rowkey = false;
+      const ObColumnParam *col = get_column(column_id);
+      if (OB_ISNULL(col)) {
+        ret = OB_SCHEMA_ERROR;
+        LOG_WARN("column schema is null", K(ret), K(column_id));
+      } else if (OB_FAIL(is_rowkey_column(column_id, is_rowkey))) {
+        LOG_WARN("fail to get is rowkey column", K(ret));
+      } else {
+        is_hidden = col->is_hidden();
+      }
+      if (!is_hidden && is_rowkey) {
+        is_nullable_for_write = true;
+      }
+    }
   }
   return ret;
 }
@@ -588,6 +612,8 @@ OB_DEF_SERIALIZE(ObTableSchemaParam)
     LOG_WARN("fail to serialize fts parser properties", K(ret));
   }
   OB_UNIS_ENCODE(is_delete_insert_);
+  OB_UNIS_ENCODE(merge_engine_type_);
+  OB_UNIS_ENCODE(inc_pk_doc_id_col_id_);
   return ret;
 }
 
@@ -728,6 +754,8 @@ OB_DEF_DESERIALIZE(ObTableSchemaParam)
     }
   }
   OB_UNIS_DECODE(is_delete_insert_);
+  OB_UNIS_DECODE(merge_engine_type_);
+  OB_UNIS_DECODE(inc_pk_doc_id_col_id_);
   return ret;
 }
 
@@ -781,6 +809,8 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchemaParam)
   OB_UNIS_ADD_LEN(vec_vector_col_id_);
   len += fts_parser_properties_.get_serialize_size();
   OB_UNIS_ADD_LEN(is_delete_insert_);
+  OB_UNIS_ADD_LEN(merge_engine_type_);
+  OB_UNIS_ADD_LEN(inc_pk_doc_id_col_id_);
   return len;
 }
 

@@ -462,8 +462,8 @@ Query Plan
 ==============================================================
 |ID|OPERATOR                     |NAME |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------
-|0 |HASH DISTINCT                |     |1       |6           |
-|1 |└─NESTED-LOOP JOIN CARTESIAN |     |3       |6           |
+|0 |HASH DISTINCT                |     |1       |3           |
+|1 |└─NESTED-LOOP JOIN CARTESIAN |     |3       |3           |
 |2 |  ├─SUBPLAN SCAN             |VIEW1|1       |3           |
 |3 |  │ └─SCALAR GROUP BY        |     |1       |3           |
 |4 |  │   └─TABLE FULL SCAN      |t2   |3       |3           |
@@ -499,8 +499,8 @@ Query Plan
 ==============================================================
 |ID|OPERATOR                     |NAME |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------
-|0 |HASH DISTINCT                |     |1       |6           |
-|1 |└─NESTED-LOOP JOIN CARTESIAN |     |3       |6           |
+|0 |HASH DISTINCT                |     |1       |3           |
+|1 |└─NESTED-LOOP JOIN CARTESIAN |     |3       |3           |
 |2 |  ├─SUBPLAN SCAN             |VIEW1|1       |3           |
 |3 |  │ └─SCALAR GROUP BY        |     |1       |3           |
 |4 |  │   └─TABLE FULL SCAN      |t2   |3       |3           |
@@ -535,13 +535,13 @@ Query Plan
 ==================================================================
 |ID|OPERATOR                         |NAME |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------------
-|0 |NESTED-LOOP JOIN                 |     |1       |9           |
+|0 |NESTED-LOOP JOIN                 |     |1       |6           |
 |1 |├─SUBPLAN SCAN                   |VIEW3|1       |3           |
 |2 |│ └─SCALAR GROUP BY              |     |1       |3           |
 |3 |│   └─TABLE FULL SCAN            |t3   |1       |3           |
-|4 |└─SUBPLAN SCAN                   |VIEW2|1       |6           |
-|5 |  └─HASH DISTINCT                |     |1       |6           |
-|6 |    └─NESTED-LOOP JOIN CARTESIAN |     |3       |6           |
+|4 |└─SUBPLAN SCAN                   |VIEW2|1       |3           |
+|5 |  └─HASH DISTINCT                |     |1       |3           |
+|6 |    └─NESTED-LOOP JOIN CARTESIAN |     |3       |3           |
 |7 |      ├─SUBPLAN SCAN             |VIEW1|1       |3           |
 |8 |      │ └─SCALAR GROUP BY        |     |1       |3           |
 |9 |      │   └─TABLE FULL SCAN      |t2   |3       |3           |
@@ -590,8 +590,8 @@ Query Plan
 ==============================================================
 |ID|OPERATOR                     |NAME |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------
-|0 |HASH DISTINCT                |     |1       |6           |
-|1 |└─NESTED-LOOP JOIN CARTESIAN |     |3       |6           |
+|0 |HASH DISTINCT                |     |1       |3           |
+|1 |└─NESTED-LOOP JOIN CARTESIAN |     |3       |3           |
 |2 |  ├─SUBPLAN SCAN             |VIEW1|1       |3           |
 |3 |  │ └─SCALAR GROUP BY        |     |1       |3           |
 |4 |  │   └─TABLE FULL SCAN      |t2   |3       |3           |
@@ -628,7 +628,7 @@ Query Plan
 ============================================================
 |ID|OPERATOR                   |NAME |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------
-|0 |NESTED-LOOP JOIN CARTESIAN |     |3       |6           |
+|0 |NESTED-LOOP JOIN CARTESIAN |     |3       |3           |
 |1 |├─SUBPLAN SCAN             |VIEW1|1       |3           |
 |2 |│ └─SCALAR GROUP BY        |     |1       |3           |
 |3 |│   └─TABLE FULL SCAN      |t2   |3       |3           |
@@ -861,9 +861,9 @@ Query Plan
 |3 |  └─SUBPLAN SCAN                   |VIEW3          |1       |14          |
 |4 |    └─MERGE ANTI JOIN              |               |1       |14          |
 |5 |      ├─TABLE FULL SCAN            |table2_bigint  |2       |3           |
-|6 |      └─SORT                       |               |2       |12          |
-|7 |        └─SUBPLAN SCAN             |VIEW2          |2       |12          |
-|8 |          └─NESTED-LOOP JOIN       |               |2       |12          |
+|6 |      └─SORT                       |               |2       |11          |
+|7 |        └─SUBPLAN SCAN             |VIEW2          |2       |11          |
+|8 |          └─NESTED-LOOP JOIN       |               |2       |11          |
 |9 |            ├─SUBPLAN SCAN         |VIEW4          |1       |5           |
 |10|            │ └─SCALAR GROUP BY    |               |1       |5           |
 |11|            │   └─SUBPLAN SCAN     |VIEW1          |1       |5           |
@@ -910,6 +910,68 @@ Outputs & filters:
       access([table100_bigint.col_decimal_20_0]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([table100_bigint.pk]), range(MIN ; MAX)always true
+Warnings:
+Warning	1292	Truncated incorrect DECIMAL value: 'for'
+Warning	1292	Truncated incorrect DECIMAL value: 'on'
+Warning	1292	Truncated incorrect DECIMAL value: 'got'
+Warning	1292	Truncated incorrect DECIMAL value: 'a'
+Warning	1292	Truncated incorrect DECIMAL value: 'tmbqlwenzgckc'
+Warning	1292	Truncated incorrect DECIMAL value: 'h'
+Warning	1292	Truncated incorrect DECIMAL value: 'otmbqlwenzgckcn'
+Warning	1292	Truncated incorrect DECIMAL value: 'kotm'
+Warning	1292	Truncated incorrect DECIMAL value: 'l'
+Warning	1292	Truncated incorrect DECIMAL value: 'l'
+Warning	1292	Truncated incorrect DECIMAL value: 'about'
+Warning	1292	Truncated incorrect DECIMAL value: 'd'
+Warning	1292	Truncated incorrect DECIMAL value: 'say'
+Warning	1292	Truncated incorrect DECIMAL value: 'up'
+Warning	1292	Truncated incorrect DECIMAL value: 'p'
+Warning	1292	Truncated incorrect DECIMAL value: 'skotmbqlwen'
+Warning	1292	Truncated incorrect DECIMAL value: 'fsko'
+Warning	1292	Truncated incorrect DECIMAL value: 'd'
+Warning	1292	Truncated incorrect DECIMAL value: 'on'
+Warning	1292	Truncated incorrect DECIMAL value: 'qfskotmbqlwenzgck'
+Warning	1292	Truncated incorrect DECIMAL value: 'h'
+Warning	1292	Truncated incorrect DECIMAL value: 'why'
+Warning	1292	Truncated incorrect DECIMAL value: 'xqfskotmbqlwenzgck'
+Warning	1292	Truncated incorrect DECIMAL value: 'qxqfskotmb'
+Warning	1292	Truncated incorrect DECIMAL value: 'd'
+Warning	1292	Truncated incorrect DECIMAL value: 'yqx'
+Warning	1292	Truncated incorrect DECIMAL value: 'back'
+Warning	1292	Truncated incorrect DECIMAL value: 'ayqxqfskotmbqlw'
+Warning	1292	Truncated incorrect DECIMAL value: 'was'
+Warning	1292	Truncated incorrect DECIMAL value: 'eayqxq'
+Warning	1292	Truncated incorrect DECIMAL value: 'we'
+Warning	1292	Truncated incorrect DECIMAL value: 'p'
+Warning	1292	Truncated incorrect DECIMAL value: 's'
+Warning	1292	Truncated incorrect DECIMAL value: 'oeayq'
+Warning	1292	Truncated incorrect DECIMAL value: 'don't'
+Warning	1292	Truncated incorrect DECIMAL value: 'of'
+Warning	1292	Truncated incorrect DECIMAL value: 'about'
+Warning	1292	Truncated incorrect DECIMAL value: 'r'
+Warning	1292	Truncated incorrect DECIMAL value: 's'
+Warning	1292	Truncated incorrect DECIMAL value: 'there'
+Warning	1292	Truncated incorrect DECIMAL value: 'coeayqxqfskotmbqlwen'
+Warning	1292	Truncated incorrect DECIMAL value: 'all'
+Warning	1292	Truncated incorrect DECIMAL value: 'gcoeayqxqfsko'
+Warning	1292	Truncated incorrect DECIMAL value: 'igcoeayqxqfsk'
+Warning	1292	Truncated incorrect DECIMAL value: 'd'
+Warning	1292	Truncated incorrect DECIMAL value: 'think'
+Warning	1292	Truncated incorrect DECIMAL value: 'wigcoeayqxqfsk'
+Warning	1292	Truncated incorrect DECIMAL value: 'twigcoeayqxqfskotmbq'
+Warning	1292	Truncated incorrect DECIMAL value: 'u'
+Warning	1292	Truncated incorrect DECIMAL value: 'q'
+Warning	1292	Truncated incorrect DECIMAL value: 'go'
+Warning	1292	Truncated incorrect DECIMAL value: 'v'
+Warning	1292	Truncated incorrect DECIMAL value: 'qtwigcoeayqxq'
+Warning	1292	Truncated incorrect DECIMAL value: 'tqtwigcoe'
+Warning	1292	Truncated incorrect DECIMAL value: 'at'
+Warning	1292	Truncated incorrect DECIMAL value: 'really'
+Warning	1292	Truncated incorrect DECIMAL value: 'd'
+Warning	1292	Truncated incorrect DECIMAL value: 'ltqtwig'
+Warning	1292	Truncated incorrect DECIMAL value: 'p'
+Warning	1292	Truncated incorrect DECIMAL value: 'on'
+Warning	1292	Truncated incorrect DECIMAL value: 'bltqtw'
 SELECT Sum(1) FROM table10_bigint WHERE pk NOT IN (SELECT pk FROM table2_bigint WHERE pk NOT IN (SELECT col_decimal_20_0 FROM table100_bigint WHERE (SELECT (SELECT Min(10) FROM table100_bigint WHERE col_char_20 > 0)) = col_decimal_20_0));
 +--------+
 | Sum(1) |
@@ -917,6 +979,9 @@ SELECT Sum(1) FROM table10_bigint WHERE pk NOT IN (SELECT pk FROM table2_bigint 
 |      8 |
 +--------+
 Warnings:
+Warning	1292	Truncated incorrect DECIMAL value: 'p'
+Warning	1292	Truncated incorrect DECIMAL value: 'on'
+Warning	1292	Truncated incorrect DECIMAL value: 'bltqtw'
 Warning	1292	Truncated incorrect DECIMAL value: 'for'
 Warning	1292	Truncated incorrect DECIMAL value: 'on'
 Warning	1292	Truncated incorrect DECIMAL value: 'got'
@@ -986,11 +1051,11 @@ Query Plan
 |0 |SUBPLAN FILTER                         |               |1       |22          |
 |1 |├─SUBPLAN SCAN                         |VIEW5          |1       |20          |
 |2 |│ └─SCALAR GROUP BY                    |               |1       |20          |
-|3 |│   └─MERGE ANTI JOIN                  |               |9       |20          |
+|3 |│   └─MERGE ANTI JOIN                  |               |9       |19          |
 |4 |│     ├─TABLE FULL SCAN                |table10_bigint |10      |3           |
-|5 |│     └─SORT                           |               |1       |17          |
-|6 |│       └─SUBPLAN SCAN                 |VIEW3          |1       |17          |
-|7 |│         └─HASH ANTI JOIN NA          |               |1       |17          |
+|5 |│     └─SORT                           |               |1       |16          |
+|6 |│       └─SUBPLAN SCAN                 |VIEW3          |1       |16          |
+|7 |│         └─HASH ANTI JOIN NA          |               |1       |16          |
 |8 |│           ├─TABLE FULL SCAN          |table2_bigint  |2       |3           |
 |9 |│           └─SUBPLAN SCAN             |VIEW2          |3       |14          |
 |10|│             └─NESTED-LOOP JOIN       |               |3       |14          |
@@ -1178,13 +1243,14 @@ Query Plan
 Outputs & filters:
 -------------------------------------
   0 - output([subquery(1)]), filter(nil), rowset=16
-      exec_params_([T_FUN_SUM(cast(t2.c1, DOUBLE(-1, -1)))(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
-  1 - output([T_FUN_SUM(cast(t2.c1, DOUBLE(-1, -1)))]), filter(nil), rowset=16
-      group(nil), agg_func([T_FUN_SUM(cast(t2.c1, DOUBLE(-1, -1)))])
-  2 - output([t2.c1]), filter(nil), rowset=16
+      exec_params_([T_FUN_SUM(T_FUN_SUM(cast(t2.c1, DOUBLE(-1, -1))))(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  1 - output([T_FUN_SUM(T_FUN_SUM(cast(t2.c1, DOUBLE(-1, -1))))]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_SUM(T_FUN_SUM(cast(t2.c1, DOUBLE(-1, -1))))])
+  2 - output([T_FUN_SUM(cast(t2.c1, DOUBLE(-1, -1)))]), filter(nil), rowset=16
       access([t2.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, 
-      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true, 
+      pushdown_aggregation([T_FUN_SUM(cast(t2.c1, DOUBLE(-1, -1)))])
   3 - output([T_FUN_SUM(:1)]), filter(nil), rowset=16
       group(nil), agg_func([T_FUN_SUM(:1)])
   4 - output([:1]), filter(nil), rowset=16
@@ -1449,13 +1515,13 @@ Query Plan
 ===========================================================
 |ID|OPERATOR             |NAME      |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------
-|0 |NESTED-LOOP JOIN     |          |1       |28          |
+|0 |NESTED-LOOP JOIN     |          |1       |25          |
 |1 |├─SUBPLAN SCAN       |v1        |1       |7           |
 |2 |│ └─SUBPLAN FILTER   |          |1       |7           |
 |3 |│   ├─TABLE FULL SCAN|t1        |1       |3           |
 |4 |│   ├─TABLE FULL SCAN|t3        |1       |3           |
 |5 |│   └─TABLE FULL SCAN|t3        |1       |3           |
-|6 |└─TABLE RANGE SCAN   |t2(idx_c1)|1       |20          |
+|6 |└─TABLE RANGE SCAN   |t2(idx_c1)|1       |18          |
 ===========================================================
 Outputs & filters:
 -------------------------------------

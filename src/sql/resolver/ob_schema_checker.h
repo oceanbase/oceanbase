@@ -462,11 +462,15 @@ public:
                             uint64_t database_id,
                             const common::ObString &object_name,
                             uint64_t &object_id);
+  int check_object_exists_by_name(const uint64_t tenant_id,
+                                     uint64_t database_id,
+                                     const common::ObString &object_name,
+                                     bool &exist,
+                                     bool &is_private_syn);
   int check_exist_same_name_object_with_synonym(const uint64_t tenant_id,
                                                 uint64_t database_id,
                                                 const common::ObString &object_name,
-                                                bool &exist,
-                                                bool &is_private_syn);
+                                                bool &exist);
   int get_object_type(const uint64_t tenant_id,
                       const common::ObString &database_name,
                       const common::ObString &table_name,
@@ -477,7 +481,8 @@ public:
                       bool explicit_db,
                       const common::ObString &prev_table_name,
                       ObSynonymChecker &synonym_checker,
-                      bool is_catalog = false);
+                      bool is_catalog = false,
+                      bool is_location = false);
   int get_object_type_with_view_info(common::ObIAllocator* allocator,
                                      void* param,
                                      const uint64_t tenant_id,
@@ -491,7 +496,8 @@ public:
                                      bool explicit_db,
                                      const common::ObString &prev_table_name,
                                      ObSynonymChecker &synonym_checker,
-                                     bool is_catalog = false);
+                                     bool is_catalog = false,
+                                     bool is_location = false);
   int check_access_to_obj(const uint64_t tenant_id,
                           const uint64_t user_id,
                           const uint64_t obj_id,
@@ -569,6 +575,10 @@ public:
   int get_directory_id(const uint64_t tenant_id,
                        const common::ObString &directory_name,
                        uint64_t &directory_id);
+  // location
+  int get_location_id(const uint64_t tenant_id,
+                      const common::ObString &location_name,
+                      uint64_t &location_id);
 int flatten_udt_attributes(const uint64_t tenant_id,
                            const uint64_t udt_id,
                            ObIAllocator &allocator,

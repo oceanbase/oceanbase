@@ -19,6 +19,7 @@
 #include "common/storage/ob_io_device.h"
 #include "share/redolog/ob_log_policy.h"
 #include "share/ob_io_device_helper.h"
+#include "share/ob_server_struct.h"
 #include "lib/ob_define.h"
 #include "lib/lock/ob_spin_lock.h"
 #include "lib/hash/ob_hashset.h"
@@ -77,7 +78,6 @@ public:
   // Write the buf to the head of a new file
   // Update file_id_, io_fd_ and max_file_id cache if success
   int delete_file(const int64_t file_id);
-  int get_total_disk_space(int64_t &total_space) const;
   int get_total_used_size(int64_t &using_space) const;
   int get_file_id_range(int64_t &min_file_id, int64_t &max_file_id);
 
@@ -92,6 +92,21 @@ private:
   int inner_close(const ObIOFd &io_fd);
   int inner_read(const ObIOFd &io_fd, void *buf, const int64_t size, const int64_t offset,
       int64_t &read_size, int64_t retry_cnt = ObLogDefinition::DEFAULT_IO_RETRY_CNT);
+  int inner_read_file(
+      const ObIOFd &io_fd,
+      const int64_t offset,
+      const int64_t size,
+      const int64_t retry_cnt,
+      void *buf,
+      int64_t &read_sz);
+#ifdef OB_BUILD_SHARED_STORAGE
+  int inner_read_object(
+      const int64_t offset,
+      const int64_t size,
+      const int64_t retry_cnt,
+      void *buf,
+      int64_t &read_sz);
+#endif
 
 public:
   // helper function
@@ -99,21 +114,14 @@ public:
       const char *log_dir, const int64_t file_id);
 private:
   // function with certain strategy
-  int normal_retry_write(void *buf, int64_t size, int64_t offset);
+  int normal_retry_write_file(void *buf, int64_t size, int64_t offset);
+  int normal_retry_write_object(
+      void *buf,
+      const int64_t size,
+      const int64_t offset);
   int do_open(const int flag, const int64_t file_id, ObIOFd &io_fd);
 
   void set_disk_warning(bool disk_warning);
-private:
-  class TmpFileCleaner : public common::ObBaseDirEntryOperator
-  {
-  public:
-    explicit TmpFileCleaner(const char* log_dir) : log_dir_(log_dir) {}
-    virtual ~TmpFileCleaner() = default;
-    virtual int func(const dirent *entry) override;
-  private:
-    bool is_tmp_filename(const char *filename) const;
-    const char* log_dir_;
-  };
 private:
   static constexpr int64_t SLEEP_TIME_US = 100 * 1000; // 100ms
   static constexpr int64_t LOG_INTERVAL_US = 10 * 1000 * 1000; // 10s
@@ -137,22 +145,7 @@ OB_INLINE void ObNormalRetryWriteParam::destroy()
 
 OB_INLINE bool ObLogFileHandler::is_opened() const
 {
-  return io_fd_.is_normal_file();
-}
-
-OB_INLINE int ObLogFileHandler::get_total_disk_space(int64_t &total_space) const
-{
-  return file_group_.get_total_disk_space(total_space);
-}
-
-OB_INLINE int ObLogFileHandler::get_total_used_size(int64_t &using_space) const
-{
-  return file_group_.get_total_used_size(using_space);
-}
-
-OB_INLINE int ObLogFileHandler::get_file_id_range(int64_t &min_file_id, int64_t &max_file_id)
-{
-  return file_group_.get_file_id_range(min_file_id, max_file_id);
+  return GCTX.is_shared_storage_mode() ? 0 < file_id_ < UINT32_MAX && file_id_ != OB_INVALID_FILE_ID : io_fd_.is_normal_file();
 }
 
 OB_INLINE bool ObLogFileHandler::is_valid_file_id(int64_t file_id)

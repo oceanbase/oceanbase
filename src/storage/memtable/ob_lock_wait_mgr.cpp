@@ -220,9 +220,6 @@ bool ObLockWaitMgr::post_process(bool need_retry, bool& need_wait)
     }
     if (need_retry) {
       if ((need_wait = node->need_wait())) {
-        // FIXME(xuwang.txw):create detector in check_timeout process
-        // below code must keep current order to fix concurrency bug
-        // more info see
         int tmp_ret = OB_SUCCESS;
         if (OB_LIKELY(ObDeadLockDetectorMgr::is_deadlock_enabled())) {
           ObTransID self_tx_id(node->tx_id_);

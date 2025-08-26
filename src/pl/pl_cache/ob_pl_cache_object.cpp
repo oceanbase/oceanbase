@@ -25,7 +25,7 @@ OB_SERIALIZE_MEMBER(ObPlParamInfo,
                     flag_,
                     scale_,
                     type_,
-                    ext_real_type_,
+                    ext_real_type_,  // FARM COMPAT WHITELIST
                     is_oracle_null_value_,  // FARM COMPAT WHITELIST
                     col_type_,
                     pl_type_,

@@ -410,9 +410,9 @@ public:
   int create_inc(ObLLVMValue &value1, ObLLVMValue &result);
   int create_dec(ObLLVMValue &value1, ObLLVMValue &result);
   int create_add(ObLLVMValue &value1, ObLLVMValue &value2, ObLLVMValue &result);
-  int create_add(ObLLVMValue &value1, int64_t &value2, ObLLVMValue &result);
+  int create_add(ObLLVMValue &value1, const int64_t &value2, ObLLVMValue &result);
   int create_sub(ObLLVMValue &value1, ObLLVMValue &value2, ObLLVMValue &result);
-  int create_sub(ObLLVMValue &value1, int64_t &value2, ObLLVMValue &result);
+  int create_sub(ObLLVMValue &value1, const int64_t &value2, ObLLVMValue &result);
   int create_ret(ObLLVMValue &value);
   int create_gep(const common::ObString &name, ObLLVMValue &value, common::ObIArray<int64_t> &idxs, ObLLVMValue &result);
   int create_gep(const common::ObString &name, ObLLVMValue &value, common::ObIArray<ObLLVMValue> &idxs, ObLLVMValue &result);

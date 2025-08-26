@@ -32,6 +32,7 @@ const int OBP_NOT_INIT = -4006;
 const int OBP_NOT_SUPPORTED = -4007;
 const int OBP_ITER_END = -4008;
 const int OBP_ALLOCATE_MEMORY_FAILED = -4013;
+const int OBP_ERR_UNEXPECTED = -4016;
 const int OBP_PLUGIN_ERROR = -11078;
 
 #ifdef __cplusplus

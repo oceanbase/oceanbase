@@ -186,7 +186,6 @@ struct ObLSStatusInfo
   }
 
   bool is_user_ls() const { return ls_id_.is_user_ls(); }
-
   uint64_t tenant_id_;
   ObLSID ls_id_;
   uint64_t ls_group_id_;
@@ -278,7 +277,7 @@ public:
   virtual int create_new_ls(const ObLSStatusInfo &ls_info,
                             const SCN &current_tenant_scn,
                             const common::ObString &zone_priority,
-                            const share::ObTenantSwitchoverStatus &working_sw_status,
+                            const int64_t switchover_epoch,
                             ObMySQLTransaction &trans) override;
   /*
    * description: override of ObLSLifeIAgent
@@ -342,7 +341,7 @@ public:
    * @param[in] client*/
   int update_init_member_list(const uint64_t tenant_id, const ObLSID &id,
                               const ObMemberList &member_list,
-                              ObISQLClient &client,
+                              ObMySQLTransaction &trans,
                               const ObMember &arb_member,
                               const common::GlobalLearnerList &learner_list);
    /*
@@ -425,6 +424,9 @@ public:
    */
   int get_all_ls_status_by_order_for_switch_tenant(const uint64_t tenant_id,
                                  const bool ignore_need_create_abort,
+                                 ObLSStatusInfoIArray &ls_array,
+                                 ObISQLClient &client);
+  int get_all_ls_status_by_order_for_flashback_log(const uint64_t tenant_id,
                                  ObLSStatusInfoIArray &ls_array,
                                  ObISQLClient &client);
   int get_ls_init_member_list(const uint64_t tenant_id, const ObLSID &id,
@@ -584,6 +586,11 @@ private:
       const common::ObIArray<ObAddr> &to_stop_servers,
       common::ObIArray<ObAddr> &valid_servers);
   int construct_ls_leader_info_sql_(common::ObSqlString &sql);
+  int update_init_member_list_(const uint64_t tenant_id, const ObLSID &id,
+    const ObMemberList &member_list,
+    ObISQLClient &client,
+    const ObMember &arb_member,
+    const common::GlobalLearnerList &learner_list);
 
 private:
   const int64_t MAX_ERROR_LOG_PRINT_SIZE = 1024;

@@ -1294,7 +1294,7 @@ int ObExpr::eval_vector(ObEvalCtx &ctx,
         *rt_skip, evaluated_vec, BATCH_SIZE(),
         [](const uint64_t l, const uint64_t r) { return ~(l | r); });
   }
-  LOG_DEBUG("need evaluate", K(need_evaluate));
+  LOG_DEBUG("need evaluate", K(need_evaluate), KP(this));
   if (OB_SUCC(ret) && need_evaluate) {
     if (OB_UNLIKELY(need_stack_check_) && OB_FAIL(check_stack_overflow())) {
       SQL_LOG(WARN, "failed to check stack overflow", K(ret));
@@ -1465,6 +1465,9 @@ int eval_assign_question_mark_func(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
         res_acc.scale_ = expr.datum_meta_.scale_;
         res_acc.precision_ = expr.datum_meta_.precision_;
         cast_ctx.res_accuracy_ = &res_acc;
+      }
+      if (ob_is_string_tc(dst_meta.get_type())) {
+        cast_ctx.dest_max_length_ = expr.max_length_;
       }
       if (dst_meta.is_collection_sql_type()) {
         dst_obj.meta_.set_meta(dst_meta);

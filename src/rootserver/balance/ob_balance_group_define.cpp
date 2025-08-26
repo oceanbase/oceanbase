@@ -23,8 +23,12 @@ using namespace share::schema;
 namespace rootserver
 {
 
+const ObBalanceGroupID ObBalanceGroupID::NON_PART_BG_ID = ObBalanceGroupID(0, 0);
+const ObBalanceGroupID ObBalanceGroupID::DUP_TABLE_BG_ID = ObBalanceGroupID(0, 1);
+const ObBalanceGroupID ObBalanceGroupID::SHARDING_NONE_TABLEGROUP_BG_ID = ObBalanceGroupID(0, 2);
 const char* ObBalanceGroup::NON_PART_BG_NAME = "NON_PART_TABLE";
 const char* ObBalanceGroup::DUP_TABLE_BG_NAME = "DUP_TABLE";
+const char* ObBalanceGroup::SHARDING_NONE_TABLEGROUP_BG_NAME = "SHARDING_NONE_TABLEGROUP";
 
 int ObBalanceGroup::init_by_tablegroup(const ObSimpleTablegroupSchema &tg,
     const int64_t max_part_level,
@@ -34,10 +38,15 @@ int ObBalanceGroup::init_by_tablegroup(const ObSimpleTablegroupSchema &tg,
   ObSqlString bg_name_str;
   const ObString &tg_name = tg.get_tablegroup_name();
 
-  if (tg.is_sharding_none()
-      || tg.is_sharding_partition()
+  if (tg.is_sharding_none()) {
+    if (OB_FAIL(bg_name_str.append_fmt("%s", SHARDING_NONE_TABLEGROUP_BG_NAME))) {
+      LOG_WARN("fail to append fmt", KR(ret), K(tg));
+    } else {
+      id_ = ObBalanceGroupID::SHARDING_NONE_TABLEGROUP_BG_ID;
+    }
+  } else if (tg.is_sharding_partition()
       || (tg.is_sharding_adaptive()
-      && (PARTITION_LEVEL_ZERO == max_part_level || PARTITION_LEVEL_ONE == max_part_level))) {
+          && (PARTITION_LEVEL_ZERO == max_part_level || PARTITION_LEVEL_ONE == max_part_level))) {
     // Table Group is a independent balance group
     if (OB_FAIL(bg_name_str.append_fmt("TABLEGROUP_%s", tg_name.ptr()))) {
       LOG_WARN("fail to append fmt", KR(ret), K(tg));
@@ -87,14 +96,14 @@ int ObBalanceGroup::init_by_table(const ObSimpleTableSchemaV2 &table_schema,
     if (OB_FAIL(bg_name_str.append_fmt("%s", DUP_TABLE_BG_NAME))) {
       LOG_WARN("assign failed", KR(ret), K(table_schema));
     } else {
-      id_ = DUP_TABLE_BG_ID;
+      id_ = ObBalanceGroupID::DUP_TABLE_BG_ID;
     }
   } else if (PARTITION_LEVEL_ZERO == part_level) {
     // All tenant's non-partition table is a balance group
     if (OB_FAIL(bg_name_str.append_fmt("%s", NON_PART_BG_NAME))) {
       LOG_WARN("fail to append fmt", KR(ret), K(table_schema));
     } else {
-      id_ = NON_PART_BG_ID;
+      id_ = ObBalanceGroupID::NON_PART_BG_ID;
     }
   } else if (PARTITION_LEVEL_ONE == part_level) {
     // Level one partition table is a single balance group
@@ -119,6 +128,58 @@ int ObBalanceGroup::init_by_table(const ObSimpleTableSchemaV2 &table_schema,
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(name_.assign(bg_name_str.ptr()))) {
     LOG_WARN("fail to assign bg name", KR(ret), K(bg_name_str));
+  }
+  return ret;
+}
+
+int ObPartGroupInfo::init(
+    const uint64_t part_group_uid,
+    const uint64_t bg_unit_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_id(part_group_uid) || !is_valid_id(bg_unit_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(part_group_uid), K(bg_unit_id));
+  } else if (OB_UNLIKELY(is_valid())) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("init twice", KR(ret), K(part_group_uid), K(bg_unit_id), KPC(this));
+  } else {
+    part_group_uid_ = part_group_uid;
+    bg_unit_id_ = bg_unit_id;
+  }
+  return ret;
+}
+
+int ObPartGroupInfo::add_part(
+    const ObTransferPartInfo &part,
+    const int64_t data_size,
+    const int64_t balance_weight)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!part.is_valid()
+      || data_size < 0
+      || balance_weight < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(part), K(data_size), K(balance_weight));
+  } else if (OB_FAIL(part_list_.push_back(part))) {
+    LOG_WARN("push back part into part info fail", KR(ret), K(part), K(part_list_));
+  } else {
+    data_size_ += data_size;
+    weight_ += balance_weight;
+  }
+  return ret;
+}
+
+int ObPartGroupInfo::assign(const ObPartGroupInfo &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(part_list_.assign(other.part_list_))) {
+    LOG_WARN("assign failed", KR(ret), K(other));
+  } else {
+    part_group_uid_ = other.part_group_uid_;
+    bg_unit_id_ = other.bg_unit_id_;
+    data_size_ = other.data_size_;
+    weight_ = other.weight_;
   }
   return ret;
 }

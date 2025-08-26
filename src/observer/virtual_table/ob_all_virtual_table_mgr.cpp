@@ -12,6 +12,7 @@
 
 #include "observer/virtual_table/ob_all_virtual_table_mgr.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "storage/ddl/ob_tablet_ddl_kv.h"
 
 using namespace oceanbase;
 using namespace common;
@@ -317,7 +318,15 @@ int ObAllVirtualTableMgr::process_curr_tenant(common::ObNewRow *&row)
             if (OB_FAIL(static_cast<blocksstable::ObSSTable *>(table)->get_meta(sst_meta_hdl))) {
               SERVER_LOG(WARN, "fail to get sstable meta handle", K(ret));
             } else {
-               flag = sst_meta_hdl.get_sstable_meta().get_table_shared_flag().get_flag();
+#ifdef OB_BUILD_SHARED_STORAGE
+              if (!GCTX.is_shared_storage_mode()) {
+                flag = sst_meta_hdl.get_sstable_meta().get_table_backup_flag().get_flag();
+              } else {
+                flag = sst_meta_hdl.get_sstable_meta().get_table_shared_flag().get_flag();
+              }
+#else
+              flag = sst_meta_hdl.get_sstable_meta().get_table_backup_flag().get_flag();
+#endif
             }
           }
           cur_row_.cells_[i].set_int(flag);
@@ -328,10 +337,14 @@ int ObAllVirtualTableMgr::process_curr_tenant(common::ObNewRow *&row)
           cur_row_.cells_[i].set_int(v);
           break;
         }
-        // FIXME: the value of SS_TABLET_VERSION is invalid
-        case SS_TABLET_VERSION: {
-          uint64_t v = share::SCN::min_scn().get_val_for_inner_table_field();
-          cur_row_.cells_[i].set_uint64(v);
+        case ROW_COUNT: {
+          int64_t row_count = -1;
+          if (table->is_sstable()) {
+            row_count = static_cast<blocksstable::ObSSTable *>(table)->get_row_count();
+          } else if (table->is_data_memtable()) {
+            row_count = static_cast<memtable::ObMemtable *>(table)->get_physical_row_cnt();
+          }
+          cur_row_.cells_[i].set_int(row_count);
           break;
         }
         default:

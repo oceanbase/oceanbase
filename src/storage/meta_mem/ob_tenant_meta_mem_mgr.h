@@ -71,6 +71,7 @@ class ObTxDataMemtable;
 class ObTxCtxMemtable;
 class ObLSMemberMemtable;
 class ObTabletCreateDeleteMdsUserData;
+struct ObTabletStorageParam;
 
 enum class ObTabletPoolType : uint8_t
 {
@@ -173,6 +174,11 @@ public:
     }
     return ret;
   }
+  int choose_tablet_pool_type(
+      const bool is_user_tablet,
+      const int64_t must_cache_size,
+      const int64_t try_cache_size,
+      ObTabletPoolType &type);
 
 private:
   static const int64_t DEFAULT_TABLET_CNT_PER_GB = 20000;
@@ -191,7 +197,7 @@ public:
   void destroy();
   int print_old_chain(
       const ObTabletMapKey &key,
-      const ObTabletBasePointer &tablet_ptr,
+      const ObTabletPointer &tablet_ptr,
       const int64_t buf_len,
       char *buf);
   // TIPS:
@@ -328,7 +334,16 @@ public:
   int init_memtablet_mgr_for_inner_tablet(
       const ObTabletMapKey &key,
       const lib::Worker::CompatMode compat_mode);
-
+#ifdef OB_BUILD_SHARED_STORAGE
+  int get_oldest_ss_change_version(
+      const ObLSID &ls_id,
+      const ObTabletID &tablet_id,
+      const ObTabletPointerHandle &tablet_ptr_handle,
+      SCN &min_ss_change_version);
+  int advance_notify_ss_change_version(
+      const ObTabletMapKey &key,
+      const share::SCN &change_version);
+#endif
 public:
   class ObT3MResourceLimitCalculatorHandler final : public share::ObIResourceLimitCalculatorHandler
   {
@@ -684,6 +699,16 @@ public:
       ObTabletMapKey &key,
       ObTabletPointerHandle &pointer_handle,
       ObTabletHandle &in_memory_tablet_handle) override;
+};
+
+class ObT3mTabletStorageParamIterator final : public ObT3mTabletMapIterator
+{
+public:
+  explicit ObT3mTabletStorageParamIterator(ObTenantMetaMemMgr &t3m);
+
+  ~ObT3mTabletStorageParamIterator() = default;
+
+  int get_next(ObTabletStorageParam &param);
 };
 
 template <typename T>

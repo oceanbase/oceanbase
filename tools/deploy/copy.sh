@@ -70,7 +70,6 @@ then
   do_install "$SOURCE_DIR/tools/timezone*.data" $ETC_DIR
   do_install $SOURCE_DIR/deps/oblib/src/lib/profile/obperf $TOOL_DIR/ true
   do_install $SOURCE_DIR/deps/3rd/home/admin/oceanbase/bin/obshell $BIN_DIR/obshell true
-  do_install $SOURCE_DIR/tools/timezone*.data $ETC_DIR true
   do_install "$SOURCE_DIR/tools/spatial_reference_systems.data" $ETC_DIR
 
 

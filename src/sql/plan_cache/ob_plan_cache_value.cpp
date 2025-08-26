@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_PC
 #include "ob_plan_cache_value.h"
+#include "sql/ob_sql.h"
 #include "sql/resolver/ob_resolver_utils.h"
 #include "sql/plan_cache/ob_pcv_set.h"
 #include "sql/udr/ob_udr_mgr.h"
@@ -1206,7 +1207,7 @@ int ObPlanCacheValue::get_one_group_params(int64_t pos, const ParamStore &src_pa
     } else if (array_obj->count_ <= pos) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid parameters pos", K(ret), K(i), K(pos), K(objparam));
-    } else if (OB_FAIL(dst_params.push_back(array_obj->data_[pos]))) {
+    } else if (OB_FAIL(ObSql::add_param_to_param_store(array_obj->data_[pos], dst_params))) {
       LOG_WARN("fail to push param_obj to param_store", K(i), K(pos), K(array_obj->data_[pos]), K(ret));
     } else {
       LOG_TRACE("get one batch obj", K(pos), K(i), K(array_obj->data_[pos]));
@@ -2035,16 +2036,21 @@ int ObPlanCacheValue::get_all_dep_schema(ObPlanCacheCtx &pc_ctx,
           tenant_id = get_tenant_id_by_object_id(stored_schema_objs_.at(i)->schema_id_);
         } else if (SYNONYM_SCHEMA == pcv_schema->schema_type_) {
           const ObSimpleSynonymSchema *synonym_schema = nullptr;
-          const ObSimpleTableSchemaV2 *sn_table_schema = nullptr; // table with the same name
           uint64_t synonym_database_id =
             OB_PUBLIC_SCHEMA_ID == pcv_schema->database_id_ ? database_id : pcv_schema->database_id_;
-          if (OB_FAIL(schema_guard.get_simple_table_schema(
-                tenant_id, synonym_database_id, pcv_schema->table_name_, false, sn_table_schema))) {
-            LOG_WARN("failed to get table schema", K(pcv_schema->schema_id_), K(ret));
-          } else if (nullptr != sn_table_schema) {
+          ObSchemaChecker schema_checker;
+          OZ (schema_checker.init(schema_guard));
+          bool exist = false;
+          bool is_private_syn = false;
+          OZ (schema_checker.check_exist_same_name_object_with_synonym(tenant_id,
+                                                                        synonym_database_id,
+                                                                        pcv_schema->table_name_,
+                                                                        exist));
+          if (OB_FAIL(ret)) {
+          } else if (exist) {
             ret = OB_OLD_SCHEMA_VERSION;
-            LOG_INFO("a table with the same name exists. regenerate the plan", K(ret),
-                     K(synonym_database_id), K(pcv_schema->table_name_));
+            LOG_INFO("exist object which name as current synonym", K(ret), K(synonym_database_id),
+              K(pcv_schema->table_name_));
           } else if (OB_FAIL(schema_guard.get_synonym_info(
                        tenant_id, synonym_database_id, pcv_schema->table_name_, synonym_schema))) {
             LOG_WARN("failed to get private synonym", K(ret));

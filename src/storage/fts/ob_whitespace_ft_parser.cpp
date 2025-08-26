@@ -161,25 +161,28 @@ int ObWhiteSpaceFTParserDesc::segment(
     ObITokenIterator *&iter) const
 {
   int ret = OB_SUCCESS;
-  void *buf = nullptr;
+  ObSpaceFTParser *parser = nullptr;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("default ft parser desc hasn't be initialized", K(ret), K(is_inited_));
   } else if (OB_ISNULL(param) || OB_ISNULL(param->fulltext_) || OB_UNLIKELY(!param->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KPC(param));
-  } else if (OB_ISNULL(buf = param->allocator_->alloc(sizeof(ObSpaceFTParser)))) {
+  } else if (OB_ISNULL(parser = OB_NEWx(ObSpaceFTParser, param->allocator_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate space ft parser", K(ret));
   } else {
-    ObSpaceFTParser *parser = new (buf) ObSpaceFTParser();
     if (OB_FAIL(parser->init(param))) {
       LOG_WARN("fail to init whitespace fulltext parser", K(ret), KPC(param));
-      param->allocator_->free(parser);
     } else {
       iter = parser;
     }
   }
+
+  if (OB_FAIL(ret)) {
+    OB_DELETEx(ObSpaceFTParser, param->allocator_, parser);
+  }
+
   return ret;
 }
 

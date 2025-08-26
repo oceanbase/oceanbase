@@ -28,6 +28,8 @@
 #include "share/object_storage/ob_device_connectivity.h"
 #include "storage/shared_storage/ob_ss_format_util.h"
 #endif
+#include "share/inner_table/ob_load_inner_table_schema.h"
+#include "rootserver/ob_load_inner_table_schema_executor.h"
 
 namespace oceanbase
 {
@@ -119,6 +121,12 @@ int ObBaseBootstrap::check_bootstrap_rs_list(
   if (rs_list.count() <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("rs_list size must larger than 0", K(ret));
+#ifdef OB_ENABLE_STANDALONE_LAUNCH
+  } else if (rs_list.count() != 1) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("in standalone mode, bootstrap with more than server is not allowed", KR(ret), K(rs_list));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "bootstrap more than one server in standalone mode");
+#endif
   } else if (OB_FAIL(check_multiple_zone_deployment_rslist(rs_list))) {
     LOG_WARN("fail to check multiple zone deployment rslist", K(ret));
 #ifdef OB_BUILD_SHARED_STORAGE
@@ -222,6 +230,7 @@ int ObPreBootstrap::prepare_bootstrap(ObAddr &master_rs)
   bool is_empty = false;
   bool match = false;
   LOG_DBA_INFO_V2(OB_BOOTSTRAP_PREPARE_BEGIN, "bootstrap prepare begin.");
+  common::ObArray<share::ObUnit> unit_array;
   begin_ts_ = ObTimeUtility::current_time();
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("check_inner_stat failed", KR(ret));
@@ -253,10 +262,14 @@ int ObPreBootstrap::prepare_bootstrap(ObAddr &master_rs)
     LOG_WARN("fail to notify sys tenant server unit resource", KR(ret));
   } else if (OB_FAIL(notify_sys_tenant_config_())) {
     LOG_WARN("fail to notify sys tenant config", KR(ret));
-  } else if (OB_FAIL(create_ls())) {
-    LOG_WARN("failed to create core table partition", KR(ret));
-  } else if (OB_FAIL(wait_elect_ls(master_rs))) {
-    LOG_WARN("failed to wait elect master partition", KR(ret));
+  } else if (OB_FAIL(gen_sys_units(unit_array))) {
+    LOG_WARN("fail to gen sys unit array", KR(ret));
+  } else if (GCTX.is_shared_storage_mode() && OB_FAIL(create_sslog_ls_(unit_array))) {
+    LOG_WARN("failed to sslog ls", KR(ret));
+  } else if (OB_FAIL(create_sys_ls(SYS_LS, unit_array))) {
+    LOG_WARN("failed to sys ls", KR(ret));
+  } else if (OB_FAIL(wait_elect_ls(SYS_LS, master_rs))) {
+    LOG_WARN("failed to wait elect leader", KR(ret));
   }
   BOOTSTRAP_CHECK_SUCCESS();
   if (OB_FAIL(ret)) {
@@ -268,32 +281,43 @@ int ObPreBootstrap::prepare_bootstrap(ObAddr &master_rs)
   return ret;
 }
 
+int ObPreBootstrap::create_sslog_ls_(
+    const common::ObArray<share::ObUnit> &unit_array)
+{
+  int ret = OB_SUCCESS;
+  ObAddr sslog_leader; // not used
+  if (OB_FAIL(create_sys_ls(SSLOG_LS, unit_array))) {
+    LOG_WARN("failed to sslog ls", KR(ret));
+  } else if (OB_FAIL(wait_elect_ls(SSLOG_LS, sslog_leader))) {
+    LOG_WARN("failed to wait elect leader", KR(ret));
+  } else if (OB_FAIL(ObRootUtils::create_sslog_tablet(OB_SYS_TENANT_ID))) {
+    LOG_WARN("failed to create sslog tablet", KR(ret));
+  }
+  return ret;
+}
+
+
 #ifdef OB_BUILD_SHARED_LOG_SERVICE
 int ObPreBootstrap::check_and_notify_logservice_access_point()
 {
   int ret = OB_SUCCESS;
   const ObString &logservice_access_point = arg_.logservice_access_point_;
-  if (!GCONF.enable_logservice) {
-    // do nothing
+  if (!GCONF.enable_logservice) { // do nothing
   } else if (logservice_access_point.empty()) {
-    // TODO by qingxia: close this fast way before release
-    // ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("logservice_access_point is empty with enable_logservice", KR(ret), K(arg_));
-  } else if (!GCONF.logservice_access_point.set_value(logservice_access_point)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("logservice storage info too long!", KR(ret), K(logservice_access_point));
+    LOG_WARN("logservice_access_point is empty with enable_logservice", KR(ret), K(arg_));
   } else {
     // Notify rs_list nodes with logservice access point
     ObNotifyLogServiceAccessPointArg rpc_arg;
     ObNotifyLogServiceAccessPointResult rpc_result;
     for (int64_t i = 0; OB_SUCC(ret) && i < rs_list_.count(); i++) {
       if (OB_FAIL(rpc_arg.init(logservice_access_point))) {
-        LOG_WARN("fail to init rpc_arg", KR(ret), K(logservice_access_point));
+        LOG_WARN("fail to init rpc_arg", KR(ret));
       } else if (OB_FAIL(rpc_proxy_.to(rs_list_[i].server_)
                                     .notify_logservice_access_point(rpc_arg, rpc_result))) {
-        LOG_WARN("fail to send rpc notify_logservice_access_point", KR(ret), K(rpc_arg), K(rs_list_[i].server_));
+        LOG_WARN("fail to send rpc notify_logservice_access_point", KR(ret), K(rs_list_[i].server_));
       } else if (OB_FAIL(rpc_result.get_ret())) {
-        LOG_WARN("notify_logservice_access_point via rpc failed", KR(ret), K(rpc_arg), K(rs_list_[i].server_));
+        LOG_WARN("notify_logservice_access_point via rpc failed", KR(ret), K(rs_list_[i].server_));
       }
     }
   }
@@ -416,6 +440,10 @@ int ObPreBootstrap::notify_sys_tenant_server_unit_resource()
   common::ObArray<uint64_t> sys_unit_id_array;
   const bool is_hidden_sys = false;
 
+#ifdef OB_BUILD_TDE_SECURITY
+  obrpc::ObRootKeyResult root_key_result;
+#endif
+
   if (OB_FAIL(unit_config.gen_sys_tenant_unit_config(is_hidden_sys))) {
     LOG_WARN("gen sys tenant unit config fail", KR(ret), K(is_hidden_sys));
   } else if (OB_FAIL(gen_sys_unit_ids(sys_unit_id_array))) {
@@ -424,6 +452,12 @@ int ObPreBootstrap::notify_sys_tenant_server_unit_resource()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sys unit id array and rs list count not match", KR(ret),
              "unit_id_array_cnt", sys_unit_id_array.count(), "rs_list_cnt", rs_list_.count());
+#ifdef OB_BUILD_TDE_SECURITY
+  } else if (OB_FAIL(ObMasterKeyGetter::instance().get_root_key(OB_SYS_TENANT_ID,
+                                                                root_key_result.key_type_,
+                                                                root_key_result.root_key_))) {
+    LOG_WARN("failed to get sys tenant root key", K(ret));
+#endif
   } else {
     ObNotifyTenantServerResourceProxy notify_proxy(
                                       rpc_proxy_,
@@ -443,7 +477,7 @@ int ObPreBootstrap::notify_sys_tenant_server_unit_resource()
               false/*if not grant*/,
               false/*is_delete*/
 #ifdef OB_BUILD_TDE_SECURITY
-              , obrpc::ObRootKeyResult()/*invalid root_key*/
+              , root_key_result
 #endif
               ))) {
         LOG_WARN("fail to init tenant unit server config", KR(ret));
@@ -493,34 +527,39 @@ int ObPreBootstrap::notify_sys_tenant_config_()
   return ret;
 }
 
-int ObPreBootstrap::create_ls()
+int ObPreBootstrap::create_sys_ls(
+    const ObLSID &ls_id,
+    const common::ObArray<share::ObUnit> &unit_array)
 {
   int ret = OB_SUCCESS;
+  LOG_INFO("start create sys tenant LS", K(ls_id));
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_UNLIKELY(!ls_id.is_valid_with_tenant(OB_SYS_TENANT_ID))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(ls_id));
   } else {
-    common::ObArray<share::ObUnit> unit_array;
-    ObLSCreator ls_creator(rpc_proxy_, OB_SYS_TENANT_ID, SYS_LS);
-    if (OB_FAIL(gen_sys_units(unit_array))) {
-      LOG_WARN("fail to gen sys unit array", KR(ret));
-    } else if (OB_FAIL(ls_creator.create_sys_tenant_ls(
+    ObLSCreator ls_creator(rpc_proxy_, OB_SYS_TENANT_ID, ls_id);
+    if (OB_FAIL(ls_creator.create_sys_tenant_ls(
             rs_list_, unit_array))) {
       LOG_WARN("fail to create sys log stream", KR(ret));
     }
   }
   if (OB_SUCC(ret)) {
-    LOG_INFO("succeed to create ls");
+    LOG_INFO("succeed to create ls", K(ls_id));
   } else {
-    LOG_WARN("create ls failed.", K(ret));
+    LOG_WARN("create ls failed", KR(ret), K(ls_id));
   }
   BOOTSTRAP_CHECK_SUCCESS();
   return ret;
 }
 
 int ObPreBootstrap::wait_elect_ls(
+    const ObLSID &ls_id,
     common::ObAddr &master_rs)
 {
   int ret = OB_SUCCESS;
+  LOG_INFO("start LS election", K(ls_id));
   const uint64_t tenant_id = OB_SYS_TENANT_ID;
 
   int64_t timeout = WAIT_ELECT_SYS_LEADER_TIMEOUT_US;
@@ -530,13 +569,23 @@ int ObPreBootstrap::wait_elect_ls(
 
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("check_inner_stat failed", K(ret));
+  } else if (OB_UNLIKELY(!ls_id.is_valid_with_tenant(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(ls_id));
+#ifdef OB_ENABLE_STANDALONE_LAUNCH
+  } else if (!ls_id.is_sys_ls()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("standalone deployment enabled while sys tenant wait non sys ls", KR(ret), K(ls_id));
+  } else if (FALSE_IT(master_rs = GCTX.self_addr())) {
+#else
   } else if (OB_FAIL(ls_leader_waiter_.wait(
-      tenant_id, SYS_LS, timeout, master_rs))) {
-    LOG_WARN("leader_waiter_ wait failed", K(tenant_id), K(SYS_LS), K(timeout), K(ret));
+      tenant_id, ls_id, timeout, master_rs))) {
+    LOG_WARN("leader_waiter_ wait failed", KR(ret), K(tenant_id), K(ls_id), K(timeout));
+#endif
   }
   if (OB_SUCC(ret)) {
     ObTaskController::get().allow_next_syslog();
-    LOG_INFO("succeed to wait elect log stream");
+    LOG_INFO("succeed to wait elect log stream", K(ls_id));
   }
   BOOTSTRAP_CHECK_SUCCESS();
   return ret;
@@ -552,7 +601,7 @@ int ObPreBootstrap::check_all_server_bootstrap_mode_match(
   ObCheckDeploymentModeArg arg;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("fail to check inner stat", K(ret));
-  } else if (OB_FAIL(arg.init(GCTX.startup_mode_))) {
+  } else if (OB_FAIL(arg.init(GCTX.startup_mode_, GCONF.enable_logservice))) {
     LOG_WARN("fail to init arg", KR(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && match && i < rs_list_.count(); ++i) {
@@ -696,7 +745,11 @@ int ObBootstrap::execute_bootstrap(rootserver::ObServerZoneOpService &server_zon
     LOG_WARN("construct all schema fail", K(ret));
   } else if (OB_FAIL(create_all_partitions())) {
     LOG_WARN("create all partitions fail", K(ret));
-  } else if (OB_FAIL(create_all_schema(ddl_service_, table_schemas))) {
+  } else if (GCONF._enable_parallel_tenant_creation &&
+      OB_FAIL(load_all_schema(ddl_service_, table_schemas))) {
+    LOG_WARN("load_all_schema failed",  K(table_schemas), K(ret));
+  } else if (!GCONF._enable_parallel_tenant_creation &&
+      OB_FAIL(create_all_schema(ddl_service_, table_schemas))) {
     LOG_WARN("create_all_schema failed",  K(table_schemas), K(ret));
   }
   BOOTSTRAP_CHECK_SUCCESS_V2("create_all_schema");
@@ -736,6 +789,40 @@ int ObBootstrap::execute_bootstrap(rootserver::ObServerZoneOpService &server_zon
   }
   ROOTSERVICE_EVENT_ADD("bootstrap", "bootstrap_succeed");
   BOOTSTRAP_CHECK_SUCCESS();
+  return ret;
+}
+
+int ObBootstrap::load_all_schema(
+    ObDDLService &ddl_service,
+    common::ObIArray<share::schema::ObTableSchema> &table_schemas)
+{
+  int ret = OB_SUCCESS;
+  const int64_t begin_time = ObTimeUtility::current_time();
+  LOG_INFO("start load all schemas", "table count", table_schemas.count());
+  LOG_DBA_INFO_V2(OB_BOOTSTRAP_CREATE_ALL_SCHEMA_BEGIN,
+                  DBA_STEP_INC_INFO(bootstrap),
+                  "bootstrap create all schema begin.");
+  ObLoadInnerTableSchemaExecutor executor;
+  if (OB_FAIL(executor.init(table_schemas, OB_SYS_TENANT_ID,
+          GCONF.get_sys_tenant_default_max_cpu(), &rpc_proxy_))) {
+    LOG_WARN("failed to init executor", KR(ret));
+  } else if (OB_FAIL(executor.execute())) {
+    LOG_WARN("failed to execute load all schema", KR(ret));
+  } else if (OB_FAIL(ObLoadInnerTableSchemaExecutor::load_core_schema_version(
+          OB_SYS_TENANT_ID, ddl_service.get_sql_proxy()))) {
+      LOG_WARN("failed to load core schema version", KR(ret));
+  }
+  LOG_INFO("finish load all schemas", KR(ret), "cost", ObTimeUtility::current_time() - begin_time);
+  if (OB_FAIL(ret)) {
+    LOG_DBA_ERROR_V2(OB_BOOTSTRAP_CREATE_ALL_SCHEMA_FAIL, ret,
+                     DBA_STEP_INC_INFO(bootstrap),
+                     "bootstrap create all schema fail. "
+                     "you may find solutions in previous error logs or seek help from official technicians.");
+  } else {
+    LOG_DBA_INFO_V2(OB_BOOTSTRAP_CREATE_ALL_SCHEMA_SUCCESS,
+                    DBA_STEP_INC_INFO(bootstrap),
+                    "bootstrap create all schema success.");
+  }
   return ret;
 }
 
@@ -1255,7 +1342,7 @@ int ObBootstrap::init_global_stat()
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("check_inner_stat failed", KR(ret));
   } else {
-    const int64_t baseline_schema_version = -1;
+    const int64_t baseline_schema_version = OB_INVALID_VERSION; // OB_INVALID_VERSION == -1
     const int64_t rootservice_epoch = 0;
     const SCN snapshot_gc_scn = SCN::min_scn();
     const int64_t snapshot_gc_timestamp = 0;
@@ -1442,16 +1529,25 @@ int ObBootstrap::insert_sys_ls_(const share::schema::ObTenantSchema &tenant_sche
 
   if (OB_SUCC(ret)) {
     ObLSLifeAgentManager life_agent(ddl_service_.get_sql_proxy());
-    share::ObLSStatusInfo status_info;
     const uint64_t unit_group_id = 0;
     const uint64_t ls_group_id = 0;
-    share::ObLSFlag flag(share::ObLSFlag::NORMAL_FLAG);
-    if (OB_FAIL(status_info.init(OB_SYS_TENANT_ID, SYS_LS, ls_group_id,
-            share::OB_LS_NORMAL, unit_group_id, primary_zone, flag))) {
-      LOG_WARN("failed to init ls info", KR(ret), K(primary_zone), K(flag));
-    } else if (OB_FAIL(life_agent.create_new_ls(status_info, SCN::base_scn(), primary_zone_str.string(),
-                                                share::NORMAL_SWITCHOVER_STATUS))) {
-      LOG_WARN("failed to get init member list", KR(ret), K(status_info), K(primary_zone_str));
+    share::ObLSStatusInfo sslog_status_info;
+    share::ObLSStatusInfo sys_status_info;
+    share::ObLSFlag sslog_flag(share::ObLSFlag::DUPLICATE_FLAG);
+    share::ObLSFlag sys_flag(share::ObLSFlag::NORMAL_FLAG);
+    if (OB_FAIL(sslog_status_info.init(OB_SYS_TENANT_ID, SSLOG_LS, ls_group_id,
+            share::OB_LS_NORMAL, unit_group_id, primary_zone, sslog_flag))) {
+      LOG_WARN("failed to init ls info", KR(ret), K(primary_zone), K(sslog_flag));
+    } else if (OB_FAIL(sys_status_info.init(OB_SYS_TENANT_ID, SYS_LS, ls_group_id,
+            share::OB_LS_NORMAL, unit_group_id, primary_zone, sys_flag))) {
+      LOG_WARN("failed to init ls info", KR(ret), K(primary_zone), K(sys_flag));
+    } else if (GCTX.is_shared_storage_mode()
+            && OB_FAIL(life_agent.create_new_ls(sslog_status_info, SCN::base_scn(), primary_zone_str.string(),
+                                                ObAllTenantInfo::INITIAL_SWITCHOVER_EPOCH))) {
+      LOG_WARN("failed to create new sslog ls", KR(ret), K(sslog_status_info), K(primary_zone_str));
+    } else if (OB_FAIL(life_agent.create_new_ls(sys_status_info, SCN::base_scn(), primary_zone_str.string(),
+                                                ObAllTenantInfo::INITIAL_SWITCHOVER_EPOCH))) {
+      LOG_WARN("failed to create new sys ls", KR(ret), K(sys_status_info), K(primary_zone_str));
     }
   }
   return ret;

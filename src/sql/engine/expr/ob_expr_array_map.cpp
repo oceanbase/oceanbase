@@ -467,8 +467,6 @@ int ObExprArrayMap::calc_result_typeN(ObExprResType& type,
   if (OB_ISNULL(exec_ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("exec ctx is null", K(ret));
-  } else if (ob_is_null(lambda_type)) {
-    is_null_res = true;
   }
   for (int64_t i = 1; i < param_num && OB_SUCC(ret); i++) {
     ObCollectionTypeBase *coll_type = NULL;
@@ -489,8 +487,10 @@ int ObExprArrayMap::calc_result_typeN(ObExprResType& type,
   } else if (is_null_res) {
     type.set_null();
   } else {
-    if (types_stack[0].get_type() == ObDecimalIntType || types_stack[0].get_type() == ObNumberType ||
-        types_stack[0].get_type() == ObUNumberType) {
+    if (ob_is_null(lambda_type)) {
+      types_stack[0].set_calc_type(ObUTinyIntType);
+      elem_type.meta_.set_utinyint(); // default type
+    } else if (lambda_type == ObDecimalIntType || lambda_type == ObNumberType || lambda_type == ObUNumberType) {
       // decimalint isn't supported in array, so cast to supported type
       ObObjType calc_type = ObIntType;
       if (types_stack[0].get_scale() != 0) {

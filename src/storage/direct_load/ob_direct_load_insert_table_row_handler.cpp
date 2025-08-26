@@ -135,9 +135,9 @@ int ObDirectLoadInsertTableRowHandler::handle_row(ObDirectLoadDatumRow &datum_ro
   return ret;
 }
 
-int ObDirectLoadInsertTableRowHandler::handle_row(const IVectorPtrs &vectors,
-                                                  const int64_t row_idx,
-                                                  const ObDirectLoadRowFlag &row_flag)
+int ObDirectLoadInsertTableRowHandler::handle_batch(const ObDirectLoadBatchRows &batch_rows,
+                                                    const uint16_t *selector,
+                                                    const int64_t size)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -146,12 +146,12 @@ int ObDirectLoadInsertTableRowHandler::handle_row(const IVectorPtrs &vectors,
   } else {
     if (nullptr != sql_statistics_ &&
         OB_FAIL(insert_tablet_ctx_->get_table_ctx()->update_sql_statistics(*sql_statistics_,
-                                                                           vectors,
-                                                                           row_idx,
-                                                                           row_flag))) {
+                                                                           batch_rows,
+                                                                           selector,
+                                                                           size))) {
       LOG_WARN("fail to update sql statistics", KR(ret));
     } else if (nullptr != lob_builder_ &&
-               OB_FAIL(lob_builder_->append_lob(vectors, row_idx, row_flag))) {
+               OB_FAIL(lob_builder_->append_lob(batch_rows, selector, size))) {
       LOG_WARN("fail to append lob", KR(ret));
     }
   }

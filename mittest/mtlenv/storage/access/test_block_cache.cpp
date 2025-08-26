@@ -138,6 +138,7 @@ TEST_F(TestObMicroBlockCache, test_block_cache)
       micro_idx_info.get_macro_id(),
       micro_idx_info,
       context_.query_flag_.is_use_block_cache(),
+      ObTabletID(tablet_id_),
       idx_io_handle,
       &allocator_));
   ASSERT_EQ(OB_SUCCESS, idx_io_handle.wait());
@@ -181,6 +182,7 @@ TEST_F(TestObMicroBlockCache, test_block_cache)
       data_idx_info.get_macro_id(),
       data_idx_info,
       context_.query_flag_.is_use_block_cache(),
+      ObTabletID(tablet_id_),
       data_io_handle,
       &allocator_));
   ASSERT_EQ(OB_SUCCESS, data_io_handle.wait());
@@ -212,6 +214,7 @@ TEST_F(TestObMicroBlockCache, test_block_cache)
   //     data_idx_info.get_macro_id(),
   //     multi_io_param,
   //     context_.query_flag_.is_use_block_cache(),
+  //     ObTabletID(tablet_id_),
   //     multi_io_handle));
   // ASSERT_EQ(OB_SUCCESS, multi_io_handle.wait());
   // const ObMultiBlockIOResult *io_result
@@ -243,6 +246,7 @@ TEST_F(TestObMicroBlockCache, test_block_cache)
       micro_des_meta,
       data_idx_info.get_logic_micro_id(),
       data_idx_info.get_data_checksum(),
+      ObTabletID(tablet_id_),
       &macro_reader,
       loaded_micro_data,
       &allocator_));
@@ -269,6 +273,7 @@ TEST_F(TestObMicroBlockCache, test_block_cache)
       micro_des_meta,
       data_idx_info.get_logic_micro_id(),
       data_idx_info.get_data_checksum(),
+      ObTabletID(tablet_id_),
       nullptr,
       loaded_index_data,
       &allocator_));

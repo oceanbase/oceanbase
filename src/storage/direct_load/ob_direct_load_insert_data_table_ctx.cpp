@@ -17,6 +17,7 @@
 #include "share/stat/ob_stat_item.h"
 #include "share/table/ob_table_load_dml_stat.h"
 #include "share/table/ob_table_load_sql_statistics.h"
+#include "storage/direct_load/ob_direct_load_batch_rows.h"
 #include "storage/direct_load/ob_direct_load_datum_row.h"
 #include "storage/direct_load/ob_direct_load_table_data_desc.h"
 #include "storage/direct_load/ob_direct_load_vector_utils.h"
@@ -76,8 +77,8 @@ int ObDirectLoadInsertDataTabletContext::init(ObDirectLoadInsertDataTableContext
     origin_tablet_id_ = origin_tablet_id;
     tablet_id_ = tablet_id;
     pk_tablet_id_ = origin_tablet_id_; // 从原表取, ddl会帮忙同步到隐藏表
-    if (OB_FAIL(start_seq_.set_parallel_degree(param_->reserved_parallel_))) {
-      LOG_WARN("fail to set parallel degree", KR(ret), K(param_->reserved_parallel_));
+    if (OB_FAIL(ObDDLUtil::init_macro_block_seq(param_->reserved_parallel_, start_seq_))) {
+      LOG_WARN("fail to init macro block seq", KR(ret), K(param_->reserved_parallel_));
     } else {
       is_inited_ = true;
     }
@@ -606,7 +607,7 @@ int ObDirectLoadInsertDataTableContext::init(
       LOG_WARN("fail to create all tablet contexts", KR(ret), K(ls_partition_ids),
                K(target_ls_partition_ids));
     } else if (param_.online_opt_stat_gather_ &&
-               sql_stat_map_.create(1024, "TLD_SqlStatMap", "TLD_SqlStatMap", MTL_ID())) {
+               OB_FAIL(sql_stat_map_.create(1024, "TLD_SqlStatMap", "TLD_SqlStatMap", MTL_ID()))) {
       LOG_WARN("fail to create sql stat map", KR(ret));
     } else {
       is_inited_ = true;
@@ -680,7 +681,7 @@ int ObDirectLoadInsertDataTableContext::get_sql_statistics(
         if (OB_ISNULL(new_sql_statistics = OB_NEWx(ObTableLoadSqlStatistics, (&safe_allocator_)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("fail to new ObTableLoadSqlStatistics", KR(ret));
-        } else if (OB_FAIL(new_sql_statistics->create(column_count))) {
+        } else if (OB_FAIL(new_sql_statistics->create(column_count, param_.max_batch_size_))) {
           LOG_WARN("fail to create sql stat", KR(ret), K(column_count));
         } else if (OB_FALSE_IT(
                      new_sql_statistics->get_sample_helper().init(param_.online_sample_percent_))) {
@@ -861,8 +862,8 @@ int ObDirectLoadInsertDataTableContext::update_sql_statistics(
 }
 
 int ObDirectLoadInsertDataTableContext::update_sql_statistics(
-  ObTableLoadSqlStatistics &sql_statistics, const IVectorPtrs &vectors, const int64_t row_idx,
-  const ObDirectLoadRowFlag &row_flag)
+  ObTableLoadSqlStatistics &sql_statistics,
+  const ObDirectLoadBatchRows &batch_rows)
 {
   int ret = OB_SUCCESS;
   bool ignore = false;
@@ -872,27 +873,24 @@ int ObDirectLoadInsertDataTableContext::update_sql_statistics(
   } else if (OB_UNLIKELY(!param_.online_opt_stat_gather_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected not gather sql stat", KR(ret), K(param_));
-  } else if (OB_UNLIKELY(row_flag.get_column_count(vectors.count()) != param_.column_count_ ||
-                         row_idx < 0 ||
-                         (row_flag.uncontain_hidden_pk_ && !param_.is_table_without_pk_))) {
+  } else if (OB_UNLIKELY(batch_rows.get_vectors().count() != param_.column_count_ ||
+                         batch_rows.empty())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid datum row", KR(ret), K(param_), K(vectors.count()), K(row_idx), K(row_flag));
-  } else if (OB_FAIL(sql_statistics.get_sample_helper().sample_row(ignore))) {
-    LOG_WARN("failed to sample row", KR(ret));
-  } else if (ignore) {
-    // do nothing
+    LOG_WARN("invalid args", KR(ret), K(param_), K(batch_rows));
   } else {
-    ObOptOSGColumnStat *col_stat = nullptr;
-    ObDatum datum;
-    for (int64_t i = 0; OB_SUCC(ret) && i < param_.column_count_; ++i) {
-      if (i < param_.rowkey_column_count_ && param_.is_table_without_pk_) {
-        // ignore heap table hidden pk
-      } else {
-        const int64_t datum_idx = row_flag.uncontain_hidden_pk_ ? i - 1 : i;
-        const int64_t col_stat_idx = param_.is_table_without_pk_ ? i - 1 : i;
+    const uint16_t *sample_selector = nullptr;
+    int64_t sample_size = batch_rows.size();
+    if (OB_FAIL(sql_statistics.sample_batch(sample_size, sample_selector))) {
+      LOG_WARN("fail to sample batch", KR(ret));
+    } else if (sample_size > 0) {
+      const ObIArray<ObDirectLoadVector *> &vectors = batch_rows.get_vectors();
+      ObOptOSGColumnStat *col_stat = nullptr;
+      ObDatum datum;
+      for (int64_t i = (param_.is_table_without_pk_ ? 1 : 0), col_stat_idx = 0;
+           OB_SUCC(ret) && i < vectors.count(); ++i, ++col_stat_idx) {
+        ObDirectLoadVector *vector = vectors.at(i);
         const ObCmpFunc &cmp_func = param_.cmp_funcs_->at(i).get_cmp_func();
         const ObColDesc &col_desc = param_.col_descs_->at(i);
-        ObIVector *vector = vectors.at(datum_idx);
         const bool is_valid =
           ObColumnStatParam::is_valid_opt_col_type(col_desc.col_type_.get_type(), true);
         if (is_valid) {
@@ -901,11 +899,71 @@ int ObDirectLoadInsertDataTableContext::update_sql_statistics(
           } else if (OB_ISNULL(col_stat)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected col stat is null", KR(ret), K(col_stat_idx));
-          } else if (OB_FAIL(ObDirectLoadVectorUtils::to_datum(vector, row_idx, datum))) {
-            LOG_WARN("fail to get datum", KR(ret));
-          } else if (OB_FAIL(col_stat->update_column_stat_info(&datum, col_desc.col_type_,
-                                                               cmp_func.cmp_func_))) {
-            LOG_WARN("fail to merge obj", KR(ret), K(i), K(col_desc), K(datum), KP(col_stat));
+          }
+          for (int64_t j = 0; OB_SUCC(ret) && j < sample_size; ++j) {
+            const int64_t row_idx = sample_selector[j];
+            if (OB_FAIL(vector->get_datum(row_idx, datum))) {
+              LOG_WARN("fail to get datum", KR(ret));
+            } else if (OB_FAIL(col_stat->update_column_stat_info(&datum, col_desc.col_type_,
+                                                                 cmp_func.cmp_func_))) {
+              LOG_WARN("fail to merge obj", KR(ret), K(i), K(col_desc), K(datum), KP(col_stat));
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDirectLoadInsertDataTableContext::update_sql_statistics(
+  ObTableLoadSqlStatistics &sql_statistics,
+  const ObDirectLoadBatchRows &batch_rows,
+  const uint16_t *selector,
+  const int64_t size)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDirectLoadInsertDataTableContext not init", KR(ret), KP(this));
+  } else if (OB_UNLIKELY(!param_.online_opt_stat_gather_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected not gather sql stat", KR(ret), K(param_));
+  } else if (OB_UNLIKELY(batch_rows.get_vectors().count() != param_.column_count_ ||
+                         batch_rows.empty() || nullptr == selector || size <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(param_), K(batch_rows), KP(selector), K(size));
+  } else {
+    const uint16_t *sample_selector = selector;
+    int64_t sample_size = size;
+    if (OB_FAIL(sql_statistics.sample_selective(sample_selector, sample_size))) {
+      LOG_WARN("fail to sample selective", KR(ret));
+    } else if (sample_size > 0) {
+      const ObIArray<ObDirectLoadVector *> &vectors = batch_rows.get_vectors();
+      ObOptOSGColumnStat *col_stat = nullptr;
+      ObDatum datum;
+      for (int64_t i = (param_.is_table_without_pk_ ? 1 : 0), col_stat_idx = 0;
+           OB_SUCC(ret) && i < vectors.count(); ++i, ++col_stat_idx) {
+        ObDirectLoadVector *vector = vectors.at(i);
+        const ObCmpFunc &cmp_func = param_.cmp_funcs_->at(i).get_cmp_func();
+        const ObColDesc &col_desc = param_.col_descs_->at(i);
+        const bool is_valid =
+          ObColumnStatParam::is_valid_opt_col_type(col_desc.col_type_.get_type(), true);
+        if (is_valid) {
+          if (OB_FAIL(sql_statistics.get_col_stat(col_stat_idx, col_stat))) {
+            LOG_WARN("fail to get col stat", KR(ret), K(col_stat_idx));
+          } else if (OB_ISNULL(col_stat)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected col stat is null", KR(ret), K(col_stat_idx));
+          }
+          for (int64_t j = 0; OB_SUCC(ret) && j < sample_size; ++j) {
+            const int64_t row_idx = sample_selector[j];
+            if (OB_FAIL(vector->get_datum(row_idx, datum))) {
+              LOG_WARN("fail to get datum", KR(ret));
+            } else if (OB_FAIL(col_stat->update_column_stat_info(&datum, col_desc.col_type_,
+                                                                 cmp_func.cmp_func_))) {
+              LOG_WARN("fail to merge obj", KR(ret), K(i), K(col_desc), K(datum), KP(col_stat));
+            }
           }
         }
       }

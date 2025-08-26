@@ -19,6 +19,7 @@
 #include "sql/dblink/ob_tm_service.h"
 #include "storage/tx/ob_xa_ctx.h"
 #include "src/rootserver/mview/ob_mview_maintenance_service.h"
+#include "src/sql/ob_sql_ccl_rule_manager.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -30,7 +31,8 @@ using namespace oceanbase::transaction;
 ObResultSet::~ObResultSet()
 {
   bool is_remote_sql = false;
-  if (OB_NOT_NULL(get_exec_context().get_sql_ctx())) {
+  sql::ObSqlCtx *sql_ctx = NULL;
+  if (OB_NOT_NULL(sql_ctx = get_exec_context().get_sql_ctx())) {
     is_remote_sql = get_exec_context().get_sql_ctx()->is_remote_sql_;
   }
   ObPhysicalPlan* physical_plan = get_physical_plan();
@@ -38,21 +40,44 @@ ObResultSet::~ObResultSet()
       && OB_UNLIKELY(physical_plan->is_limited_concurrent_num())) {
     physical_plan->dec_concurrent_num();
   }
+
+  if (my_session_.has_ccl_rule_checked() && my_session_.is_enable_sql_ccl_rule()) {
+    sql::ObSQLCCLRuleManager *sql_ccl_rule_mgr = MTL(sql::ObSQLCCLRuleManager *);
+    if (!is_inner_result_set_ && sql_ccl_rule_mgr->is_inited() && OB_NOT_NULL(sql_ccl_rule_mgr) && OB_NOT_NULL(get_exec_context().get_sql_ctx())) {
+      FOREACH(p_value_wrapper, get_exec_context().get_sql_ctx()->matched_ccl_rule_level_values_) {
+        sql_ccl_rule_mgr->dec_rule_level_concurrency(*p_value_wrapper);
+      }
+      FOREACH(p_value_wrapper,
+              get_exec_context().get_sql_ctx()->matched_ccl_format_sqlid_level_values_) {
+        sql_ccl_rule_mgr->dec_format_sqlid_level_concurrency(*p_value_wrapper);
+      }
+    }
+  }
+
   // when ObExecContext is destroyed, it also depends on the physical plan, so need to ensure
   // that inner_exec_ctx_ is destroyed before cache_obj_guard_
   if (NULL != inner_exec_ctx_) {
     inner_exec_ctx_->~ObExecContext();
     inner_exec_ctx_ = NULL;
   }
-  ObPlanCache *pc = my_session_.get_plan_cache_directly();
-  if (OB_NOT_NULL(pc)) {
-    cache_obj_guard_.force_early_release(pc);
+#ifdef OB_BUILD_SPM
+  if (OB_NOT_NULL(sql_ctx) && sql_ctx->spm_ctx_.evo_plan_added_
+      && OB_NOT_NULL(cache_obj_guard_.get_cache_obj())) {
+    sql_ctx->spm_ctx_.evo_plan_guard_.swap(cache_obj_guard_);
+    sql_ctx->spm_ctx_.evo_plan_added_ = false;
+  } else
+#endif
+  {
+    ObPlanCache *pc = my_session_.get_plan_cache_directly();
+    if (OB_NOT_NULL(pc)) {
+      cache_obj_guard_.force_early_release(pc);
+    }
+    if (OB_NOT_NULL(pc)) {
+      temp_cache_obj_guard_.force_early_release(pc);
+    }
+    // Always called at the end of the ObResultSet destructor
+    update_end_time();
   }
-  if (OB_NOT_NULL(pc)) {
-    temp_cache_obj_guard_.force_early_release(pc);
-  }
-  // Always called at the end of the ObResultSet destructor
-  update_end_time();
   is_init_ = false;
 }
 
@@ -955,6 +980,11 @@ int ObResultSet::do_close(int *client_ret)
       ret = OB_NOT_INIT;
       LOG_WARN("result set isn't init", K(ret));
     } else {
+      if (OB_NOT_NULL(get_physical_plan()) && get_physical_plan()->is_returning()) {
+        // In the returning scenario, affected_rows_ can only be determined after returning the data,
+        // so fill in affected_rows when closing.
+        affected_rows_ = plan_ctx->get_affected_rows();
+      }
       store_affected_rows(*plan_ctx);
       store_found_rows(*plan_ctx);
     }

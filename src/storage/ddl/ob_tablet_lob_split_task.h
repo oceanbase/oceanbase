@@ -102,7 +102,7 @@ public:
   bool is_valid() const {
     return OB_INVALID_ID != tenant_id_ && ls_id_.is_valid() && ori_lob_meta_tablet_id_.is_valid()
            && new_lob_tablet_ids_.count() > 0 && schema_version_ > 0
-           && data_format_version_ > 0 && parallelism_ > 0 && compaction_scn_ > 0
+           && data_format_version_ > 0 && parallelism_ > 0
            && compat_mode_ != lib::Worker::CompatMode::INVALID
            && task_id_ > 0 && OB_INVALID_ID != source_table_id_ && OB_INVALID_ID != dest_schema_id_
            && consumer_group_id_ >= 0 && lob_col_idxs_.count() > 0 && parallel_datum_rowkey_list_.count() > 0;
@@ -148,25 +148,39 @@ public:
     m_allocator_(allocator_), new_main_tablet_ids_(OB_MALLOC_NORMAL_BLOCK_SIZE, m_allocator_),
     new_lob_tablet_ids_(OB_MALLOC_NORMAL_BLOCK_SIZE, m_allocator_),
     cmp_ret_(0), comparer_(cmp_ret_), total_map_(nullptr), sub_maps_(),
-    skipped_split_major_keys_(),
-    row_inserted_(0), physical_row_count_(0)
+    skipped_split_major_keys_(), row_inserted_(0), physical_row_count_(0),
+    split_scn_(), reorg_scn_(), ls_rebuild_seq_(-1),
+    dst_major_snapshot_(-1)
+#ifdef OB_BUILD_SHARED_STORAGE
+    , ss_split_helper_(), is_data_split_executor_(false)
+#endif
   {}
   ~ObLobSplitContext() { destroy(); }
   int init(const ObLobSplitParam& param);
-  int get_dst_lob_tablet_ids(const ObLobSplitParam& param);
   int init_maps(const ObLobSplitParam& param);
   inline bool is_valid() const { return is_inited_; }
   void destroy();
-  TO_STRING_KV(K_(is_inited), K_(data_ret), K_(is_lob_piece),
+  TO_STRING_KV(
+    K_(is_inited), K_(is_split_finish_with_meta_flag), K_(data_ret), K_(is_lob_piece),
     K_(ls_handle), K_(main_tablet_id), K_(main_tablet_handle),
     K_(lob_meta_tablet_handle), K_(new_main_tablet_ids),
     K_(new_lob_tablet_ids), KPC_(total_map), K_(sub_maps), K_(main_table_ranges),
-    K_(skipped_split_major_keys), K_(row_inserted), K_(physical_row_count));
+    K_(skipped_split_major_keys), K_(row_inserted), K_(physical_row_count),
+    K_(split_scn), K_(reorg_scn), K_(ls_rebuild_seq),
+    K_(dst_major_snapshot)
+#ifdef OB_BUILD_SHARED_STORAGE
+    , K_(is_data_split_executor)
+#endif
+    );
+
+private:
+  int get_dst_lob_tablet_ids(const ObLobSplitParam& param);
 private:
   common::ObArenaAllocator range_allocator_; // for datum range.
 public:
   static const int64_t EACH_SORT_MEMORY_LIMIT = 8L * 1024L * 1024L; // 8MB
   bool is_inited_;
+  bool is_split_finish_with_meta_flag_;
   int data_ret_;
   bool is_lob_piece_;
   ObLSHandle ls_handle_;
@@ -187,16 +201,24 @@ public:
   ObArray<ObITable::TableKey> skipped_split_major_keys_;
   int64_t row_inserted_;
   int64_t physical_row_count_;
+  share::SCN split_scn_;
+  share::SCN reorg_scn_;
+  int64_t ls_rebuild_seq_;
+  int64_t dst_major_snapshot_;
+#ifdef OB_BUILD_SHARED_STORAGE
+  ObSSDataSplitHelper ss_split_helper_;
+  bool is_data_split_executor_;
+#endif
 };
 
 
-class ObTabletLobSplitDag final : public share::ObIDag
+class ObTabletLobSplitDag final : public ObIDataSplitDag
 {
 public:
   ObTabletLobSplitDag();
   virtual ~ObTabletLobSplitDag();
   virtual int init_by_param(const share::ObIDagInitParam *param) override;
-  int64_t hash() const;
+  virtual uint64_t hash() const override;
   bool operator ==(const share::ObIDag &other) const;
   bool is_inited() const { return is_inited_; }
   ObLobSplitParam &get_param() { return param_; }
@@ -212,7 +234,14 @@ public:
   virtual bool ignore_warning() override;
   virtual bool is_ha_dag() const override { return false; }
   // report lob tablet split status to RS.
-  int report_lob_split_status();
+  virtual int report_replica_build_status() const override;
+  virtual int get_complement_data_ret() const override {
+    return context_.data_ret_;
+  }
+  virtual void set_complement_data_ret(const int ret_code) override {
+    context_.data_ret_ = OB_SUCCESS == context_.data_ret_ ?
+      ret_code : context_.data_ret_;
+  }
   int calc_total_row_count();
 private:
   bool is_inited_;
@@ -250,6 +279,10 @@ public:
   int init(ObLobSplitParam &param, ObLobSplitContext &ctx);
   virtual int process() override;
 private:
+#ifdef OB_BUILD_SHARED_STORAGE
+  int prepare_split_helper();
+#endif
+private:
   static const int64_t SORT_MEMORY_LIMIT = 32L * 1024L * 1024L;
   bool is_inited_;
   ObLobSplitParam *param_;
@@ -261,11 +294,19 @@ struct ObTabletLobWriteSSTableCtx final
 public:
   ObTabletLobWriteSSTableCtx();
   ~ObTabletLobWriteSSTableCtx();
-  int init(const ObSSTable &org_sstable, const ObStorageSchema &storage_schema, const int64_t major_snapshot_version);
+  int init(
+    const ObSSTable &org_sstable,
+    const ObStorageSchema &storage_schema,
+    const int64_t major_snapshot_version,
+    const int64_t sstable_index);
   int assign(const ObTabletLobWriteSSTableCtx &other);
   int64_t get_version() const { return table_key_.is_major_sstable() ? dst_major_snapshot_version_ : table_key_.get_end_scn().get_val_for_tx(); }
-  bool is_valid() const { return table_key_.is_valid() && data_seq_ > -1 && meta_.is_valid() && dst_major_snapshot_version_ >= 0; }
-  TO_STRING_KV(K_(table_key), K_(data_seq), K_(merge_type), K_(meta), K_(dst_uncommitted_tx_id_arr), K_(dst_major_snapshot_version));
+  bool is_valid() const {
+    return table_key_.is_valid() && data_seq_ > -1 && meta_.is_valid() && dst_major_snapshot_version_ >= 0
+      && sstable_index_ >= 0; }
+  TO_STRING_KV(K_(table_key), K_(data_seq), K_(merge_type),
+    K_(meta), K_(dst_uncommitted_tx_id_arr), K_(dst_major_snapshot_version),
+    K_(sstable_index));
 public:
   ObITable::TableKey table_key_;
   int64_t data_seq_;
@@ -273,6 +314,7 @@ public:
   ObSSTableBasicMeta meta_; // for major split, it's src lob tablet's last major sstable's meta with MODIFICATION
   ObArray<int64_t> dst_uncommitted_tx_id_arr_; // first uncommitted row's tx id for each split dst minor sstable
   int64_t dst_major_snapshot_version_;
+  int64_t sstable_index_; // the index of the sstable in minors or major.
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTabletLobWriteSSTableCtx);
 };
@@ -291,13 +333,17 @@ private:
                                            ObArrayArray<ObMacroBlockWriter*>& slice_writers,
                                            ObArrayArray<ObSSTableIndexBuilder*>& index_builders);
   int prepare_sstable_writer(const ObTabletLobWriteSSTableCtx &write_sstable_ctx,
-                             const ObTabletID &new_tablet_id,
+                             const int64_t dest_tablet_index/*tablet index in ctx.new_lob_tablet_ids_*/,
                              const ObStorageSchema &storage_schema,
                              ObWholeDataStoreDesc &data_desc,
                              ObMacroBlockWriter *&slice_writer,
                              ObSSTableIndexBuilder *&index_builder);
+  int prepare_macro_seq_param(
+      const ObTabletLobWriteSSTableCtx &write_sstable_ctx,
+      const int64_t dest_tablet_index,
+      ObMacroSeqParam &macro_seq_param);
   int prepare_sstable_macro_writer(const ObTabletLobWriteSSTableCtx &write_sstable_ctx,
-                                   const ObTabletID &new_tablet_id,
+                                   const int64_t dest_tablet_index,
                                    const ObStorageSchema &storage_schema,
                                    ObWholeDataStoreDesc &data_desc,
                                    ObSSTableIndexBuilder *index_builder,
@@ -305,6 +351,7 @@ private:
   int prepare_sstable_index_builder(const ObTabletLobWriteSSTableCtx &write_sstable_ctx,
                                     const ObTabletID &new_tablet_id,
                                     const ObStorageSchema &storage_schema,
+                                    ObWholeDataStoreDesc &data_desc,
                                     ObSSTableIndexBuilder *&index_builder);
   int dispatch_rows(ObIArray<ObIStoreRowIteratorPtr>& iters,
                     ObArrayArray<ObMacroBlockWriter*>& slice_writers);
@@ -317,12 +364,20 @@ private:
   int create_sstable(ObSSTableIndexBuilder *sstable_index_builder,
                      const ObTabletLobWriteSSTableCtx &write_sstable_ctx,
                      const int64_t tablet_idx,
-                     const ObTabletID &new_tablet_id,
                      ObTableHandleV2 &new_table_handle);
   void release_slice_writer(ObMacroBlockWriter *&slice_writer);
   void release_index_builder(ObSSTableIndexBuilder *&index_builder);
   void release_sstable_writers_and_builders(ObArrayArray<ObMacroBlockWriter*>& slice_writers,
                                             ObArrayArray<ObSSTableIndexBuilder*>& index_builders);
+  int check_and_create_mds_sstable(
+      const ObTabletID &dest_tablet_id);
+#ifdef OB_BUILD_SHARED_STORAGE
+  int close_ss_index_builder(
+      const ObTabletLobWriteSSTableCtx &write_sstable_ctx,
+      const int64_t dest_tablet_index, // index in ctx.dest_tablets_id.
+      ObSSTableIndexBuilder *index_builder,
+      ObSSTableMergeRes &res);
+#endif
 private:
   common::ObArenaAllocator allocator_;
   bool is_inited_;

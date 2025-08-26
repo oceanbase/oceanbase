@@ -73,7 +73,8 @@ TEST_F(TestLAMicroKeyManager, test_push_micro_key_to_hashset)
   ObSSMicroBlockCacheKey micro_key;
   ObSSMicroPrewarmMeta micro_meta;
   micro_key = ObSSMicroBlockCacheKey(ObSSMicroBlockId(macro_id, 103/*offset*/, 104/*size*/));
-  micro_meta = ObSSMicroPrewarmMeta(micro_key, 98/*data_crc*/, 97/*data_size*/, 1/*is_in_l1*/);
+  micro_meta = ObSSMicroPrewarmMeta(micro_key, macro_id.second_id()/*effective_tablet_id*/,
+                                    98/*data_crc*/, 97/*data_size*/, 1/*is_in_l1*/);
   // test 1: push PRIVATE_DATA_MACRO
   ASSERT_EQ(0, micro_cache->la_micro_key_mgr_.la_micro_key_set_.size());
   ASSERT_EQ(OB_HASH_NOT_EXIST, micro_cache->la_micro_key_mgr_.la_micro_key_set_.exist_refactored(micro_meta));
@@ -84,7 +85,8 @@ TEST_F(TestLAMicroKeyManager, test_push_micro_key_to_hashset)
   // test 2: push PRIVATE_META_MACRO
   macro_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::PRIVATE_META_MACRO));
   micro_key = ObSSMicroBlockCacheKey(ObSSMicroBlockId(macro_id, 103/*offset*/, 104/*size*/));
-  micro_meta = ObSSMicroPrewarmMeta(micro_key, 98/*data_crc*/, 97/*data_size*/, 1/*is_in_l1*/);
+  micro_meta = ObSSMicroPrewarmMeta(micro_key, macro_id.second_id()/*effective_tablet_id*/,
+                                    98/*data_crc*/, 97/*data_size*/, 1/*is_in_l1*/);
   ASSERT_EQ(OB_HASH_NOT_EXIST, micro_cache->la_micro_key_mgr_.la_micro_key_set_.exist_refactored(micro_meta));
   ASSERT_EQ(OB_SUCCESS, micro_cache->la_micro_key_mgr_.push_la_micro_key_to_hashset(micro_meta));
   ASSERT_EQ(0, micro_cache->la_micro_key_mgr_.la_micro_key_set_.size());
@@ -93,7 +95,8 @@ TEST_F(TestLAMicroKeyManager, test_push_micro_key_to_hashset)
   // test 3: push SHARED_MAJOR_META_MACRO
   macro_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::SHARED_MAJOR_META_MACRO));
   micro_key = ObSSMicroBlockCacheKey(ObSSMicroBlockId(macro_id, 103/*offset*/, 104/*size*/));
-  micro_meta = ObSSMicroPrewarmMeta(micro_key, 98/*data_crc*/, 97/*data_size*/, 1/*is_in_l1*/);
+  micro_meta = ObSSMicroPrewarmMeta(micro_key, macro_id.second_id()/*effective_tablet_id*/,
+                                    98/*data_crc*/, 97/*data_size*/, 1/*is_in_l1*/);
   ASSERT_EQ(OB_HASH_NOT_EXIST, micro_cache->la_micro_key_mgr_.la_micro_key_set_.exist_refactored(micro_meta));
   ASSERT_EQ(OB_SUCCESS, micro_cache->la_micro_key_mgr_.push_la_micro_key_to_hashset(micro_meta));
   ASSERT_EQ(1, micro_cache->la_micro_key_mgr_.la_micro_key_set_.size());
@@ -104,7 +107,8 @@ TEST_F(TestLAMicroKeyManager, test_push_micro_key_to_hashset)
   ObLogicMicroBlockId logic_macro_id;
   logic_macro_id.init(105/*offset*/, ObLogicMacroBlockId(106/*data_seq*/, 107/*logic_version*/, 108/*tablet_id*/));
   micro_key = ObSSMicroBlockCacheKey(logic_macro_id, 109/*crc*/);
-  micro_meta = ObSSMicroPrewarmMeta(micro_key, 98/*data_crc*/, 97/*data_size*/, 1/*is_in_l1*/);
+  micro_meta = ObSSMicroPrewarmMeta(micro_key, 108/*effective_tablet_id*/,
+                                    98/*data_crc*/, 97/*data_size*/, 1/*is_in_l1*/);
   ASSERT_EQ(OB_HASH_NOT_EXIST, micro_cache->la_micro_key_mgr_.la_micro_key_set_.exist_refactored(micro_meta));
   ASSERT_EQ(OB_SUCCESS, micro_cache->la_micro_key_mgr_.push_la_micro_key_to_hashset(micro_meta));
   ASSERT_EQ(2, micro_cache->la_micro_key_mgr_.la_micro_key_set_.size());

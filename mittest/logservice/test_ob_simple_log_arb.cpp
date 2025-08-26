@@ -1027,8 +1027,8 @@ TEST_F(TestObSimpleLogClusterArbService, test_degradation_policy)
     sleep(5);
     int64_t first_leader_idx = leader_idx;
     PALF_LOG(INFO, "case 2: test degrade for 2F1A");
-    block_net(first_leader_idx, another_f_idx);
     fisrt_f_connected_with_rs = false;
+    block_net(first_leader_idx, another_f_idx);
     // should not be degraded
     sleep(5);
     common::GlobalLearnerList degraded_learner_list;

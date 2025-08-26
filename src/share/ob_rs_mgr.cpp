@@ -281,6 +281,10 @@ int ObRsMgr::get_all_rs_list_from_configure_(common::ObIArray<common::ObAddr> &s
   ObSEArray<ObRootAddr, OB_MAX_MEMBER_NUMBER> readonly_list; // not used
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("check inner stat faild", KR(ret));
+#ifdef OB_ENABLE_STANDALONE_LAUNCH
+  } else if (OB_FAIL(server_list.push_back(GCONF.self_addr_))) {
+    LOG_WARN("failed to push_back", KR(ret), K(GCONF.self_addr_), K(server_list));
+#else
   } else if (OB_FAIL(addr_agent_.fetch(
              rs_list,
              readonly_list))) {
@@ -290,6 +294,7 @@ int ObRsMgr::get_all_rs_list_from_configure_(common::ObIArray<common::ObAddr> &s
     LOG_WARN("get empty rs list", KR(ret));
   } else if (OB_FAIL(convert_addr_array(rs_list, server_list))) {
     LOG_WARN("fail to convert addr array", KR(ret), K(rs_list));
+#endif
   }
   return ret;
 }
@@ -362,12 +367,16 @@ int ObRsMgr::renew_master_rootserver(const int64_t cluster_id)
 
 int ObRsMgr::construct_initial_server_list(
     const bool check_ls_service,
+    const ObLSID &ls_id,
     common::ObIArray<common::ObAddr> &server_list)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_UNLIKELY(!ls_id.is_sys_ls() && !ls_id.is_sslog_ls())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(ls_id));
   }
   // case 1: get rs from ObRsMgr master_rs_
   if (OB_SUCC(ret)) {
@@ -394,30 +403,35 @@ int ObRsMgr::construct_initial_server_list(
       }
     }
   }
-  // case 3: try get sys_ls's member_list from ObLSService
+  // case 3: try get server_list from ObLSService
+  //     a. For SSLOG LS, we did not record the LS information in the RS memory, so need to ask all members(member_list and learner_list)
+  //     b. For SYS LS, RS memory contains all reported LS information, So only need to find the location of RS(in member_list).
   // For RTO scene, get_paxos_member_list() may be blocked and related threads will be hang.
   // To avoid thread hang when refreshing ls locations by rpc, we don't use member_list of sys tenant's ls.
   if (OB_SUCC(ret) && check_ls_service) {
     MTL_SWITCH(OB_SYS_TENANT_ID) {
       ObMemberList member_list;
+      GlobalLearnerList learner_list; // for SSLOG LS
       ObLSService *ls_svr = nullptr;
+      ObLS *ls = nullptr;
       ObLSHandle ls_handle;
       int64_t paxos_replica_number = 0;
       if (OB_ISNULL(ls_svr = MTL(ObLSService*))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("MTL ObLSService failed", KR(ret), "tenant_id", OB_SYS_TENANT_ID, K(MTL_ID()));
-      } else if (OB_FAIL(ls_svr->get_ls(SYS_LS, ls_handle, ObLSGetMod::RS_MOD))) {
+      } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::RS_MOD))) {
         if (OB_LS_NOT_EXIST == ret) {
           ret = OB_SUCCESS;
         } else {
-          LOG_WARN("get ls handle failed", KR(ret), "log_stream_id", SYS_LS.id());
+          LOG_WARN("get ls handle failed", KR(ret), K(ls_id));
         }
-      } else if (OB_ISNULL(ls_handle.get_ls())) {
+      } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("ls_handle.get_ls() is nullptr", KR(ret));
-      } else if (OB_SUCCESS != (tmp_ret = ls_handle.get_ls()->get_paxos_member_list(member_list, paxos_replica_number))) {
-        LOG_WARN("get member_list from ObLS failed", KR(tmp_ret), "tenant_id", OB_SYS_TENANT_ID,
-                 "log_stream_id", SYS_LS.id(), K(ls_handle));
+        LOG_WARN("ls is nullptr", KR(ret));
+      } else if (ls_id.is_sys_ls() && OB_TMP_FAIL(ls->get_paxos_member_list(member_list, paxos_replica_number))) {
+        LOG_WARN("get member_list from ObLS failed", KR(tmp_ret), "tenant_id", OB_SYS_TENANT_ID, K(ls_id), K(ls_handle));
+      } else if (ls_id.is_sslog_ls() && OB_TMP_FAIL(ls->get_paxos_member_list_and_learner_list(member_list, paxos_replica_number, learner_list))) {
+        LOG_WARN("get member_list and learner_list from ls failed", KR(tmp_ret), K(ls_id));
       }
       if (OB_SUCC(ret)) {
         ObAddr addr;
@@ -428,6 +442,16 @@ int ObRsMgr::construct_initial_server_list(
                     && OB_FAIL(server_list.push_back(addr))) {
             LOG_WARN("fail to push back addr", KR(ret), K(addr));
           }
+        }
+        if (ls_id.is_sslog_ls()) {
+          for (int64_t i = 0; OB_SUCC(ret) && i < learner_list.get_member_number(); i++) {
+            ObAddr addr;
+            if (OB_FAIL(learner_list.get_server_by_index(i, addr))) {
+              LOG_WARN("fail to get server", KR(ret), K(i), K(learner_list));
+            } else if (!has_exist_in_array(server_list, addr) && OB_FAIL(server_list.push_back(addr))) {
+              LOG_WARN("fail to push back addr", KR(ret), K(addr));
+            }
+          } // end for
         }
       }
     } else {

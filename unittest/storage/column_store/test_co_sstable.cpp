@@ -160,7 +160,7 @@ int TestCOSSTable::mock_major_sstable(
   ObStorageSchema storage_schema;
   if (OB_FAIL(storage_schema.init(allocator, table_schema, lib::Worker::CompatMode::MYSQL))) {
     LOG_WARN("failed to init storage schema", K(ret));
-  } else if (OB_FAIL(param.init_for_empty_major_sstable(tablet_id, storage_schema, snapshot_version, -1, false))) {
+  } else if (OB_FAIL(param.init_for_empty_major_sstable(tablet_id, storage_schema, snapshot_version, -1, false, false))) {
     LOG_WARN("failed to build create sstable param", K(ret), K(table_key));
   } else if (FALSE_IT(param.table_key_ = table_key)) {
   } else if (FALSE_IT(param.column_group_cnt_ = column_group_cnt)) {
@@ -281,10 +281,11 @@ TEST_F(TestCOSSTable, co_table_basic_test)
   EXPECT_EQ(true, co_sstable->valid_for_cs_reading_);
 
   // serialize co sstable
-  const int64_t buf_len = co_sstable->get_serialize_size();
+  const uint64_t data_version = DATA_CURRENT_VERSION;
+  const int64_t buf_len = co_sstable->get_serialize_size(data_version);
   char * encode_buf = static_cast<char *>(allocator_.alloc(sizeof(char) * buf_len));
   int64_t pos = 0;
-  ret = co_sstable->serialize(encode_buf, buf_len, pos);
+  ret = co_sstable->serialize(data_version, encode_buf, buf_len, pos);
   EXPECT_EQ(OB_SUCCESS, ret);
 
   // deserialize co sstable

@@ -3495,7 +3495,7 @@ int ObInnerTableSchema::all_virtual_table_mgr_ora_schema(ObTableSchema &table_sc
   }
 
   if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("SS_TABLET_VERSION", //column_name
+    ADD_COLUMN_SCHEMA("ROW_COUNT", //column_name
       ++column_id, //column_id
       0, //rowkey_id
       0, //index_id

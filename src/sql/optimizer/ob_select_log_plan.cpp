@@ -514,7 +514,8 @@ int ObSelectLogPlan::inner_create_merge_rollup_plan(const ObIArray<ObRawExpr*> &
                                                       need_sort,
                                                       prefix_pos))) {
     LOG_WARN("failed to check if need sort", K(ret));
-  } else if (((!need_sort || prefix_pos > 0) && use_part_sort) ||
+  } else if (OB_FALSE_IT(prefix_pos = (use_part_sort && need_sort) ? 0 : prefix_pos)) {
+  } else if ((!need_sort && use_part_sort) ||
              (need_sort && can_ignore_merge && OrderingFlag::NOT_MATCH == interesting_order_info)) {
     // 1. need generate partition sort plan, but need not sort
     // 2. if need sort and no further op needs the output order, not generate merge groupby
@@ -919,7 +920,8 @@ int ObSelectLogPlan::candi_allocate_normal_group_by(const ObIArray<ObRawExpr*> &
       if (OB_FAIL(get_distribute_group_by_method(candidate_plan.plan_tree_,
                                                 groupby_helper,
                                                 reduce_exprs,
-                                                group_dist_methods))) {
+                                                group_dist_methods,
+                                                true))) {
         LOG_WARN("failed to get distribute method", K(ret));
       } else if (!(DistAlgo::DIST_HASH_HASH & group_dist_methods)) {
         OPT_TRACE("basic or partition wise can not use three stage group by");
@@ -1398,7 +1400,8 @@ int ObSelectLogPlan::inner_create_merge_group_plan(const ObIArray<ObRawExpr*> &r
                                                       need_sort,
                                                       prefix_pos))) {
     LOG_WARN("failed to check if need sort", K(ret));
-  } else if (((!need_sort || prefix_pos > 0) && use_part_sort) ||
+  } else if (OB_FALSE_IT(prefix_pos = (use_part_sort && need_sort) ? 0 : prefix_pos)) {
+  } else if ((!need_sort && use_part_sort) ||
              (need_sort && can_ignore_merge_plan && OrderingFlag::NOT_MATCH == interesting_order_info)) {
     // 1. need generate partition sort plan, but need not sort
     // 2. if need sort and no further op needs the output order, not generate merge groupby
@@ -2360,6 +2363,8 @@ int ObSelectLogPlan::generate_raw_plan_for_set()
       child_input_filters.reuse();
       child_rename_filters.reuse();
       child_remain_filters.reuse();
+      bool need_accurate_cardinality = get_need_accurate_cardinality() ||
+              (select_stmt->is_recursive_union() && 0 == i);
       if (OB_ISNULL(child_stmt = child_stmts.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null stmt", K(child_stmt), K(ret));
@@ -2383,6 +2388,7 @@ int ObSelectLogPlan::generate_raw_plan_for_set()
       } else if (OB_FAIL(generate_child_plan_for_set(child_stmt, child_plan,
                                                      child_rename_filters, i,
                                                      select_stmt->is_set_distinct(),
+                                                     need_accurate_cardinality,
                                                      nonrecursive_plan))) {
         LOG_WARN("failed to generate left subquery plan", K(ret));
       } else if (OB_FAIL(child_plans.push_back(child_plan))) {
@@ -5597,7 +5603,7 @@ int ObSelectLogPlan::allocate_plan_top()
     }
     // step. allocate 'order-by' if needed
     if (OB_SUCC(ret) && select_stmt->has_order_by() && !select_stmt->is_order_siblings() &&
-        !get_optimizer_context().is_online_ddl()) {
+        !get_optimizer_context().is_insert_stmt_in_online_ddl()) {
       candidates_.is_final_sort_ = true;
       if (OB_FAIL(candi_allocate_order_by(need_limit, order_items))) {
         LOG_WARN("failed to allocate order by operator", K(ret));
@@ -5688,7 +5694,7 @@ int ObSelectLogPlan::allocate_plan_top()
       // FOR UPDATE SKIP LOCKED does not need SQL-level retry, hence we don't need a MATERIAL to
       // block the output.
       if (optimizer_context_.has_no_skip_for_update()
-          && OB_FAIL(candi_allocate_for_update_material())) {
+          && OB_FAIL(candi_allocate_material_for_dml())) {
         LOG_WARN("failed to allocate material", K(ret));
         //allocate temp-table transformation if needed.
       } else if (!get_optimizer_context().get_temp_table_infos().empty() &&
@@ -5786,6 +5792,7 @@ int ObSelectLogPlan::generate_child_plan_for_set(const ObDMLStmt *sub_stmt,
                                                  ObIArray<ObRawExpr*> &pushdown_filters,
                                                  const uint64_t child_offset,
                                                  const bool is_set_distinct,
+                                                 const bool need_accurate_cardinality,
                                                  ObSelectLogPlan *nonrecursive_plan)
 {
   int ret = OB_SUCCESS;
@@ -5801,7 +5808,8 @@ int ObSelectLogPlan::generate_child_plan_for_set(const ObDMLStmt *sub_stmt,
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("Failed to create logical plan", K(sub_plan), K(ret));
   } else if (FALSE_IT(sub_plan->set_is_parent_set_distinct(is_set_distinct)) ||
-             FALSE_IT(sub_plan->set_nonrecursive_plan_for_fake_cte(nonrecursive_plan))) {
+             FALSE_IT(sub_plan->set_nonrecursive_plan_for_fake_cte(nonrecursive_plan))||
+             FALSE_IT(sub_plan->set_need_accurate_cardinality(need_accurate_cardinality))) {
     // do nothing
   } else if (OB_FAIL(sub_plan->init_rescan_info_for_subquery_paths(*this, false, false))) {
     LOG_WARN("failed to init rescan info", K(ret));
@@ -6151,6 +6159,12 @@ int ObSelectLogPlan::calc_win_func_helper_with_hint(const ObLogicalOperator *op,
       LOG_WARN("choose topn filter failed", K(ret));
     } else if (!win_func_helper.enable_topn_) {
       is_valid = false;
+    }
+    if (OB_SUCC(ret) && (WinDistAlgo::WIN_DIST_RANGE == option.algo_
+                         || WinDistAlgo::WIN_DIST_LIST == option.algo_)) {
+      for (int64_t i = 1; is_valid && OB_SUCC(ret) && i < temp_pby_oby_prefixes.count(); ++i) {
+        is_valid = temp_pby_oby_prefixes.at(0) == temp_pby_oby_prefixes.at(i);
+      }
     }
   }
   return ret;
@@ -7504,7 +7518,7 @@ int ObSelectLogPlan::create_range_list_dist_win_func(ObLogicalOperator *top,
                                                     false, /* use hash sort */
                                                     false, /* use hash topn sort */
                                                     ObLogWindowFunction::WindowFunctionRoleType::NORMAL,
-                                                    sort_keys,
+                                                    range_dist_keys,
                                                     range_dist_keys.count(),
                                                     pby_prefix,
                                                     top,

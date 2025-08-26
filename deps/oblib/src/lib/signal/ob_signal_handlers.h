@@ -37,6 +37,7 @@ private:
 };
 extern int minicoredump(int sig, int64_t tid, pid_t& pid);
 extern int faststack();
+extern bool need_close_socket_fd_when_core_dump;
 } // namespace common
 } // namespace oceanbase
 

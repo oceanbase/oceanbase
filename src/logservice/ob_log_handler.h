@@ -148,6 +148,7 @@ public:
   virtual int force_set_as_single_replica() = 0;
   virtual int force_set_as_single_replica(const palf::LogConfigVersion &config_version, const int64_t timeout_us) = 0;
   virtual int force_set_member_list(const common::ObMemberList &new_member_list, const int64_t new_replica_num) = 0;
+  virtual int inc_config_version(int64_t timeout_us) = 0;
   virtual int add_member(const common::ObMember &member,
                          const int64_t paxos_replica_num,
                          const palf::LogConfigVersion &config_version,
@@ -528,6 +529,8 @@ public:
   // So if advance_base_info returns OB_SUCCESS, that means log sync and replay_status have been disabled.
   int advance_base_info(const palf::PalfBaseInfo &palf_base_info, const bool is_rebuild) override final;
   // check if palf is in sync state or need rebuild
+  // in SN, we compare follower's log_sync_scn with leader's log_sync_scn.
+  // in SS, we compare follower's replayed_scn with leader's log_sync_scn, because follower has no log_sync_scn.
   // @param [out] is_log_sync: if the log of this replica is sync with leader's,
   //    - false: leader's max_scn  - local max_scn > 3s + keepalive_interval
   //    - true:  leader's max_scn  - local max_scn < 3s + keepalive_interval
@@ -583,6 +586,9 @@ public:
   // - OB_INVALID_ARGUMENT: invalid argument
   // - other: bug
   virtual int force_set_member_list(const common::ObMemberList &new_member_list, const int64_t new_replica_num) override final;
+  // increment member info config version
+  // update porposer_id if proposal_id in member info is not latest, otherwise inc config_seq in member_info
+  virtual int inc_config_version(int64_t timeout_us) override final;
   // @brief, add a member to paxos group, can be called in any member
   // @param[in] common::ObMember &member: member which will be added
   // @param[in] const int64_t paxos_replica_num: replica number of paxos group after adding 'member'
@@ -853,6 +859,13 @@ public:
   int stat(palf::PalfStat &palf_stat) const;
 #ifdef OB_BUILD_SHARED_LOG_SERVICE
   void refresh_proposer_member_info() const;
+  // @brief: whether election is allowed with ignoring proposer list.
+  // @return:
+  // OB_NOT_INIT: not inited
+  // OB_NOT_RUNNING: in stop state
+  // OB_ERR_UNEXPECTED: ffi is null
+  // OB_INVALID_ARGUMENT: ffi is invalid
+  int set_allow_election_without_memlist(const bool allow_election_without_memlist);
 #endif
   template<typename StartPoint, typename IteratorType>
   friend int init_log_iterator(

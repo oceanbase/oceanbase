@@ -101,6 +101,7 @@ protected:
   void set_base_version() const;
   ObStoreRowIterator *get_di_base_iter() { return di_base_iters_.count() > 0 ? di_base_iters_[0] : nullptr; }
   int prepare_di_base_blockscan(bool di_base_only, ObDatumRow *row = nullptr);
+  virtual int get_range_count() const { return 1; }
 private:
   int get_next_normal_row(blocksstable::ObDatumRow *&row);
   int get_next_normal_rows(int64_t &count, int64_t capacity);
@@ -166,7 +167,7 @@ protected:
   bool is_unprojected_row_valid_; // whether unprojected_row_ is ready for refresh_table_on_demand currently
   ObGetTableParam *get_table_param_;
   ObBlockRowStore *block_row_store_;
-  ObGroupByCell *group_by_cell_;
+  ObGroupByCellBase *group_by_cell_;
   sql::ObBitVector *skip_bit_;
   ObIAllocator *long_life_allocator_; // used for memory which will be chached in ObGlobalIterPool
   ObStoreRowIterPool<ObStoreRowIterator> *stmt_iter_pool_;

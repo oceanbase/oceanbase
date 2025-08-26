@@ -39,6 +39,9 @@ const char *ObDataDictSqlClient::query_tenant_schema_version_sql_format =
 const char *ObDataDictSqlClient::report_data_dict_persist_info_sql_format =
     "REPLACE INTO %s (SNAPSHOT_SCN, START_LSN, END_LSN) VALUES (%lu, %lu, %lu)";
 
+const char *ObDataDictSqlClient::recycle_dict_history_sql_format =
+    "DELETE FROM %s WHERE SNAPSHOT_SCN < %lu";
+
 ObDataDictSqlClient::ObDataDictSqlClient()
   : is_inited_(false),
     sql_proxy_(NULL)
@@ -204,6 +207,35 @@ int ObDataDictSqlClient::parse_record_from_row_(
     }
   }
 
+  return ret;
+}
+
+int ObDataDictSqlClient::recycle_hisotry_dict_info(
+    const uint64_t tenant_id,
+    const share::SCN &recycle_until_scn,
+    int64_t &recycle_count)
+{
+  int ret = OB_SUCCESS;
+  recycle_count = 0;
+
+  IF_CLIENT_VALID {
+    if (OB_UNLIKELY(!is_user_tenant(tenant_id))
+        || OB_UNLIKELY(! recycle_until_scn.is_valid_and_not_min())) {
+      ret = OB_INVALID_ARGUMENT;
+      DDLOG(WARN, "invalid argument for recycle_hisotry_dict_info", KR(ret), K(tenant_id), K(recycle_until_scn));
+    } else {
+      ObSqlString sql;
+      uint64_t recycle_until_scn_val = recycle_until_scn.get_val_for_inner_table_field();
+      if (OB_FAIL(sql.assign_fmt(recycle_dict_history_sql_format,
+          OB_ALL_DATA_DICTIONARY_IN_LOG_TNAME, recycle_until_scn_val))) {
+        DDLOG(WARN, "assign_fmt to sql_string failed", KR(ret), K(tenant_id), K(recycle_until_scn));
+      } else if (OB_FAIL(sql_proxy_->write(tenant_id, sql.ptr(), recycle_count))) {
+        DDLOG(WARN, "execute recycle_history_dict_info failed", KR(ret), K(tenant_id), K(sql), K(recycle_until_scn), K(recycle_until_scn_val));
+      } else {
+        DDLOG(INFO, "recycle_hisotry_dict_info done", K(tenant_id), K(recycle_count));
+      }
+    }
+  }
   return ret;
 }
 

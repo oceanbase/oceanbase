@@ -23,14 +23,13 @@ int64_t ObSNTenantTmpFileManager::current_dir_id_ = ObTmpFileGlobal::INVALID_TMP
 
 ObSNTenantTmpFileManager::ObSNTenantTmpFileManager()
   : ObITenantTmpFileManager(),
-    tmp_file_block_manager_(),
-    page_cache_controller_(tmp_file_block_manager_)
+    write_cache_(),
+    tmp_file_block_manager_()
 {
 }
 
 ObSNTenantTmpFileManager::~ObSNTenantTmpFileManager()
 {
-  destroy();
 }
 
 int ObSNTenantTmpFileManager::init_sub_module_()
@@ -39,8 +38,8 @@ int ObSNTenantTmpFileManager::init_sub_module_()
 
   if (OB_FAIL(tmp_file_block_manager_.init(tenant_id_))) {
     LOG_WARN("fail to init tenant tmp file block manager", KR(ret));
-  } else if (OB_FAIL(page_cache_controller_.init())) {
-    LOG_WARN("fail to init page cache controller", KR(ret));
+  } else if (OB_FAIL(write_cache_.init(&tmp_file_block_manager_))) {
+    LOG_WARN("fail to init write cache", KR(ret));
   } else {
     LOG_INFO("ObSNTenantTmpFileManager init successful", K(tenant_id_), KP(this));
   }
@@ -51,20 +50,19 @@ int ObSNTenantTmpFileManager::init_sub_module_()
 int ObSNTenantTmpFileManager::start_sub_module_()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(page_cache_controller_.start())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("fail to start page cache controller background threads", KR(ret));
+  if (OB_FAIL(write_cache_.start())) {
+    LOG_WARN("fail to init tmp file write cache", KR(ret), K(tenant_id_));
   } else {
     is_running_ = true;
-    LOG_INFO("ObSNTenantTmpFileManager start successful", K(tenant_id_), KP(this));
   }
+  LOG_INFO("ObSNTenantTmpFileManager start over", KR(ret), K(tenant_id_), KP(this));
   return ret;
 }
 
 int ObSNTenantTmpFileManager::stop_sub_module_()
 {
   int ret = OB_SUCCESS;
-  page_cache_controller_.stop();
+  write_cache_.stop();
   LOG_INFO("ObSNTenantTmpFileManager stop successful", K(tenant_id_), KP(this));
   return ret;
 }
@@ -72,7 +70,7 @@ int ObSNTenantTmpFileManager::stop_sub_module_()
 int ObSNTenantTmpFileManager::wait_sub_module_()
 {
   int ret = OB_SUCCESS;
-  page_cache_controller_.wait();
+  write_cache_.wait();
   LOG_INFO("ObSNTenantTmpFileManager wait successful", K(tenant_id_), KP(this));
   return ret;
 }
@@ -80,9 +78,8 @@ int ObSNTenantTmpFileManager::wait_sub_module_()
 int ObSNTenantTmpFileManager::destroy_sub_module_()
 {
   int ret = OB_SUCCESS;
-  page_cache_controller_.destroy();
+  write_cache_.destroy();
   tmp_file_block_manager_.destroy();
-
   LOG_INFO("ObSNTenantTmpFileManager destroy", K(tenant_id_), KP(this));
   return ret;
 }
@@ -96,7 +93,7 @@ int ObSNTenantTmpFileManager::alloc_dir(int64_t &dir_id)
     ret = OB_NOT_INIT;
     LOG_WARN("ObSNTenantTmpFileManager has not been inited", KR(ret), K(tenant_id_));
   } else if (OB_UNLIKELY(!is_running())) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_NOT_RUNNING;
     LOG_WARN("ObSNTenantTmpFileManager is not running", KR(ret), K(is_running_));
   } else {
     dir_id = ATOMIC_AAF(&current_dir_id_, 1);
@@ -106,7 +103,10 @@ int ObSNTenantTmpFileManager::alloc_dir(int64_t &dir_id)
   return ret;
 }
 
-int ObSNTenantTmpFileManager::open(int64_t &fd, const int64_t &dir_id, const char* const label)
+int ObSNTenantTmpFileManager::open(
+    int64_t &fd,
+    const int64_t &dir_id,
+    const char* const label)
 {
   int ret = OB_SUCCESS;
   fd = ObTmpFileGlobal::INVALID_TMP_FILE_FD;
@@ -117,7 +117,7 @@ int ObSNTenantTmpFileManager::open(int64_t &fd, const int64_t &dir_id, const cha
     ret = OB_NOT_INIT;
     LOG_WARN("ObSNTenantTmpFileManager has not been inited", KR(ret), K(tenant_id_));
   } else if (OB_UNLIKELY(!is_running())) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_NOT_RUNNING;
     LOG_WARN("ObSNTenantTmpFileManager is not running", KR(ret), K(is_running_));
   } else if (OB_ISNULL(buf = tmp_file_allocator_.alloc(sizeof(ObSharedNothingTmpFile),
                                                        lib::ObMemAttr(tenant_id_, "SNTmpFile")))) {
@@ -127,9 +127,10 @@ int ObSNTenantTmpFileManager::open(int64_t &fd, const int64_t &dir_id, const cha
   } else if (FALSE_IT(tmp_file = new (buf) ObSharedNothingTmpFile())) {
   } else if (FALSE_IT(fd = ATOMIC_AAF(&current_fd_, 1))) {
   } else if (OB_FAIL(tmp_file->init(tenant_id_, fd, dir_id,
-                                    &tmp_file_block_manager_, &callback_allocator_,
-                                    &wbp_index_cache_allocator_, &wbp_index_cache_bucket_allocator_,
-                                    &page_cache_controller_, label))) {
+                                    &tmp_file_block_manager_,
+                                    &write_cache_,
+                                    &callback_allocator_,
+                                    label))) {
     LOG_WARN("fail to init tmp file", KR(ret), K(fd), K(dir_id));
   } else if (OB_FAIL(files_.insert(ObTmpFileKey(fd), tmp_file))) {
     LOG_WARN("fail to set refactored to tmp file map", KR(ret), K(fd), KP(tmp_file));
@@ -141,7 +142,7 @@ int ObSNTenantTmpFileManager::open(int64_t &fd, const int64_t &dir_id, const cha
     tmp_file = nullptr;
   }
 
-  LOG_INFO("open a tmp file over", KR(ret), K(fd), K(dir_id), KP(tmp_file), K(lbt()));
+  LOG_INFO("open a tmp file over", KR(ret), K(fd), K(dir_id), KP(tmp_file), KP(this), K(lbt()));
   return ret;
 }
 
@@ -154,7 +155,7 @@ int ObSNTenantTmpFileManager::get_tmp_file(const int64_t fd, ObSNTmpFileHandle &
     ret = OB_NOT_INIT;
     LOG_WARN("ObSNTenantTmpFileManager has not been inited", KR(ret), K(tenant_id_));
   } else if (OB_UNLIKELY(!is_running())) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_NOT_RUNNING;
     LOG_WARN("ObSNTenantTmpFileManager is not running", KR(ret), K(is_running_));
   } else if (OB_FAIL(files_.get(ObTmpFileKey(fd), file_handle))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
@@ -178,7 +179,7 @@ int ObSNTenantTmpFileManager::get_macro_block_list(common::ObIArray<blocksstable
     LOG_WARN("ObSNTenantTmpFileManager has not been inited", KR(ret), K(tenant_id_));
 // XXX This function must still be available after the tenant is stopped and before it is destroyed.
 //  } else if (OB_UNLIKELY(!is_running())) {
-//    ret = OB_ERR_UNEXPECTED;
+//    ret = OB_NOT_RUNNING;
 //    LOG_WARN("ObSNTenantTmpFileManager is not running", KR(ret), K(is_running_));
   } else if (OB_FAIL(tmp_file_block_manager_.get_macro_block_list(macro_id_list))) {
     LOG_WARN("fail to get macro block id list", KR(ret));
@@ -201,7 +202,7 @@ int ObSNTenantTmpFileManager::get_tmp_file_disk_usage(int64_t &disk_data_size, i
     LOG_WARN("ObSNTenantTmpFileManager has not been inited", KR(ret), K(tenant_id_));
 // XXX This function must still be available after the tenant is stopped and before it is destroyed.
 //  } else if (OB_UNLIKELY(!is_running())) {
-//    ret = OB_ERR_UNEXPECTED;
+//    ret = OB_NOT_RUNNING;
 //    LOG_WARN("ObSNTenantTmpFileManager is not running", KR(ret), K(is_running_));
   } else if (OB_FAIL(tmp_file_block_manager_.get_block_usage_stat(used_page_num, macro_block_count))) {
     LOG_WARN("fail to get block usage stat", KR(ret));
@@ -211,6 +212,30 @@ int ObSNTenantTmpFileManager::get_tmp_file_disk_usage(int64_t &disk_data_size, i
   }
 
   LOG_INFO("get tmp file macro block count", KR(ret), K(used_page_num), K(macro_block_count));
+  return ret;
+}
+
+int ObSNTenantTmpFileManager::get_suggested_max_tmp_file_num(int64_t& suggested_max_tmp_file_num,
+                const int64_t write_cache_size_expected_reside_in_memory)
+{
+  int ret = OB_SUCCESS;
+  suggested_max_tmp_file_num = 0;
+
+  if (write_cache_size_expected_reside_in_memory <= 0) {
+    int64_t& write_cache_size_expected_reside_in_memory_mutable_ref =
+                  const_cast<int64_t&>(write_cache_size_expected_reside_in_memory);
+    write_cache_size_expected_reside_in_memory_mutable_ref = 16 * 1024; // 16KB
+  }
+
+  int64_t memory_limit = write_cache_.get_memory_limit();
+  if (memory_limit <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected memory limit", KR(ret), K(memory_limit));
+  } else {
+    suggested_max_tmp_file_num = memory_limit / write_cache_size_expected_reside_in_memory;
+    LOG_INFO("suggested max tmp file num by tmp file write buffer pool memory limit",
+        KR(ret), K(memory_limit), K(suggested_max_tmp_file_num));
+  }
   return ret;
 }
 

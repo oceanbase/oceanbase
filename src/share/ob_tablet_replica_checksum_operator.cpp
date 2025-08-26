@@ -14,9 +14,7 @@
 
 #include "share/ob_tablet_replica_checksum_operator.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
-#ifdef OB_BUILD_SHARED_STORAGE
-#include "share/compaction/ob_shared_storage_compaction_util.h"
-#endif
+
 namespace oceanbase
 {
 namespace share
@@ -440,16 +438,10 @@ void ObTabletReplicaChecksumItem::reset()
 
 bool ObTabletReplicaChecksumItem::is_key_valid() const
 {
-#ifdef OB_BUILD_SHARED_STORAGE
-  return OB_INVALID_ID != tenant_id_
-      && ls_id_.is_valid_with_tenant(tenant_id_)
-      && tablet_id_.is_valid_with_tenant(tenant_id_);
-#else
   return OB_INVALID_ID != tenant_id_
       && ls_id_.is_valid_with_tenant(tenant_id_)
       && tablet_id_.is_valid_with_tenant(tenant_id_)
       && server_.is_valid();
-#endif
 }
 
 bool ObTabletReplicaChecksumItem::is_valid() const
@@ -692,22 +684,6 @@ int ObTabletReplicaChecksumOperator::inner_batch_remove_by_sql_(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(start_idx), K(end_idx),
              "tablet_replica cnt", tablet_replicas.count());
-  } else if (GCTX.is_shared_storage_mode()) {
-#ifdef OB_BUILD_SHARED_STORAGE
-    if (OB_FAIL(sql.assign_fmt("DELETE FROM %s WHERE tenant_id = '%lu' AND (tablet_id, ls_id) IN(",
-                OB_ALL_TABLET_REPLICA_CHECKSUM_TNAME, tenant_id))) {
-      LOG_WARN("fail to assign sql", KR(ret), K(tenant_id));
-    } else {
-      for (int64_t idx = start_idx; OB_SUCC(ret) && (idx < end_idx); ++idx) {
-        if (OB_FAIL(sql.append_fmt("('%lu', %ld)%s",
-                                   tablet_replicas.at(idx).get_tablet_id().id(),
-                                   tablet_replicas.at(idx).get_ls_id().id(),
-                                   ((idx == end_idx - 1) ? ")" : ", ")))) {
-          LOG_WARN("fail to assign sql", KR(ret), K(tenant_id), K(idx), K(start_idx), K(end_idx));
-        }
-      }
-    }
-#endif
   } else if (OB_FAIL(sql.assign_fmt("DELETE FROM %s WHERE tenant_id = '%lu' AND (tablet_id, svr_ip, svr_port, ls_id) IN(",
               OB_ALL_TABLET_REPLICA_CHECKSUM_TNAME, tenant_id))) {
     LOG_WARN("fail to assign sql", KR(ret), K(tenant_id));
@@ -1210,259 +1186,6 @@ int ObTabletReplicaChecksumOperator::inner_batch_insert_or_update_by_sql_(
   }
   return ret;
 }
-
-#ifdef OB_BUILD_SHARED_STORAGE
-
-int ObTabletReplicaChecksumOperator::gene_select_sql_(
-  const uint64_t tenant_id,
-      const ObIArray<ObTabletReplicaChecksumItem> &items,
-      const int64_t start_idx,
-      const int64_t end_idx,
-      ObSqlString &sql)
-{
-  int ret = OB_SUCCESS;
-  ObSqlString tablet_sql;
-  for (int64_t idx = 0; OB_SUCC(ret) && (idx < items.count()); ++idx) {
-    const ObTabletID &tablet_id = items.at(idx).tablet_id_;
-    if (OB_FAIL(tablet_sql.append_fmt("%s %ld", 0 == idx ? "" : ",", tablet_id.id()))) {
-      LOG_WARN("fail to assign sql", KR(ret), K(tablet_id));
-    }
-  } // end for
-  if (FAILEDx(sql.assign_fmt(
-          "SELECT tenant_id, tablet_id, ls_id, compaction_scn FROM %s WHERE "
-          "tenant_id=%lu AND svr_ip = '%s' AND svr_port = %d AND tablet_id in (%s) FOR UPDATE",
-          OB_ALL_TABLET_REPLICA_CHECKSUM_TNAME, tenant_id, compaction::SHARED_STORAGE_REPLICA_CKM_SVR_IP,
-          compaction::SHARED_STORAGE_REPLICA_CKM_SVR_PORT,
-          tablet_sql.ptr()))) {
-    LOG_WARN("fail to assign sql", KR(ret), K(tenant_id));
-  }
-  return ret;
-}
-
-int ObTabletReplicaChecksumOperator::build_ckm_info_map_(
-    const uint64_t tenant_id,
-    const ObIArray<ObTabletReplicaChecksumItem> &items,
-    const int64_t start_idx,
-    const int64_t end_idx,
-    ObISQLClient &sql_client,
-    ObTabletSimpleCkmInfoMap &map)
-{
-  int ret = OB_SUCCESS;
-  ObSqlString sql;
-  sqlclient::ObMySQLResult *res = NULL;
-  const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
-  if (OB_FAIL(gene_select_sql_(tenant_id, items, start_idx, end_idx, sql))) {
-    LOG_WARN("failed to gene select sql", KR(ret), K(tenant_id), K(items), K(start_idx), K(end_idx));
-  }
-  HEAP_VAR(ObMySQLProxy::MySQLResult, result) {
-    if (FAILEDx(sql_client.read(result, meta_tenant_id, sql.ptr(), share::OBCG_DEFAULT))) {
-      LOG_WARN("fail to execute sql", KR(ret), K(tenant_id), K(meta_tenant_id), "sql", sql.ptr());
-    } else if (OB_ISNULL(res = result.get_result())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("fail to get mysql result", KR(ret), "sql", sql.ptr());
-    } else {
-      ObSimpleCkmInfo info;
-      int64_t int_tablet_id  = 0;
-      int64_t int_ls_id  = 0;
-      uint64_t compaction_scn_val = 0;
-      while (OB_SUCC(ret)) {
-        if (OB_FAIL(res->next())) {
-          if (OB_ITER_END != ret) {
-            LOG_WARN("fail to get next result", KR(ret));
-          }
-        } else {
-          info.reset();
-          (void)GET_COL_IGNORE_NULL(res->get_int, "tablet_id", int_tablet_id);
-          (void)GET_COL_IGNORE_NULL(res->get_int, "ls_id", int_ls_id);
-          (void)GET_COL_IGNORE_NULL(res->get_uint, "compaction_scn", compaction_scn_val);
-          info.ls_id_ = ObLSID(int_ls_id);
-          info.compaction_scn_ = int64_t(compaction_scn_val);
-          if (FAILEDx(map.set_refactored(ObTabletID(int_tablet_id), info))) {
-            LOG_WARN("fail to push back checksum item", KR(ret), K(int_tablet_id), K(info));
-          }
-        }
-      } // end of while
-      ret = (OB_ITER_END == ret ? OB_SUCCESS : ret);
-    }
-  }
-  LOG_TRACE("build ckm info map", KR(ret), K(map.size()));
-  return ret;
-}
-
-int ObTabletReplicaChecksumOperator::batch_select_and_update_with_trans(
-    const uint64_t tenant_id,
-    const ObIArray<ObTabletReplicaChecksumItem> &items)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY((OB_INVALID_TENANT_ID == tenant_id) || (items.count() <= 0))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), "items count", items.count());
-  } else {
-    ObTabletSimpleCkmInfoMap map;
-    int64_t start_idx = 0;
-    int64_t end_idx = min(MAX_BATCH_COUNT, items.count());
-    if (OB_FAIL(map.create(MAX_BATCH_COUNT, "TabletUpdMap",
-                           ObModIds::OB_HASH_NODE, tenant_id))) {
-      LOG_WARN("fail to create replica map", KR(ret));
-    }
-    while (OB_SUCC(ret) && (start_idx < end_idx)) {
-      common::ObMySQLTransaction trans;
-      if (OB_FAIL(trans.start(GCTX.sql_proxy_, gen_meta_tenant_id(tenant_id)))) {
-        LOG_WARN("fail to start transaction", KR(ret), K(tenant_id));
-      } else if (OB_FAIL(inner_batch_select_and_update_by_sql_(tenant_id, items, start_idx,
-          end_idx, trans, map))) {
-        LOG_WARN("fail to inner batch insert", KR(ret), K(tenant_id), K(start_idx), K(map.size()));
-      } else {
-        start_idx = end_idx;
-        end_idx = min(start_idx + MAX_BATCH_COUNT, items.count());
-        map.reuse(); // clear map before next batch
-      }
-      if (trans.is_started()) {
-        int trans_ret = trans.end(OB_SUCCESS == ret);
-        if (OB_SUCCESS != trans_ret) {
-          LOG_WARN("fail to end transaction", KR(trans_ret));
-          ret = ((OB_SUCCESS == ret) ? trans_ret : ret);
-        }
-      }
-    } // while
-  }
-  return ret;
-}
-
-enum OpType
-{
-  OP_INSERT = 0,
-  OP_UPDATE,
-  OP_MAX
-};
-
-int ObTabletReplicaChecksumOperator::update_with_map_(
-    const uint64_t tenant_id,
-    const ObIArray<ObTabletReplicaChecksumItem> &items,
-    const int64_t start_idx,
-    const int64_t end_idx,
-    ObISQLClient &sql_client,
-    ObTabletSimpleCkmInfoMap &map)
-{
-  int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  ObSimpleCkmInfo info;
-  OpType op_type = OP_MAX;
-  ObDMLSqlSplicer dml;
-  int64_t affected_rows = -1;
-  ObSqlString sql;
-  ObArenaAllocator allocator;
-  const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
-  ObString visible_column_meta;
-  ObString b_column_meta;
-  ObTabletReplicaReportColumnMeta mock_column_meta;
-  uint64_t min_data_version = 0;
-
-  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, min_data_version))) {
-    LOG_WARN("get tenant data version failed", K(ret), K(tenant_id));
-  } else {
-    for (int64_t idx = start_idx; OB_SUCC(ret) && idx < end_idx; ++idx) {
-      const ObTabletReplicaChecksumItem &item = items.at(idx);
-      const ObTabletReplicaReportColumnMeta *column_meta = &item.column_meta_;
-      op_type = OP_MAX;
-      sql.reuse();
-      dml.reuse();
-      if (OB_TMP_FAIL(map.get_refactored(item.tablet_id_, info))) {
-        if (OB_HASH_NOT_EXIST == tmp_ret) {
-          op_type = OP_INSERT;
-        } else {
-          ret = tmp_ret;
-          LOG_WARN("failed to get from map", KR(ret), K(item));
-        }
-      } else if (info.ls_id_ != item.ls_id_ || info.compaction_scn_ < item.compaction_scn_.get_val_for_tx()) {
-        op_type = OP_UPDATE;
-      }
-#ifdef ERRSIM
-      if (OB_SUCC(ret)) {
-        ret = OB_E(EventTable::EN_MOCK_LARGE_COLUMN_META) ret;
-        if (OB_FAIL(ret)) {
-          ret = OB_SUCCESS;
-          if (OB_FAIL(mock_large_column_meta(item.column_meta_, mock_column_meta))) {
-            LOG_WARN("fail to mock large column meta", KR(ret));
-          } else {
-            LOG_INFO("ERRSIM EN_MOCK_LARGE_COLUMN_META", K(ret));
-            column_meta = &mock_column_meta;
-          }
-        }
-      }
-#endif
-      ObObj obj;
-      if (OB_FAIL(ret) || OP_MAX == op_type) {
-      } else if (OB_TMP_FAIL(get_visible_column_meta(*column_meta, allocator, visible_column_meta))) {
-        LOG_WARN("fail to get visible column meta str", KR(tmp_ret));
-      } else if (OB_TMP_FAIL(column_meta->get_str_obj(item.data_checksum_type_, allocator, obj, b_column_meta))) {
-        LOG_WARN("fail to get column meta str", KR(tmp_ret));
-      } else if (OB_TMP_FAIL(dml.add_pk_column("tenant_id", tenant_id))) {
-        LOG_WARN("failed to add pk column", KR(tmp_ret), K(item));
-      } else if (OB_TMP_FAIL(dml.add_pk_column("tablet_id", item.tablet_id_.id()))) {
-        LOG_WARN("failed to add pk column", KR(tmp_ret), K(item));
-      } else if (OB_TMP_FAIL(dml.add_pk_column("ls_id", item.ls_id_.id()))) {
-        LOG_WARN("failed to add pk column", KR(tmp_ret), K(item));
-      } else if (OB_TMP_FAIL(dml.add_pk_column("svr_ip", compaction::SHARED_STORAGE_REPLICA_CKM_SVR_IP))) {
-        LOG_WARN("failed to add pk column", KR(tmp_ret), K(item));
-      } else if (OB_TMP_FAIL(dml.add_pk_column("svr_port", compaction::SHARED_STORAGE_REPLICA_CKM_SVR_PORT))) {
-        LOG_WARN("failed to add pk column", KR(tmp_ret), K(item));
-      } else if (OB_TMP_FAIL(dml.add_column("compaction_scn", item.compaction_scn_.get_val_for_tx()))) {
-        LOG_WARN("failed to add pk column", KR(tmp_ret), K(item));
-      } else if (OB_TMP_FAIL(dml.add_column("row_count", item.row_count_))) {
-        LOG_WARN("failed to add column", KR(tmp_ret), K(item));
-      } else if (OB_TMP_FAIL(dml.add_column("data_checksum", item.data_checksum_))) {
-        LOG_WARN("failed to add column", KR(tmp_ret), K(item));
-      } else if (OB_TMP_FAIL(dml.add_column("column_checksums", visible_column_meta))) {
-        LOG_WARN("failed to add column", KR(tmp_ret), K(item));
-      } else if (OB_TMP_FAIL(dml.add_column("b_column_checksums", obj))) {
-        LOG_WARN("failed to add column", KR(tmp_ret), K(item));
-      } else if (min_data_version >= DATA_VERSION_4_3_3_0 &&
-          OB_TMP_FAIL(dml.add_column("data_checksum_type", item.data_checksum_type_))) {
-        LOG_WARN("failed to add column", KR(tmp_ret), K(item));
-      } else if (min_data_version >= DATA_VERSION_4_3_5_2 &&
-          OB_TMP_FAIL(dml.add_column("co_base_snapshot_version", item.co_base_snapshot_version_.get_val_for_inner_table_field()))) {
-      } else if (OP_INSERT == op_type && OB_TMP_FAIL(dml.splice_insert_update_sql(OB_ALL_TABLET_REPLICA_CHECKSUM_TNAME, sql))) {
-        LOG_WARN("failed to splice sql", KR(tmp_ret));
-      } else if (OP_UPDATE == op_type && OB_TMP_FAIL(dml.splice_update_sql(OB_ALL_TABLET_REPLICA_CHECKSUM_TNAME, sql))) {
-        LOG_WARN("failed to splice sql", KR(tmp_ret));
-      } else if (OB_TMP_FAIL(sql_client.write(meta_tenant_id, sql.ptr(), affected_rows))) {
-        LOG_WARN("failed to write", KR(tmp_ret), K(sql));
-      }
-    } // for
-  }
-
-
-  return ret;
-}
-
-int ObTabletReplicaChecksumOperator::inner_batch_select_and_update_by_sql_(
-    const uint64_t tenant_id,
-    const ObIArray<ObTabletReplicaChecksumItem> &items,
-    const int64_t start_idx,
-    const int64_t end_idx,
-    ObISQLClient &sql_client,
-    ObTabletSimpleCkmInfoMap &map)
-{
-  int ret = OB_SUCCESS;
-  const int64_t item_cnt = items.count();
-  if (OB_UNLIKELY((!is_valid_tenant_id(tenant_id))
-      || (item_cnt <= 0)
-      || (start_idx < 0)
-      || (start_idx >= end_idx)
-      || (end_idx > item_cnt)
-      || (!map.created()))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), "items count", item_cnt,
-      K(start_idx), K(end_idx), K(map.created()));
-  } else if (OB_FAIL(build_ckm_info_map_(tenant_id, items, start_idx, end_idx, sql_client, map))) {
-    LOG_WARN("fail to build replca info map", KR(ret), K(tenant_id), K(items), K(start_idx), K(end_idx));
-  } else if (OB_FAIL(update_with_map_(tenant_id, items, start_idx, end_idx, sql_client, map))) {
-    LOG_WARN("fail to update", KR(ret), K(tenant_id), K(items), K(start_idx), K(end_idx));
-  }
-  return ret;
-}
-#endif
 
 int ObTabletReplicaChecksumOperator::batch_update_compaction_scn(
     const uint64_t tenant_id,

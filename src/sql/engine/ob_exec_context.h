@@ -31,6 +31,7 @@
 #include "lib/udt/ob_udt_type.h"
 #include "lib/udt/ob_collection_type.h"
 #include "sql/plan_cache/ob_adaptive_auto_dop.h"
+#include "sql/engine/ob_diagnosis_manager.h"
 
 #define GET_PHY_PLAN_CTX(ctx) ((ctx).get_physical_plan_ctx())
 #define GET_MY_SESSION(ctx) ((ctx).get_my_session())
@@ -109,32 +110,6 @@ struct ObOperatorKit
   const ObOpSpec *spec_;
   ObOperator *op_;
   ObOpInput *input_;
-};
-
-struct ObDiagnosisManager
-{
-  ObDiagnosisManager() : cur_file_url_(NULL), cur_line_number_(0)
-  {
-    ObMemAttr attr(MTL_ID(), "DiagnosisMgr");
-    idxs_.set_attr(attr);
-    rets_.set_attr(attr);
-    col_names_.set_attr(attr);
-    allocator_.set_attr(attr);
-  }
-
-  void set_cur_file_url(ObString file_url) { cur_file_url_ = file_url; }
-  ObString get_cur_file_url() { return cur_file_url_; }
-  void set_cur_line_number(int64_t line_number) { cur_line_number_  = line_number; }
-  int64_t get_cur_line_number() { return cur_line_number_; }
-  int do_diagnosis(ObBitVector &skip, int64_t limit_num);
-  int add_warning_info(int err_ret, int line_idx);
-
-  common::ObArray<int64_t> idxs_;
-  common::ObArray<int64_t> rets_;
-  common::ObArray<ObString> col_names_;
-  ObString cur_file_url_;
-  int64_t cur_line_number_;
-  ObArenaAllocator allocator_;
 };
 
 // Physical operator kit store
@@ -219,7 +194,7 @@ public:
   int init_expr_op(const uint64_t expr_op_size, ObIAllocator *allocator = NULL);
   void reset_expr_op();
   inline bool is_expr_op_ctx_inited() { return expr_op_size_ > 0 && NULL != expr_op_ctx_store_; }
-  int get_convert_charset_allocator(common::ObArenaAllocator *&allocator);
+  int get_convert_charset_allocator(common::ObIAllocator *&allocator);
   int get_malloc_allocator(ObIAllocator *&allocator);
   void try_reset_convert_charset_allocator();
 
@@ -406,6 +381,8 @@ public:
   inline pl::ObPLPackageGuard* get_original_package_guard() { return package_guard_; }
   inline void set_package_guard(pl::ObPLPackageGuard* v) { package_guard_ = v; }
   int init_pl_ctx();
+  inline ObIAllocator* get_pl_expr_alloc() { return pl_expr_allocator_; }
+  inline void set_pl_expr_alloc(ObIAllocator *alloc) { pl_expr_allocator_ = alloc; }
 
   ObPartIdRowMapManager& get_part_row_manager() { return part_row_map_manager_; }
 
@@ -494,7 +471,7 @@ public:
   int fill_px_batch_info(
       ObBatchRescanParams &params,
       int64_t batch_id,
-      sql::ObExpr::ObExprIArray &array);
+      const sql::ObExpr::ObExprIArray &array);
   int64_t get_px_batch_id() { return px_batch_id_; }
 
   ObDmlEventType get_dml_event() const { return dml_event_; }
@@ -597,6 +574,10 @@ public:
   }
 
   ObDiagnosisManager& get_diagnosis_manager() { return diagnosis_manager_; }
+  common::ObArenaAllocator &get_deterministic_udf_cache_allocator() { return deterministic_udf_cache_allocator_; }
+
+  void *get_external_url_resource_cache() { return external_url_resource_cache_; }
+  void set_external_url_resource_cache(void *cache) { external_url_resource_cache_ = cache; }
 
 private:
   int build_temp_expr_ctx(const ObTempExpr &temp_expr, ObTempExprCtx *&temp_expr_ctx);
@@ -665,6 +646,7 @@ protected:
   //@todo: (linlin.xll) ObPLCtx is ambiguous with ObPLContext, need to rename it
   pl::ObPLCtx *pl_ctx_;
   pl::ObPLPackageGuard *package_guard_;
+  ObIAllocator *pl_expr_allocator_;
 
   ObPartIdRowMapManager part_row_map_manager_;
   const common::ObIArray<int64_t> *row_id_list_;
@@ -788,6 +770,9 @@ protected:
   AutoDopHashMap auto_dop_map_;
   bool force_local_plan_;
   ObDiagnosisManager diagnosis_manager_;
+  common::ObArenaAllocator deterministic_udf_cache_allocator_;
+
+  void *external_url_resource_cache_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExecContext);
 };
@@ -819,9 +804,11 @@ inline void ObExecContext::reference_my_plan(const ObPhysicalPlan *my_plan)
 inline void ObExecContext::set_my_session(ObSQLSessionInfo *session)
 {
   my_session_ = session;
-  set_mem_attr(ObMemAttr(session->get_effective_tenant_id(),
+  if (OB_NOT_NULL(session)) {
+    set_mem_attr(ObMemAttr(session->get_effective_tenant_id(),
                          ObModIds::OB_SQL_EXEC_CONTEXT,
                          ObCtxIds::EXECUTE_CTX_ID));
+  }
 }
 
 inline ObSQLSessionInfo *ObExecContext::get_my_session() const

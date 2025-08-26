@@ -403,12 +403,18 @@ int ObAggregatedStore::fill_rows(
             LOG_WARN("Failed to get row ids", K(ret), K(begin_index), K(end_index));
           }
         } else if (0 == row_count) {
-        } else if (agg_flat_row_mode_ && blocksstable::ObIMicroBlockReader::Reader == reader->get_type()) {
+        } else if (agg_flat_row_mode_
+                   && (blocksstable::ObIMicroBlockReader::Reader == reader->get_type()
+                       || blocksstable::ObIMicroBlockReader::NewFlatReader == reader->get_type())) {
           // for flat block, do aggregate in row mode in some case
-           blocksstable::ObMicroBlockReader *block_reader = static_cast<blocksstable::ObMicroBlockReader*>(reader);
-           if (OB_FAIL(block_reader->get_aggregate_result(*iter_param_, context_, row_ids_, row_count, row_buf_, agg_row_.get_agg_cells()))) {
-             LOG_WARN("Failed to get aggregate", K(ret));
-           }
+          if (OB_FAIL(reader->get_aggregate_result(*iter_param_,
+                                                   context_,
+                                                   row_ids_,
+                                                   row_count,
+                                                   row_buf_,
+                                                   agg_row_.get_agg_cells()))) {
+            LOG_WARN("Failed to get aggregate", K(ret));
+          }
         } else {
           for (int64_t i = 0; OB_SUCC(ret) && i < agg_row_.get_agg_count(); ++i) {
             ObAggCell *cell = agg_row_.at(i);

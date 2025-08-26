@@ -18,10 +18,12 @@
 #include "share/io/ob_io_manager.h"
 #include "storage/meta_store/ob_server_storage_meta_service.h"
 #include "storage/ob_file_system_router.h"
+#include "share/allocator/ob_shared_memory_allocator_mgr.h"
 
 namespace oceanbase
 {
 using namespace common;
+using namespace share;
 namespace tools
 {
 
@@ -32,6 +34,15 @@ ObAdminExecutor::ObAdminExecutor()
       config_mgr_(ObServerConfig::get_instance(), reload_config_)
 {
   // 设置MTL上下文
+
+  // 初始化MTL TxShare相关内存分配器
+  ObMemAttr mem_attr;
+  mem_attr.label_ = "OB_ADMIN";
+  ObSharedMemAllocMgr *shared_mem_alloc_mgr = OB_NEW(ObSharedMemAllocMgr, mem_attr.label_);
+  OB_ASSERT(OB_SUCCESS == shared_mem_alloc_mgr->init());
+  OB_ASSERT(OB_SUCCESS == shared_mem_alloc_mgr->start());
+  mock_server_tenant_.set(shared_mem_alloc_mgr);
+
   IGNORE_RETURN ObTimerService::get_instance().start();
   mock_server_tenant_.set(&ObTimerService::get_instance());
   share::ObTenantEnv::set_tenant(&mock_server_tenant_);
@@ -203,8 +214,8 @@ int ObAdminExecutor::set_sts_credential_key(const char *sts_credential)
   } else {
     if (OB_FAIL(ObDeviceManager::get_instance().init_devices_env())) {
       STORAGE_LOG(WARN, "fail to init device env", KR(ret));
-    } else if (OB_FAIL(ObObjectStorageInfo::register_cluster_version_mgr(
-                   &ObClusterVersionBaseMgr::get_instance()))) {
+    } else if (OB_FAIL(ObObjectStorageInfo::register_cluster_state_mgr(
+                   &ObClusterStateBaseMgr::get_instance()))) {
       STORAGE_LOG(WARN, "fail to register cluster version mgr", KR(ret));
     } else {
       omt::ObTenantConfigGuard tenant_config(TENANT_CONF(OB_SYS_TENANT_ID));

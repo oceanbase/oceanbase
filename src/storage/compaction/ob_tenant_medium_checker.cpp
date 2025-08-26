@@ -87,9 +87,7 @@ ObTenantMediumChecker::~ObTenantMediumChecker()
 int ObTenantMediumChecker::init()
 {
   int ret = OB_SUCCESS;
-  if (GCTX.is_shared_storage_mode()) {
-    FLOG_INFO("cluster is shared storage mode, not init ObTenantMediumChecker", KR(ret));
-  } else if (IS_INIT) {
+  if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObTenantMediumChecker is inited before", KR(ret), KPC(this));
   } else if (OB_FAIL(tablet_ls_set_.create(DEFAULT_MAP_BUCKET, "MedCheckSet", "CheckSetNode", MTL_ID()))) {

@@ -15,7 +15,9 @@
 
 #include "lib/charset/ob_charset.h"
 #include "lib/hash/ob_hashmap.h"
+#include "object/ob_object.h"
 #include "plugin/interface/ob_plugin_ftparser_intf.h"
+#include "share/datum/ob_datum_funcs.h"
 
 namespace oceanbase
 {
@@ -25,57 +27,25 @@ namespace storage
 class ObFTWord final
 {
 public:
-  ObFTWord() : word_(), type_(ObCollationType::CS_TYPE_INVALID) {}
-  ObFTWord(const int64_t length, const char *ptr, const ObCollationType &type) : word_(length, ptr), type_(type) {}
+  ObFTWord() : word_(), meta_() {}
+  ObFTWord(const int64_t length, const char *ptr, const ObObjMeta &meta) : meta_(meta)
+  {
+    word_.set_string(ptr, length);
+  }
   ~ObFTWord() = default;
 
-  OB_INLINE const common::ObString &get_word() const { return word_; }
-  OB_INLINE const ObCollationType &get_collation_type() const { return type_; }
-  OB_INLINE int hash(uint64_t &hash_val) const
-  {
-    hash_val = ObCharset::hash(type_, word_);
-    return common::OB_SUCCESS;
-  }
-  OB_INLINE uint64_t hash() const { return ObCharset::hash(type_, word_); }
-  OB_INLINE bool empty() const { return word_.empty(); }
-
-  OB_INLINE bool operator ==(const ObFTWord &other) const
-  {
-    bool is_equal = false;
-    if (other.type_ == type_) {
-      is_equal = 0 == ObCharset::strcmp(type_, word_, other.word_);
-    }
-    return is_equal;
-  }
+  OB_INLINE const ObDatum &get_word() const { return word_; }
+  OB_INLINE ObCollationType get_collation_type() const { return meta_.get_collation_type(); }
+  OB_INLINE bool empty() const { return word_.get_string().empty(); }
+  int hash(uint64_t &hash_val) const;
+  bool operator==(const ObFTWord &other) const;
   OB_INLINE bool operator !=(const ObFTWord &other) const { return !(other == *this); }
 
-  TO_STRING_KV(K_(type), K_(word));
-private:
-  common::ObString word_;
-  ObCollationType type_;
-};
+  TO_STRING_KV(K_(meta), K_(word));
 
-class ObFTWordCount final
-{
-public:
-  ObFTWordCount() : ft_word_(), word_cnt_(0) {}
-  ~ObFTWordCount() = default;
-  OB_INLINE int hash(uint64_t &hash_val) const
-  {
-    hash_val = hash();
-    return common::OB_SUCCESS;
-  }
-  OB_INLINE uint64_t hash() const
-  {
-    int64_t hash_value = ft_word_.hash();
-    hash_value = common::murmurhash(&word_cnt_, sizeof(word_cnt_), hash_value);
-    return hash_value;
-  }
-  OB_INLINE bool is_valid() const { return !ft_word_.empty() && word_cnt_ > 1; }
-  TO_STRING_KV(K_(ft_word), K_(word_cnt));
-public:
-  ObFTWord ft_word_;
-  int64_t word_cnt_;
+private:
+  ObDatum word_;
+  ObObjMeta meta_;
 };
 
 typedef common::hash::ObHashMap<ObFTWord, int64_t> ObFTWordMap;
@@ -96,7 +66,7 @@ public:
   void set_flag(const uint64_t flag) { flag_ |= flag; }
 private:
   void clear_flag(const uint64_t flag) { flag_ &= ~flag; }
-  bool has_flag(const uint64 flag) const { return (flag_ & flag) == flag; }
+  bool has_flag(const uint64_t flag) const { return (flag_ & flag) == flag; }
 public:
   void set_min_max_word() { set_flag(AWF_MIN_MAX_WORD); }
   void set_stop_word() { set_flag(AWF_STOPWORD); }

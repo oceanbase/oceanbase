@@ -91,9 +91,12 @@ int ObTabletSpaceUsage::deserialize(const char *buf, const int64_t data_len, int
     LOG_WARN("fail to serialize backup_bytes_", K(ret), K(data_len), K(new_pos), K(length));
   } else if (new_pos - pos < length && OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &ss_public_sstable_occupy_size_))) {
     LOG_WARN("fail to deserialize ss_public_sstable_occupy_size_", K(ret), K(data_len), K(new_pos), K(length));
-  } else if (OB_UNLIKELY(length != new_pos - pos)) {
+  } else if (OB_UNLIKELY(length < new_pos - pos)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("length doesn't match", K(ret), K(length), K(new_pos), K(pos));
+  } else if (OB_UNLIKELY(length > new_pos - pos)) {
+    LOG_WARN("old server may deserialize value written by new server", K(length), K(new_pos - pos), K(new_pos));
+    pos += length;
   } else {
     pos = new_pos;
   }

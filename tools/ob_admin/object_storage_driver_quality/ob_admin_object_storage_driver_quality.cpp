@@ -1094,10 +1094,10 @@ int ObAdminObjectStorageDriverQualityExecutor::execute(int argc, char *argv[])
   int ret = OB_SUCCESS;
   OSDQScene *scene = nullptr;
   const int64_t memory_limit = 16 * 1024 * 1024 * 1024LL;  // 16 GB
-  if (OB_FAIL(set_environment_())) {
-    OB_LOG(WARN, "failed set environment", KR(ret));
-  } else if (OB_FAIL(parse_cmd_(argc, argv))) {
+  if (OB_FAIL(parse_cmd_(argc, argv))) {
     OB_LOG(WARN, "failed to parse cmd", KR(ret), K(argc), K(argv));
+  } else if (OB_FAIL(set_environment_())) {
+    OB_LOG(WARN, "failed set environment", KR(ret));
   } else if (OB_FAIL(param_dump())) {
     OB_LOG(WARN, "failed to dump args", KR(ret));
   } else if (OB_FAIL(metric_.init())) {
@@ -1183,8 +1183,9 @@ int ObAdminObjectStorageDriverQualityExecutor::parse_cmd_(int argc, char *argv[]
   while (OB_SUCC(ret) && -1 != (opt = getopt_long(argc, argv, opt_str, longopts, &index))) {
     switch (opt) {
       case 'h': {
+        ret = OB_INVALID_ARGUMENT;
         print_usage_();
-        exit(1);
+        break;
       }
       case 'd': {
         time_t timestamp = time(NULL);
@@ -1259,13 +1260,15 @@ int ObAdminObjectStorageDriverQualityExecutor::parse_cmd_(int argc, char *argv[]
           }
           break;
         } else {
+          ret = OB_INVALID_ARGUMENT;
           print_usage_();
-          exit(1);
+          break;
         }
       }
       default: {
+        ret = OB_INVALID_ARGUMENT;
         print_usage_();
-        exit(1);
+        break;
       }
     }
   }
@@ -1301,6 +1304,8 @@ int ObAdminObjectStorageDriverQualityExecutor::set_environment_()
     OB_LOG(WARN, "failed to init io manager", KR(ret));
   } else if (OB_FAIL(ObIOManager::get_instance().start())) {
     OB_LOG(WARN, "failed to start io manager", KR(ret));
+  } else if (OB_FAIL(ObObjectStorageInfo::register_cluster_state_mgr(&ObClusterStateBaseMgr::get_instance()))) {
+    STORAGE_LOG(WARN, "fail to register cluster state mgr", KR(ret));
   }
 
   // set tenant io manager memory limit;

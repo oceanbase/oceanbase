@@ -585,7 +585,13 @@ int ObParser::split_start_with_pl(const ObString &stmt,
         int64_t success_len = 0;
         OX(success_len = parse_result.result_tree_->children_[parse_result.result_tree_->num_child_ - 1]->str_len_ +
           parse_result.result_tree_->children_[parse_result.result_tree_->num_child_ - 1]->pos_);
-        if(OB_SUCC(ret) && ';' == stmt[success_len]) success_len++;
+        if(OB_SUCC(ret)) {
+          if (';' == stmt[success_len]) {
+            success_len++;
+          } else {
+            ret = OB_ERR_PARSE_SQL;
+          }
+        }
         CK(success_len < remain);
         ObString error_part(remain - success_len, stmt.ptr() + success_len);
         OZ(queries.push_back(error_part));

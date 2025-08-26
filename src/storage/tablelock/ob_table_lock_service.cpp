@@ -1934,7 +1934,9 @@ int ObTableLockService::process_table_tablet_lock_(ObTableLockCtx &ctx,
 
   if (OB_FAIL(process_obj_lock_(ctx, table_ls_lock_map))) {
     LOG_WARN("lock table failed", K(ret), K(ctx), K(table_lock_mode));
-  } else if (OB_FAIL(get_tablet_ls_lock_map_(lock_mode, ctx, tablet_ls_lock_map))) {
+  }
+  DEBUG_SYNC(TABLE_LOCK_AFTER_LOCK_TABLE_BEFORE_LOCK_TABLET);
+  if (FAILEDx(get_tablet_ls_lock_map_(lock_mode, ctx, tablet_ls_lock_map))) {
     LOG_WARN("get tablet ls_lock_map failed", K(ret), K(ctx), K(lock_mode));
   } else if (FALSE_IT(ctx.lock_mode_ = lock_mode)) {
   } else  if (!ctx.is_enable_lock_priority_ && OB_FAIL(pre_check_lock_(ctx, tablet_ls_lock_map))) {

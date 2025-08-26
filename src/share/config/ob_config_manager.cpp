@@ -16,6 +16,10 @@
 #include "ob_config_manager.h"
 #include "observer/ob_sql_client_decorator.h"
 #include "observer/ob_server.h"
+#include "lib/oblog/ob_log_compressor.h"
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+#include "logservice/libpalf/libpalf_logger.h"
+#endif
 
 namespace oceanbase
 {
@@ -61,6 +65,73 @@ int ObConfigManager::init(ObMySQLProxy &sql_proxy, const ObAddr &server)
     LOG_WARN("init timer failed", K(ret));
   } else {
     inited_ = true;
+  }
+  return ret;
+}
+
+int ObConfigManager::ob_logger_config_update(const ObServerConfig& config)
+{
+  int ret = OB_SUCCESS;
+  int64_t max_log_cnt = 0;
+  const bool record_old_log_file = config.enable_syslog_recycle;
+  int64_t max_disk_size = 0;
+  const char *compress_func_ptr = config.syslog_compress_func.str();
+  const int64_t min_uncompressed_count = config.syslog_file_uncompressed_count;
+  const bool log_warn = config.enable_syslog_wf;
+  const bool enable_async_syslog = config.enable_async_syslog;
+
+  LOG_INFO("Whether record old log file", K(record_old_log_file));
+  LOG_INFO("Whether log warn", K(log_warn));
+  LOG_INFO("Whether compress syslog file", K(compress_func_ptr));
+
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  int64_t libpalf_max_log_cnt = 0;
+  if (GCONF.enable_logservice) {
+    if (OB_FAIL(libpalf::LibPalfLogger::cal_libpalf_shared_syslog_capacity(
+      config.max_syslog_file_count,
+      config.syslog_disk_size,
+      libpalf::LibPalfLogger::LIBPALF_SHARED_MAX_SYSLOG_CAPACITY_PERCENTAGE,
+      OB_LOGGER.DEFAULT_MAX_FILE_SIZE,
+      libpalf_max_log_cnt,
+      max_log_cnt,
+      max_disk_size))) {
+      LOG_WARN("cal libpalf shared syslog capacity failed", KR(ret));
+    } else if (OB_FAIL(libpalf::LibPalfLogger::set_max_syslog_file_count(libpalf_max_log_cnt))) {
+      LOG_WARN("set libpalf shared syslog capacity failed", KR(ret));
+    } else {
+      LOG_INFO("libpalf shared syslog capacity set success", K(libpalf_max_log_cnt), K(max_log_cnt), K(max_disk_size));
+    }
+  } else {
+    max_log_cnt = config.max_syslog_file_count;
+    max_disk_size = config.syslog_disk_size;
+  }
+#else
+  max_log_cnt = config.max_syslog_file_count;
+  max_disk_size = config.syslog_disk_size;
+#endif
+
+  if (OB_FAIL(ret)) { // do nothing
+  } else if (OB_FAIL(OB_LOGGER.set_max_file_index(max_log_cnt))) {
+    OB_LOG(ERROR, "fail to set_max_file_index", K(max_log_cnt), K(ret));
+  } else if (OB_FAIL(OB_LOGGER.set_record_old_log_file(record_old_log_file))) {
+    OB_LOG(ERROR, "fail to set_record_old_log_file", K(record_old_log_file), K(ret));
+  } else if (OB_FAIL(OB_LOG_COMPRESSOR.set_max_disk_size(max_disk_size))) {
+    OB_LOG(ERROR, "fail to set_max_disk_size", K(max_disk_size), KR(ret));
+  } else if (OB_FAIL(OB_LOG_COMPRESSOR.set_compress_func(compress_func_ptr))) {
+    OB_LOG(ERROR, "fail to set_compress_func", K(compress_func_ptr), KR(ret));
+  } else if (OB_FAIL(OB_LOG_COMPRESSOR.set_min_uncompressed_count(min_uncompressed_count))) {
+    OB_LOG(ERROR, "fail to set_min_uncompressed_count", K(min_uncompressed_count), KR(ret));
+  } else {
+    OB_LOGGER.set_log_warn(log_warn);
+    OB_LOGGER.set_enable_async_log(enable_async_syslog);
+
+    LOG_INFO("init log config", K(record_old_log_file), K(log_warn), K(enable_async_syslog),
+              K(max_disk_size), K(compress_func_ptr), K(min_uncompressed_count));
+    if (0 == max_log_cnt) {
+      LOG_INFO("won't recycle log file");
+    } else {
+      LOG_INFO("recycle log file", "count", max_log_cnt);
+    }
   }
   return ret;
 }
@@ -448,13 +519,8 @@ int ObConfigManager::got_version(int64_t version, const bool remove_repeat/* = f
       // 如果决策了本次要调度一个新 task，那么现将队列中排队的所有 task 全部移除
       // 有一点可以确保，到达这个点时无论移除的 task 是什么，下一个要添加的 task
       // 的 version 一定是最新的。
-      bool task_exist = false;
-      int tmp_ret = TG_TASK_EXIST(lib::TGDefIDs::CONFIG_MGR, update_task_, task_exist);
-      if (task_exist) {
-        TG_CANCEL(lib::TGDefIDs::CONFIG_MGR, update_task_);
-        LOG_INFO("Cancel pending update task",
-                 K(tmp_ret), K_(current_version), K(version));
-      }
+      TG_CANCEL(lib::TGDefIDs::CONFIG_MGR, update_task_);
+      LOG_INFO("May cancel pending update task", K_(current_version), K(version));
     }
 
     if (schedule) {

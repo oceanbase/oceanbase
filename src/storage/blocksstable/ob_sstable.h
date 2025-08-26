@@ -277,10 +277,7 @@ public:
   OB_INLINE bool is_loaded() const { return nullptr != meta_; }
   int persist_linked_block_if_need(
       ObArenaAllocator &allocator,
-      const ObTabletID &tablet_id,
-      const int64_t tablet_transfer_seq,
-      const int64_t snapshot_version,
-      blocksstable::ObIMacroBlockFlushCallback *ddl_redo_cb,
+      const ObLinkedMacroInfoWriteParam &param,
       int64_t &macro_start_seq,
       ObSharedObjectsWriteCtx &linked_block_write_ctx);
   int get_meta(ObSSTableMetaHandle &meta_handle, common::ObSafeArenaAllocator *allocator = nullptr) const;
@@ -330,17 +327,19 @@ public:
     UNUSEDx(dir_name, schema, fname);
     return OB_NOT_SUPPORTED;
   }
-  virtual int64_t get_serialize_size() const override;
-  virtual int serialize(char *buf, const int64_t buf_len, int64_t &pos) const override;
+  virtual int64_t get_serialize_size(const uint64_t data_version) const;
+  virtual int serialize(
+      const uint64_t data_version,
+      char *buf,
+      const int64_t buf_len,
+      int64_t &pos) const;
   virtual int deserialize(
       common::ObArenaAllocator &allocator,
       const char *buf,
       const int64_t data_len,
       int64_t &pos);
-  int deserialize_post_work(
-      common::ObIAllocator *allocator);
-  virtual int serialize_full_table(char *buf, const int64_t buf_len, int64_t &pos) const;
-  virtual int64_t get_full_serialize_size() const; // return -1 when it fails to get meta
+  virtual int serialize_full_table(const uint64_t data_version, char *buf, const int64_t buf_len, int64_t &pos) const;
+  virtual int64_t get_full_serialize_size(const uint64_t data_version) const; // return -1 when it fails to get meta
   int assign_meta(ObSSTableMeta *dest);
   int build_multi_row_lock_checker(
       ObRowsInfo &rows_info,

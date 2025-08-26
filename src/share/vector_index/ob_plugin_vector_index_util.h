@@ -145,24 +145,21 @@ struct ObVsagQueryResult
 class ObPluginVectorIndexHelper final
 {
 public:
-  static int merge_delta_and_snap_vids(const ObVsagQueryResult &first,
-                                       const ObVsagQueryResult &second,
-                                       const int64_t total,
-                                       int64_t &actual_cnt,
-                                       int64_t *&vids_result,
-                                       float *&float_result,
-                                       ObVecExtraInfoPtr &extra_info_result);
-
-  static int get_vector_memory_value_and_limit(const uint64_t tenant_id,
-                                               int64_t& value,
-                                               int64_t& upper_limit);
-
-  static int is_ob_vector_memory_valid(const uint64_t tenant_id,
-                                       bool& is_valid);
-
+  static int driect_merge_delta_and_snap_vids(const ObVsagQueryResult &first,
+                                              const ObVsagQueryResult &second,
+                                              int64_t &actual_cnt,
+                                              int64_t *&vids_result,
+                                              float *&float_result,
+                                              ObVecExtraInfoPtr &extra_info_result);
+  static int sort_merge_delta_and_snap_vids(const ObVsagQueryResult &first,
+                                            const ObVsagQueryResult &second,
+                                            const int64_t total,
+                                            int64_t &actual_cnt,
+                                            int64_t *&vids_result,
+                                            float *&float_result,
+                                            ObVecExtraInfoPtr &extra_info_result);
   static int get_vector_memory_limit_size(const uint64_t tenant_id,
                                           int64_t& memory_limit);
-  static int vsag_errcode_2ob(int vsag_errcode);
 };
 
 };

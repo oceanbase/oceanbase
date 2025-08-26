@@ -112,6 +112,8 @@ public:
     jit::ObLLVMFunction spi_get_current_expr_allocator_;
     jit::ObLLVMFunction spi_adjust_error_trace_;
     jit::ObLLVMFunction spi_convert_anonymous_array_;
+    jit::ObLLVMFunction spi_internal_error_;
+    jit::ObLLVMFunction spi_reset_allocator_;
   };
 
   struct EHStack
@@ -123,6 +125,7 @@ public:
       jit::ObLLVMBasicBlock exit_;
       int64_t level_;
       jit::ObLLVMBasicBlock raising_block_;
+      bool has_continue_hander_;
     };
 
     EHStack() : exceptions_(), cur_(0) {}
@@ -210,12 +213,14 @@ public:
     profile_mode_(session_info_.get_pl_profiler() != nullptr),
     global_strings_(),
     int_buffer_(allocator),
-    objparam_buffer_(allocator)
+    objparam_buffer_(allocator),
+    need_cg_(true),
+    dispatch_map_()
     { }
 
   virtual ~ObPLCodeGenerator() {}
 
-  int init();
+  int init(bool is_package = false);
   int generate(ObPLFunction &pl_func);
   int generate(ObPLPackage &pl_package);
 
@@ -401,7 +406,8 @@ public:
   inline EHStack::EHInfo *get_exception(int64_t idx) { return exception_stack_.cur_ - 1 < idx ? NULL : &exception_stack_.exceptions_[idx]; }
   inline int set_exception(jit::ObLLVMBasicBlock &block,
                            jit::ObLLVMBasicBlock &exit,
-                           int64_t level)
+                           int64_t level,
+                           bool has_continue_hander)
   {
     int ret = common::OB_SUCCESS;
     if (exception_stack_.cur_ < EH_STACK_DEPTH - 1) {
@@ -409,6 +415,7 @@ public:
       exception_stack_.exceptions_[exception_stack_.cur_].exit_ = exit;
       exception_stack_.exceptions_[exception_stack_.cur_].level_ = level;
       exception_stack_.exceptions_[exception_stack_.cur_].raising_block_.reset();
+      exception_stack_.exceptions_[exception_stack_.cur_].has_continue_hander_ = has_continue_hander;
       ++exception_stack_.cur_;
     } else {
       ret = OB_NOT_SUPPORTED;
@@ -417,7 +424,6 @@ public:
     }
     return ret;
   }
-
   inline int reset_exception()
   {
     int ret = common::OB_SUCCESS;
@@ -428,11 +434,20 @@ public:
     }
     return ret;
   }
+  inline bool could_be_catched_by_continue_handler() const
+  {
+    bool ret = false;
+    for (int64_t i = exception_stack_.cur_ - 1; !ret && i >= 0; --i) {
+      ret = ret || exception_stack_.exceptions_[i].has_continue_hander_;
+    }
+    return ret;
+  }
+
   inline const LabelStack::LabelInfo *get_label(const common::ObString &name) const
   {
     const LabelStack::LabelInfo *label = NULL;
     for (int64_t i = label_stack_.cur_; NULL == label && i > 0; --i) {
-      if (0 == label_stack_.labels_[i - 1].name_.case_compare(name)) {
+      if (label_stack_.labels_[i - 1].name_.case_compare_equal(name)) {
         label = &label_stack_.labels_[i - 1];
       }
     }
@@ -603,6 +618,7 @@ public:
   int extract_status_from_context(jit::ObLLVMValue &p_pl_exex_ctx, jit::ObLLVMValue &result);
   int extract_pl_ctx_from_context(jit::ObLLVMValue &p_pl_exex_ctx, jit::ObLLVMValue &result);
   int extract_pl_function_from_context(jit::ObLLVMValue &p_pl_exex_ctx, jit::ObLLVMValue &result);
+  int extract_tmp_allocator_from_context(jit::ObLLVMValue &p_pl_exex_ctx, jit::ObLLVMValue &result);
   int extract_arg_from_argv(jit::ObLLVMValue &p_argv, int64_t idx, jit::ObLLVMValue &result);
   int extract_objparam_from_argv(jit::ObLLVMValue &p_argv, const int64_t idx, jit::ObLLVMValue &result);
   int extract_datum_from_argv(jit::ObLLVMValue &p_argv, const int64_t idx, common::ObObjType type, jit::ObLLVMValue &result);
@@ -701,6 +717,7 @@ public:
                                 jit::ObLLVMValue &p_result_obj);
   int prepare_expression(ObPLCompileUnit &pl_func);
   int final_expression(ObPLCompileUnit &pl_func);
+  int codegen_expression(ObPLCompileUnit &pl_func);
   ObSQLSessionInfo& get_session_info() const { return session_info_; }
 
 private:
@@ -774,44 +791,6 @@ private:
                           bool in_notfound,
                           bool in_warning,
                           jit::ObLLVMValue &p_result_obj);
-private:
-  common::ObIAllocator &allocator_;
-  sql::ObSQLSessionInfo &session_info_;
-  share::schema::ObSchemaGetterGuard &schema_guard_;
-  ObPLCompileUnitAST &ast_;
-  common::ObIArray<ObSqlExpression*> &exprs_;
-  jit::ObLLVMHelper &helper_;
-  jit::ObLLVMFunction func_;
-  jit::ObLLVMBasicBlock entry_;
-  jit::ObLLVMBasicBlock exit_;
-  jit::ObLLVMBasicBlock current_;
-  EHStack exception_stack_;
-  LabelStack label_stack_;
-  LoopStack loop_stack_;
-  ObPLADTService adt_service_;
-  ObPLSPIService spi_service_;
-  ObPLEHService eh_service_;
-  jit::ObLLVMFunction pl_execute_;
-  jit::ObLLVMFunction set_user_type_var_;
-  jit::ObLLVMFunction set_implicit_cursor_in_forall_;
-  jit::ObLLVMFunction unset_implicit_cursor_in_forall_;
-  ObLLVMTypeMap user_type_map_;
-  jit::ObLLVMValue saved_ob_error_;
-  jit::ObLLVMValue saved_exception_;
-  ObPLSEArray<jit::ObLLVMValue> vars_; //第0个是隐藏ctx参数，从第1个开始与ObPLSymbolTable对应
-  // key: stmt id, value: pair(key: index, -1,)
-  goto_label_map goto_label_map_;
-
-  // an unreachable block, used to tell LLVM there is no successor block after this
-  jit::ObLLVMBasicBlock unreachable_;
-
-  // current stmt_id, updated when throw an exception
-  // also anchor of allocas in entry block
-  jit::ObLLVMValue stmt_id_;
-
-  // if there is no current_exception, use this block to throw an exception to PL engine
-  jit::ObLLVMBasicBlock default_raise_block_;
-
 public:
   int get_unreachable_block(jit::ObLLVMBasicBlock &unreachable);
   inline goto_label_map &get_goto_label_map() { return goto_label_map_; }
@@ -862,7 +841,71 @@ private:
   int init_di_adt_service();
   int generate_di_prototype();
 
+  int get_int_buffer(jit::ObLLVMValue &result);
+  int get_char_buffer(jit::ObLLVMValue &result);
+  int get_condition_buffer(jit::ObLLVMValue &result);
+  int get_data_type_buffer(jit::ObLLVMValue &result);
+  int get_objparam_buffer(jit::ObLLVMValue &result);
+
+  int64_t get_objparam_buffer_idx() { return objparam_buffer_idx_; };
+  void set_objparam_buffer_idx(int64_t idx) { objparam_buffer_idx_ = idx; }
+
+  int64_t get_int_buffer_idx() { return int_buffer_idx_; };
+  void set_int_buffer_idx(int64_t idx) { int_buffer_idx_ = idx; }
+
+  int get_into_type_array_buffer(int64_t size, jit::ObLLVMValue &result);
+  int get_return_type_array_buffer(int64_t size, jit::ObLLVMValue &result);
+  int get_argv_array_buffer(int64_t size, jit::ObLLVMValue &result);
+
+// continue handler
+public:
+  jit::ObLLVMBasicBlock &get_continue_handler_dispatcher() { return continue_handler_dispatcher_; }
+  jit::ObLLVMValue &get_dispatch_stmt_id() { return dispatch_stmt_id_; }
+  int generate_istore_stmt_id(int64_t stmt_id);
+  int generate_load_stmt_id(jit::ObLLVMValue &stmt_id);
+  int register_dispatch_map(const uint64_t stmt_id, const jit::ObLLVMBasicBlock &continue_block);
+  int generate_init_continue_handler_dispatcher();
 private:
+  int generate_dispatch_dest();
+
+private:
+  common::ObIAllocator &allocator_;
+  sql::ObSQLSessionInfo &session_info_;
+  share::schema::ObSchemaGetterGuard &schema_guard_;
+  ObPLCompileUnitAST &ast_;
+  common::ObIArray<ObSqlExpression*> &exprs_;
+  jit::ObLLVMHelper &helper_;
+  jit::ObLLVMFunction func_;
+  jit::ObLLVMBasicBlock entry_;
+  jit::ObLLVMBasicBlock exit_;
+  jit::ObLLVMBasicBlock current_;
+  EHStack exception_stack_;
+  LabelStack label_stack_;
+  LoopStack loop_stack_;
+  ObPLADTService adt_service_;
+  ObPLSPIService spi_service_;
+  ObPLEHService eh_service_;
+  jit::ObLLVMFunction pl_execute_;
+  jit::ObLLVMFunction set_user_type_var_;
+  jit::ObLLVMFunction set_implicit_cursor_in_forall_;
+  jit::ObLLVMFunction unset_implicit_cursor_in_forall_;
+  ObLLVMTypeMap user_type_map_;
+  jit::ObLLVMValue saved_ob_error_;
+  jit::ObLLVMValue saved_exception_;
+  ObPLSEArray<jit::ObLLVMValue> vars_; //第0个是隐藏ctx参数，从第1个开始与ObPLSymbolTable对应
+  // key: stmt id, value: pair(key: index, -1,)
+  goto_label_map goto_label_map_;
+
+  // an unreachable block, used to tell LLVM there is no successor block after this
+  jit::ObLLVMBasicBlock unreachable_;
+
+  // current stmt_id, updated when throw an exception
+  // also anchor of allocas in entry block
+  jit::ObLLVMValue stmt_id_;
+
+  // if there is no current_exception, use this block to throw an exception to PL engine
+  jit::ObLLVMBasicBlock default_raise_block_;
+
   jit::ObLLVMDIHelper &di_helper_;
   ObPLDIADTService di_adt_service_;
   ObLLVMDITypeMap di_user_type_map_;
@@ -906,22 +949,15 @@ private:
 
   jit::ObLLVMValue argv_array_ptr_;
   int64_t argv_array_size_ = 0;
+  bool need_cg_;
 
-  int get_int_buffer(jit::ObLLVMValue &result);
-  int get_char_buffer(jit::ObLLVMValue &result);
-  int get_condition_buffer(jit::ObLLVMValue &result);
-  int get_data_type_buffer(jit::ObLLVMValue &result);
-  int get_objparam_buffer(jit::ObLLVMValue &result);
-
-  int64_t get_objparam_buffer_idx() { return objparam_buffer_idx_; };
-  void set_objparam_buffer_idx(int64_t idx) { objparam_buffer_idx_ = idx; }
-
-  int64_t get_int_buffer_idx() { return int_buffer_idx_; };
-  void set_int_buffer_idx(int64_t idx) { int_buffer_idx_ = idx; }
-
-  int get_into_type_array_buffer(int64_t size, jit::ObLLVMValue &result);
-  int get_return_type_array_buffer(int64_t size, jit::ObLLVMValue &result);
-  int get_argv_array_buffer(int64_t size, jit::ObLLVMValue &result);
+  // continue handler
+  using DispatchMap =
+      common::hash::ObHashMap<uint64_t, jit::ObLLVMBasicBlock, common::hash::NoPthreadDefendMode>;
+  DispatchMap dispatch_map_;
+  jit::ObLLVMBasicBlock continue_handler_dispatcher_;
+  jit::ObLLVMSwitch dispatch_switch_inst_;
+  jit::ObLLVMValue dispatch_stmt_id_;
 };
 
 class ObPLCodeGenerateVisitor : public ObPLStmtVisitor
@@ -985,6 +1021,7 @@ struct ObPLCGBufferGuard
 public:
   ObPLCGBufferGuard(ObPLCodeGenerator &generator)
     : generator_(generator),
+      int_buffer_idx_(generator.get_int_buffer_idx()),
       objparam_buffer_idx_(generator.get_objparam_buffer_idx()),
       old_guard_(generator.top_buffer_guard_)
   {
@@ -1049,6 +1086,7 @@ private:
 
 private:
   ObPLCodeGenerator &generator_;
+  int64_t int_buffer_idx_;
   int64_t objparam_buffer_idx_;
   int64_t objparam_count_ = 0;
   ObPLCGBufferGuard *old_guard_ = nullptr;

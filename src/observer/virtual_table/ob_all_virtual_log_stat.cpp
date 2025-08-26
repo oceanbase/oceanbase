@@ -59,6 +59,8 @@ int ObAllVirtualPalfStat::inner_get_next_row(common::ObNewRow *&row)
                 logservice::ObLogStat log_stat;
                 if (OB_FAIL(log_handler->stat(log_stat.palf_stat_))) {
                   SERVER_LOG(WARN, "ObLogHandler stat failed", K(ret), K(ls->get_ls_id()));
+                  // try another ls
+                  ret = OB_SUCCESS;
                 } else if (OB_FAIL(insert_log_stat_(log_stat, &cur_row_))){
                   SERVER_LOG(WARN, "ObAllVirtualPalfStat insert_log_stat_ failed", K(ret), K(log_stat));
                 } else {

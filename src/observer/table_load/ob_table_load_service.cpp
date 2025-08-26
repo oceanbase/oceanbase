@@ -20,6 +20,7 @@
 #include "observer/table_load/ob_table_load_store_ctx.h"
 #include "observer/table_load/ob_table_load_table_ctx.h"
 #include "rootserver/ob_partition_exchange.h"
+#include "share/ob_server_struct.h"
 
 namespace oceanbase
 {
@@ -467,8 +468,9 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
     const uint64_t tenant_id = MTL_ID();
     uint64_t compat_version = 0;
     bool trigger_enabled = false;
+    bool has_vector_index = false;
+    bool has_spatial_index = false;
     bool has_fts_index = false;
-    bool has_multivalue_index = false;
     bool has_non_normal_local_index = false;
     bool is_heap_table_with_single_unique_index = false;
     // check if it is a user table
@@ -492,13 +494,21 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
         FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support non-user table", tmp_prefix);
       }
     }
-    // check if exists full-text search index
-    else if (OB_FAIL(table_schema->check_has_fts_index(schema_guard, has_fts_index))) {
-      LOG_WARN("fail to check has full-text search index", K(ret));
-    } else if (has_fts_index) {
+    // check if exists vector index
+    else if (table_schema->check_has_vec_domain_index(schema_guard, has_vector_index)) {
+      LOG_WARN("fail to check has vector index", KR(ret));
+    } else if (has_vector_index) {
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("direct-load does not support table has full-text search index", KR(ret));
-      FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table has full-text search index", tmp_prefix);
+      LOG_WARN("direct-load does not support table with vector index", KR(ret), K(has_vector_index));
+      FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table with vector index", tmp_prefix);
+    }
+    // check if exists spatial index
+    else if (table_schema->check_has_spatial_index(schema_guard, has_spatial_index)) {
+      LOG_WARN("fail to check has spatial index", KR(ret));
+    } else if (has_spatial_index) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("direct-load does not support table with spatial index", KR(ret), K(has_spatial_index));
+      FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table with spatial index", tmp_prefix);
     }
     // check if the trigger is enabled
     else if (OB_FAIL(table_schema->check_has_trigger_on_table(schema_guard, trigger_enabled))) {
@@ -518,8 +528,12 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
       LOG_WARN("direct-load does not support table required by materialized view", KR(ret));
       FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table required by materialized view", tmp_prefix);
     }
+    // check for full text search index
+    else if (OB_FAIL(check_support_direct_load_for_fts_index(schema_guard, table_schema, method, load_mode))) {
+      LOG_WARN("fail to check support direct load for fts index", KR(ret));
+    }
     // check for columns
-    else if (OB_FAIL(check_support_direct_load_for_columns(table_schema, load_mode))) {
+    else if (OB_FAIL(check_support_direct_load_for_columns(table_schema, method, load_mode))) {
       LOG_WARN("fail to check support direct load for columns", KR(ret));
     }
     // check for default value
@@ -630,6 +644,7 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
 
 int ObTableLoadService::check_support_direct_load_for_columns(
     const ObTableSchema *table_schema,
+    const ObDirectLoadMethod::Type method,
     const ObDirectLoadMode::Type load_mode)
 {
   int ret = OB_SUCCESS;
@@ -647,9 +662,9 @@ int ObTableLoadService::check_support_direct_load_for_columns(
         LOG_WARN("invalid column schema", KR(ret), KP(column_schema));
       } else if (column_schema->is_unused()) {
         // 快速删除列, 仍然需要写宏块, 直接填null
-      } else if (column_schema->is_generated_column()) {
+      } else if ((!ObDirectLoadMethod::is_full(method) || !ObDirectLoadMode::is_insert_into(load_mode)) && column_schema->is_generated_column()) {
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("direct-load does not support table has generated column", KR(ret), KPC(column_schema));
+        LOG_WARN("direct-load does not support table has generated column", KR(ret), KPC(column_schema), K(method), K(load_mode));
         FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table has generated column", tmp_prefix);
       } else if (column_schema->get_meta_type().is_null()) {
         ret = OB_NOT_SUPPORTED;
@@ -750,6 +765,28 @@ int ObTableLoadService::check_support_direct_load_for_partition_level(
         schema_guard, table_schema, compat_version))) {
       LOG_WARN("fail to check exchange partition", KR(ret), KPC(table_schema), K(compat_version));
     }
+  }
+  return ret;
+}
+
+int ObTableLoadService::check_support_direct_load_for_fts_index(
+    ObSchemaGetterGuard &schema_guard,
+    const ObTableSchema *table_schema,
+    const ObDirectLoadMethod::Type method,
+    const storage::ObDirectLoadMode::Type load_mode)
+{
+  int ret = OB_SUCCESS;
+  bool has_fts_index = false;
+  if (OB_FAIL(table_schema->check_has_fts_index_aux(schema_guard, has_fts_index))) {
+    LOG_WARN("fail to check has fts index aux", KR(ret));
+  } else if ((!ObDirectLoadMethod::is_full(method)
+              || !ObDirectLoadMode::is_insert_into(load_mode)
+              || GCTX.is_shared_storage_mode())
+             && has_fts_index) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("only share-nothing full insert into select direct-load support table has full-text search index",
+              KR(ret), K(method), K(load_mode));
+    FORWARD_USER_ERROR_MSG(ret, "only share-nothing full insert into select direct-load support table has full-text search index");
   }
   return ret;
 }

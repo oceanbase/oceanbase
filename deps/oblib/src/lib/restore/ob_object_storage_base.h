@@ -36,7 +36,8 @@ public:
 
   ObStorageIORetryStrategyBase(const int64_t timeout_us)
       : start_time_us_(0),  // cannot use virtual func `current_time_us` in constructor
-        timeout_us_(timeout_us < 0 ? OB_STORAGE_MAX_IO_TIMEOUT_US : timeout_us) // 0 means never retry
+        timeout_us_(timeout_us < 0 ? OB_STORAGE_MAX_IO_TIMEOUT_US : timeout_us), // 0 means never retry
+        delay_us_(BASE_DELAY_US)
   {}
 
   // A virtual destructor can lead to link failures, temporarily commented out
@@ -58,11 +59,12 @@ public:
   }
 
   virtual uint32_t calc_delay_time_us(
-      const RetType &outcome, const int64_t attempted_retries) const
+      const RetType &outcome, const int64_t attempted_retries)
   {
-    static const uint32_t base_delay_us = 25 * 1000;        // 25ms
-    static const uint32_t MAX_DELAY_US = 5 * 1000 * 1000LL; // 5s
-    return MIN(base_delay_us * (1 << attempted_retries), MAX_DELAY_US);
+    if (attempted_retries != 0 && delay_us_ < MAX_DELAY_US) {
+      delay_us_ = delay_us_ * DELAY_EXPONENT;
+    }
+    return MIN(delay_us_, MAX_DELAY_US);
   }
 
   virtual void log_error(
@@ -75,8 +77,12 @@ protected:
       const RetType &outcome, const int64_t attempted_retries) const = 0;
 
 protected:
+  static const uint32_t BASE_DELAY_US = 25 * 1000;        // 25ms
+  static const uint32_t MAX_DELAY_US = 5 * 1000 * 1000LL; // 5s
+  static const uint32_t DELAY_EXPONENT = 3;
   int64_t start_time_us_;
   int64_t timeout_us_;
+  int64_t delay_us_;
 };
 
 // interface class, used for OSS & S3,
@@ -136,7 +142,7 @@ FuncRetType<FuncType, Args...> execute_until_timeout(
       // if should_retry, log the current error
       uint32_t sleep_time_us = retry_strategy.calc_delay_time_us(func_ret, retries);
       retry_strategy.log_error(func_ret, retries);
-      ::usleep(sleep_time_us);
+      ob_usleep(sleep_time_us);
     }
     retries++;
   } while (should_retry_flag);

@@ -167,7 +167,7 @@ int64_t ObMemtableCtx::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
   common::databuff_printf(buf, buf_len, pos, "{");
-  pos += ObIMvccCtx::to_string(buf + pos, buf_len);
+  pos += ObIMvccCtx::to_string(buf + pos, buf_len - pos);
   common::databuff_printf(buf, buf_len, pos,
                           " end_code=%d tx_status=%ld is_readonly=%s "
                           "ref=%ld", end_code_, tx_status_, STR_BOOL(is_read_only_), ref_);
@@ -586,8 +586,7 @@ int ObMemtableCtx::trans_replay_end(const bool commit,
   // merge may be triggered after clear state in which the callback has already
   if (commit
       && 0 != checksum // if leader's checksum is skipped, follow skip check
-      && log_cluster_version >= CLUSTER_VERSION_3100
-      && !ObServerConfig::get_instance().ignore_replay_checksum_error) {
+      && log_cluster_version >= CLUSTER_VERSION_3100) {
     ObSEArray<uint64_t, 1> replay_checksum;
     if (OB_FAIL(calc_checksum_all(replay_checksum))) {
       TRANS_LOG(WARN, "calc checksum fail", K(ret));
@@ -603,7 +602,11 @@ int ObMemtableCtx::trans_replay_end(const bool commit,
                   "checksum_replayed", checksum_collapsed,
                   "checksum_before_collapse", replay_checksum,
                   K(checksum_signature), KPC(this));
-        OB_SAFE_ABORT();
+        if (ObServerConfig::get_instance().ignore_replay_checksum_error) {
+          cs_ret = OB_SUCCESS;
+        } else {
+          OB_SAFE_ABORT();
+        }
       }
     }
   }

@@ -378,7 +378,7 @@ int ObPLPackageManager::get_syspack_source_file_content(const char *file_name, c
     LOG_INFO("file name c string is null", K(file_name));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < syspack_source_count; i++) {
-      if (0 == ObString(file_name).case_compare(syspack_source_contents[i].first)) {
+      if (ObString(file_name).case_compare_equal(syspack_source_contents[i].first)) {
         content = syspack_source_contents[i].second;
         break;
       }
@@ -449,7 +449,7 @@ int ObPLPackageManager::load_sys_package(ObMySQLProxy &sql_proxy,
     if (pack_file_info == nullptr) {                                                        \
       int sys_package_count = SIZE_OF_SYSPACK_LST(syspack_file_list);                       \
       for (int64_t i = 0; OB_SUCC(ret) && i < sys_package_count; ++i) {                     \
-        if (0 == package_name.case_compare(ObString(syspack_file_list[i].package_name))) {  \
+        if (package_name.case_compare_equal(ObString(syspack_file_list[i].package_name))) {  \
           pack_file_info = &syspack_file_list[i];                                           \
           break;                                                                            \
         }                                                                                   \
@@ -741,55 +741,75 @@ int ObPLPackageManager::get_package_expr(const ObPLResolveCtx &resolve_ctx,
   int ret = OB_SUCCESS;
   const ObPackageInfo *package_spec_info = NULL;
   const ObPackageInfo *package_body_info = NULL;
+
   CK (package_id != OB_INVALID_ID);
   CK (expr_idx != OB_INVALID_ID);
-  OZ (get_package_schema_info(resolve_ctx.schema_guard_, package_id, package_spec_info, package_body_info));
+  OZ (get_package_schema_info(
+    resolve_ctx.schema_guard_, package_id, package_spec_info, package_body_info));
   CK (OB_NOT_NULL(package_spec_info));
-  CK (package_spec_info->get_package_id() == package_id);
+
   if (OB_SUCC(ret)) {
-    ObPLCompiler compiler(resolve_ctx.allocator_,
+    ObArenaAllocator local_alloc("GetPKGRawExpr", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    ObPLCompiler compiler(local_alloc,
                           resolve_ctx.session_info_,
                           resolve_ctx.schema_guard_,
                           resolve_ctx.package_guard_,
                           resolve_ctx.sql_proxy_);
     const uint64_t tenant_id = package_spec_info->get_tenant_id();
     uint64_t db_id = package_spec_info->get_database_id();
-    uint64_t package_spec_id = package_spec_info->get_package_id();
-    ObPLBlockNS *null_parent_ns = NULL;
     const ObDatabaseSchema *db_schema = NULL;
-    uint64_t effective_tenant_id = resolve_ctx.session_info_.get_effective_tenant_id();
-    HEAP_VAR(ObPLPackageAST, package_spec_ast, resolve_ctx.allocator_) {
-      ObString source;
-      if (package_spec_info->is_for_trigger()) {
-        OZ (ObTriggerInfo::gen_package_source(package_spec_info->get_tenant_id(),
-                                              package_spec_info->get_package_id(),
-                                              source,
-                                              PACKAGE_TYPE,
-                                              resolve_ctx.schema_guard_,
-                                              resolve_ctx.allocator_));
-      } else {
-        source = package_spec_info->get_source();
-      }
-      OZ (ObSQLUtils::convert_sql_text_from_schema_for_resolve(
-        resolve_ctx.allocator_, resolve_ctx.session_info_.get_dtc_params(), source));
+
+    HEAP_VARS_2((ObPLPackageAST, package_spec_ast, local_alloc),
+                (ObPLPackageAST, package_body_ast, local_alloc)) {
+
       OZ (resolve_ctx.schema_guard_.get_database_schema(tenant_id, db_id, db_schema));
-      OZ (package_spec_ast.init(db_schema->get_database_name_str(),
-                                package_spec_info->get_package_name(),
-                                PL_PACKAGE_SPEC,
-                                package_spec_info->get_database_id(),
-                                package_spec_id,
-                                package_spec_info->get_schema_version(),
-                                NULL));
-      {
-        ObPLCompilerEnvGuard guard(
-          *package_spec_info, resolve_ctx.session_info_, resolve_ctx.schema_guard_, package_spec_ast, ret);
-        OZ (compiler.analyze_package(source, null_parent_ns,
-                                     package_spec_ast, package_spec_info->is_for_trigger()));
+      CK (OB_NOT_NULL(db_schema));
+
+#define ANALYZE_PACKAGE(package_info, package_ast, package_type, parent_ns, parent_ast)       \
+if (OB_SUCC(ret)) {                                                                           \
+  ObString source;                                                                            \
+  if (package_info->is_for_trigger()) {                                                       \
+    OZ (ObTriggerInfo::gen_package_source(package_info->get_tenant_id(),                      \
+                                          package_info->get_package_id(),                     \
+                                          source,                                             \
+                                          PL_PACKAGE_SPEC == package_type,                    \
+                                          resolve_ctx.schema_guard_,                          \
+                                          local_alloc));                                      \
+  } else {                                                                                    \
+    source = package_info->get_source();                                                      \
+  }                                                                                           \
+  OZ (package_ast.init(db_schema->get_database_name_str(),                                    \
+                       package_info->get_package_name(),                                      \
+                       package_type,                                                          \
+                       package_info->get_database_id(),                                       \
+                       package_info->get_package_id(),                                        \
+                       package_info->get_schema_version(),                                    \
+                       parent_ast));                                                                \
+  OZ (ObSQLUtils::convert_sql_text_from_schema_for_resolve(                                   \
+    local_alloc, resolve_ctx.session_info_.get_dtc_params(), source));                        \
+  {                                                                                           \
+    ObPLCompilerEnvGuard guard(                                                               \
+      *package_info, resolve_ctx.session_info_, resolve_ctx.schema_guard_, package_ast, ret); \
+    OZ (compiler.analyze_package(source, parent_ns,                                           \
+                                 package_ast, package_info->is_for_trigger()));               \
+  }                                                                                           \
+  if (OB_SUCC(ret) && package_id == package_info->get_package_id()) {                         \
+    OV (expr_idx >= 0 && package_ast.get_exprs().count() > expr_idx,                          \
+      OB_ERR_UNEXPECTED, K(expr_idx), K(package_ast.get_exprs().count()));                    \
+    CK (OB_NOT_NULL(package_ast.get_expr(expr_idx)));                                         \
+    OZ (ObPLExprCopier::copy_expr(expr_factory, package_ast.get_expr(expr_idx), expr));       \
+  }                                                                                           \
+}
+
+      ANALYZE_PACKAGE(package_spec_info, package_spec_ast, PL_PACKAGE_SPEC, NULL, NULL);
+      if (package_id != package_spec_info->get_package_id()) {
+        ANALYZE_PACKAGE(package_body_info, package_body_ast, PL_PACKAGE_BODY,
+                        &(package_spec_ast.get_body()->get_namespace()), &package_spec_ast);
       }
-      CK (expr_idx >= 0 && package_spec_ast.get_exprs().count() > expr_idx);
-      CK (OB_NOT_NULL(package_spec_ast.get_expr(expr_idx)));
-      OZ (ObPLExprCopier::copy_expr(expr_factory, package_spec_ast.get_expr(expr_idx), expr));
+
+#undef ANALYZE_PACKAGE
     }
+    CK (OB_NOT_NULL(expr));
   }
   return ret;
 }
@@ -1101,7 +1121,7 @@ int ObPLPackageManager::update_special_package_status(const ObPLResolveCtx &reso
   if (OB_FAIL(ret)) {
     // do nothing
   } else if (get_tenant_id_by_object_id(package_id) == OB_SYS_TENANT_ID &&
-               0 == package_spec->get_name().compare("DBMS_PROFILER")) {
+               package_spec->get_name().compare_equal("DBMS_PROFILER")) {
 #ifdef OB_BUILD_ORACLE_PL
     OZ (ObDBMSProfiler::notify_package_variable_change(resolve_ctx.session_info_, var, old_val, new_val));
 #endif // OB_BUILD_ORACLE_PL
@@ -1847,8 +1867,10 @@ int ObPLPackageManager::notify_package_variable_deserialize(ObBasicSessionInfo *
     CK (OB_NOT_NULL(GCTX.schema_service_));
     OZ (GCTX.schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard));
     OZ (schema_guard.get_package_info(OB_SYS_TENANT_ID, pkg_var_info.package_id_, package_info), pkg_var_info);
-    CK (OB_NOT_NULL(package_info));
-    if (OB_SUCC(ret) && 0 == package_info->get_package_name().compare("DBMS_PROFILER")) {
+
+    if (OB_SUCC(ret)
+          && OB_NOT_NULL(package_info)
+          && package_info->get_package_name().compare_equal("DBMS_PROFILER")) {
       ObObj value_obj;
       bool has_run_status_var = false;
       hash::ObHashMap<int64_t, ObPackageVarEncodeInfo> value_map;
@@ -1881,6 +1903,74 @@ int ObPLPackageManager::notify_package_variable_deserialize(ObBasicSessionInfo *
 
 #endif // OB_BUILD_ORACLE_PL
 
+  return ret;
+}
+
+int ObPLPackageManager::get_cached_package_body_for_trigger(uint64_t tenant_id,
+                                                            uint64_t trigger_id,
+                                                            pl::ObPLPackageGuard &package_guard,
+                                                            common::ObIAllocator &allocator,
+                                                            ObSchemaGetterGuard &schema_guard,
+                                                            ObSQLSessionInfo &session_info,
+                                                            common::ObMySQLProxy &sql_proxy,
+                                                            ObPLPackage *&package_body)
+{
+  int ret = OB_SUCCESS;
+  package_body = nullptr;
+  const ObTriggerInfo *trigger_info = nullptr;
+  if (OB_FAIL(schema_guard.get_trigger_info(tenant_id, trigger_id, trigger_info))) {
+    OB_LOG(WARN, "get trigger info failed", K(ret), K(trigger_id));
+  } else if (OB_ISNULL(trigger_info)) {
+    ret = OB_ERR_TRIGGER_NOT_EXIST;
+    LOG_WARN("trigger not exist", K(ret), K(tenant_id), K(trigger_id));
+  } else {
+    ObPLPackage *tmp_package_spec = nullptr;
+    ObPLPackage *tmp_package_body = nullptr;
+    pl::ObPL *pl_engine = GCTX.pl_engine_;
+    pl::ObPLResolveCtx resolve_ctx(allocator, session_info, schema_guard, package_guard, sql_proxy, false);
+    if (OB_ISNULL(pl_engine)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("pl engine is null", K(ret));
+    } else if (!package_guard.is_inited()
+               && OB_FAIL(package_guard.init())) {
+      LOG_WARN("failed to init package guard", K(ret));
+    } else if (OB_FAIL(pl_engine->get_package_manager().get_cached_package(resolve_ctx,
+                                                                   trigger_info->get_trigger_spec_package_id(trigger_id),
+                                                                   tmp_package_spec,
+                                                                   tmp_package_body))) {
+      LOG_WARN("get cached package failed", K(ret));
+    } else if (OB_ISNULL(tmp_package_spec) || OB_ISNULL(tmp_package_body)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("package spec or body is null", K(ret), K(tmp_package_spec), K(tmp_package_body));
+    } else {
+      package_body = tmp_package_body;
+    }
+    if (OB_FAIL(ret)) {
+      int tmp_ret = ret;
+      const ObDatabaseSchema *database_schema = NULL;
+      ret = OB_SUCCESS;
+      ObSqlString &err_msg = session_info.get_pl_exact_err_msg();
+      if (OB_FAIL(err_msg.append_fmt("\nerror during execution of trigger "))) {
+        LOG_WARN("failed to append error msg", K(ret));
+      } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id,
+                                                          trigger_info->get_database_id(),
+                                                          database_schema))) {
+        LOG_WARN("get database schema failed", K(ret), K(tenant_id), K(trigger_info->get_database_id()));
+      } else if (OB_ISNULL(database_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("database schema is null", K(ret));
+      } else if (OB_FAIL(err_msg.append_fmt("%.*s.", database_schema->get_database_name_str().length(),
+                                            database_schema->get_database_name_str().ptr()))) {
+        LOG_WARN("failed to append error msg", K(ret));
+      } else if (OB_FAIL(err_msg.append_fmt("%.*s", trigger_info->get_trigger_name().length(),
+                                                    trigger_info->get_trigger_name().ptr()))) {
+        LOG_WARN("failed to append error msg", K(ret));
+      }
+      if (OB_SUCC(ret)) {
+        ret = tmp_ret;
+      }
+    }
+  }
   return ret;
 }
 

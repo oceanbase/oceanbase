@@ -78,6 +78,8 @@ public:
   // should be removed in version 4.2.0.0
   virtual int update_replayable_point(const share::SCN &replayable_scn) = 0;
 
+  virtual int advance_base_lsn(int64_t id, palf::LSN base_lsn) = 0;
+
   virtual int64_t get_tenant_id() = 0;
 };
 

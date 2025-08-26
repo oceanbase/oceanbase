@@ -230,6 +230,9 @@ public:
 
 #endif
   }
+  virtual void set_attr(const ObMemAttr &attr) override {
+    mattr_ = attr;
+  }
 
   void purge_extra_cached_block(Arena &arena, bool need_check = false) {
     arena.ref(1);

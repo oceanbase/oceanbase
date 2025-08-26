@@ -25,7 +25,7 @@ using namespace oceanbase::sql;
 
 int ObBarrierPieceMsgListener::on_message(
     ObBarrierPieceMsgCtx &ctx,
-    common::ObIArray<ObPxSqcMeta *> &sqcs,
+    common::ObIArray<ObPxSqcMeta> &sqcs,
     const ObBarrierPieceMsg &pkt)
 {
   int ret = OB_SUCCESS;
@@ -52,13 +52,13 @@ int ObBarrierPieceMsgListener::on_message(
   return ret;
 }
 
-int ObBarrierPieceMsgCtx::send_whole_msg(common::ObIArray<ObPxSqcMeta *> &sqcs)
+int ObBarrierPieceMsgCtx::send_whole_msg(common::ObIArray<ObPxSqcMeta> &sqcs)
 {
   int ret = OB_SUCCESS;
   ObBarrierWholeMsg whole;
   whole.op_id_ = op_id_;
   ARRAY_FOREACH_X(sqcs, idx, cnt, OB_SUCC(ret)) {
-    dtl::ObDtlChannel *ch = sqcs.at(idx)->get_qc_channel();
+    dtl::ObDtlChannel *ch = sqcs.at(idx).get_qc_channel();
     if (OB_ISNULL(ch)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("null expected", K(ret));

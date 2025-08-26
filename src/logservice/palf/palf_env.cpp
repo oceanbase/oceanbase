@@ -285,5 +285,10 @@ int64_t PalfEnv::get_tenant_id()
   return palf_env_impl_.get_tenant_id();
 }
 
+int PalfEnv::advance_base_lsn(int64_t id, palf::LSN lsn)
+{
+  return common::OB_NOT_SUPPORTED;
+}
+
 } // end namespace palf
 } // end namespace oceanbase

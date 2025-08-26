@@ -74,7 +74,8 @@ public:
              const bool has_memstore,
              const bool is_remove,
              const int64_t hidden_sys_data_disk_config_size,
-             const int64_t actual_data_disk_size);
+             const int64_t actual_data_disk_size,
+             const common::ObReplicaType &replica_type);
 
     int divide_meta_tenant(ObTenantConfig& meta_tenant_config);
 
@@ -86,7 +87,7 @@ public:
                  "unit_status", get_unit_status_str(unit_status_),
                  K_(config), K_(mode), K_(create_timestamp), K_(is_removed),
                  K_(hidden_sys_data_disk_config_size),
-                 K_(actual_data_disk_size));
+                 K_(actual_data_disk_size), K_(replica_type));
 
     bool is_valid() const
     {
@@ -122,6 +123,7 @@ public:
     //   For sys tenant, config_.data_disk_size() can not be 0, and actual_data_disk_size_ is always 0.
     // In SN mode, actual_data_disk_size_ is always 0.
     int64_t actual_data_disk_size_;
+    common::ObReplicaType replica_type_;
   };
 
   struct ObServerConfig

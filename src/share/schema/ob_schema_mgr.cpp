@@ -500,15 +500,18 @@ ObSchemaMgr::ObSchemaMgr()
       built_in_index_name_map_(SET_USE_500("BuiltInIdxNames", ObCtxIds::SCHEMA_SERVICE)),
       dblink_mgr_(allocator_),
       directory_mgr_(allocator_),
+      location_mgr_(allocator_),
       context_mgr_(allocator_),
       mock_fk_parent_table_mgr_(allocator_),
       rls_policy_mgr_(allocator_),
       rls_group_mgr_(allocator_),
       rls_context_mgr_(allocator_),
       catalog_mgr_(allocator_),
+      ccl_rule_mgr_(allocator_),
       timestamp_in_slot_(0),
       allocator_idx_(OB_INVALID_INDEX),
-      mlog_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_MLOG_INFO_VEC, ObCtxIds::SCHEMA_SERVICE))
+      mlog_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_MLOG_INFO_VEC, ObCtxIds::SCHEMA_SERVICE)),
+      external_resource_mgr_(allocator_)
 {
 }
 
@@ -557,15 +560,18 @@ ObSchemaMgr::ObSchemaMgr(ObIAllocator &allocator)
       built_in_index_name_map_(SET_USE_500("BuiltInIdxNames", ObCtxIds::SCHEMA_SERVICE)),
       dblink_mgr_(allocator_),
       directory_mgr_(allocator_),
+      location_mgr_(allocator_),
       context_mgr_(allocator_),
       mock_fk_parent_table_mgr_(allocator_),
       rls_policy_mgr_(allocator_),
       rls_group_mgr_(allocator_),
       rls_context_mgr_(allocator_),
       catalog_mgr_(allocator_),
+      ccl_rule_mgr_(allocator_),
       timestamp_in_slot_(0),
       allocator_idx_(OB_INVALID_INDEX),
-      mlog_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_MLOG_INFO_VEC, ObCtxIds::SCHEMA_SERVICE))
+      mlog_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_MLOG_INFO_VEC, ObCtxIds::SCHEMA_SERVICE)),
+      external_resource_mgr_(allocator_)
 {
 }
 
@@ -630,6 +636,8 @@ int ObSchemaMgr::init(const uint64_t tenant_id)
     LOG_WARN("init dblink mgr failed", K(ret));
   } else if (OB_FAIL(directory_mgr_.init())) {
     LOG_WARN("init directory mgr failed", K(ret));
+  } else if (OB_FAIL(location_mgr_.init())) {
+    LOG_WARN("init location mgr failed", K(ret));
   } else if (OB_FAIL(rls_policy_mgr_.init())) {
     LOG_WARN("init rls_policy mgr failed", K(ret));
   } else if (OB_FAIL(rls_group_mgr_.init())) {
@@ -646,6 +654,10 @@ int ObSchemaMgr::init(const uint64_t tenant_id)
     LOG_WARN("init context mgr failed", K(ret));
   } else if (OB_FAIL(mock_fk_parent_table_mgr_.init())) {
     LOG_WARN("init mock_fk_parent_table_mgr_ failed", K(ret));
+  } else if (OB_FAIL(external_resource_mgr_.init())) {
+    LOG_WARN("init external_resource_mgr_ failed", K(ret));
+  } else if (OB_FAIL(ccl_rule_mgr_.init())) {
+    LOG_WARN("init ccl_rule mgr failed", K(ret));
   } else {
     tenant_id_ = tenant_id;
   }
@@ -704,16 +716,19 @@ void ObSchemaMgr::reset()
     tablespace_mgr_.reset();
     dblink_mgr_.reset();
     directory_mgr_.reset();
+    location_mgr_.reset();
     rls_policy_mgr_.reset();
     rls_group_mgr_.reset();
     rls_context_mgr_.reset();
     catalog_mgr_.reset();
+    ccl_rule_mgr_.reset();
     tenant_id_ = OB_INVALID_TENANT_ID;
     hidden_table_name_map_.clear();
     built_in_index_name_map_.clear();
     context_mgr_.reset();
     mock_fk_parent_table_mgr_.reset();
     mlog_infos_.clear();
+    external_resource_mgr_.reset();
   }
 }
 
@@ -817,6 +832,8 @@ int ObSchemaMgr::assign(const ObSchemaMgr &other)
         LOG_WARN("assign dblink mgr failed", K(ret));
       } else if (OB_FAIL(directory_mgr_.assign(other.directory_mgr_))) {
         LOG_WARN("assign directory mgr failed", K(ret));
+      } else if (OB_FAIL(location_mgr_.assign(other.location_mgr_))) {
+        LOG_WARN("assign location mgr failed", K(ret));
       } else if (OB_FAIL(context_mgr_.assign(other.context_mgr_))) {
         LOG_WARN("assign context mgr failed", K(ret));
       } else if (OB_FAIL(mock_fk_parent_table_mgr_.assign(other.mock_fk_parent_table_mgr_))) {
@@ -829,6 +846,10 @@ int ObSchemaMgr::assign(const ObSchemaMgr &other)
         LOG_WARN("assign rls_context mgr failed", K(ret));
       } else if (OB_FAIL(catalog_mgr_.assign(other.catalog_mgr_))) {
         LOG_WARN("assign catalog mgr failed", K(ret));
+      } else if (OB_FAIL(external_resource_mgr_.assign(other.external_resource_mgr_))) {
+        LOG_WARN("assign external_resource_mgr_ failed", K(ret));
+      } else if (OB_FAIL(ccl_rule_mgr_.assign(other.ccl_rule_mgr_))) {
+        LOG_WARN("assign ccl_rule mgr failed", K(ret));
       }
     }
   }
@@ -916,6 +937,8 @@ int ObSchemaMgr::deep_copy(const ObSchemaMgr &other)
         LOG_WARN("deep copy dblink mgr failed", K(ret));
       } else if (OB_FAIL(directory_mgr_.deep_copy(other.directory_mgr_))) {
         LOG_WARN("deep copy directory mgr failed", K(ret));
+      } else if (OB_FAIL(location_mgr_.deep_copy(other.location_mgr_))) {
+        LOG_WARN("deep copy location mgr failed", K(ret));
       } else if (OB_FAIL(context_mgr_.deep_copy(other.context_mgr_))) {
         LOG_WARN("deep copy context mgr failed", K(ret));
       } else if (OB_FAIL(mock_fk_parent_table_mgr_.deep_copy(other.mock_fk_parent_table_mgr_))) {
@@ -928,6 +951,10 @@ int ObSchemaMgr::deep_copy(const ObSchemaMgr &other)
         LOG_WARN("deep copy rls_context mgr failed", K(ret));
       } else if (OB_FAIL(catalog_mgr_.deep_copy(other.catalog_mgr_))) {
         LOG_WARN("deep copy catalog mgr failed", K(ret));
+      } else if (OB_FAIL(external_resource_mgr_.deep_copy(other.external_resource_mgr_))) {
+        LOG_WARN("deep copy external_resource mgr failed", K(ret));
+      } else if (OB_FAIL(ccl_rule_mgr_.deep_copy(other.ccl_rule_mgr_))) {
+        LOG_WARN("deep copy ccl_rule mgr failed", K(ret));
       }
     }
     if (OB_SUCC(ret)) {
@@ -1536,6 +1563,20 @@ int ObSchemaMgr::get_directory_schema(
     LOG_WARN("tenant_id not matched", K(ret), K(tenant_id), K_(tenant_id));
   } else {
     ret = directory_mgr_.get_directory_schema_by_id(schema_id, schema);
+  }
+  return ret;
+}
+int ObSchemaMgr::get_location_schema(
+    const uint64_t tenant_id,
+    const uint64_t schema_id,
+    const ObLocationSchema *&schema) const
+{
+  int ret = OB_SUCCESS;
+  if (tenant_id_ != tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant_id not matched", K(ret), K(tenant_id), K_(tenant_id));
+  } else {
+    ret = location_mgr_.get_location_schema_by_id(schema_id, schema);
   }
   return ret;
 }
@@ -2169,6 +2210,78 @@ int ObSchemaMgr::del_catalog(const ObTenantCatalogId &id)
 {
   int ret = OB_SUCCESS;
   OZ(catalog_mgr_.del_catalog(id));
+  return ret;
+}
+
+int ObSchemaMgr::add_locations(const common::ObIArray<ObLocationSchema> &location_schemas)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; i < location_schemas.count() && OB_SUCC(ret); ++i) {
+    if (OB_FAIL(add_location(location_schemas.at(i)))) {
+      LOG_WARN("push schema failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObSchemaMgr::add_location(const ObLocationSchema &catalog_schema)
+{
+  int ret = OB_SUCCESS;
+  ObNameCaseMode mode = OB_NAME_CASE_INVALID;
+  if (is_sys_tenant(tenant_id_)) {
+    mode = OB_ORIGIN_AND_INSENSITIVE;
+  } else if (OB_FAIL(get_tenant_name_case_mode(catalog_schema.get_tenant_id(), mode))) {
+    LOG_WARN("fail to get_tenant_name_case_mode", K(ret), "tenant_id", catalog_schema.get_tenant_id());
+  } else if (OB_NAME_CASE_INVALID == mode) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid case mode", K(ret), K(mode));
+  }
+  if (OB_SUCC(ret) && OB_FAIL(location_mgr_.add_location(catalog_schema, mode))) {
+    LOG_WARN("failed to add location", K(ret));
+  }
+  return ret;
+}
+
+int ObSchemaMgr::del_location(const ObTenantLocationId &id)
+{
+  int ret = OB_SUCCESS;
+  OZ(location_mgr_.del_location(id));
+  return ret;
+}
+
+int ObSchemaMgr::add_ccl_rules(const common::ObIArray<ObSimpleCCLRuleSchema> &ccl_schemas)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; i < ccl_schemas.count() && OB_SUCC(ret); ++i) {
+    if (OB_FAIL(add_ccl_rule(ccl_schemas.at(i)))) {
+      LOG_WARN("push schema failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObSchemaMgr::add_ccl_rule(const ObSimpleCCLRuleSchema &ccl_schema)
+{
+  int ret = OB_SUCCESS;
+  ObNameCaseMode mode = OB_NAME_CASE_INVALID;
+  if (is_sys_tenant(tenant_id_)) {
+    mode = OB_ORIGIN_AND_INSENSITIVE;
+  } else if (OB_FAIL(get_tenant_name_case_mode(ccl_schema.get_tenant_id(), mode))) {
+    LOG_WARN("fail to get_tenant_name_case_mode", K(ret), "tenant_id", ccl_schema.get_tenant_id());
+  } else if (OB_NAME_CASE_INVALID == mode) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid case mode", K(ret), K(mode));
+  }
+  if (OB_SUCC(ret) && OB_FAIL(ccl_rule_mgr_.add_ccl_rule(ccl_schema, mode))) {
+    LOG_WARN("failed to add catalog", K(ret));
+  }
+  return ret;
+}
+
+int ObSchemaMgr::del_ccl_rule(const ObTenantCCLRuleId &id)
+{
+  int ret = OB_SUCCESS;
+  OZ(ccl_rule_mgr_.del_ccl_rule(id));
   return ret;
 }
 
@@ -2863,9 +2976,9 @@ int ObSchemaMgr::add_foreign_keys_in_table(
       int hash_ret = foreign_key_name_map_.set_refactored(foreign_key_name_wrapper,
                                                           const_cast<ObSimpleForeignKeyInfo*> (simple_foreign_key_info),
                                                           over_write);
-      if (OB_SUCCESS != hash_ret) {
-        ret = OB_HASH_EXIST == hash_ret ? OB_SUCCESS : OB_ERR_UNEXPECTED;
-        LOG_ERROR("build fk name hashmap failed", K(ret), K(hash_ret),
+      if (OB_SUCCESS != hash_ret && OB_HASH_EXIST != hash_ret) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("build fk name hashmap failed", KR(ret), K(hash_ret),
                   "fk_id", simple_foreign_key_info->foreign_key_id_,
                   "fk_name", simple_foreign_key_info->foreign_key_name_);
       }
@@ -4531,6 +4644,8 @@ int ObSchemaMgr::del_schemas_in_tenant(const uint64_t tenant_id)
         LOG_WARN("del dblink in tenant failed", K(ret), K(tenant_id));
       } else if (OB_FAIL(directory_mgr_.del_directory_schemas_in_tenant(tenant_id))) {
         LOG_WARN("del directory in tenant failed", K(ret), K(tenant_id));
+      } else if (OB_FAIL(location_mgr_.del_location_schemas_in_tenant(tenant_id))) {
+        LOG_WARN("del location in tenant failed", K(ret), K(tenant_id));
       } else if (OB_FAIL(context_mgr_.del_schemas_in_tenant(tenant_id))) {
         LOG_WARN("del context in tenant failed", K(ret), K(tenant_id));
       } else if (OB_FAIL(mock_fk_parent_table_mgr_.del_schemas_in_tenant(tenant_id))) {
@@ -4543,6 +4658,10 @@ int ObSchemaMgr::del_schemas_in_tenant(const uint64_t tenant_id)
         LOG_WARN("del rls_context in tenant failed", K(ret), K(tenant_id));
       } else if (OB_FAIL(catalog_mgr_.del_schemas_in_tenant(tenant_id))) {
         LOG_WARN("del catalog in tenant failed", K(ret), K(tenant_id));
+      } else if (OB_FAIL(external_resource_mgr_.del_schemas_in_tenant(tenant_id))) {
+        LOG_WARN("del external_resource in tenant failed", K(ret), K(tenant_id));
+      } else if (OB_FAIL(ccl_rule_mgr_.del_schemas_in_tenant(tenant_id))) {
+        LOG_WARN("del ccl_rule in tenant failed", K(ret), K(tenant_id));
       }
     }
   }
@@ -4582,12 +4701,15 @@ int ObSchemaMgr::get_schema_count(int64_t &schema_count) const
     int64_t audit_schema_count = 0;
     int64_t dblink_schema_count = 0;
     int64_t directory_schema_count = 0;
+    int64_t location_schema_count = 0;
     int64_t context_schema_count = 0;
     int64_t mock_fk_parent_table_schema_count = 0;
     int64_t rls_policy_schema_count = 0;
     int64_t rls_group_schema_count = 0;
     int64_t rls_context_schema_count = 0;
     int64_t catalog_schema_count = 0;
+    int64_t external_resource_schema_count = 0;
+    int64_t ccl_rule_schema_count = 0;
     if (OB_FAIL(outline_mgr_.get_outline_schema_count(outline_schema_count))) {
       LOG_WARN("get_outline_schema_count failed", K(ret));
     } else if (OB_FAIL(routine_mgr_.get_routine_schema_count(routine_schema_count))) {
@@ -4628,6 +4750,8 @@ int ObSchemaMgr::get_schema_count(int64_t &schema_count) const
       LOG_WARN("get dblink schema count failed", K(ret));
     } else if (OB_FAIL(directory_mgr_.get_directory_schema_count(directory_schema_count))) {
       LOG_WARN("get directory schema count failed", K(ret));
+    } else if (OB_FAIL(location_mgr_.get_location_schema_count(location_schema_count))) {
+      LOG_WARN("get location schema count failed", K(ret));
     } else if (OB_FAIL(context_mgr_.get_context_schema_count(context_schema_count))) {
       LOG_WARN("get context schema count failed", K(ret));
     } else if (OB_FAIL(mock_fk_parent_table_mgr_.get_mock_fk_parent_table_schema_count(mock_fk_parent_table_schema_count))) {
@@ -4640,6 +4764,10 @@ int ObSchemaMgr::get_schema_count(int64_t &schema_count) const
       LOG_WARN("get rls_context schema count failed", K(ret));
     } else if (OB_FAIL(catalog_mgr_.get_schema_count(catalog_schema_count))) {
       LOG_WARN("get catalog schema count failed", K(ret));
+    } else if (OB_FAIL(external_resource_mgr_.get_external_resource_schema_count(external_resource_schema_count))) {
+      LOG_WARN("get external_resource schema count failed", K(ret));
+    } else if (OB_FAIL(ccl_rule_mgr_.get_schema_count(ccl_rule_schema_count))) {
+      LOG_WARN("get ccl_rule schema count failed", K(ret));
     } else {
       schema_count += (outline_schema_count + routine_schema_count + priv_schema_count
                        + synonym_schema_count + package_schema_count
@@ -4653,13 +4781,16 @@ int ObSchemaMgr::get_schema_count(int64_t &schema_count) const
                        + audit_schema_count
                        + dblink_schema_count
                        + directory_schema_count
+                       + location_schema_count
                        + rls_policy_schema_count
                        + rls_group_schema_count
                        + rls_context_schema_count
                        + catalog_schema_count
+                       + ccl_rule_schema_count
                        + sys_variable_schema_count
                        + context_schema_count
                        + mock_fk_parent_table_schema_count
+                       + external_resource_schema_count
                       );
     }
   }
@@ -5426,6 +5557,8 @@ int ObSchemaMgr::get_schema_statistics(common::ObIArray<ObSchemaStatisticsInfo> 
     LOG_WARN("fail to push back schema statistics", K(ret), K(schema_info));
   } else if (OB_FAIL(directory_mgr_.get_schema_statistics(schema_info))) {
     LOG_WARN("fail to get directory statistics", K(ret));
+  } else if (OB_FAIL(location_mgr_.get_schema_statistics(schema_info))) {
+    LOG_WARN("fail to get location statistics", K(ret));
   } else if (OB_FAIL(rls_policy_mgr_.get_schema_statistics(schema_info))) {
     LOG_WARN("fail to get rls_policy statistics", K(ret));
   } else if (OB_FAIL(rls_group_mgr_.get_schema_statistics(schema_info))) {
@@ -5444,6 +5577,14 @@ int ObSchemaMgr::get_schema_statistics(common::ObIArray<ObSchemaStatisticsInfo> 
     LOG_WARN("fail to get mock_fk_parent_table statistics", K(ret));
   } else if (OB_FAIL(schema_infos.push_back(schema_info))) {
     LOG_WARN("fail to push back schema statistics", K(ret), K(schema_info));
+  } else if (OB_FAIL(ccl_rule_mgr_.get_schema_statistics(schema_info))) {
+    LOG_WARN("fail to get ccl_rule statistics", K(ret));
+  } else if (OB_FAIL(schema_infos.push_back(schema_info))) {
+    LOG_WARN("fail to push back schema statistics", K(ret), K(schema_info));
+  } else if (OB_FAIL(external_resource_mgr_.get_schema_statistics(schema_info))) {
+    LOG_WARN("failed to get external_resource statistics", K(ret));
+  } else if (OB_FAIL(schema_infos.push_back(schema_info))) {
+    LOG_WARN("failed to push back schema statistics", K(ret), K(schema_info));
   }
   return ret;
 }
@@ -5740,6 +5881,41 @@ int ObSchemaMgr::get_table_statistics(ObSchemaStatisticsInfo &schema_info) const
       }
     }
   }
+  return ret;
+}
+
+int ObSchemaMgr::get_external_resource_schema(
+  const uint64_t &tenant_id,
+  const uint64_t &external_resource_id,
+  const ObSimpleExternalResourceSchema *&external_resource_schema) const
+{
+  int ret = OB_SUCCESS;
+
+  if (tenant_id_ != tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant_id not matched", K(ret), K(tenant_id), K_(tenant_id));
+  } else {
+    ret = external_resource_mgr_.get_external_resource_schema(external_resource_id, external_resource_schema);
+  }
+
+  return ret;
+}
+
+int ObSchemaMgr::get_external_resource_schema(
+  const uint64_t &tenant_id,
+  const uint64_t &database_id,
+  const ObString &external_resource_name,
+  const ObSimpleExternalResourceSchema *&external_resource_schema) const
+{
+  int ret = OB_SUCCESS;
+
+  if (tenant_id_ != tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant_id not matched", K(ret), K(tenant_id), K_(tenant_id));
+  } else {
+    ret = external_resource_mgr_.get_external_resource_schema(tenant_id, database_id, external_resource_name, external_resource_schema);
+  }
+
   return ret;
 }
 

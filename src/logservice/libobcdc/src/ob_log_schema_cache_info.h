@@ -20,6 +20,7 @@
 #include "common/object/ob_object.h"                      // ObObjMeta
 #include "common/ob_accuracy.h"                           // ObAccuracy
 #include "lib/container/ob_array_helper.h"
+#include "lib/udt/ob_collection_type.h"
 
 namespace oceanbase
 {
@@ -110,6 +111,8 @@ public:
   }
   void get_extended_type_info(common::ObArrayHelper<common::ObString> &str_array) const;
 
+  inline const common::ObSqlCollectionInfo *get_collection_info() const { return collection_info_; }
+
   inline void set_udt_set_id(const uint64_t id) { udt_set_id_ = id; }
   inline uint64_t get_udt_set_id() const { return udt_set_id_; }
   inline bool is_udt_column() const { return udt_set_id_ > 0 && OB_INVALID_ID != udt_set_id_; }
@@ -178,6 +181,7 @@ private:
   // used for enum and set
   int64_t            extended_type_info_size_;
   common::ObString   *extended_type_info_;
+  common::ObSqlCollectionInfo *collection_info_;
   // The rowkey_info in TableSchema is not accurate because the new no primary key table will change the partition key to the primary key.
   // need to mark if this column was the primary key when the user created it
   bool               is_rowkey_;

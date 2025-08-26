@@ -24,7 +24,6 @@
 #include "share/ob_primary_zone_util.h"
 #include "rootserver/ob_tenant_thread_helper.h"
 #include "share/ls/ob_ls_operator.h"
-#include "share/inner_table/ob_sslog_table_schema.h"
 #include "rootserver/ob_ddl_operator.h"
 #include "rootserver/ob_table_creator.h"
 
@@ -142,8 +141,8 @@ int ObParallelCreateTenantExecutor::wait_all_(
       // To avoid load_sys_package and tenant DDL operations competing for DDL threads
       // wait for all load_sys_package tasks to complete before returning to the user.
       // ObCompatibilityMode::OCEANBASE_MODE means wait both mysql and oracle sys package
-    } else if (OB_FAIL(ObLoadSysPackageTask::wait_sys_package_ready(*sql_proxy_, ctx_,
-            ObCompatibilityMode::OCEANBASE_MODE))) {
+    } else if (!GCONF._enable_async_load_sys_package &&
+        OB_FAIL(ObLoadSysPackageTask::wait_sys_package_ready(*sql_proxy_, ctx_, ObCompatibilityMode::OCEANBASE_MODE))) {
       LOG_WARN("failed to wait sys package ready", KR(ret), K(ctx_));
     }
   }
@@ -201,7 +200,7 @@ int ObParallelCreateTenantExecutor::create_tenant_sys_ls_()
         K(pools), K(meta_palf_base_info), K(create_tenant_arg_));
     } else if (OB_FAIL(wait_ls_leader_(meta_tenant_id, SSLOG_LS))) {
       LOG_WARN("failed to wait ls leader", KR(ret), K(meta_tenant_id));
-    } else if (OB_FAIL(create_sslog_tablet_())) {
+    } else if (OB_FAIL(ObRootUtils::create_sslog_tablet(meta_tenant_id))) {
       LOG_WARN("failed to create sslog tablet", KR(ret));
     }
   }
@@ -348,59 +347,6 @@ int ObParallelCreateTenantExecutor::async_call_create_normal_tenant_(
     LOG_WARN("failed to call parallel create normal tenant", KR(ret), K(addr), K(ctx_), K(arg));
   }
   LOG_INFO("call create_normal_tenant", KR(ret), K(arg));
-  return ret;
-}
-
-int ObParallelCreateTenantExecutor::create_sslog_tablet_()
-{
-  int ret = OB_SUCCESS;
-  FLOG_INFO("start creating sslog table");
-  const uint64_t tenant_id = meta_tenant_schema_.get_tenant_id();
-  if (OB_FAIL(check_inner_stat_())) {
-    LOG_WARN("check_inner_stat failed", KR(ret));
-  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("sql_proxy_ is NULL", KR(ret), KP(GCTX.sql_proxy_));
-  } else {
-    ObMySQLTransaction trans;
-    ObTableSchema table_schema;
-    ObTableCreator table_creator(tenant_id, SCN::base_scn(), trans);
-    common::ObArray<const share::schema::ObTableSchema*> table_schema_ptrs;
-    common::ObArray<share::ObLSID> ls_id_array;
-    common::ObArray<bool> need_create_empty_majors;
-    if (OB_FAIL(trans.start(GCTX.sql_proxy_, tenant_id))) {
-      LOG_WARN("fail to start trans", KR(ret));
-    } else if (OB_FAIL(table_creator.init(false))) {
-      LOG_WARN("fail to init tablet creator", KR(ret));
-    } else if (OB_FAIL(ObSSlogTableSchema::all_sslog_table_schema(table_schema))) {
-      LOG_WARN("fail to get schema", KR(ret));
-    } else if (OB_FAIL(ObSchemaUtils::construct_tenant_space_full_table(tenant_id, table_schema))) {
-      LOG_WARN("fail to construct tenant space table", KR(ret), K(tenant_id));
-    } else if (OB_FAIL(table_schema_ptrs.push_back(&table_schema))) {
-      LOG_WARN("fail to push back", KR(ret));
-    } else if (OB_FAIL(ls_id_array.push_back(SSLOG_LS))) {
-      LOG_WARN("fail to push back", KR(ret));
-    } else if (OB_FAIL(need_create_empty_majors.push_back(true))) {
-      LOG_WARN("fail to push back", KR(ret));
-    } else if (OB_FAIL(table_creator.add_create_tablets_of_tables_arg(
-                                table_schema_ptrs,
-                                ls_id_array,
-                                DATA_CURRENT_VERSION,
-                                need_create_empty_majors/*need_create_empty_major_sstable*/))) {
-      LOG_WARN("fail to add create tablet arg", KR(ret));
-    } else if (OB_FAIL(table_creator.execute())) {
-      LOG_WARN("execute create partition failed", K(ret));
-    }
-    if (trans.is_started()) {
-      int temp_ret = OB_SUCCESS;
-      bool commit = OB_SUCC(ret);
-      if (OB_SUCCESS != (temp_ret = trans.end(commit))) {
-        ret = (OB_SUCC(ret)) ? temp_ret : ret;
-        LOG_WARN("trans end failed", K(commit), K(temp_ret));
-      }
-    }
-  }
-  FLOG_INFO("finish creating sslog table", KR(ret));
   return ret;
 }
 

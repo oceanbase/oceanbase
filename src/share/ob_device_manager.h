@@ -41,16 +41,19 @@ public:
   const static int64_t LOG_INTERVAL_US = 5 * 1000 * 1000; // 5s
 };
 
-class ObClusterVersionMgr: public ObClusterVersionBaseMgr
+class ObClusterStateMgr: public ObClusterStateBaseMgr
 {
 public:
-  ObClusterVersionMgr() {}
-  virtual ~ObClusterVersionMgr() {}
+  ObClusterStateMgr() {}
+  virtual ~ObClusterStateMgr() {}
   virtual int is_supported_assume_version() const override;
   virtual int is_supported_enable_worm_version() const override;
-  static ObClusterVersionMgr &get_instance()
+  virtual int is_supported_azblob_version() const override;
+  virtual bool is_shared_storage_mode() const override;
+  virtual bool is_write_with_if_match() const override;
+  static ObClusterStateMgr &get_instance()
   {
-    static ObClusterVersionMgr mgr;
+    static ObClusterStateMgr mgr;
     return mgr;
   }
 };
@@ -76,10 +79,6 @@ public:
   void destroy();
   static ObDeviceManager &get_instance();
 
-  int get_device_key(const common::ObString &storage_info,
-                     const common::ObString &storage_type_prefix,
-                     char *device_key,
-                     const int64_t device_key_len) const;
   /*for object device, will return a new object to caller*/
   /*ofs/local will share in upper logical*/
   // 1. ObObjectStorageInfo is a member of ObObjectDevice, which is used for accessing object storage.
@@ -87,7 +86,7 @@ public:
   // 2. ObStorageIdMod is a member of ObObjectDevice, which is used for ObIOManager QoS.
   //    Hence, different ObStorageIdMod should use different ObObjectDevice.
   // 3. In summary, ObDeviceManager::get_device should be based on both ObObjectStorageInfo and ObStorageIdMod.
-  int get_device(const ObString &storage_type_prefix,
+  int get_device(const ObString &uri,
                  const ObObjectStorageInfo &storage_info,
                  const ObStorageIdMod &storage_id_mod,
                  ObIODevice *&device_handle);
@@ -117,17 +116,17 @@ private:
   typedef common::hash::ObHashMap<ObString, ObDeviceInsInfo*> StoragInfoDeviceInfoMap;
   typedef common::hash::ObHashMap<int64_t, ObDeviceInsInfo*> DeviceHandleDeviceInfoMap;
 
-  int alloc_device_(const ObString &storage_type_prefix,
+  int alloc_device_(const ObString &uri,
                     const ObString &device_key,
                     ObDeviceInsInfo *&device_info);
   int get_device_key_(ObIAllocator &allcator,
-                      const ObString &storage_type_prefix,
+                      const ObString &uri,
                       const ObObjectStorageInfo &storage_info,
                       const ObStorageIdMod &storage_id_mod,
                       char *&device_key);
   int inc_device_ref_nolock_(ObDeviceInsInfo *dev_info);
   int get_deivce_(const ObString &device_key, ObIODevice *&device_handle);
-  int alloc_device_and_init_(const ObString &storage_type_prefix,
+  int alloc_device_and_init_(const ObString &uri,
                              const ObString &device_key,
                              const ObStorageIdMod &storage_id_mod,
                              ObIODevice *&device_handle);

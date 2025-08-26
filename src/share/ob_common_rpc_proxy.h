@@ -16,8 +16,6 @@
 #include "rpc/obrpc/ob_rpc_proxy.h"
 #include "share/ob_lease_struct.h"
 #include "share/partition_table/ob_partition_location.h"
-#include "share/ob_rpc_struct.h"
-#include "share/ob_lonely_table_clean_rpc_struct.h"
 #include "share/ob_rs_mgr.h"
 #include "share/ob_time_zone_info_manager.h"
 #include "common/storage/ob_freeze_define.h" // for ObFrozenStatus
@@ -25,6 +23,9 @@
 #include "share/config/ob_server_config.h"
 #include "observer/ob_server_struct.h"
 #include "share/ls/ob_ls_info.h"
+#include "share/ob_lonely_table_clean_rpc_struct.h"
+#include "share/ob_external_resource_rpc_struct.h"
+#include "share/ob_create_hidden_tablev2_rpc_struct.h"
 
 namespace oceanbase
 {

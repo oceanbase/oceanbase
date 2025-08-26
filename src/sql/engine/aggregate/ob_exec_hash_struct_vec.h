@@ -2185,7 +2185,9 @@ int ObExtendHashTableVec<GroupRowBucket>::init(ObIAllocator *allocator,
       ret = OB_ALLOCATE_MEMORY_FAILED;
       SQL_ENG_LOG(WARN, "failed to allocate memory", K(ret));
     } else {
-      MEMSET(&col_has_null_.at(0), 0, col_has_null_.count());
+      if (col_has_null_.count() > 0) {
+        MEMSET(&col_has_null_.at(0), 0, col_has_null_.count());
+      }
       buckets_ = new(buckets_buf)BucketArray(allocator_);
       buckets_->set_tenant_id(tenant_id_);
       initial_bucket_num_ = common::next_pow2(initial_size * SIZE_BUCKET_SCALE);

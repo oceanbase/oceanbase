@@ -127,7 +127,7 @@ int ObMvccEngine::get(ObMvccAccessCtx &ctx,
     if (OB_SUCCESS != (tmp_ret = try_compact_row_when_mvcc_read_(ctx.get_snapshot_version(), *value))) {
       TRANS_LOG(WARN, "fail to try to compact row", K(tmp_ret));
     }
-  } else if (query_flag.is_for_foreign_key_check()) {
+  } else if (query_flag.is_for_foreign_key_check() || query_flag.is_plain_insert_gts_opt()) {
     ret = ObRowConflictHandler::check_foreign_key_constraint_for_memtable(ctx, value, lock_state);
   } else {
     // do nothing

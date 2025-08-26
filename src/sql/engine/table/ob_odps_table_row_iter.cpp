@@ -17,6 +17,7 @@
 #include "src/share/external_table/ob_external_table_utils.h"
 #include "src/sql/engine/expr/ob_datum_cast.h"
 #include "odps/odps_api.h"
+#include "sql/engine/expr/ob_array_expr_utils.h"
 
 namespace oceanbase {
 namespace sql {
@@ -27,6 +28,134 @@ int ObODPSTableRowIterator::OdpsPartition::reset()
   record_count_ = -1;
   name_.clear();
   return ret;
+}
+
+ObODPSTableRowIterator::OdpsColumn::OdpsColumn(): this_type_info_(&type_info_) {
+  int ret = OB_SUCCESS;
+  is_child_ = false;
+}
+
+
+ObODPSTableRowIterator::OdpsColumn::OdpsColumn(const std::string name, const apsara::odps::sdk::ODPSColumnTypeInfo& type_info) :
+name_(name),
+type_info_(type_info),
+this_type_info_(&type_info_)
+{
+  int ret = OB_SUCCESS;
+  is_child_ = false;
+}
+
+ObODPSTableRowIterator::OdpsColumn::OdpsColumn(const ObODPSTableRowIterator::OdpsColumn& other) {
+  int ret = OB_SUCCESS;
+  name_ = other.name_;
+  type_info_ = other.type_info_;
+  this_type_info_ = &type_info_;
+  is_child_ = other.is_child_;
+}
+
+ObODPSTableRowIterator::OdpsColumn ObODPSTableRowIterator::OdpsColumn::operator=(const ObODPSTableRowIterator::OdpsColumn& other) {
+  name_ = other.name_;
+  type_info_ = other.type_info_;
+  this_type_info_ = &type_info_;
+  int ret = OB_SUCCESS;
+  is_child_ = other.is_child_;
+  return *this;
+}
+const ObODPSTableRowIterator::OdpsColumn ObODPSTableRowIterator::OdpsColumn::get_child_column(int32_t index) const {
+  // copy construct for sub
+  if (index < 0 || index >= this_type_info_->mSubTypes.size()) {
+    return OdpsColumn();
+  } else {
+    int ret = OB_SUCCESS;
+    LOG_WARN("get child column", K(index), K(this_type_info_->mSubTypes.at(index).mType));
+    return OdpsColumn(&this_type_info_->mSubTypes.at(index));
+  }
+}
+
+ObOdpsJniConnector::OdpsType ObODPSTableRowIterator::OdpsColumn::get_odps_type() const {
+  ObOdpsJniConnector::OdpsType odps_type = ObOdpsJniConnector::OdpsType::UNKNOWN;
+  if (OB_ISNULL(this_type_info_)) {
+    int ret = OB_SUCCESS;
+    LOG_WARN("this_type_info_ is null", K(this_type_info_));
+  } else {
+    int ret = OB_SUCCESS;
+    LOG_WARN("this_type_info_ is not null", K(this_type_info_->mType), K(type_info_.mType), K(this_type_info_), K(&type_info_));
+    switch (this_type_info_->mType) {
+      case apsara::odps::sdk::ODPSColumnType::ODPS_BIGINT:
+        odps_type = ObOdpsJniConnector::OdpsType::BIGINT;
+        break;
+      case apsara::odps::sdk::ODPSColumnType::ODPS_DOUBLE:
+        odps_type = ObOdpsJniConnector::OdpsType::DOUBLE;
+        break;
+      case apsara::odps::sdk::ODPSColumnType::ODPS_BOOLEAN:
+        odps_type = ObOdpsJniConnector::OdpsType::BOOLEAN;
+        break;
+      case apsara::odps::sdk::ODPSColumnType::ODPS_DATETIME:
+        odps_type = ObOdpsJniConnector::OdpsType::DATETIME;
+        break;
+      case apsara::odps::sdk::ODPSColumnType::ODPS_STRING:
+        odps_type = ObOdpsJniConnector::OdpsType::STRING;
+        break;
+      case apsara::odps::sdk::ODPSColumnType::ODPS_DECIMAL:
+        odps_type = ObOdpsJniConnector::OdpsType::DECIMAL;
+        break;
+      case apsara::odps::sdk::ODPSColumnType::ODPS_TINYINT:
+        odps_type = ObOdpsJniConnector::OdpsType::TINYINT;
+        break;
+      case apsara::odps::sdk::ODPSColumnType::ODPS_SMALLINT:
+        odps_type = ObOdpsJniConnector::OdpsType::SMALLINT;
+        break;
+      case apsara::odps::sdk::ODPSColumnType::ODPS_INTEGER:
+        odps_type = ObOdpsJniConnector::OdpsType::INT;
+        break;
+      case apsara::odps::sdk::ODPSColumnType::ODPS_CHAR:
+        odps_type = ObOdpsJniConnector::OdpsType::CHAR;
+        break;
+      case apsara::odps::sdk::ODPSColumnType::ODPS_VARCHAR:
+        odps_type = ObOdpsJniConnector::OdpsType::VARCHAR;
+        break;
+      case apsara::odps::sdk::ODPSColumnType::ODPS_BINARY:
+        odps_type = ObOdpsJniConnector::OdpsType::BINARY;
+        break;
+      case apsara::odps::sdk::ODPSColumnType::ODPS_DATE:
+        odps_type = ObOdpsJniConnector::OdpsType::DATE;
+        break;
+      case apsara::odps::sdk::ODPSColumnType::ODPS_TIMESTAMP:
+        odps_type = ObOdpsJniConnector::OdpsType::TIMESTAMP;
+        break;
+      case apsara::odps::sdk::ODPSColumnType::ODPS_FLOAT:
+        odps_type = ObOdpsJniConnector::OdpsType::FLOAT;
+        break;
+      case apsara::odps::sdk::ODPSColumnType::ODPS_MAP:
+        odps_type = ObOdpsJniConnector::OdpsType::MAP;
+        break;
+      case apsara::odps::sdk::ODPSColumnType::ODPS_ARRAY:
+        odps_type = ObOdpsJniConnector::OdpsType::ARRAY;
+        break;
+      case apsara::odps::sdk::ODPSColumnType::ODPS_INTERVAL_DAY_TIME:
+        odps_type = ObOdpsJniConnector::OdpsType::INTERVAL_DAY_TIME;
+        break;
+      case apsara::odps::sdk::ODPSColumnType::ODPS_INTERVAL_YEAR_MONTH:
+        odps_type = ObOdpsJniConnector::OdpsType::INTERVAL_YEAR_MONTH;
+        break;
+      case apsara::odps::sdk::ODPSColumnType::ODPS_STRUCT:
+        odps_type = ObOdpsJniConnector::OdpsType::STRUCT;
+        break;
+      case apsara::odps::sdk::ODPSColumnType::ODPS_JSON:
+        odps_type = ObOdpsJniConnector::OdpsType::JSON;
+        break;
+      case apsara::odps::sdk::ODPSColumnType::ODPS_TIMESTAMP_NTZ:
+        odps_type = ObOdpsJniConnector::OdpsType::TIMESTAMP_NTZ;
+        break;
+      case apsara::odps::sdk::ODPSColumnType::ODPS_UNKNOWN:
+        odps_type = ObOdpsJniConnector::OdpsType::UNKNOWN;
+        break;
+      default:
+        odps_type = ObOdpsJniConnector::OdpsType::UNKNOWN;
+        break;
+    }
+  }
+  return odps_type;
 }
 
 int ObODPSTableRowIterator::init_tunnel(const sql::ObODPSGeneralFormat &odps_format, bool need_decrypt)
@@ -95,6 +224,9 @@ int ObODPSTableRowIterator::init_tunnel(const sql::ObODPSGeneralFormat &odps_for
       } else if (OB_ISNULL((odps_->GetTables()).get())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexcepted null ptr", K(ret));
+      } else if (OB_ISNULL(odps_format_.project_.ptr()) || OB_ISNULL(odps_format_.table_.ptr())) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid argument", K(ret), K(odps_format_.project_), K(odps_format_.schema_), K(odps_format_.table_));
       } else if (OB_ISNULL((table_handle_ = odps_->GetTables()->Get(std::string(odps_format_.project_.ptr(), odps_format_.project_.length()), // do not need try catch
                                                           std::string(odps_format_.schema_.ptr(), odps_format_.schema_.length()),
                                                           std::string(odps_format_.table_.ptr(), odps_format_.table_.length()))).get())) {
@@ -131,7 +263,6 @@ int ObODPSTableRowIterator::init_tunnel(const sql::ObODPSGeneralFormat &odps_for
       LOG_WARN("caught exception when call external driver api", K(ret), KP(this));
     }
   }
-
   return ret;
 }
 
@@ -195,6 +326,24 @@ int ObODPSTableRowIterator::init(const storage::ObTableScanParam *scan_param)
       LOG_WARN("failed to prepare expr", K(ret));
     }
   }
+  if (OB_SUCC(ret)) {
+    if (OB_ISNULL(scan_param_->op_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("op is null", K(ret));
+    }
+    if (OB_SUCC(ret)) {
+      ObEvalCtx &eval_ctx = scan_param_->op_->get_eval_ctx();
+      session_ptr_ = eval_ctx.exec_ctx_.get_my_session();
+      if (OB_ISNULL(session_ptr_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("session is null", K(ret));
+      } else if (OB_FAIL(session_ptr_->get_sys_variable(SYS_VAR_TIME_ZONE, timezone_str_))) {
+        LOG_WARN("failed to get store idx", K(ret));
+      }
+    }
+  }
+  // 如果成功的话revert析构
+  // 如果失败的话析构函数析构
   return ret;
 }
 
@@ -223,7 +372,7 @@ int ObODPSTableRowIterator::next_task()
         int64_t part_id = scan_param_->key_ranges_.at(task_idx).get_start_key().get_obj_ptr()[ObExternalTableUtils::PARTITION_ID].get_int();
         bool is_part_table = scan_param_->table_param_->is_partition_table();
         bool is_external_object = is_external_object_id(scan_param_->table_param_->get_table_id());
-        if (part_spec.compare("#######DUMMY_FILE#######") == 0) {
+        if (part_spec.compare(ObExternalTableUtils::dummy_file_name()) == 0) {
           ret = OB_ITER_END;
           LOG_WARN("empty file", K(ret));
         } else {
@@ -270,6 +419,7 @@ int ObODPSTableRowIterator::next_task()
                     LOG_WARN("fail to set refactored", K(ret));
                   }
                   // other thread has create downloader, free current downloader
+                  temp_downloader->~OdpsPartitionDownloader();
                   allocator.free(temp_downloader);
                   temp_downloader = NULL;
                 } else {
@@ -446,256 +596,188 @@ int ObODPSTableRowIterator::print_type_map_user_info(apsara::odps::sdk::ODPSColu
 }
 
 int ObODPSTableRowIterator::check_type_static(apsara::odps::sdk::ODPSColumnTypeInfo odps_type_info,
-                                              const ObExpr *ob_type_expr)
+                                              const ObExpr *ob_type_expr,
+                                              ObODPSArrayHelper *array_helper)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(ob_type_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null ptr", K(ret));
   } else {
-    const apsara::odps::sdk::ODPSColumnType odps_type = odps_type_info.mType;
-    const int32_t odps_type_length = odps_type_info.mSpecifiedLength;
-    const int32_t odps_type_precision = odps_type_info.mPrecision;
-    const int32_t odps_type_scale = odps_type_info.mScale;
     const ObObjType ob_type = ob_type_expr->obj_meta_.get_type();
     const int32_t ob_type_length = ob_type_expr->max_length_;
     const int32_t ob_type_precision = ob_type_expr->datum_meta_.precision_;
     const int32_t ob_type_scale = ob_type_expr->datum_meta_.scale_;
-    switch(odps_type)
-    {
-      case apsara::odps::sdk::ODPS_TINYINT:
-      case apsara::odps::sdk::ODPS_BOOLEAN:
-      {
-        if (ObTinyIntType == ob_type) {
-          // odps_type to ob_type is valid
-        } else {
-          ret = OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH;
-          LOG_WARN("invalid odps type map to ob type", K(ret), K(odps_type), K(ob_type));
-          print_type_map_user_info(odps_type_info, ob_type_expr);
-        }
-        break;
-      }
-      case apsara::odps::sdk::ODPS_SMALLINT:
-      {
-        if (ObSmallIntType == ob_type) {
-          // odps_type to ob_type is valid
-        } else {
-          ret = OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH;
-          LOG_WARN("invalid odps type map to ob type", K(ret), K(odps_type), K(ob_type));
-          print_type_map_user_info(odps_type_info, ob_type_expr);
-        }
-        break;
-      }
-      case apsara::odps::sdk::ODPS_INTEGER:
-      {
-        if (ObInt32Type == ob_type) {
-          // odps_type to ob_type is valid
-        } else {
-          ret = OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH;
-          LOG_WARN("invalid odps type map to ob type", K(ret), K(odps_type), K(ob_type));
-          print_type_map_user_info(odps_type_info, ob_type_expr);
-        }
-        break;
-      }
-      case apsara::odps::sdk::ODPS_BIGINT:
-      {
-        if (ObIntType == ob_type) {
-          // odps_type to ob_type is valid
-        } else {
-          ret = OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH;
-          LOG_WARN("invalid odps type map to ob type", K(ret), K(odps_type), K(ob_type));
-          print_type_map_user_info(odps_type_info, ob_type_expr);
-        }
-        break;
-      }
-      case apsara::odps::sdk::ODPS_FLOAT:
-      {
-        if (ObFloatType == ob_type && ob_type_length == 12 && ob_type_scale == -1) {
-          // odps_type to ob_type is valid
-        } else {
-          ret = OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH;
-          LOG_WARN("invalid odps type map to ob type", K(ret), K(odps_type), K(ob_type));
-          print_type_map_user_info(odps_type_info, ob_type_expr);
-        }
-        break;
-      }
-      case apsara::odps::sdk::ODPS_DOUBLE:
-      {
-        if (ObDoubleType == ob_type && ob_type_length == 23 && ob_type_scale == -1) {
-          // odps_type to ob_type is valid
-        } else {
-          ret = OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH;
-          LOG_WARN("invalid odps type map to ob type", K(ret), K(odps_type), K(ob_type));
-          print_type_map_user_info(odps_type_info, ob_type_expr);
-        }
-        break;
-      }
-      case apsara::odps::sdk::ODPS_DECIMAL:
-      {
-        if (ObDecimalIntType == ob_type ||
-            ObNumberType == ob_type) {
-          // odps_type to ob_type is valid
-          if (ob_type_precision != odps_type_precision || // in ObExpr, max_length_ is decimal type's precision
-              ob_type_scale != odps_type_scale) {
-            ret = OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH;
-            LOG_WARN("invalid precision or scale or length", K(ret), K(odps_type), K(ob_type),
-                                                              K(ob_type_length),
-                                                              K(ob_type_precision),
-                                                              K(ob_type_scale),
-                                                              K(odps_type_length),
-                                                              K(odps_type_precision),
-                                                              K(odps_type_scale));
-            print_type_map_user_info(odps_type_info, ob_type_expr);
-          }
-        } else {
-          ret = OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH;
-          print_type_map_user_info(odps_type_info, ob_type_expr);
-        }
-        break;
-      }
-      case apsara::odps::sdk::ODPS_CHAR:
-      {
-        if (ObCharType == ob_type) {
-          // odps_type to ob_type is valid
-          if (ob_type_length != odps_type_length) {
-            ret = OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH;
-            LOG_WARN("invalid precision or scale or length", K(ret), K(odps_type), K(ob_type),
-                                                              K(ob_type_length),
-                                                              K(ob_type_precision),
-                                                              K(ob_type_scale),
-                                                              K(odps_type_length),
-                                                              K(odps_type_precision),
-                                                              K(odps_type_scale));
-            print_type_map_user_info(odps_type_info, ob_type_expr);
-          }
-        } else {
-          ret = OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH;
-          LOG_WARN("invalid odps type map to ob type", K(ret), K(odps_type), K(ob_type));
-          print_type_map_user_info(odps_type_info, ob_type_expr);
-        }
-        break;
-      }
-      case apsara::odps::sdk::ODPS_VARCHAR:
-      {
-        if (ObVarcharType == ob_type) {
-          // odps_type to ob_type is valid
-          if (ob_type_length != odps_type_length) {
-            ret = OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH;
-            LOG_WARN("invalid precision or scale or length", K(ret), K(odps_type), K(ob_type),
-                                                              K(ob_type_length),
-                                                              K(ob_type_precision),
-                                                              K(ob_type_scale),
-                                                              K(odps_type_length),
-                                                              K(odps_type_precision),
-                                                              K(odps_type_scale));
-            print_type_map_user_info(odps_type_info, ob_type_expr);
-          }
-        } else {
-          ret = OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH;
-          LOG_WARN("invalid odps type map to ob type", K(ret), K(odps_type), K(ob_type));
-          print_type_map_user_info(odps_type_info, ob_type_expr);
-        }
-        break;
-      }
-      case apsara::odps::sdk::ODPS_STRING:
-      case apsara::odps::sdk::ODPS_BINARY://check length at runtime
-      {
-        if (ObVarcharType == ob_type ||
-            ObTinyTextType == ob_type ||
-            ObTextType == ob_type ||
-            ObLongTextType == ob_type ||
-            ObMediumTextType == ob_type) {
-          // odps_type to ob_type is valid
-        } else {
-          ret = OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH;
-          LOG_WARN("invalid odps type map to ob type", K(ret), K(odps_type), K(ob_type));
-          print_type_map_user_info(odps_type_info, ob_type_expr);
-        }
-        break;
-      }
-      case apsara::odps::sdk::ODPS_TIMESTAMP:
-      {
-        if (ObTimestampType == ob_type) {
-          // odps_type to ob_type is valid
-          if (ob_type_scale < 6) {
-            ret = OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH;
-            LOG_WARN("invalid precision or scale or length", K(ret), K(odps_type), K(ob_type),
-                                                              K(ob_type_length),
-                                                              K(ob_type_precision),
-                                                              K(ob_type_scale),
-                                                              K(odps_type_length),
-                                                              K(odps_type_precision),
-                                                              K(odps_type_scale));
-            print_type_map_user_info(odps_type_info, ob_type_expr);
-          }
-        } else {
-          ret = OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH;
-          LOG_WARN("invalid odps type map to ob type", K(ret), K(odps_type), K(ob_type));
-          print_type_map_user_info(odps_type_info, ob_type_expr);
-        }
-        break;
-      }
-      case apsara::odps::sdk::ODPS_TIMESTAMP_NTZ:
-      {
-        if (ob_is_datetime_or_mysql_datetime(ob_type)) {
-          // odps_type to ob_type is valid
-          if (ob_type_scale < 6) {
-            ret = OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH;
-            LOG_WARN("invalid precision or scale or length", K(ret), K(odps_type), K(ob_type),
-                                                              K(ob_type_length),
-                                                              K(ob_type_precision),
-                                                              K(ob_type_scale),
-                                                              K(odps_type_length),
-                                                              K(odps_type_precision),
-                                                              K(odps_type_scale));
-            print_type_map_user_info(odps_type_info, ob_type_expr);
-          }
-        } else {
-          ret = OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH;
-          LOG_WARN("invalid odps type map to ob type", K(ret), K(odps_type), K(ob_type));
-          print_type_map_user_info(odps_type_info, ob_type_expr);
-        }
-        break;
-      }
-      case apsara::odps::sdk::ODPS_DATE:
-      {
-        if (ObDateType == ob_type || ObMySQLDateType == ob_type) {
-          // odps_type to ob_type is valid
-        } else {
-          ret = OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH;
-          LOG_WARN("invalid odps type map to ob type", K(ret), K(odps_type), K(ob_type));
-          print_type_map_user_info(odps_type_info, ob_type_expr);
-        }
-        break;
-      }
-      case apsara::odps::sdk::ODPS_DATETIME:
-      {
-        if (ObDateTimeType == ob_type || ObMySQLDateTimeType == ob_type) {
-          // odps_type to ob_type is valid
-          if (ob_type_scale < 3) {
-            ret = OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH;
-            LOG_WARN("invalid precision or scale or length", K(ret), K(odps_type), K(ob_type),
-                                                              K(ob_type_length),
-                                                              K(ob_type_precision),
-                                                              K(ob_type_scale),
-                                                              K(odps_type_length),
-                                                              K(odps_type_precision),
-                                                              K(odps_type_scale));
-            print_type_map_user_info(odps_type_info, ob_type_expr);
-          }
-        } else {
-          ret = OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH;
-          LOG_WARN("invalid odps type map to ob type", K(ret), K(odps_type), K(ob_type));
-          print_type_map_user_info(odps_type_info, ob_type_expr);
-        }
-        break;
-      }
-      default:
-      {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("unsupported odps type", K(ret));
-      }
+    if (OB_FAIL(check_type_static(odps_type_info, ob_type, ob_type_length,
+                                  ob_type_precision, ob_type_scale, array_helper))) {
+      LOG_WARN("failed to check type static");
     }
+  }
+  return ret;
+}
+
+int ObODPSTableRowIterator::check_type_static(apsara::odps::sdk::ODPSColumnTypeInfo odps_type_info,
+                                              const ObObjType ob_type,
+                                              const int32_t ob_type_length,
+                                              const int32_t ob_type_precision,
+                                              const int32_t ob_type_scale,
+                                              ObODPSArrayHelper *array_helper)
+{
+  int ret = OB_SUCCESS;
+  const apsara::odps::sdk::ODPSColumnType odps_type = odps_type_info.mType;
+  const int32_t odps_type_length = odps_type_info.mSpecifiedLength;
+  const int32_t odps_type_precision = odps_type_info.mPrecision;
+  const int32_t odps_type_scale = odps_type_info.mScale;
+  bool is_match = false;
+  switch(odps_type)
+  {
+    case apsara::odps::sdk::ODPS_TINYINT:
+    case apsara::odps::sdk::ODPS_BOOLEAN:
+    {
+      if (ObTinyIntType == ob_type) {
+        is_match = true;
+      }
+      break;
+    }
+    case apsara::odps::sdk::ODPS_SMALLINT:
+    {
+      if (ObSmallIntType == ob_type) {
+        is_match = true;
+      }
+      break;
+    }
+    case apsara::odps::sdk::ODPS_INTEGER:
+    {
+      if (ObInt32Type == ob_type) {
+        is_match = true;
+      }
+      break;
+    }
+    case apsara::odps::sdk::ODPS_BIGINT:
+    {
+      if (ObIntType == ob_type) {
+        is_match = true;
+      }
+      break;
+    }
+    case apsara::odps::sdk::ODPS_FLOAT:
+    {
+      if (ObFloatType == ob_type && ob_type_scale == DEFAULT_FLOAT_SCALE) {
+        is_match = true;
+      }
+      break;
+    }
+    case apsara::odps::sdk::ODPS_DOUBLE:
+    {
+      if (ObDoubleType == ob_type && ob_type_scale == DEFAULT_DOUBLE_SCALE) {
+        is_match = true;
+      }
+      break;
+    }
+    case apsara::odps::sdk::ODPS_DECIMAL:
+    {
+      if (ObDecimalIntType == ob_type || ObNumberType == ob_type) {
+        if (ob_type_precision == odps_type_precision &&
+            ob_type_scale == odps_type_scale) {
+          is_match = true;
+        }
+      }
+      break;
+    }
+    case apsara::odps::sdk::ODPS_CHAR:
+    {
+      if (ObCharType == ob_type) {
+        if (ob_type_length == odps_type_length) {
+          is_match = true;
+        }
+      }
+      break;
+    }
+    case apsara::odps::sdk::ODPS_VARCHAR:
+    {
+      if (ObVarcharType == ob_type) {
+        if (ob_type_length == odps_type_length) {
+          is_match = true;
+        }
+      }
+      break;
+    }
+    case apsara::odps::sdk::ODPS_STRING:
+    case apsara::odps::sdk::ODPS_BINARY://check length at runtime
+    {
+      if (ObVarcharType == ob_type ||
+          ObTinyTextType == ob_type ||
+          ObTextType == ob_type ||
+          ObLongTextType == ob_type ||
+          ObMediumTextType == ob_type) {
+        is_match = true;
+      }
+      break;
+    }
+    case apsara::odps::sdk::ODPS_JSON:
+    {
+      if (ObJsonType == ob_type) {
+        is_match = true;
+      }
+      break;
+    }
+    case apsara::odps::sdk::ODPS_TIMESTAMP:
+    {
+      if (ObTimestampType == ob_type && ob_type_scale >= 6) {
+        is_match = true;
+      }
+      break;
+    }
+    case apsara::odps::sdk::ODPS_TIMESTAMP_NTZ:
+    {
+      if (ob_is_datetime_or_mysql_datetime(ob_type) && ob_type_scale >= 6) {
+        is_match = true;
+      }
+      break;
+    }
+    case apsara::odps::sdk::ODPS_DATE:
+    {
+      if (ObDateType == ob_type || ObMySQLDateType == ob_type) {
+        is_match = true;
+      }
+      break;
+    }
+    case apsara::odps::sdk::ODPS_DATETIME:
+    {
+      if (ob_is_datetime_or_mysql_datetime(ob_type) && ob_type_scale >= 3) {
+        is_match = true;
+      }
+      break;
+    }
+    case apsara::odps::sdk::ODPS_ARRAY:
+    {
+      if (ObCollectionSQLType == ob_type) {
+        if (OB_ISNULL(array_helper) || OB_UNLIKELY(odps_type_info.mSubTypes.size() != 1)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected argument", KP(array_helper), K(odps_type_info.mSubTypes.size()));
+        } else if (OB_FAIL(SMART_CALL(check_type_static(odps_type_info.mSubTypes.at(0),
+                                                        array_helper->element_type_,
+                                                        array_helper->element_length_,
+                                                        array_helper->element_precision_,
+                                                        array_helper->element_scale_,
+                                                        array_helper->child_helper_)))) {
+          LOG_WARN("failed to chekc type static");
+        } else {
+          is_match = true;
+        }
+      }
+      break;
+    }
+    default:
+    {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("unsupported odps type", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && !is_match) {
+    ret = OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH;
+    LOG_WARN("invalid odps type map to ob type", K(odps_type), K(odps_type_length), K(odps_type_precision),
+                K(odps_type_scale), K(ob_type), K(ob_type_length), K(ob_type_precision), K(ob_type_scale));
   }
   return ret;
 }
@@ -707,9 +789,11 @@ int ObODPSTableRowIterator::prepare_expr()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexcepted null ptr", KP(scan_param_), K(ret));
   } else {
+    malloc_alloc_.set_attr(lib::ObMemAttr(scan_param_->tenant_id_, "ODPSRowIter"));
     for (int64_t i = 0; OB_SUCC(ret) && i < scan_param_->ext_file_column_exprs_->count(); ++i) {
       const ObExpr *cur_expr = scan_param_->ext_file_column_exprs_->at(i); // do no check is NULL or not
       int target_idx = cur_expr->extra_ - 1;
+      ObODPSArrayHelper* array_helper = nullptr;
       if (OB_UNLIKELY(cur_expr->type_ == T_PSEUDO_EXTERNAL_FILE_COL &&
                       (target_idx < 0 || target_idx >= column_list_.count()))) {
         ret = OB_EXTERNAL_ODPS_UNEXPECTED_ERROR;
@@ -717,9 +801,16 @@ int ObODPSTableRowIterator::prepare_expr()
         LOG_USER_ERROR(OB_EXTERNAL_ODPS_UNEXPECTED_ERROR, "wrong column index point to odps, please check the index of external$tablecol[index] and metadata$partition_list_col[index]");
       } else if (OB_FAIL(target_column_id_list_.push_back(target_idx))) {
         LOG_WARN("failed to keep target_idx", K(ret));
-      // } else if (cur_expr->type_ == T_PSEUDO_EXTERNAL_FILE_COL &&
-      //            OB_FAIL(check_type_static(column_list_.at(target_idx).type_info_, cur_expr))) {
-      //   LOG_WARN("odps type map ob type not support", K(ret), K(target_idx));
+      } else if (T_PSEUDO_EXTERNAL_FILE_COL == cur_expr->type_ &&
+                 ObCollectionSQLType == cur_expr->obj_meta_.get_type() &&
+                 OB_FAIL(ObODPSTableUtils::create_array_helper(scan_param_->op_->get_eval_ctx().exec_ctx_,
+                                                               arena_alloc_, *cur_expr, array_helper))) {
+        LOG_WARN("failed to create array helper");
+      } else if (cur_expr->type_ == T_PSEUDO_EXTERNAL_FILE_COL &&
+                 OB_FAIL(check_type_static(column_list_.at(target_idx).type_info_, cur_expr, array_helper))) {
+        LOG_WARN("odps type map ob type not support", K(ret), K(target_idx));
+      } else if (OB_FAIL(array_helpers_.push_back(array_helper))) {
+        LOG_WARN("failed to push back array_helper to array");
       }
     }
     if (OB_SUCC(ret)) {
@@ -745,7 +836,6 @@ int ObODPSTableRowIterator::prepare_expr()
     ObEvalCtx &eval_ctx = scan_param_->op_->get_eval_ctx();
     void *vec_mem = NULL;
     void *records_mem = NULL;
-    malloc_alloc_.set_attr(lib::ObMemAttr(scan_param_->tenant_id_, "ODPSRowIter"));
     if (OB_FAIL(ret)) {
       // do nothing
     } else if (0 > eval_ctx.max_batch_size_) {
@@ -930,7 +1020,6 @@ int ObODPSTableRowIterator::pull_all_columns() {
         LOG_WARN("unexcepted null ptr", K(ret));
       } else {
         for (uint32_t i = 0; OB_SUCC(ret) && i < schema_handle->GetColumnCount(); i++) {
-          std::string name_ = schema_handle->GetTableColumn(i).GetName();
           if (OB_FAIL(column_list_.push_back(ObODPSTableRowIterator::OdpsColumn(schema_handle->GetTableColumn(i).GetName(),
                                                         schema_handle->GetTableColumn(i).GetTypeInfo())))) {
             LOG_WARN("failed to push back column_list_", K(ret));
@@ -1059,6 +1148,169 @@ int ObODPSTableRowIterator::retry_read_task()
     if (OB_SUCC(ret)) {
       ret = OB_ODPS_ERROR;
       LOG_WARN("odps exception occured when calling odps api", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObODPSTableRowIterator::decode_odps_array(std::shared_ptr<apsara::odps::sdk::ODPSArray> array,
+                                              ObODPSArrayHelper &helper)
+{
+  int ret = OB_SUCCESS;
+  apsara::odps::sdk::ODPSColumnType element_type = array->GetElementType();
+  if (OB_ISNULL(helper.array_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null");
+  } else {
+    helper.array_->clear();
+  }
+  try {
+    for (int64_t i = 0; OB_SUCC(ret) && i < array->Size(); ++i) {
+      if (array->IsNull(i)) {
+        if (OB_FAIL(helper.array_->push_null())) {
+          LOG_WARN("failed to push null to array");
+        }
+      } else if (apsara::odps::sdk::ODPS_BOOLEAN == element_type &&
+                 ObTinyIntType == helper.element_type_ &&
+                 !is_oracle_mode()) {
+        bool v = array->GetBool(i);
+        if (OB_FAIL(static_cast<ObArrayFixedSize<int8_t> *>(helper.array_)->push_back(v))) {
+          LOG_WARN("failed to push tinyint to array");
+        }
+      } else if (apsara::odps::sdk::ODPS_TINYINT == element_type &&
+                 ObTinyIntType == helper.element_type_ &&
+                 !is_oracle_mode()) {
+        int64_t v = array->GetTinyInt(i);
+        if (OB_FAIL(static_cast<ObArrayFixedSize<int8_t> *>(helper.array_)->push_back(v))) {
+          LOG_WARN("failed to push tinyint to array");
+        }
+      } else if (apsara::odps::sdk::ODPS_SMALLINT == element_type &&
+                 ObSmallIntType == helper.element_type_ &&
+                 !is_oracle_mode()) {
+        int64_t v = array->GetSmallInt(i);
+        if (OB_FAIL(static_cast<ObArrayFixedSize<int16_t> *>(helper.array_)->push_back(v))) {
+          LOG_WARN("failed to push smallint to array");
+        }
+      } else if (apsara::odps::sdk::ODPS_INTEGER == element_type &&
+                 ObInt32Type == helper.element_type_ &&
+                 !is_oracle_mode()) {
+        int64_t v = array->GetInteger(i);
+        if (OB_FAIL(static_cast<ObArrayFixedSize<int32_t> *>(helper.array_)->push_back(v))) {
+          LOG_WARN("failed to push int to array");
+        }
+      } else if (apsara::odps::sdk::ODPS_BIGINT == element_type &&
+                 ObIntType == helper.element_type_ &&
+                 !is_oracle_mode()) {
+        int64_t v = array->GetBigInt(i);
+        if (OB_FAIL(static_cast<ObArrayFixedSize<int64_t> *>(helper.array_)->push_back(v))) {
+          LOG_WARN("failed to push bigint to array");
+        }
+      } else if (apsara::odps::sdk::ODPS_FLOAT == element_type &&
+                 ObFloatType == helper.element_type_) {
+        float v = array->GetFloat(i);
+        if (OB_FAIL(static_cast<ObArrayFixedSize<float> *>(helper.array_)->push_back(v))) {
+          LOG_WARN("failed to push tinyint to array");
+        }
+      } else if (apsara::odps::sdk::ODPS_DOUBLE == element_type &&
+                 ObDoubleType == helper.element_type_) {
+        double v = array->GetDouble(i);
+        if (OB_FAIL(static_cast<ObArrayFixedSize<double> *>(helper.array_)->push_back(v))) {
+          LOG_WARN("failed to push tinyint to array");
+        }
+      } else if (apsara::odps::sdk::ODPS_VARCHAR == element_type &&
+                 ObVarcharType == helper.element_type_) {
+        std::string v_str = array->GetVarchar(i);
+        uint32_t len = v_str.length();
+        const char* v = v_str.c_str();
+        if (v == NULL || (0 == len && lib::is_oracle_mode())) {
+          if (OB_FAIL(helper.array_->push_null())) {
+            LOG_WARN("failed to push null to array");
+          }
+        } else {
+          ObObjType in_type = ObVarcharType;
+          ObObjType out_type = ObVarcharType;
+          ObCollationType in_cs_type = CS_TYPE_UTF8MB4_BIN; // odps's collation
+          ObCollationType out_cs_type = helper.element_collation_;
+          ObString in_str(len, v);
+          bool has_set_res = false;
+          ObCharsetType out_charset = common::ObCharset::charset_type_by_coll(out_cs_type);
+          if (CHARSET_UTF8MB4 == out_charset || CHARSET_BINARY == out_charset) {
+            if (OB_FAIL(static_cast<ObArrayBinary *>(helper.array_)->push_back(in_str))) {
+              LOG_WARN("failed to push double to array");
+            }
+          } else {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("string need cast in array<varchar> not support");
+          }
+        }
+      } else if (apsara::odps::sdk::ODPS_STRING == element_type &&
+                 ObVarcharType == helper.element_type_) {
+        std::string v_str = array->GetString(i);
+        uint32_t len = v_str.length();
+        const char* v = v_str.c_str();
+
+        if (v == NULL || (0 == len && lib::is_oracle_mode())) {
+          if (OB_FAIL(helper.array_->push_null())) {
+            LOG_WARN("failed to push null to array");
+          }
+        } else if (len > helper.element_length_) {
+          ret = OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH;
+          LOG_WARN("unexpected data length", K(ret),
+                                             K(len),
+                                             K(helper.element_length_));
+        } else {
+          ObObjType in_type = ObVarcharType;
+          ObObjType out_type = ObVarcharType;
+          ObCollationType in_cs_type = CS_TYPE_UTF8MB4_BIN;
+          ObCollationType out_cs_type = helper.element_collation_;
+          ObString in_str(len, v);
+          bool has_set_res = false;
+          ObCharsetType out_charset = common::ObCharset::charset_type_by_coll(out_cs_type);
+          if (CHARSET_UTF8MB4 == out_charset || CHARSET_BINARY == out_charset) {
+            if (OB_FAIL(static_cast<ObArrayBinary *>(helper.array_)->push_back(in_str))) {
+              LOG_WARN("failed to push double to array");
+            }
+          } else {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("string need cast in array<varchar> not support");
+          }
+        }
+      } else if (apsara::odps::sdk::ODPS_ARRAY == element_type &&
+                 ObCollectionSQLType == helper.element_type_) {
+        std::shared_ptr<apsara::odps::sdk::ODPSArray> odps_child_array = array->GetArray(i);
+        ObArrayNested *nested_array = static_cast<ObArrayNested *>(helper.array_);
+        if (OB_ISNULL(helper.child_helper_) || OB_ISNULL(helper.child_helper_->array_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", KP(helper.child_helper_));
+        } else if (OB_FAIL(decode_odps_array(odps_child_array, *helper.child_helper_))) {
+          LOG_WARN("failed to print child array info");
+        // 这个init函数需要在child_array中的元素已经填充完毕后调用，即在child_decoder->decode之后调用。否则无法正确初始化类成员。
+        } else if (OB_FAIL(helper.child_helper_->array_->init())) {
+          LOG_WARN("failed to init child array");
+        } else if (OB_FAIL(nested_array->push_back(*helper.child_helper_->array_))) {
+          LOG_WARN("failed to push back child array");
+        }
+      } else {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("odps array not support type", K(ret), K(element_type), K(helper.element_type_));
+      }
+    }
+  } catch (apsara::odps::sdk::OdpsTunnelException& ex) {
+    if (OB_SUCC(ret)) {
+      ret = OB_ODPS_ERROR;
+      LOG_WARN("odps exception occured when calling OpenReader method", K(ret), K(ex.what()));
+      LOG_USER_ERROR(OB_ODPS_ERROR, ex.what());
+    }
+  } catch (const std::exception& ex) {
+    if (OB_SUCC(ret)) {
+      ret = OB_ODPS_ERROR;
+      LOG_WARN("odps exception occured when calling OpenReader method", K(ret), K(ex.what()));
+      LOG_USER_ERROR(OB_ODPS_ERROR, ex.what());
+    }
+  } catch (...) {
+    if (OB_SUCC(ret)) {
+      ret = OB_ODPS_ERROR;
+      LOG_WARN("odps exception occured when calling OpenReader method", K(ret));
     }
   }
   return ret;
@@ -1667,24 +1919,56 @@ int ObODPSTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
               case apsara::odps::sdk::ODPS_DATETIME:
               {
                 if (ob_is_datetime_or_mysql_datetime(type) && is_mysql_mode()) {
-                  int32_t tmp_offset = 0;
                   int64_t res_offset = 0;
-                  if (OB_FAIL(ctx.exec_ctx_.get_my_session()->get_timezone_info()->get_timezone_offset(0, tmp_offset))) {
-                    LOG_WARN("failed to get timezone offset", K(ret));
-                  } else {
-                    res_offset = SEC_TO_USEC(tmp_offset);
-                  }
                   for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < returned_row_cnt; ++row_idx) {
                     const int64_t* v = records_[row_idx]->GetDatetimeValue(target_idx);
                     if (v == NULL) {
                       datums[row_idx].set_null();
-                    } else if (ObMySQLDateTimeType == type) {
-                      ObMySQLDateTime mdt_value;
-                      ret = ObTimeConverter::datetime_to_mdatetime(*v * 1000 + res_offset, mdt_value);
-                      datums[row_idx].set_mysql_datetime(mdt_value);
                     } else {
-                      int64_t datetime = *v * 1000 + res_offset;
-                      datums[row_idx].set_datetime(datetime);
+                      int ret_more = OB_SUCCESS;
+                      int32_t offset_sec = 0;
+                      if (OB_ISNULL(session_ptr_)) {
+                        ret = OB_ERR_UNEXPECTED;
+                        LOG_WARN("session_ptr_ is null", K(ret));
+                      } else if (OB_FAIL(ObTimeConverter::str_to_offset(timezone_str_, offset_sec, ret_more,
+                                                is_oracle_mode(), true))) {
+                        if (ret != OB_ERR_UNKNOWN_TIME_ZONE) {
+                          LOG_WARN("fail to convert str_to_offset", K(timezone_str_), K(ret));
+                        }
+                      }
+                      if (OB_ERR_UNKNOWN_TIME_ZONE == ret) {
+                        ret = OB_SUCCESS;
+                        ObTime ob_time(DT_TYPE_ORACLE_TTZ);
+                        MEMCPY(ob_time.tz_name_, timezone_str_.ptr(), timezone_str_.length());
+                        ob_time.tz_name_[timezone_str_.length()] = '\0';
+                        ob_time.is_tz_name_valid_ = true;
+                        ObTimeConvertCtx cvrt_ctx(TZ_INFO(session_ptr_), true);
+                        ObOTimestampData tmp_ot_data;
+                        tmp_ot_data.time_ctx_.tz_desc_ = 0;
+                        tmp_ot_data.time_ctx_.store_tz_id_ = 0;
+                        tmp_ot_data.time_us_ = *v * 1000;
+
+                        if (OB_FAIL(ObTimeConverter::otimestamp_to_ob_time(ObTimestampLTZType, tmp_ot_data,
+                                                                          NULL, ob_time))) {
+                          LOG_WARN("failed to convert otimestamp_to_ob_time", K(ret));
+                        } else if (OB_FAIL(ObTimeConverter::str_to_tz_offset(cvrt_ctx, ob_time))) {
+                          LOG_WARN("failed to convert string to tz_offset", K(ret));
+                        } else {
+                          offset_sec = ob_time.parts_[DT_OFFSET_MIN] * 60;
+                          LOG_DEBUG("finish str_to_tz_offset", K(ob_time), K(tmp_ot_data));
+                        }
+                      }
+                      if (OB_SUCC(ret)) {
+                        res_offset = SEC_TO_USEC(offset_sec);
+                        if (ObMySQLDateTimeType == type) {
+                          ObMySQLDateTime mdt_value;
+                          ret = ObTimeConverter::datetime_to_mdatetime(*v * 1000 + res_offset, mdt_value);
+                          datums[row_idx].set_mysql_datetime(mdt_value);
+                        } else {
+                          int64_t datetime = *v * 1000 + res_offset;
+                          datums[row_idx].set_datetime(datetime);
+                        }
+                      }
                     }
                   }
                 } else if (false && ObTimestampNanoType == type && is_oracle_mode()) {
@@ -1715,10 +1999,43 @@ int ObODPSTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
                 }
                 break;
               }
+              case apsara::odps::sdk::ODPS_ARRAY:
+              {
+                if (ObCollectionSQLType == type) {
+                  ObEvalCtx::BatchInfoScopeGuard batch_info_guard(ctx);
+                  batch_info_guard.set_batch_idx(0);
+                  ObODPSArrayHelper *helper = array_helpers_.at(column_idx);
+                  if (OB_ISNULL(helper) || OB_ISNULL(helper->array_)) {
+                    ret = OB_ERR_UNEXPECTED;
+                    LOG_WARN("get null array helper", K(column_idx), KP(helper));
+                  }
+                  for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < returned_row_cnt; ++row_idx) {
+                    batch_info_guard.set_batch_idx(row_idx);
+                    std::shared_ptr<apsara::odps::sdk::ODPSArray> v = records_[row_idx]->GetArrayValue(target_idx);
+                    if(v == NULL) {
+                      datums[row_idx].set_null();
+                    } else if (OB_FAIL(decode_odps_array(v, *helper))) {
+                      LOG_WARN("failed to print array info");
+                    } else {
+                      ObString res_str;
+                      if (OB_FAIL(ObArrayExprUtils::set_array_res(helper->array_, helper->array_->get_raw_binary_len(),
+                                                                  expr, ctx, res_str))) {
+                        LOG_WARN("get array binary string failed", K(ret));
+                      } else {
+                        datums[row_idx].set_string(res_str);
+                      }
+                    }
+                  }
+                } else {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("unexpected expr type", K(ret), K(type), K(column_idx));
+                }
+                break;
+              }
               default:
               {
                 ret = OB_NOT_SUPPORTED;
-                LOG_WARN("odps not support type", K(ret));
+                LOG_WARN("odps not support type", K(ret), K(odps_type));
               }
             }
           } catch (apsara::odps::sdk::OdpsTunnelException& ex) {
@@ -2341,21 +2658,53 @@ int ObODPSTableRowIterator::inner_get_next_row(bool &need_retry)
             {
               if (ob_is_datetime_or_mysql_datetime(type) && is_mysql_mode()) {
                 const int64_t* v = record_->GetDatetimeValue(target_idx);
-                int32_t tmp_offset = 0;
                 int64_t res_offset = 0;
                 if (v == NULL) {
                   datum.set_null();
-                } else if (OB_FAIL(ctx.exec_ctx_.get_my_session()->get_timezone_info()->get_timezone_offset(0, tmp_offset))) {
-                  LOG_WARN("failed to get timezone offset", K(ret));
                 } else {
-                  res_offset = SEC_TO_USEC(tmp_offset);
-                  int64_t datetime = *v * 1000 + res_offset;
-                  if (ObMySQLDateTimeType == type) {
-                    ObMySQLDateTime mdt_value;
-                    ret = ObTimeConverter::datetime_to_mdatetime(datetime, mdt_value);
-                    datum.set_mysql_datetime(mdt_value);
-                  } else {
-                    datum.set_datetime(datetime);
+                  int ret_more = OB_SUCCESS;
+                  int32_t offset_sec = 0;
+                  if (OB_ISNULL(session_ptr_)) {
+                    ret = OB_ERR_UNEXPECTED;
+                    LOG_WARN("session_ptr_ is null", K(ret));
+                  } else if (OB_FAIL(ObTimeConverter::str_to_offset(timezone_str_, offset_sec, ret_more,
+                                            is_oracle_mode(), true))) {
+                    if (ret != OB_ERR_UNKNOWN_TIME_ZONE) {
+                      LOG_WARN("fail to convert str_to_offset", K(timezone_str_), K(ret));
+                    }
+                  }
+                  if (OB_ERR_UNKNOWN_TIME_ZONE == ret) {
+                    ret = OB_SUCCESS;
+                    ObTime ob_time(DT_TYPE_ORACLE_TTZ);
+                    MEMCPY(ob_time.tz_name_, timezone_str_.ptr(), timezone_str_.length());
+                    ob_time.tz_name_[timezone_str_.length()] = '\0';
+                    ob_time.is_tz_name_valid_ = true;
+                    ObTimeConvertCtx cvrt_ctx(TZ_INFO(session_ptr_), true);
+                    ObOTimestampData tmp_ot_data;
+                    tmp_ot_data.time_ctx_.tz_desc_ = 0;
+                    tmp_ot_data.time_ctx_.store_tz_id_ = 0;
+                    tmp_ot_data.time_us_ = *v * 1000;
+
+                    if (OB_FAIL(ObTimeConverter::otimestamp_to_ob_time(ObTimestampLTZType, tmp_ot_data,
+                                                                      NULL, ob_time))) {
+                      LOG_WARN("failed to convert otimestamp_to_ob_time", K(ret));
+                    } else if (OB_FAIL(ObTimeConverter::str_to_tz_offset(cvrt_ctx, ob_time))) {
+                      LOG_WARN("failed to convert string to tz_offset", K(ret));
+                    } else {
+                      offset_sec = ob_time.parts_[DT_OFFSET_MIN] * 60;
+                      LOG_DEBUG("finish str_to_tz_offset", K(ob_time), K(tmp_ot_data));
+                    }
+                  }
+                  if (OB_SUCC(ret)) {
+                    res_offset = SEC_TO_USEC(offset_sec);
+                    int64_t datetime = *v * 1000 + res_offset;
+                    if (ObMySQLDateTimeType == type) {
+                      ObMySQLDateTime mdt_value;
+                      ret = ObTimeConverter::datetime_to_mdatetime(datetime, mdt_value);
+                      datum.set_mysql_datetime(mdt_value);
+                    } else {
+                      datum.set_datetime(datetime);
+                    }
                   }
                 }
               } else if (false && ObTimestampNanoType == type && is_oracle_mode()) {
@@ -2382,10 +2731,37 @@ int ObODPSTableRowIterator::inner_get_next_row(bool &need_retry)
               }
               break;
             }
+            case apsara::odps::sdk::ODPS_ARRAY:
+            {
+              if (ObCollectionSQLType == type) {
+                ObODPSArrayHelper *helper = array_helpers_.at(column_idx);
+                std::shared_ptr<apsara::odps::sdk::ODPSArray> v = record_->GetArrayValue(target_idx);
+                if (OB_ISNULL(helper) || OB_ISNULL(helper->array_)) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("get null array helper", KP(helper), K(column_idx));
+                } else if(v == NULL) {
+                  datum.set_null();
+                } else if (OB_FAIL(decode_odps_array(v, *helper))) {
+                  LOG_WARN("failed to print array info");
+                } else {
+                  ObString res_str;
+                  if (OB_FAIL(ObArrayExprUtils::set_array_res(helper->array_, helper->array_->get_raw_binary_len(),
+                                                              expr, ctx, res_str))) {
+                    LOG_WARN("get array binary string failed", K(ret));
+                  } else {
+                    datum.set_string(res_str);
+                  }
+                }
+              } else {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("unexpected expr type", K(ret), K(type), K(column_idx));
+              }
+              break;
+            }
             default:
             {
               ret = OB_NOT_SUPPORTED;
-              LOG_WARN("odps not support type", K(ret));
+              LOG_WARN("odps not support type", K(ret), K(odps_type));
             }
           }
         } catch (apsara::odps::sdk::OdpsTunnelException& ex) {
@@ -2446,8 +2822,8 @@ int ObOdpsPartitionDownloaderMgr::init_downloader(int64_t bucket_size) {
 }
 
 int ObOdpsPartitionDownloaderMgr::fetch_row_count(uint64_t tenant_id,
-                                                  const ObIArray<ObExternalFileInfo> &external_table_files,
                                                   const ObString &properties,
+                                                  ObIArray<ObExternalFileInfo> &external_table_files,
                                                   bool &use_partition_gi)
 {
   int ret = OB_SUCCESS;
@@ -2477,7 +2853,7 @@ int ObOdpsPartitionDownloaderMgr::fetch_row_count(uint64_t tenant_id,
       const share::ObExternalFileInfo &odps_partition = external_table_files.at(i);
       apsara::odps::sdk::IDownloadPtr odps_partition_downloader = NULL;
       if (INT64_MAX == odps_partition.file_id_
-          && 0 == odps_partition.file_url_.compare("#######DUMMY_FILE#######")) {
+          && 0 == odps_partition.file_url_.compare(ObExternalTableUtils::dummy_file_name())) {
         // do nothing
         *(const_cast<int64_t*>(&odps_partition.file_size_)) = 0;
       } else if (odps_partition.file_size_ >= 0) {
@@ -2642,7 +3018,7 @@ int ObOdpsPartitionDownloaderMgr::create_upload_session(const sql::ObODPSGeneral
             LOG_WARN("session is invalid", K(ret));
           } else {
             sleepTimeMs += 1000;
-            usleep(1000 * 1000);
+            ob_usleep(1000 * 1000);
           }
         }
         if (OB_SUCC(ret)) {
@@ -2908,7 +3284,7 @@ int ObOdpsPartitionDownloaderMgr::DeleteDownloaderFunc::operator()(common::hash:
     err_ = (err_ == ErrType::SUCCESS) ? ErrType::DOWNLOADER_IS_NULL : err_;
     LOG_WARN("unexpected error in DeleteDownloaderFunc", K(ret), K(value), K(part_id), K(err_));// ret is still OB_SUCCESS
   } else {
-    downloader->reset();
+    downloader->~OdpsPartitionDownloader();
     if (OB_ISNULL(downloader_alloc_)) {
       err_ = (err_ == ErrType::SUCCESS) ? ErrType::ALLOC_IS_NULL : err_;
       LOG_WARN("unexpected error in DeleteDownloaderFunc", K(ret), K(value), K(part_id), K(err_));// ret is still OB_SUCCESS

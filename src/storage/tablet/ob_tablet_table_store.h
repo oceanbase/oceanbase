@@ -123,14 +123,14 @@ public:
   virtual int64_t get_deep_copy_size() const override;
   virtual int64_t get_try_cache_size() const;
   virtual int deep_copy(char *buf, const int64_t buf_len, ObIStorageMetaObj *&value) const override;
-  int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
+  int serialize(const uint64_t data_version, char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize(
       common::ObArenaAllocator &allocator,
       const ObTablet &tablet,
       const char *buf,
       const int64_t data_len,
       int64_t &pos);
-  int64_t get_serialize_size() const;
+  int64_t get_serialize_size(const uint64_t data_version) const;
   OB_INLINE bool is_valid() const
   {
     return is_inited_ &&
@@ -178,6 +178,7 @@ public:
       ObTableStoreIterator &iter,
       const ObGetReadTablesMode mode = ObGetReadTablesMode::NORMAL) const;
   int get_all_sstable(ObTableStoreIterator &iter, const bool unpack_co_table = false) const;
+  int get_major_sstables(ObTableStoreIterator &iter, const bool unpack_co_table = false) const;
   int get_read_major_sstable(const int64_t snapshot_version, ObTableStoreIterator &iter) const;
   int get_memtables(common::ObIArray<storage::ObITable *> &memtables) const;
   int update_memtables(const common::ObIArray<storage::ObITable *> &memtables);
@@ -227,16 +228,19 @@ public:
       common::ObArenaAllocator &allocator,
       ObTablet &tablet,
       const ObBatchUpdateTableStoreParam &param,
-      const ObTabletTableStore &old_store);
+      const ObTabletTableStore &old_store,
+      const share::SCN &split_start_scn);
   const blocksstable::ObMajorChecksumInfo &get_major_ckm_info() const { return major_ckm_info_; }
   int get_all_minor_sstables(ObTableStoreIterator &iter) const;
 private:
   int get_need_to_cache_sstables(
+      const int64_t limit_size,
       common::ObIArray<ObStorageMetaValue::MetaType> &meta_types,
       common::ObIArray<ObStorageMetaKey> &keys,
       common::ObIArray<blocksstable::ObSSTable *> &sstables);
   int get_need_to_cache_sstables(
       const ObSSTableArray &sstable_array,
+      int64_t &remain_size,
       common::ObIArray<ObStorageMetaValue::MetaType> &meta_types,
       common::ObIArray<ObStorageMetaKey> &keys,
       common::ObIArray<blocksstable::ObSSTable *> &sstables);
@@ -287,7 +291,8 @@ private:
       const int64_t inc_base_snapshot_version,
       const ObTabletHAStatus &ha_status,
       const UpdateUpperTransParam &upper_trans_param,
-      const bool is_mds);
+      const bool is_mds,
+      const bool allow_adjust_next_start_scn);
   int inner_process_minor_tables(
       common::ObArenaAllocator &allocator,
       const ObTabletTableStore &old_store,
@@ -450,7 +455,8 @@ private:
       common::ObArenaAllocator &allocator,
       const ObTablet &tablet,
       const ObBatchUpdateTableStoreParam &param,
-      const ObTabletTableStore &old_store);
+      const ObTabletTableStore &old_store,
+      const share::SCN &split_start_scn);
   int build_split_minor_tables_(
       common::ObArenaAllocator &allocator,
       const ObTabletTableStore &old_store,
@@ -484,6 +490,11 @@ private:
       const ObTabletTableStore &old_store,
       const ObIArray<ObITable *> &tables_array,
       int64_t &inc_base_snapshot_version);
+  static int adjust_sstable_start_scn_(
+      ObSSTable &sstable,
+      ObArenaAllocator &allocator,
+      const share::SCN start_scn,
+      ObSSTable *&copied_sstable);
 #ifdef OB_BUILD_SHARED_STORAGE
   int process_minor_sstables_for_ss_(
     ObArenaAllocator &allocator,

@@ -34,6 +34,8 @@ namespace transaction
 ObTransService::ObTransService()
     : is_inited_(false),
       is_running_(false),
+      tx_version_mgr_(),
+      tx_version_mgr_for_sslog_(),
       use_def_(true),
       rpc_(&rpc_def_),
       location_adapter_(&location_adapter_def_),
@@ -46,6 +48,9 @@ ObTransService::ObTransService()
       defensive_check_mgr_(NULL),
 #endif
       tx_desc_mgr_(*this),
+#ifdef OB_BUILD_SHARED_STORAGE
+      palf_kv_gc_task_(nullptr),
+#endif
       tx_debug_seq_(0),
       read_only_checker_()
 {
@@ -71,8 +76,13 @@ int ObTransService::mtl_init(ObTransService *&it)
     TRANS_LOG(ERROR, "dup table rpc init error", KR(ret));
   } else if (OB_FAIL(it->location_adapter_def_.init(schema_service, location_service))) {
     TRANS_LOG(ERROR, "location adapter init error", KR(ret));
-  } else if (OB_FAIL(it->gti_source_def_.init(self, req_transport))) {
+  } else if (OB_FAIL(it->gti_source_def_.init(self, req_transport, MTL_ID()))) {
     TRANS_LOG(ERROR, "gti source init error", KR(ret));
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (GCTX.is_shared_storage_mode()
+      && OB_FAIL(it->sslog_gti_source_.init(self, req_transport, MTL_ID()))) {
+    TRANS_LOG(ERROR, "sslog gti source init error", KR(ret));
+#endif
   } else if (OB_FAIL(it->init(self,
                               &it->rpc_def_,
                               &it->dup_table_rpc_def_,
@@ -215,6 +225,10 @@ int ObTransService::start()
   //   TRANS_LOG(WARN, "ObDupTableRpc start error", K(ret));
   } else if (OB_FAIL(gti_source_->start())) {
     TRANS_LOG(WARN, "ObGtiSource start error", KR(ret));
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (GCTX.is_shared_storage_mode() && OB_FAIL(sslog_gti_source_.start())) {
+    TRANS_LOG(WARN, "ObGtiSource for sslog start error", KR(ret));
+#endif
   } else if (OB_FAIL(tx_ctx_mgr_.start())) {
     TRANS_LOG(WARN, "tx_ctx_mgr_ start error", KR(ret));
   } else if (OB_FAIL(tx_desc_mgr_.start())) {
@@ -252,6 +266,11 @@ void ObTransService::stop()
     rpc_->stop();
     dup_table_rpc_->stop();
     gti_source_->stop();
+#ifdef OB_BUILD_SHARED_STORAGE
+    if (GCTX.is_shared_storage_mode()) {
+      sslog_gti_source_.stop();
+    }
+#endif
     dup_table_loop_worker_.stop();
     ObSimpleThreadPool::stop();
     is_running_ = false;
@@ -281,6 +300,11 @@ int ObTransService::wait_()
     rpc_->wait();
     // dup_table_rpc_->wait();
     gti_source_->wait();
+#ifdef OB_BUILD_SHARED_STORAGE
+    if (GCTX.is_shared_storage_mode()) {
+      sslog_gti_source_.wait();
+    }
+#endif
     dup_table_loop_worker_.wait();
     TRANS_LOG(INFO, "transaction service wait success", KPC(this));
   }
@@ -304,6 +328,11 @@ void ObTransService::destroy()
       use_def_ = false;
     }
     gti_source_->destroy();
+#ifdef OB_BUILD_SHARED_STORAGE
+    if (GCTX.is_shared_storage_mode()) {
+      sslog_gti_source_.destroy();
+    }
+#endif
     tablet_to_ls_cache_.destroy();
     tx_ctx_mgr_.destroy();
     tx_desc_mgr_.destroy();
@@ -314,6 +343,9 @@ void ObTransService::destroy()
       ob_free(defensive_check_mgr_);
       defensive_check_mgr_ = NULL;
     }
+#endif
+#ifdef OB_BUILD_SHARED_STORAGE
+    sslog::ObPalfKVGcTask::free_palf_kv_gc_task(palf_kv_gc_task_);
 #endif
     is_inited_ = false;
     TRANS_LOG(INFO, "transaction service destroyed", KPC(this), K_(tablet_to_ls_cache));
@@ -551,6 +583,17 @@ void ObTransService::handle(void *task)
       if (OB_FAIL(redo_sync_task->iter_tx_retry_redo_sync())) {
         TRANS_LOG(WARN, "execute redo sync task failed", K(ret));
       }
+#ifdef OB_BUILD_SHARED_STORAGE
+    } else if(ObTransRetryTaskType::PALF_KV_GC_TASK == trans_task->get_task_type()) {
+      sslog::ObPalfKVGcTask *palf_kv_task = static_cast<sslog::ObPalfKVGcTask *>(trans_task);
+      if (OB_FAIL(palf_kv_task->handle_gc_task())) {
+        TRANS_LOG(WARN, "[PALF_KV_GC_TASK] handle palf kv gc task failed", K(ret), KPC(palf_kv_task));
+      } else {
+        TRANS_LOG(WARN, "[PALF_KV_GC_TASK] handle palf kv gc task successfully", K(ret),
+                  KPC(palf_kv_task));
+      }
+      palf_kv_task->clear_in_thread_pool();
+#endif
     } else {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "unexpected trans task type!!!", KR(ret), K(*trans_task));
@@ -1008,5 +1051,31 @@ int ObTransService::get_max_commit_version(SCN &commit_version) const
   }
   return ret;
 }
+
+int ObTransService::push_palf_kv_gc_task(const share::SCN &max_gc_scn)
+{
+  int ret = OB_SUCCESS;
+
+#ifdef OB_BUILD_SHARED_STORAGE
+  if (OB_SUCC(ret) && OB_ISNULL(palf_kv_gc_task_)) {
+    ret = sslog::ObPalfKVGcTask::make_palf_kv_gc_task(tenant_id_, palf_kv_gc_task_);
+  }
+
+  if (OB_SUCC(ret)) {
+    if (palf_kv_gc_task_->in_thread_pool()) {
+      ret = OB_EAGAIN;
+      TRANS_LOG(INFO, "the palf_kv_gc_task is in the thread pool", K(ret), KPC(palf_kv_gc_task_));
+    } else if (OB_FALSE_IT(palf_kv_gc_task_->set_in_thread_pool())) {
+    } else if (OB_FALSE_IT(palf_kv_gc_task_->inc_update_gc_scn(max_gc_scn))) {
+    } else if (OB_FAIL(push(palf_kv_gc_task_))) {
+      palf_kv_gc_task_->clear_in_thread_pool();
+      TRANS_LOG(WARN, "push the palf_kv_gc_task failed", K(ret), KPC(palf_kv_gc_task_));
+    }
+  }
+#endif
+
+  return ret;
+}
+
 } // transaction
 } // oceanbase

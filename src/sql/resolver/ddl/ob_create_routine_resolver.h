@@ -60,6 +60,7 @@ public:
 
 protected:
   int resolve_sp_body(const ParseNode *parse_node, share::schema::ObRoutineInfo &routine_info);
+  int resolve_external_udf(const ParseNode &parse_tree, obrpc::ObCreateRoutineArg &crt_routine_arg);
 
 private:
   int check_dup_routine_param(const common::ObIArray<share::schema::ObRoutineParam*> &params,

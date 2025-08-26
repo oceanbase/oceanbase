@@ -122,9 +122,9 @@ int ObInitialBackupTabletGroupFuseTask::generate_tablet_fuse_dags_()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("initial backup tablet group fuse dag should not be NULL", K(ret), KP(initial_dag));
   } else {
-    if (OB_FAIL(scheduler->alloc_dag(start_dag))) {
+    if (OB_FAIL(scheduler->alloc_dag(start_dag, true/*is_ha_dag*/))) {
       LOG_WARN("failed to alloc start fuse dag ", K(ret));
-    } else if (OB_FAIL(scheduler->alloc_dag(finish_dag))) {
+    } else if (OB_FAIL(scheduler->alloc_dag(finish_dag, true/*is_ha_dag*/))) {
       LOG_WARN("failed to alloc finish fuse dag", K(ret));
     } else if (OB_FAIL(start_dag->init(dag_net_, finish_dag))) {
       LOG_WARN("failed to init start fuse dag", K(ret));
@@ -350,7 +350,7 @@ int ObStartBackupTabletGroupFuseTask::generate_tablet_fuse_dag_()
       LOG_WARN("failed to get next tablet id", K(ret), KPC(group_ctx_));
     }
   } else {
-    if (OB_FAIL(scheduler->alloc_dag(tablet_fuse_dag))) {
+    if (OB_FAIL(scheduler->alloc_dag(tablet_fuse_dag, true/*is_ha_dag*/))) {
       LOG_WARN("failed to alloc tablet fuse dag ", K(ret));
     } else if (OB_FAIL(tablet_fuse_dag->init(group_ctx_->param_, fuse_item, *group_ctx_))) {
       LOG_WARN("failed to init tablet fuse dag", K(ret), "param", group_ctx_->param_, K(fuse_item));
@@ -528,7 +528,7 @@ int ObFinishBackupTabletGroupFuseTask::generate_init_dag_()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
   } else {
-    if (OB_FAIL(scheduler->alloc_dag(initial_dag))) {
+    if (OB_FAIL(scheduler->alloc_dag(initial_dag, true/*is_ha_dag*/))) {
       LOG_WARN("failed to alloc initial fuse dag ", K(ret));
     } else if (OB_FAIL(initial_dag->init(dag_net_))) {
       LOG_WARN("failed to init initial fuse dag", K(ret));

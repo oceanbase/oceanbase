@@ -101,16 +101,42 @@ int ObExprCalcOdpsSize::calc_odps_size(const ObExpr &expr, ObEvalCtx &ctx, ObDat
 #endif
         } else {
 #if defined(OB_BUILD_JNI_ODPS)
-          if (OB_FAIL(ObOdpsPartitionJNIScannerMgr::fetch_row_count(
-                  file_url, table_schema->get_external_properties(),
-                  row_count))) {
-            LOG_WARN("failed to fetch row count", K(ret), K(file_url),
-                     K(table_schema->get_external_properties()));
+          bool is_odps_external_table = false;
+          ObODPSGeneralFormat::ApiMode odps_api_mode;
+          if (OB_FAIL(ObSQLUtils::get_odps_api_mode(
+                  table_schema->get_external_properties(), is_odps_external_table, odps_api_mode))) {
+            LOG_WARN("failed to check is odps external table or not", K(ret), K(table_schema->get_external_properties()));
           } else {
-            // -1 means the partition spec not exists
-            LOG_TRACE("fetch row count with partition spec",
-                     K(ret), K(row_count), K(file_url),
-                     K(table_schema->get_external_properties()));
+            if (odps_api_mode != ObODPSGeneralFormat::TUNNEL_API) {
+              // do nothing
+              if (odps_api_mode == ObODPSGeneralFormat::BYTE) {
+                // do nothing
+              } else {
+                if (OB_FAIL(ObOdpsPartitionJNIScannerMgr::fetch_storage_row_count(
+                        ctx.exec_ctx_, file_url, table_schema->get_external_properties(), row_count))) {
+                  LOG_WARN("failed to fetch row count", K(ret), K(file_url), K(table_schema->get_external_properties()));
+                } else {
+                  // -1 means the partition spec not exists
+                  LOG_TRACE("fetch row count with partition spec",
+                      K(ret),
+                      K(row_count),
+                      K(file_url),
+                      K(table_schema->get_external_properties()));
+                }
+              }
+            } else {
+              if (OB_FAIL(ObOdpsPartitionJNIScannerMgr::fetch_row_count(
+                      ctx.exec_ctx_, file_url, table_schema->get_external_properties(), row_count))) {
+                LOG_WARN("failed to fetch row count", K(ret), K(file_url), K(table_schema->get_external_properties()));
+              } else {
+                // -1 means the partition spec not exists
+                LOG_TRACE("fetch row count with partition spec",
+                    K(ret),
+                    K(row_count),
+                    K(file_url),
+                    K(table_schema->get_external_properties()));
+              }
+            }
           }
 #else
           ret = OB_NOT_SUPPORTED;

@@ -785,7 +785,10 @@ int ObCgroupCtrl::set_cpu_cfs_quota_by_path_(const char *group_path, const doubl
             K(cfs_period_us_new));
       } else {
         cfs_period_us = cfs_period_us_new;
-        if (-1 == cpu || cpu >= INT32_MAX / cfs_period_us) {
+        if (cfs_period_us <= 0) {
+          cfs_quota_us = -1;
+          LOG_WARN("get wrong cfs_period_us, use no limit", K(cfs_quota_us), K(cfs_period_us), K(group_path));
+        } else if (-1 == cpu || cpu >= INT32_MAX / cfs_period_us) {
           cfs_quota_us = -1;
         } else {
           cfs_quota_us = static_cast<int32_t>(cfs_period_us * cpu);
@@ -831,7 +834,12 @@ int ObCgroupCtrl::get_cpu_cfs_quota_by_path_(const char *group_path, double &cpu
     } else {
       cfs_period_value[VALUE_BUFSIZE] = '\0';
       int32_t cfs_period_us = atoi(cfs_period_value);
-      cpu = 1.0 * cfs_quota_us / cfs_period_us;
+      if (cfs_period_us > 0) {
+        cpu = 1.0 * cfs_quota_us / cfs_period_us;
+      } else {
+        cpu = -1;
+        LOG_WARN("get wrong cfs_period_us, use no limit", K(cpu), K(cfs_period_us), K(group_path));
+      }
     }
   }
   return ret;

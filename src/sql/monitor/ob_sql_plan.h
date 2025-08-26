@@ -244,6 +244,7 @@ private:
                               PlanText &plan_text);
 
   int format_plan_table(ObIArray<ObSqlPlanItem*> &sql_plan_infos,
+                        const bool is_explain_format_object_name_display,
                         const ObExplainDisplayOpt& option,
                         PlanText &plan_text);
 

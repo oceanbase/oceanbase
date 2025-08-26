@@ -105,8 +105,10 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
     RPC_PROCESSOR(ObRpcLSModifyPaxosReplicaNumberP, gctx_);
     RPC_PROCESSOR(ObRpcLSCheckDRTaskExistP, gctx_);
     RPC_PROCESSOR(ObAdminDRTaskP, gctx_);
+    RPC_PROCESSOR(ObRpcTriggerPartitionBalanceP, gctx_);
     RPC_PROCESSOR(ObRpcLSReplaceReplicaP, gctx_);
     RPC_PROCESSOR(ObRpcCreateTenantUserLSP, gctx_);
+    RPC_PROCESSOR(ObRpcLoadTenantTableSchemaP, gctx_);
     RPC_PROCESSOR(ObRpcGenUniqueIDP, gctx_);
     RPC_PROCESSOR(ObRpcStartTransferTaskP, gctx_);
     RPC_PROCESSOR(ObRpcFinishTransferTaskP, gctx_);
@@ -123,6 +125,7 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
     RPC_PROCESSOR(ObRpcNotifyCloneSchedulerP, gctx_);
     RPC_PROCESSOR(ObRpcNotifyTenantThreadP, gctx_);
     RPC_PROCESSOR(ObRpcTabletMajorFreezeP, gctx_);
+    RPC_PROCESSOR(ObRpcAlterLSP, gctx_);
     RPC_PROCESSOR(ObRpcDetectSessionAliveP, gctx_);
     RPC_PROCESSOR(ObCancelGatherStatsP, gctx_);
     RPC_PROCESSOR(ObCollectMvMergeInfoP, gctx_);
@@ -148,6 +151,11 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
     RPC_PROCESSOR(ObSetSSCkptCompressorP, gctx_);
     RPC_PROCESSOR(ObSetSSCacheSizeRatioP, gctx_);
     RPC_PROCESSOR(ObTriggerStorageCacheP, gctx_);
+    RPC_PROCESSOR(ObRpcTabletSplitScheduleP, gctx_);
+    RPC_PROCESSOR(ObRpcGetMinSSGCLastSuccScnP, gctx_);
+    RPC_PROCESSOR(ObRpcGetSSGCLastSuccScnsP, gctx_);
+    RPC_PROCESSOR(ObDelSSMacroCacheP, gctx_);
+    RPC_PROCESSOR(ObDelSSTabletMacroCacheP, gctx_);
 #endif
     RPC_PROCESSOR(ObRebuildTabletP, gctx_);
     RPC_PROCESSOR(ObNotifySharedStorageInfoP, gctx_);
@@ -159,4 +167,7 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
 #endif
     RPC_PROCESSOR(ObRpcStartArchiveP, gctx_);
     RPC_PROCESSOR(ObWriteInnerTabletP, gctx_);
+    RPC_PROCESSOR(ObRpcCheckBackupDestRWConsistencyP, gctx_);
+    RPC_PROCESSOR(ObRpcCheckBackupDestVaildityP, gctx_);
+    RPC_PROCESSOR(ObRpcWriteBackupDestFormatFileP, gctx_);
 }

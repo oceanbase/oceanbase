@@ -486,10 +486,10 @@ int ObSqlCollectionInfo::set_element_meta(const std::string &name, ObCollectionB
       basic_meta.meta_.set_smallint();
       basic_meta.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObSmallIntType].scale_);
       basic_meta.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObSmallIntType].precision_);
-    } else if (0 == name.compare("MEDIUMINT")) {
-      basic_meta.meta_.set_mediumint();
-      basic_meta.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObMediumIntType].scale_);
-      basic_meta.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObMediumIntType].precision_);
+    // } else if (0 == name.compare("MEDIUMINT")) {
+    //   basic_meta.meta_.set_mediumint();
+    //   basic_meta.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObMediumIntType].scale_);
+    //   basic_meta.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObMediumIntType].precision_);
     } else if (0 == name.compare("INT")) {
       basic_meta.meta_.set_int32();
       basic_meta.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObInt32Type].scale_);
@@ -506,39 +506,39 @@ int ObSqlCollectionInfo::set_element_meta(const std::string &name, ObCollectionB
       basic_meta.meta_.set_number();
       basic_meta.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObNumberType].scale_);
       basic_meta.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObNumberType].precision_);
-    } else if (0 == name.compare("DATETIME")) {
-      basic_meta.meta_.set_datetime();
-    } else if (0 == name.compare("MYSQL_DATETIME")) {
-      basic_meta.meta_.set_mysql_datetime();
-    } else if (0 == name.compare("TIMESTAMP")) {
-      basic_meta.meta_.set_timestamp();
-    } else if (0 == name.compare("DATE")) {
-      basic_meta.meta_.set_date();
-    } else if (0 == name.compare("MYSQL_DATE")) {
-      basic_meta.meta_.set_mysql_date();
-    } else if (0 == name.compare("TIME")) {
-      basic_meta.meta_.set_time();
-    } else if (0 == name.compare("YEAR")) {
-      basic_meta.meta_.set_year();
+    // } else if (0 == name.compare("DATETIME")) {
+    //   basic_meta.meta_.set_datetime();
+    // } else if (0 == name.compare("MYSQL_DATETIME")) {
+    //   basic_meta.meta_.set_mysql_datetime();
+    // } else if (0 == name.compare("TIMESTAMP")) {
+    //   basic_meta.meta_.set_timestamp();
+    // } else if (0 == name.compare("DATE")) {
+    //   basic_meta.meta_.set_date();
+    // } else if (0 == name.compare("MYSQL_DATE")) {
+    //   basic_meta.meta_.set_mysql_date();
+    // } else if (0 == name.compare("TIME")) {
+    //   basic_meta.meta_.set_time();
+    // } else if (0 == name.compare("YEAR")) {
+    //   basic_meta.meta_.set_year();
     } else if (0 == name.compare("VARCHAR")) {
       basic_meta.meta_.set_varchar();
       // use default CS
       basic_meta.set_collation_type(CS_TYPE_UTF8MB4_BIN);
       basic_meta.set_collation_level(CS_LEVEL_COERCIBLE);
-    } else if (0 == name.compare("VARBINARY")) {
-      basic_meta.meta_.set_varbinary();
+    // } else if (0 == name.compare("VARBINARY")) {
+    //   basic_meta.meta_.set_varbinary();
     } else if (0 == name.compare("CHAR")) {
       basic_meta.meta_.set_char();
-    } else if (0 == name.compare("BINARY")) {
-      basic_meta.meta_.set_binary();
-    } else if (0 == name.compare("BIT")) {
-      basic_meta.meta_.set_bit();
-    } else if (0 == name.compare("JSON")) {
-      basic_meta.meta_.set_json();
-    } else if (0 == name.compare("GEOMETRY")) {
-      basic_meta.meta_.set_geometry();
-    } else if (0 == name.compare("DECIMAL_INT")) {
-      basic_meta.meta_.set_decimal_int();
+    // } else if (0 == name.compare("BINARY")) {
+    //   basic_meta.meta_.set_binary();
+    // } else if (0 == name.compare("BIT")) {
+    //   basic_meta.meta_.set_bit();
+    // } else if (0 == name.compare("JSON")) {
+    //   basic_meta.meta_.set_json();
+    // } else if (0 == name.compare("GEOMETRY")) {
+    //   basic_meta.meta_.set_geometry();
+    // } else if (0 == name.compare("DECIMAL_INT")) {
+    //   basic_meta.meta_.set_decimal_int();
     } else {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("unsupported element type", K(ret), K(ObString(name.length(), name.c_str())));

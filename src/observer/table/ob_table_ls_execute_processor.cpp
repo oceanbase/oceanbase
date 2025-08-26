@@ -1114,7 +1114,7 @@ int ObTableLSExecuteP::new_try_process()
   if (OB_ISNULL(arg_.ls_op_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls op is null", K(ret));
-  } else if (OB_FAIL(init_schema_info(arg_.ls_op_->get_table_id(),
+  } else if (OB_FAIL(init_table_schema_info(arg_.ls_op_->get_table_id(),
       arg_.ls_op_->get_table_name(), !is_tablegroup_req_))) {
     if (ret == OB_TABLE_NOT_EXIST) {
       ObString db("");
@@ -1132,7 +1132,7 @@ int ObTableLSExecuteP::new_try_process()
     exec_ctx_.set_table_name(arg_.ls_op_->get_table_name());
     exec_ctx_.set_table_id(arg_.ls_op_->get_table_id());
     exec_ctx_.set_audit_ctx(audit_ctx_);
-    exec_ctx_.set_simple_schema(simple_table_schema_);
+    exec_ctx_.set_table_schema(table_schema_);
     exec_ctx_.set_cb_allocator(&cb->get_allocator());
     cb_ = cb;
     ObTableLSOpResult &cb_result = cb_->get_result();

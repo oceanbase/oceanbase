@@ -30,6 +30,7 @@ static bool cpu_have_avx();
 static bool cpu_have_avx2();
 static bool cpu_have_avxf();
 static bool cpu_have_avx512bw();
+static bool cpu_have_neon();
 
 bool CpuFlagSet::have_flag(const CpuFlag flag) const
 {
@@ -65,6 +66,7 @@ CpuFlagSet::CpuFlagSet() : flags_(0)
   LOG_CPUFLAG(AVX)
   LOG_CPUFLAG(AVX2)
   LOG_CPUFLAG(AVX512BW)
+  LOG_CPUFLAG(NEON)
 #undef LOG_CPUFLAG
 }
 
@@ -79,6 +81,7 @@ void CpuFlagSet::init_from_cpu(uint64_t& flags)
   CPU_HAVE(avx, AVX);
   CPU_HAVE(avx2, AVX2);
   CPU_HAVE(avx512bw, AVX512BW);
+  CPU_HAVE(neon, NEON);
 #undef CPU_HAVE
 }
 
@@ -89,7 +92,8 @@ int CpuFlagSet::init_from_os(uint64_t& flags)
   const char* const CPU_FLAG_CMDS[(int)CpuFlag::MAX] = {"grep -E ' sse4_2( |$)' /proc/cpuinfo",
       "grep -E ' avx( |$)' /proc/cpuinfo",
       "grep -E ' avx2( |$)' /proc/cpuinfo",
-      "grep -E ' avx512bw( |$)' /proc/cpuinfo"};
+      "grep -E ' avx512bw( |$)' /proc/cpuinfo",
+      "grep -E ' asimd( |$)' /proc/cpuinfo"};
   for (int i = 0; i < (int)CpuFlag::MAX; ++i) {
     int system_ret = system(CPU_FLAG_CMDS[i]);
     if (system_ret != 0) {
@@ -186,6 +190,14 @@ bool cpu_have_avx512bw()
 #endif
 }
 
+bool cpu_have_neon()
+{
+#if defined(__aarch64__) || defined(__ARM_NEON)
+  return true;
+#else
+  return false;
+#endif
+}
 
 } // common
 } // oceanbase

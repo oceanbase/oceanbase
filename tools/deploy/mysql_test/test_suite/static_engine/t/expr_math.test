@@ -9,7 +9,7 @@ connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
 
 connection conn_admin;
 --sleep 2
-alter system set enable_async_syslog = false;
+
 set @@ob_enable_plan_cache = 0;
 #set @@ob_log_level='debug';
 

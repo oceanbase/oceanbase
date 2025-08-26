@@ -53,6 +53,10 @@ public:
                         const ObOptDSStat &value,
                         ObOptDSStatHandle &ds_stat_handle);
 
+  int batch_get_table_stats(const uint64_t tenant_id,
+                            ObIArray<const ObOptTableStat::Key *> &keys,
+                            ObIArray<ObOptTableStatHandle> &handles);
+
   ObOptStatSqlService &get_sql_service() { return sql_service_; }
 
   int get_table_rowcnt(const uint64_t tenant_id,
@@ -89,6 +93,16 @@ private:
                                       const ObIArray<ObTabletID> &all_tablet_ids,
                                       const ObIArray<share::ObLSID> &all_ls_ids,
                                       int64_t &table_rowcnt);
+
+  int init_table_stats(ObIAllocator &allocator,
+                       const ObIArray<const ObOptTableStat::Key *> &keys,
+                       ObIArray<ObOptTableStat *> &table_stats);
+
+  int batch_load_table_stats_and_put_cache(const uint64_t tenant_id,
+                                           ObIArray<const ObOptTableStat::Key *> &keys,
+                                           ObIArray<ObOptTableStatHandle> &handles,
+                                           ObIArray<int64_t> &regather_handles_indices);
+
 protected:
   bool inited_;
   static const int64_t DEFAULT_TAB_STAT_CACHE_PRIORITY = 1;

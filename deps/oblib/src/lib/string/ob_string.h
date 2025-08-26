@@ -304,6 +304,24 @@ public:
     return OB_SUCCESS;
   }
 
+  inline bool case_compare_equal(const ObString &obstr) const
+  {
+    bool cmp = true;
+    if (NULL == ptr_) {
+      if (NULL != obstr.ptr_) {
+        cmp = false;
+      }
+    } else if (NULL == obstr.ptr_) {
+      cmp = false;
+    } else if (data_length_ != obstr.data_length_) {
+      cmp = false;
+    } else {
+      cmp = (0 == strncasecmp(ptr_, obstr.ptr_, data_length_));
+    }
+
+    return cmp;
+  }
+
   inline int case_compare(const ObString &obstr) const
   {
     int cmp = 0;
@@ -320,6 +338,17 @@ public:
       }
     }
     return cmp;
+  }
+
+  inline bool case_compare_equal(const char *str) const
+  {
+    obstr_size_t len = 0;
+    if (NULL != str) {
+      len = static_cast<obstr_size_t>(strlen(str));
+    }
+    char *p = const_cast<char *>(str);
+    const ObString rv(0, len, p);
+    return case_compare_equal(rv);
   }
 
   inline int case_compare(const char *str) const
@@ -345,6 +374,32 @@ public:
       cmp = data_length_ - obstr.data_length_;
     }
     return cmp;
+  }
+
+  inline bool compare_equal(const ObString &obstr) const
+  {
+    bool cmp = true;
+    if (ptr_ == obstr.ptr_) {
+      cmp = data_length_ == obstr.data_length_;
+    } else if (0 == data_length_ && 0 == obstr.data_length_) {
+      cmp = true;
+    } else if (data_length_ != obstr.data_length_) {
+      cmp = false;
+    } else {
+      cmp = (0 == MEMCMP(ptr_, obstr.ptr_, data_length_));
+    }
+    return cmp;
+  }
+
+  inline bool compare_equal(const char *str) const
+  {
+    obstr_size_t len = 0;
+    if (NULL != str) {
+      len = static_cast<obstr_size_t>(strlen(str));
+    }
+    char *p = const_cast<char *>(str);
+    const ObString rv(0, len, p);
+    return compare_equal(rv);
   }
 
   inline int32_t compare(const char *str) const
@@ -470,12 +525,12 @@ public:
 
   inline bool operator==(const ObString &obstr) const
   {
-    return compare(obstr) == 0;
+    return compare_equal(obstr);
   }
 
   inline bool operator!=(const ObString &obstr) const
   {
-    return compare(obstr) != 0;
+    return !compare_equal(obstr);
   }
 
   inline bool operator<(const char *str) const
@@ -500,12 +555,12 @@ public:
 
   inline bool operator==(const char *str) const
   {
-    return compare(str) == 0;
+    return compare_equal(str);
   }
 
   inline bool operator!=(const char *str) const
   {
-    return compare(str) != 0;
+    return !compare_equal(str);
   }
 
   const ObString trim() const
@@ -817,6 +872,46 @@ int ob_write_string(AllocatorT &allocator, const ObString &src, ObString &dst, i
   } else {
     MEMSET(ptr, padding, len);
     dst.assign_ptr(ptr, len);
+  }
+  return ret;
+}
+
+template <typename AllocatorT>
+int ob_concat_string(AllocatorT &allocator, ObString &dst, int64_t num, const ObString sources[], bool c_style = false)
+{
+  int ret = OB_SUCCESS;
+  ObString::obstr_size_t dst_length = 0;
+  if (OB_ISNULL(sources) || num < 0) {
+    ret = OB_INVALID_ARGUMENT;
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < num; i++) {
+    if (OB_NOT_NULL(sources[i]) && OB_NOT_NULL(sources[i].ptr()) && sources[i].length() > 0) {
+      dst_length += sources[i].length();
+    }
+  }
+
+  char *buf = nullptr;
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(dst_length + (c_style ? 1 : 0))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LIB_LOG(WARN, "allocate memory failed", K(ret), K(dst_length));
+  }
+
+  ObString::obstr_size_t pos = 0;
+  for (int64_t i = 0; OB_SUCC(ret) && i < num; i++) {
+    if (OB_NOT_NULL(sources[i]) && OB_NOT_NULL(sources[i].ptr()) && sources[i].length() > 0) {
+      MEMCPY(buf + pos, sources[i].ptr(), sources[i].length());
+      pos += sources[i].length();
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (c_style) {
+      buf[pos] = 0;
+    }
+    dst.assign_ptr(buf, dst_length);
+  }
+  if (OB_FAIL(ret) && OB_NOT_NULL(buf)) {
+    allocator.free(buf);
   }
   return ret;
 }

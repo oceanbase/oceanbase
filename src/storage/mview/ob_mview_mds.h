@@ -24,7 +24,8 @@ enum MVIEW_OP_TYPE
   UNDEFINE_OP = 0,
   COMPLETE_REFRESH = 1,
   FAST_REFRESH = 2,
-  PURGE_MLOG = 3
+  PURGE_MLOG = 3,
+  NESTED_SYNC_REFRESH = 4
 };
 
 struct ObMViewOpArg
@@ -39,6 +40,9 @@ public:
     parallel_ = 0;
     session_id_ = 0;
     start_ts_ = 0;
+    refresh_id_ = OB_INVALID_ID;
+    nested_mview_lists_.reset();
+    target_data_sync_scn_.reset();
   }
   ~ObMViewOpArg() { reset(); }
   bool is_valid() const { return table_id_ > 0 &&
@@ -46,13 +50,16 @@ public:
   int assign(const ObMViewOpArg& other);
 
   TO_STRING_KV(K_(table_id), K_(mview_op_type), K_(read_snapshot), K_(parallel), K_(session_id),
-               K_(start_ts));
+               K_(start_ts), K_(refresh_id), K_(target_data_sync_scn));
   int64_t table_id_;
   MVIEW_OP_TYPE mview_op_type_;
   int64_t read_snapshot_;
   int64_t parallel_;
   uint64_t session_id_;
   int64_t start_ts_;
+  uint64_t refresh_id_;
+  ObSEArray<uint64_t, 4> nested_mview_lists_;
+  share::SCN target_data_sync_scn_; // gts
 };
 
 class ObMViewMdsOpCtx : public mds::BufferCtx

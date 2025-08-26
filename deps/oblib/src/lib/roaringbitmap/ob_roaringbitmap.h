@@ -24,7 +24,6 @@
 #include "lib/allocator/page_arena.h"
 #include "src/logservice/ob_log_service.h"
 
-
 namespace oceanbase {
 namespace common {
 
@@ -40,6 +39,9 @@ namespace common {
       ret = OB_ALLOCATE_MEMORY_FAILED;                             \
       FLOG_WARN("fail to alloc memory in croaring", K(ret));       \
     }
+
+class ObRoaring64Bin;
+class ObRoaringBin;
 
 static const uint32_t RB_VERSION_SIZE = sizeof(uint8_t);
 static const uint32_t RB_TYPE_SIZE = sizeof(uint8_t);
@@ -105,6 +107,8 @@ public:
   int value_or(ObRoaringBitmap *rb);
   int value_xor(ObRoaringBitmap *rb);
   int value_andnot(ObRoaringBitmap *rb);
+  int value_and(ObRoaringBin *rb_bin);
+  int value_and(ObRoaring64Bin *rb_bin);
   int subset(ObRoaringBitmap *res_rb,
              uint64_t limit,
              uint64_t offset = 0,
@@ -160,16 +164,20 @@ class ObRoaringBitmapIter
       : rb_(rb),
         iter_(nullptr),
         inited_(false),
+        is_reverse_(false),
         curr_val_(0),
         val_idx_(0) {}
   virtual ~ObRoaringBitmapIter() = default;
 
-  int init();
+  int init(bool is_reverse = false);
   inline uint64_t get_curr_value() { return curr_val_; };
   inline uint64_t get_val_idx() { return val_idx_; };
   int get_next();
   void deinit() {
     inited_ = false;
+    is_reverse_ = false;
+    curr_val_ = 0;
+    val_idx_ = 0;
     if (OB_NOT_NULL(iter_)) {
       roaring::api::roaring64_iterator_free(iter_);
       iter_ = nullptr;
@@ -189,6 +197,7 @@ class ObRoaringBitmapIter
   ObRoaringBitmap *rb_;
   roaring::api::roaring64_iterator_t* iter_;
   bool inited_;
+  bool is_reverse_;
   uint64_t curr_val_;
   uint64_t val_idx_;
 };

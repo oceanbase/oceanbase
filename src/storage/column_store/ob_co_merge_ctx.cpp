@@ -11,16 +11,15 @@
 #include "ob_co_merge_ctx.h"
 #include "storage/column_store/ob_co_merge_dag.h"
 #include "storage/tablet/ob_tablet_medium_info_reader.h"
-#ifdef OB_BUILD_SHARED_STORAGE
-#include "storage/compaction/ob_refresh_tablet_util.h"
-#include "storage/compaction/ob_merge_ctx_func.h"
-#include "storage/compaction/ob_tenant_compaction_obj_mgr.h"
-#endif
+#include "lib/ob_define.h"
+#include "lib/thread/ob_thread_name.h"
+#include "observer/ob_server_event_history_table_operator.h"
 
 namespace oceanbase
 {
 namespace compaction
 {
+ERRSIM_POINT_DEF(EN_CO_MERGE_WITH_MINOR);
 ObCOTabletMergeCtx::ObCOTabletMergeCtx(
     ObCOMergeDagNet &dag_net,
     ObTabletMergeDagParam &param,
@@ -91,6 +90,12 @@ int ObCOTabletMergeCtx::schedule_minor_errsim(bool &schedule_minor) const
   SCHEDULE_MINOR_ERRSIM(EN_SWAP_TABLET_IN_COMPACTION);
   SCHEDULE_MINOR_ERRSIM(EN_COMPACTION_SCHEDULE_MINOR_FAIL);
   SCHEDULE_MINOR_ERRSIM(EN_COMPACTION_CO_MERGE_SCHEDULE_FAILED);
+
+  if (EN_CO_MERGE_WITH_MINOR) {
+    STORAGE_LOG(INFO, "ERRSIM EN_CO_MERGE_WITH_MINOR");
+    SERVER_EVENT_SYNC_ADD("merge_errsim", "co_merge_with_minor", "ret_code", ret);
+    schedule_minor = get_tables_handle().get_count() > 1;
+  }
 #endif
   return ret;
 }
@@ -290,6 +295,7 @@ int ObCOTabletMergeCtx::check_convert_co_checksum(const ObSSTable *new_sstable)
           LOG_ERROR("column checksum error match", K(ret), "row_ckm", row_column_checksums.at(i) , "col_ckm", col_column_checksums.at(i),
             K(i), "row_column_ckm_cnt", row_column_checksums.count(), "col_column_ckm_cnt", col_column_checksums.count(),
             K(row_column_checksums), K(col_column_checksums), KPC(row_sstable));
+          (void) ObCSReplicaUtil::diagnose_trim_default_value_checksum_error(*row_sstable, *get_schema());
         }
       }
     }
@@ -645,6 +651,22 @@ int ObCOTabletMergeCtx::create_sstables(const uint32_t start_cg_idx, const uint3
       merged_sstable_array_[i] = table_handle.get_table();
       exist_cg_tables_cnt++;
       const ObSSTable *new_sstable = static_cast<ObSSTable *>(table_handle.get_table());
+#ifdef ERRSIM
+      char *origin_thread_name = ob_get_tname_v2();
+      ObSSTableMetaHandle meta_handle;
+      if (OB_FAIL(new_sstable->get_meta(meta_handle))) {
+        LOG_WARN("failed to get sstable meta handle", K(ret), KPC(new_sstable));
+      } else {
+        int64_t co_base_snapshot_version = meta_handle.get_sstable_meta().get_co_base_snapshot_version();
+        int64_t base_snapshot_version = new_sstable->get_key().get_end_scn().get_val_for_logservice();
+        SERVER_EVENT_SYNC_ADD("merge_errsim", "create_sstable",
+                              "origin_thread_name", origin_thread_name,
+                              "tablet_id", get_tablet_id().id(),
+                              "column_group_idx", i,
+                              "base_snapshot_version", base_snapshot_version,
+                              "co_base_snapshot_version", co_base_snapshot_version);
+      }
+#endif
       FLOG_INFO("success to create sstable", KPC(new_sstable), KPC(cg_schema_ptr), "cg_idx", i);
     }
   } // for
@@ -1034,179 +1056,6 @@ int ObCOTabletMergeCtx::mock_row_store_table_read_info()
   LOG_INFO("[RowColSwitch] Generate read info for co merge", K(ret), K(mocked_row_store_table_read_info_));
   return ret;
 }
-
-#ifdef OB_BUILD_SHARED_STORAGE
-
-int ObCOTabletOutputMergeCtx::init_tablet_merge_info()
-{
-  int ret = OB_SUCCESS;
-  const int64_t cg_count = get_schema()->get_column_group_count();
-  if (OB_FAIL(ObMergeCtxFunc::init_major_task_checkpoint_mgr(
-      get_tablet_id(), get_merge_version(), get_concurrent_cnt(), cg_count,
-      get_tables_handle(), get_exec_mode(), *get_ls(), mem_ctx_.get_allocator(),
-      task_ckp_mgr_))) {
-    if (OB_NO_NEED_MERGE != ret) {
-      LOG_WARN("failed to init major checkpoint mgr", KR(ret), KPC(this));
-    }
-  } else {
-    start_schedule_cg_idx_ = task_ckp_mgr_.get_start_schedule_task_idx();
-    if (OB_FAIL(ObCOTabletMergeCtx::init_tablet_merge_info())) {
-      LOG_WARN("failed to init tablet merge info", KR(ret));
-    } else if (OB_FAIL(major_pre_warm_param_.init(get_ls()->get_ls_id(), get_tablet_id()))) {
-      LOG_WARN("failed to init pre warm param", KR(ret), KPC(this));
-    }
-  }
-  return ret;
-}
-
-int ObCOTabletOutputMergeCtx::get_macro_seq_by_stage(
-    const ObGetMacroSeqStage stage, int64_t &macro_start_seq) const
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(task_ckp_mgr_.get_macro_seq_by_stage(stage, macro_start_seq))) {
-    LOG_WARN("failed to get macro seq", KR(ret), K(stage));
-  }
-  return ret;
-}
-
-int ObCOTabletOutputMergeCtx::mark_cg_finish(const int64_t start_cg_idx, const int64_t end_cg_idx)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(task_ckp_mgr_.mark_cg_finish(get_tablet_id(), get_merge_version(), start_cg_idx, end_cg_idx))) {
-    LOG_WARN("failed to mark cg finish", KR(ret));
-  }
-  return ret;
-}
-
-void ObCOTabletOutputMergeCtx::destroy()
-{
-  task_ckp_mgr_.destroy(mem_ctx_.get_allocator());
-  ObCOTabletMergeCtx::destroy();
-}
-
-int ObCOTabletOutputMergeCtx::update_tablet(ObTabletHandle &new_tablet_handle)
-{
-  int ret = OB_SUCCESS;
-  const ObSSTable *new_sstable = nullptr;
-  if (OB_FAIL(pre_warm_writer_.complete())) {
-    LOG_WARN("failed to complete pre warm writer", KR(ret), K_(pre_warm_writer));
-  } else if (OB_FAIL(ObCOTabletMergeCtx::create_sstable(new_sstable))) {
-    LOG_WARN("failed to create sstable", KR(ret));
-  } else if (OB_FAIL(ObMergeCtxFunc::upload_tablet_and_write_major_ckm_info(*this, *new_sstable, new_tablet_handle))) {
-    LOG_WARN("failed to upload and write major ckm info", KR(ret), KPC(new_sstable));
-  }
-  return ret;
-}
-
-int ObCOTabletOutputMergeCtx::check_medium_info(
-    const ObMediumCompactionInfo &next_medium_info,
-    const int64_t last_major_snapshot)
-{
-  return ObMergeCtxFunc::check_medium_info(*get_ls(), next_medium_info, last_major_snapshot, get_tablet_id());
-}
-
-int ObCOTabletOutputMergeCtx::generate_macro_seq_info(
-    const int64_t task_idx,
-    int64_t &macro_start_seq)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(task_ckp_mgr_.get_macro_start_seq(task_idx, macro_start_seq))) {
-    LOG_WARN("failed to get macro seq", K(ret), K(task_idx));
-  } else {
-    LOG_INFO("success to get macro start seq", KR(ret), K(task_idx), K(macro_start_seq));
-  }
-  return ret;
-}
-
-
-void ObCOTabletOutputMergeCtx::after_update_tablet_for_major()
-{
-  // do nothing
-  int tmp_ret = OB_SUCCESS;
-  ObBasicObjHandle<ObCompactionReportObj> report_obj_hdl;
-
-  if (OB_TMP_FAIL(MTL_SVR_OBJ_MGR.get_obj_handle(GCTX.get_server_id(), report_obj_hdl))) {
-    LOG_WARN_RET(tmp_ret, "failed to get report obj handle", "cur_svr_id", GCTX.get_server_id());
-  } else if (OB_TMP_FAIL(report_obj_hdl.get_obj()->update_exec_tablet(1, true/*is_finish_task*/))) {
-    LOG_WARN_RET(tmp_ret, "failed to inc exec tablet", K(get_ls_id()), K(get_tablet_id()));
-  }
-  // add ckm-report task & update tablet state in update_tablet->download_major_ckm_info
-}
-
-/*
- *  ----------------------------------------------ObCOTabletValidateMergeCtx--------------------------------------------------
- */
-int ObCOTabletValidateMergeCtx::update_tablet_after_merge()
-{
-  int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  ObTabletHandle new_tablet_handle;
-  ObUpdateTableStoreParam param;
-  if (OB_FAIL(build_update_table_store_param(nullptr/* new_sstable */, param))) {
-    LOG_WARN("failed to build update table store param", KR(ret), K(param));
-  } else if (OB_FAIL(param.compaction_info_.major_ckm_info_.assign(major_ckm_info_, &mem_ctx_.get_allocator()))) {
-    LOG_WARN("failed to assign major ckm info", KR(ret), K(major_ckm_info_));
-  } else if (OB_FAIL(get_ls()->update_tablet_table_store(
-      get_tablet_id(), param, new_tablet_handle))) {
-    LOG_WARN("failed to update tablet table store", K(ret), K(param), K(new_tablet_handle));
-    CTX_SET_DIAGNOSE_LOCATION(*this);
-  } else {
-    ObTabletCompactionState tmp_state;
-    tmp_state.set_calc_ckm_scn(get_merge_version());
-    (void) ObMergeCtxFunc::update_tablet_state(get_ls_id(), get_tablet_id(), tmp_state);
-    time_guard_click(ObStorageCompactionTimeGuard::UPDATE_TABLET);
-    (void) ObCOTabletMergeCtx::collect_running_info();
-  }
-  return ret;
-}
-
-int ObCOTabletValidateMergeCtx::create_sstables(const uint32_t start_cg_idx, const uint32_t end_cg_idx)
-{
-  int ret = OB_SUCCESS;
-  int64_t macro_start_seq = 0;
-  if (OB_UNLIKELY(start_cg_idx > end_cg_idx
-      || end_cg_idx > array_count_
-      || nullptr == cg_merge_info_array_
-      || !is_schema_valid())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected co merge info array or storage schema", K(ret), K(start_cg_idx),
-        K(end_cg_idx), KP(cg_merge_info_array_), K(array_count_), K_(static_param));
-  } else if (OB_FAIL(get_macro_seq_by_stage(BUILD_INDEX_TREE, macro_start_seq))) {
-      LOG_WARN("failed to get macro seq", KR(ret), K(macro_start_seq), "param", get_dag_param());
-  } else {
-    SMART_VAR(ObSSTableMergeRes, res) {
-      for (int64_t i = start_cg_idx; OB_SUCC(ret) && i < end_cg_idx; ++i) {
-        res.reset();
-        const ObStorageColumnGroupSchema &cg_schema = get_schema()->get_column_groups().at(i);
-        // the start_macro_seq of each cg is same,
-        // but the param of build_sstable_merge_res becomes ref instead of const, (which should be IncSeqGenerator finally);
-        // avoid the changing of macro_start_seq, we use a tmp_macro_start_seq there.
-        int64_t tmp_macro_start_seq = macro_start_seq;
-        if (OB_UNLIKELY(nullptr == cg_merge_info_array_[i])) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("merge info or table array is null", K(ret), K(i));
-        } else if (OB_FAIL(cg_merge_info_array_[i]->build_sstable_merge_res(static_param_, get_pre_warm_param(), tmp_macro_start_seq, res))) {
-          LOG_WARN("fail to create sstable", K(ret), K(i), KPC(this));
-        } else if (OB_FAIL(major_ckm_info_.init_from_merge_result(mem_ctx_.get_allocator(), *this, cg_schema, res))) {
-          LOG_WARN("failed to init major ckm info", KR(ret));
-        } else {
-          LOG_INFO("success to init major ckm info", K(ret), K(i), K(cg_schema));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObCOTabletValidateMergeCtx::check_medium_info(
-    const ObMediumCompactionInfo &next_medium_info,
-    const int64_t last_major_snapshot)
-{
-  return ObMergeCtxFunc::check_medium_info(*get_ls(), next_medium_info, last_major_snapshot, get_tablet_id());
-}
-
-#endif
-
 
 } // namespace compaction
 } // namespace oceanbase

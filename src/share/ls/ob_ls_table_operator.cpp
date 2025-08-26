@@ -14,6 +14,7 @@
 
 #include "rootserver/ob_root_utils.h"       // for rootserver::ObRootUtils::get_rs_default_timeout_ctx
 #include "ob_ls_table_operator.h"   // for declarations of functions in this cpp
+#include "observer/ob_service.h"
 
 namespace oceanbase
 {
@@ -57,6 +58,7 @@ int ObLSTableOperator::set_use_memory_ls_(ObIRsListChangeCb &rs_list_change_cb)
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
   } else {
+    int tmp_ret = OB_SUCCESS;
     if (OB_UNLIKELY(!inmemory_ls_.is_inited())) {
       if (OB_FAIL(inmemory_ls_.init(rs_list_change_cb))) {
         LOG_WARN("inmemory_ls_ init failed", KR(ret));
@@ -132,7 +134,7 @@ int ObLSTableOperator::update(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(replica));
   } else if (OB_FAIL(get_ls_table_(GCONF.cluster_id, replica.get_tenant_id(),
-                                   replica.get_ls_id(), inner_table_only, lst))) {
+                                   replica.get_ls_id(), inner_table_only, false/*is_for_get*/, lst))) {
     LOG_WARN("get ls table failed", KR(ret), K(replica), K(inner_table_only));
   } else if (OB_ISNULL(lst)) {
     ret = OB_ERR_UNEXPECTED;
@@ -164,7 +166,7 @@ int ObLSTableOperator::get(
   } else if (!is_valid_key(tenant_id, ls_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), KT(tenant_id), K(ls_id));
-  } else if (OB_FAIL(get_ls_table_(cluster_id, tenant_id, ls_id, inner_table_only, lst))) {
+  } else if (OB_FAIL(get_ls_table_(cluster_id, tenant_id, ls_id, inner_table_only, true/*is_for_get*/, lst))) {
     LOG_WARN("get ls table failed", KR(ret), K(tenant_id), K(ls_id), K(mode));
   } else if (OB_ISNULL(lst)) {
     ret = OB_ERR_UNEXPECTED;
@@ -204,6 +206,7 @@ int ObLSTableOperator::get_ls_table_(
     const uint64_t tenant_id,
     const ObLSID &ls_id,
     const bool inner_table_only,
+    const bool is_for_get,
     ObLSTable *&ls_table)
 {
   int ret = OB_SUCCESS;
@@ -214,12 +217,25 @@ int ObLSTableOperator::get_ls_table_(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id));
   } else if (!inner_table_only && is_sys_tenant(tenant_id)) {
-    if (GCONF.cluster_id == cluster_id) {
-      ls_table = root_ls_;
+    if (ls_id.is_sys_ls()) {
+      if (GCONF.cluster_id == cluster_id) {
+        ls_table = root_ls_;
+      } else {
+        //get rs_list from remote cluster must use rpc_ls_operator
+        //can not get rs_list of remote cluster in inmemory
+        ls_table = static_cast<ObLSTable *>(&rpc_ls_);
+      }
+    } else if (ls_id.is_sslog_ls()) {
+      // 1. The information of the SYS tenant SSLOG LS is persisted in the inner table of 1 LS.
+      // 2. In order to solve the circular dependency problem, the SYS tenant SSLOG LS information is obtained based on RPC by default.
+      if (is_for_get) {
+        ls_table = static_cast<ObLSTable *>(&rpc_ls_);
+      } else {
+        ls_table = static_cast<ObLSTable *>(&persistent_ls_);
+      }
     } else {
-      //get rs_list from remote cluster must use rpc_ls_operator
-      //can not get rs_list of remote cluster in inmemory
-      ls_table = static_cast<ObLSTable *>(&rpc_ls_);
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sys tenant unexpected ls", KR(ret), K(tenant_id), K(ls_id));
     }
   } else {
     ls_table = static_cast<ObLSTable *>(&persistent_ls_);
@@ -244,6 +260,13 @@ int ObLSTableOperator::get_by_tenant(
       LOG_WARN("fail to get sys_tenant ls", KR(ret), K(tenant_id));
     } else if (OB_FAIL(ls_infos.push_back(ls_info))) {
       LOG_WARN("fail to assign", KR(ret), K(ls_info));
+    } else if (GCTX.is_shared_storage_mode()) {
+      ObLSInfo sslog_info;
+      if (OB_FAIL(rpc_ls_.get(GCONF.cluster_id, OB_SYS_TENANT_ID, SSLOG_LS, share::ObLSTable::DEFAULT_MODE, sslog_info))) {
+        LOG_WARN("fail to get sys_tenant ls", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(ls_infos.push_back(sslog_info))) {
+        LOG_WARN("fail to assign", KR(ret), K(sslog_info));
+      }
     }
   } else if (is_sys_tenant(tenant_id)
              || is_meta_tenant(tenant_id)
@@ -254,6 +277,61 @@ int ObLSTableOperator::get_by_tenant(
   } else {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
+  }
+  return ret;
+}
+
+int ObLSTableOperator::load_sys_tenant_ls_(
+    const ObLSID &ls_id,
+    ObIArray<ObLSInfo> &inner_table_ls_infos)
+{
+  int ret = OB_SUCCESS;
+  // do not reset inner_table_ls_infos
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(!ls_id.is_valid_with_tenant(OB_SYS_TENANT_ID))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(ls_id));
+  } else {
+    ObLSInfo tmp_ls_info;
+    int64_t idx = OB_INVALID_INDEX; // sys ls position
+    for (int64_t i = 0; OB_INVALID_INDEX == idx && OB_SUCC(ret) && i < inner_table_ls_infos.count(); i++) {
+      const ObLSInfo &ls = inner_table_ls_infos.at(i);
+      if (is_sys_tenant(ls.get_tenant_id()) && ls_id == ls.get_ls_id()) {
+        // SYS tenant's meta table records both its own LS and the LS of all meta tenants,
+        // and SYS tenant's LS info comes from both RS memory(SYS LS)/RPC(SSLOG LS) and meta table,
+        // so for the sys tenant, we need combine the meta table results with the MEMORY/RPC results.
+        // Non-SYS tenant's LS info only record in meta table, no special treatment required.
+        if (OB_FAIL(tmp_ls_info.assign(ls))) {
+          LOG_WARN("fail to assign sys ls", KR(ret), K(ls), K(ls_id));
+        } else {
+          idx = i;
+        }
+      }
+    } // end for
+    if (OB_SUCC(ret)) {
+      ObLSInfo ls_info;
+      if (OB_ISNULL(root_ls_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("root ls is null", KR(ret), KP(root_ls_));
+      } else if (ls_id.is_sys_ls() && OB_FAIL(root_ls_->get(GCONF.cluster_id, OB_SYS_TENANT_ID,
+                SYS_LS, share::ObLSTable::DEFAULT_MODE, ls_info))) {
+        LOG_WARN("fail to get sys_tenant ls", KR(ret));
+      } else if (ls_id.is_sslog_ls() && OB_FAIL(rpc_ls_.get(GCONF.cluster_id, OB_SYS_TENANT_ID,
+                SSLOG_LS, share::ObLSTable::DEFAULT_MODE, ls_info))) {
+        LOG_WARN("fail to get sys_tenant ls", KR(ret));
+      } else if (OB_INVALID_INDEX != idx) {
+        if (OB_FAIL(inner_table_ls_infos.remove(idx))) {
+          LOG_WARN("fail to remove ls from array", KR(ret), K(idx));
+        } else if (OB_FAIL(ls_info.composite_with(tmp_ls_info))) {
+          LOG_WARN("composite ls failed", KR(ret), K(ls_info), K(tmp_ls_info));
+        }
+      }
+      if (FAILEDx(inner_table_ls_infos.push_back(ls_info))) {
+        LOG_WARN("fail to push back ls_info", KR(ret), K(ls_info));
+      }
+    }
   }
   return ret;
 }
@@ -273,37 +351,10 @@ int ObLSTableOperator::load_all_ls_in_tenant(
   } else if (OB_FAIL(persistent_ls_.load_all_ls_in_tenant(exec_tenant_id, ls_infos))) {
     LOG_WARN("load tenant ls info failed", KR(ret), K(exec_tenant_id));
   } else if (is_sys_tenant(exec_tenant_id)) {
-    ObLSInfo sys_ls_info;
-    int64_t idx = OB_INVALID_INDEX; // sys ls position
-    for (int64_t i = 0; OB_INVALID_INDEX == idx && OB_SUCC(ret) && i < ls_infos.count(); i++) {
-      const ObLSInfo &ls = ls_infos.at(i);
-      if (is_sys_tenant(ls.get_tenant_id()) && SYS_LS == ls.get_ls_id()) {
-        if (OB_FAIL(sys_ls_info.assign(ls))) {
-          LOG_WARN("fail to assign sys ls", KR(ret), K(ls));
-        } else {
-          idx = i;
-        }
-      }
-    } // end for
-
-    if (OB_SUCC(ret)) {
-      ObLSInfo ls_info;
-      if (OB_ISNULL(root_ls_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("root ls is null", KR(ret));
-      } else if (OB_FAIL(root_ls_->get(GCONF.cluster_id, OB_SYS_TENANT_ID,
-                 SYS_LS, share::ObLSTable::DEFAULT_MODE, ls_info))) {
-        LOG_WARN("fail to get sys_tenant ls", KR(ret), K(exec_tenant_id));
-      } else if (OB_INVALID_INDEX != idx) {
-        if (OB_FAIL(ls_infos.remove(idx))) {
-          LOG_WARN("fail to remove ls from array", KR(ret), K(idx));
-        } else if (OB_FAIL(ls_info.composite_with(sys_ls_info))) {
-          LOG_WARN("composite ls failed", KR(ret), K(ls_info), K(sys_ls_info));
-        }
-      }
-      if (FAILEDx(ls_infos.push_back(ls_info))) {
-        LOG_WARN("fail to assign", KR(ret), K(ls_info));
-      }
+    if (OB_FAIL(load_sys_tenant_ls_(SYS_LS, ls_infos))) {
+      LOG_WARN("load sys tenant sys ls info failed", KR(ret));
+    } else if (GCTX.is_shared_storage_mode() && OB_FAIL(load_sys_tenant_ls_(SSLOG_LS, ls_infos))) {
+      LOG_WARN("load sys tenant sslog ls info failed", KR(ret));
     }
   }
   return ret;
@@ -324,7 +375,7 @@ int ObLSTableOperator::remove(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id), K(server));
   } else if (OB_FAIL(get_ls_table_(GCONF.cluster_id, tenant_id,
-                                   ls_id, inner_table_only, lst))) {
+                                   ls_id, inner_table_only, false/*is_for_get*/, lst))) {
     LOG_WARN("get ls table failed", KR(ret), K(tenant_id), K(ls_id), K(inner_table_only));
   } else if (OB_ISNULL(lst)) {
     ret = OB_ERR_UNEXPECTED;
@@ -388,11 +439,17 @@ int ObLSTableOperator::batch_get(
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
   } else if (is_sys_tenant(tenant_id)) {
-    ObLSInfo ls_info;
-    if (OB_FAIL(get(cluster_id, OB_SYS_TENANT_ID, SYS_LS, mode, ls_info))) {
-      LOG_WARN("fail to get sys_tenant ls", KR(ret), K(tenant_id));
-    } else if (OB_FAIL(ls_infos.push_back(ls_info))) {
-      LOG_WARN("fail to assign", KR(ret), K(ls_info));
+    for (int i = 0; OB_SUCC(ret) && i < ls_ids.count(); i++) {
+      const share::ObLSID &ls_id = ls_ids.at(i);
+      ObLSInfo sys_info;
+      if (ls_id.is_sslog_ls() && !GCTX.is_shared_storage_mode()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected sslog ls in non-shared storage mode", KR(ret), K(tenant_id), K(ls_id));
+      } else if (OB_FAIL(get(cluster_id, OB_SYS_TENANT_ID, ls_id, mode, sys_info))) {
+        LOG_WARN("fail to get sys_tenant ls", KR(ret), K(tenant_id), K(ls_id));
+      } else if (OB_FAIL(ls_infos.push_back(sys_info))) {
+        LOG_WARN("fail to assign", KR(ret), K(sys_info));
+      }
     }
   } else if (is_meta_tenant(tenant_id) || is_user_tenant(tenant_id)) {
     if (OB_FAIL(persistent_ls_.batch_get(cluster_id, tenant_id, ls_ids, ls_infos))) {

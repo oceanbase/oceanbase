@@ -14,6 +14,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "common/object/ob_obj_compare.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
+#include "sql/engine/expr/ob_expr_vector.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/expr/ob_array_cast.h"
@@ -82,6 +83,12 @@ int ObArrayExprUtils::get_type_vector(
       LOG_WARN("construct array obj failed", K(ret), K(*coll_info));
     } else if (OB_FAIL(result->init(blob_data))) {
       LOG_WARN("failed to init array", K(ret));
+    } else {
+      if (result->size() > ObExprVector::MAX_VECTOR_DIM) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("vector dimension exceeds maximum limit", K(ret), K(result->size()));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "vector dimension exceeds maximum limit of 16000");
+      }
     }
   }
   return ret;
@@ -1534,6 +1541,8 @@ int ObArrayExprUtils::deduce_array_type(ObExecContext *exec_ctx, ObExprResType &
              && coll_info->collection_meta_->type_id_ != ObNestedType::OB_VECTOR_TYPE) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_WARN("invalid collection type", K(ret), K(coll_info->collection_meta_->type_id_));
+  } else if (type2.is_null()) {
+    // do nothing
   } else if (!ob_is_collection_sql_type(type2.get_type())) {
     ObCollectionArrayType *arr_type = static_cast<ObCollectionArrayType *>(coll_info->collection_meta_);
     ObCollectionTypeBase *elem_type = arr_type->element_type_;
@@ -1743,98 +1752,6 @@ int ObArrayExprUtils::set_obj_to_vector(ObIVector *vec, int64_t idx, ObObj obj, 
     ret = OB_ERR_UNEXPECTED;
     OB_LOG(WARN, "unexpected object type", K(ret), K(obj.get_type()));
   }
-  return ret;
-}
-
-template <typename T1, typename T>
-int ObArrayExprUtils::calc_array_sum_by_type(uint32_t data_len, uint32_t len, const char *data_ptr,
-                                             uint8_t *null_bitmaps, T &sum)
-{
-  int ret = OB_SUCCESS;
-  if (data_len / sizeof(T1) != len) {
-    ret = OB_ERR_UNEXPECTED;
-    OB_LOG(WARN, "unexpected array length", K(ret), K(len), K(data_len));
-  } else {
-    T1 *data = reinterpret_cast<T1 *>(const_cast<char *>(data_ptr));
-    for (uint32_t i = 0; i < len; ++i) {
-      if (null_bitmaps != nullptr && null_bitmaps[i] > 0) {
-        /* do nothing */
-      } else if (OB_FAIL(raw_check_add<T>(sum + data[i], static_cast<T>(data[i]), sum))) {
-        LOG_WARN("array_sum overflow", K(ret), K(sum), K(data[i]));
-        break;
-      } else {
-        sum += static_cast<T>(data[i]);
-      }
-    }
-  }
-  return ret;
-}
-
-template <typename T>
-int ObArrayExprUtils::calc_array_sum(uint32_t len, uint8_t *nullbitmaps, const char *data_ptr,
-                                   uint32_t data_len, ObCollectionArrayType *arr_type, T &sum)
-{
-  int ret = OB_SUCCESS;
-
-  ObCollectionBasicType *elem_type = NULL;
-  if (OB_ISNULL(elem_type = static_cast<ObCollectionBasicType *>(arr_type->element_type_))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("source array collection element type is null", K(ret));
-  } else if (arr_type->element_type_->type_id_ != ObNestedType::OB_BASIC_TYPE) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("not supported element type", K(ret), K(arr_type->element_type_->type_id_));
-  } else {
-    ObObjType obj_type = elem_type->basic_meta_.get_obj_type();
-    switch (obj_type) {
-    case ObTinyIntType: {
-      ret = calc_array_sum_by_type<int8_t>(data_len, len, data_ptr, nullbitmaps, sum);
-      break;
-    }
-    case ObSmallIntType: {
-      ret = calc_array_sum_by_type<int16_t>(data_len, len, data_ptr, nullbitmaps, sum);
-      break;
-    }
-    case ObInt32Type: {
-      ret = calc_array_sum_by_type<int32_t>(data_len, len, data_ptr, nullbitmaps, sum);
-      break;
-    }
-    case ObIntType: {
-      ret = calc_array_sum_by_type<int64_t>(data_len, len, data_ptr, nullbitmaps, sum);
-      break;
-    }
-    case ObUTinyIntType: {
-      ret = calc_array_sum_by_type<uint8_t>(data_len, len, data_ptr, nullbitmaps, sum);
-      break;
-    }
-    case ObUSmallIntType: {
-      ret = calc_array_sum_by_type<uint16_t>(data_len, len, data_ptr, nullbitmaps, sum);
-      break;
-    }
-    case ObUInt32Type: {
-      ret = calc_array_sum_by_type<uint32_t>(data_len, len, data_ptr, nullbitmaps, sum);
-      break;
-    }
-    case ObUInt64Type: {
-      ret = calc_array_sum_by_type<uint64_t>(data_len, len, data_ptr, nullbitmaps, sum);
-      break;
-    }
-    case ObUFloatType:
-    case ObFloatType: {
-      ret = calc_array_sum_by_type<float>(data_len, len, data_ptr, nullbitmaps, sum);
-      break;
-    }
-    case ObUDoubleType:
-    case ObDoubleType: {
-      ret = calc_array_sum_by_type<double>(data_len, len, data_ptr, nullbitmaps, sum);
-      break;
-    }
-    default: {
-      ret = OB_NOT_SUPPORTED;
-      OB_LOG(WARN, "not supported element type", K(ret), K(elem_type->basic_meta_.get_type_class()));
-    }
-    } // end switch
-  }
-
   return ret;
 }
 

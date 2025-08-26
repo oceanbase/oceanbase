@@ -403,6 +403,17 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigAuditLogCompressionChecker);
 };
 
+class ObConfigDiagnosisLogCompressionChecker
+  : public ObConfigChecker
+{
+public:
+  ObConfigDiagnosisLogCompressionChecker() {}
+  virtual ~ObConfigDiagnosisLogCompressionChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigDiagnosisLogCompressionChecker);
+};
+
 class ObConfigAuditLogPathChecker
   : public ObConfigChecker
 {
@@ -994,6 +1005,16 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObParallelDDLControlParser);
 };
 
+class ObSSLocalCacheControlParser : public ObConfigParser
+{
+public:
+  ObSSLocalCacheControlParser() {}
+  virtual ~ObSSLocalCacheControlParser() {}
+  virtual bool parse(const char *str, uint8_t *arr, int64_t len) override;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObSSLocalCacheControlParser);
+};
+
 class ObConfigKvGroupCommitRWModeChecker
   : public ObConfigChecker
 {
@@ -1124,6 +1145,18 @@ public:
 private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigJavaParamsChecker);
 };
+class ObConfigJniTransDataParamsChecker
+  : public ObConfigChecker
+{
+public:
+  ObConfigJniTransDataParamsChecker() {}
+  virtual ~ObConfigJniTransDataParamsChecker() {}
+  bool check(const ObConfigItem& t) const;
+private:
+  static const ObString arrow_table_str_;
+  static const ObString off_heap_table_str_;
+  DISALLOW_COPY_AND_ASSIGN(ObConfigJniTransDataParamsChecker);
+};
 
 class ObConfigEnableAutoSplitChecker : public ObConfigChecker
 {
@@ -1155,6 +1188,31 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigGlobalIndexAutoSplitPolicyChecker);
 };
 
+class ObHNSWIterFilterScanNumChecker
+  : public ObConfigChecker
+{
+public:
+  ObHNSWIterFilterScanNumChecker() {}
+  virtual ~ObHNSWIterFilterScanNumChecker() {}
+  bool check(const ObConfigItem &t) const;
+  static constexpr int64_t MAX_HNSW_ITER_SCAN_NUMS = INT64_MAX;
+  static constexpr int64_t MIN_HNSW_ITER_SCAN_NUMS = 0;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObHNSWIterFilterScanNumChecker);
+};
+
+class ObConfigDefaultMicroBlockFormatVersionChecker : public ObConfigChecker
+{
+public:
+  ObConfigDefaultMicroBlockFormatVersionChecker() = default;
+
+  virtual ~ObConfigDefaultMicroBlockFormatVersionChecker() = default;
+
+  bool check(const ObConfigItem &t) const;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigDefaultMicroBlockFormatVersionChecker);
+};
 
 } // namespace common
 } // namespace oceanbase

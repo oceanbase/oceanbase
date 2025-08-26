@@ -131,7 +131,6 @@ private:
   int set_timeout_ctx_(common::ObTimeoutCtx &ctx);
   bool is_valid_key_(const uint64_t tenant_id, const ObTabletID &tablet_id) const;
   int erase_cache_(const uint64_t tenant_id, const ObTabletID &tablet_id);
-  bool belong_to_sys_ls_(const uint64_t tenant_id, const ObTabletID &tablet_id) const;
   /*
     Fetch tablet_ls_caches with tablet_id renew time greater than expire_renew_time.
     If none is found or the renew time is outdated (less than expire_renew_time),

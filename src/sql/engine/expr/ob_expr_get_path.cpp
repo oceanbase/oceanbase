@@ -32,13 +32,15 @@ int ObDataAccessPathExtraInfo::deep_copy(common::ObIAllocator &allocator,
     ObDataAccessPathExtraInfo *other = static_cast<ObDataAccessPathExtraInfo *>(copied_info);
     if (OB_FAIL(ob_write_string(allocator, data_access_path_, other->data_access_path_))) {
       LOG_WARN("fail to write string", K(ret));
+    } else {
+      other->mapped_column_id_ = mapped_column_id_;
     }
   }
   return ret;
 }
 
 
-OB_SERIALIZE_MEMBER(ObDataAccessPathExtraInfo, data_access_path_);
+OB_SERIALIZE_MEMBER(ObDataAccessPathExtraInfo, data_access_path_, mapped_column_id_);
 
 }
 }

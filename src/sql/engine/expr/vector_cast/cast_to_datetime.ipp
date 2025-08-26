@@ -127,6 +127,9 @@ struct ToDatetimeCastImpl
               ret = OB_INVALID_DATE_FORMAT;
               SQL_LOG(WARN, "should cast positive int to datetime", K(ret));
             } else if (OB_FAIL(ObTimeConverter::int_to_datetime(in_val, 0, cvrt_ctx_, res_val, date_sql_mode_))) {
+              if (ret == OB_INVALID_ZERO_DATE) {
+                ret = OB_INVALID_DATE_VALUE;
+              }
               SQL_LOG(WARN, "int_datetime failed", K(ret), K(in_val));
             }
             if (CAST_FAIL(ret)) {
@@ -191,6 +194,9 @@ struct ToDatetimeCastImpl
               ret = OB_INVALID_DATE_FORMAT;
               SQL_LOG(WARN, "should cast positive int to datetime", K(ret));
             } else if (OB_FAIL(ObTimeConverter::int_to_datetime(in_val, 0, cvrt_ctx_, res_val, date_sql_mode_))) {
+              if (ret == OB_INVALID_ZERO_DATE) {
+                ret = OB_INVALID_DATE_VALUE;
+              }
               SQL_LOG(WARN, "int_datetime failed", K(ret), K(res_val));
             }
             if (CAST_FAIL(ret)) {
@@ -407,6 +413,9 @@ struct ToDatetimeCastImpl
                 SQL_LOG(WARN, "failed to get int and dec part", K(ret));
               } else if (OB_FAIL(ObTimeConverter::int_to_datetime(int_part, dec_part,
                                                         cvrt_ctx_, out_val, date_sql_mode_))) {
+                if (ret == OB_INVALID_ZERO_DATE) {
+                  ret = OB_INVALID_DATE_VALUE;
+                }
                 SQL_LOG(WARN, "int to datetime failed", K(ret), K(int_part), K(dec_part));
               }
             }

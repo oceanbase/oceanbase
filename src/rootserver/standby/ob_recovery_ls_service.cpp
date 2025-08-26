@@ -112,6 +112,8 @@ void ObRecoveryLSService::do_work()
       ObCurTraceId::init(GCONF.self_addr_);
       ObTenantInfoLoader *tenant_info_loader = MTL(ObTenantInfoLoader*);
       ObAllTenantInfo tenant_info;
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+      idle_time_us = tenant_config.is_valid() ? tenant_config->_keepalive_interval : idle_time_us;
       //two thread for seed log and recovery_ls_manager
       if (!is_user_tenant(tenant_id_)) {
         ret = OB_ERR_UNEXPECTED;
@@ -1004,7 +1006,7 @@ int ObRecoveryLSService::process_ls_operator_in_trans_(
       }
     } else if (share::is_ls_create_pre_op(ls_attr.get_ls_operation_type())) {
       //create new ls;
-      if (OB_FAIL(create_new_ls_(ls_attr, sync_scn, tenant_info.get_switchover_status(), trans))) {
+      if (OB_FAIL(create_new_ls_(ls_attr, sync_scn, tenant_info.get_switchover_epoch(), trans))) {
         LOG_WARN("failed to create new ls", KR(ret), K(sync_scn), K(ls_attr), K(tenant_info));
       }
     } else if (share::is_ls_create_abort_op(ls_attr.get_ls_operation_type())) {
@@ -1083,14 +1085,13 @@ int ObRecoveryLSService::porcess_alter_ls_group_(const share::ObLSAttr &ls_attr,
 
 int ObRecoveryLSService::create_new_ls_(const share::ObLSAttr &ls_attr,
                                         const SCN &sync_scn,
-                                        const ObTenantSwitchoverStatus &switchover_status,
+                                        const int64_t switchover_epoch,
                                         common::ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
-  if (!share::is_ls_create_pre_op(ls_attr.get_ls_operation_type())
-      || ! switchover_status.is_valid()) {
+  if (!share::is_ls_create_pre_op(ls_attr.get_ls_operation_type()) || OB_INVALID_VERSION == switchover_epoch) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(ls_attr), K(switchover_status));
+    LOG_WARN("invalid argument", KR(ret), K(ls_attr), K(switchover_epoch));
   } else {
     //create new ls;
     DEBUG_SYNC(BEFORE_RECOVER_USER_LS);
@@ -1112,9 +1113,8 @@ int ObRecoveryLSService::create_new_ls_(const share::ObLSAttr &ls_attr,
       ObLSFlag ls_flag = ls_attr.get_ls_flag();
       if (OB_FAIL(ObLSServiceHelper::create_new_ls_in_trans(ls_attr.get_ls_id(),
               ls_attr.get_ls_group_id(), ls_attr.get_create_scn(),
-              switchover_status, tenant_stat, trans, ls_flag, OB_INVALID_TENANT_ID/*source_tenant_id*/))) {
-        LOG_WARN("failed to add new ls status info", KR(ret), K(ls_attr), K(sync_scn),
-            K(tenant_stat), K(switchover_status));
+              switchover_epoch, tenant_stat, trans, ls_flag, OB_INVALID_TENANT_ID/*source_tenant_id*/))) {
+        LOG_WARN("failed to add new ls status info", KR(ret), K(ls_attr), K(sync_scn), K(tenant_stat));
       }
     }
     LOG_INFO("[LS_RECOVERY] create new ls", KR(ret), K(ls_attr));
@@ -1237,6 +1237,7 @@ int ObRecoveryLSService::process_ls_transfer_task_in_trans_(
 }
 
 //balance ls group and balance primary zone
+ERRSIM_POINT_DEF(ERRSIM_STANDBY_BALANCE);
 int ObRecoveryLSService::do_standby_balance_()
 {
   int ret = OB_SUCCESS;
@@ -1249,6 +1250,8 @@ int ObRecoveryLSService::do_standby_balance_()
     LOG_WARN("sql can't null", K(ret), K(proxy_));
   } else if (OB_FAIL(get_tenant_schema(tenant_id_, tenant_schema))) {
     LOG_WARN("failed to get tenant schema", KR(ret), K(tenant_id_));
+  } else if (OB_UNLIKELY(ERRSIM_STANDBY_BALANCE)) {
+    LOG_WARN("ERRSIM_STANDBY_BALANCE opened, do nothing", KR(ret), K(tenant_id_));
   } else {
     ObTenantLSInfo tenant_info(proxy_, &tenant_schema, tenant_id_);
     bool is_balanced = false;

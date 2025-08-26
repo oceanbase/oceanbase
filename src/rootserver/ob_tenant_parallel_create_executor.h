@@ -69,7 +69,6 @@ private:
 
   int create_tenant_sys_ls_();
   int create_tenant_sslog_();
-  int create_sslog_tablet_();
 
   int create_tenant_sys_ls_(const ObTenantSchema &tenant_schema,
       const ObIArray<share::ObResourcePoolName> &pool_list,

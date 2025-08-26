@@ -33,6 +33,7 @@ ObGIOpInput::ObGIOpInput(ObExecContext &ctx, const ObOpSpec &spec)
     pump_(nullptr),
     px_sequence_id_(OB_INVALID_ID),
     rf_max_wait_time_(0),
+    task_balancer_(nullptr),
     deserialize_allocator_(nullptr)
 {}
 
@@ -97,6 +98,7 @@ OB_DEF_SERIALIZE(ObGIOpInput)
     }
   }
   OB_UNIS_ENCODE(table_location_keys_);
+  OB_UNIS_ENCODE(ser_task_balancer_);
   return ret;
 }
 
@@ -112,6 +114,7 @@ OB_DEF_DESERIALIZE(ObGIOpInput)
     pos = pos + sizeof(pump_);
   }
   OB_UNIS_DECODE(table_location_keys_);
+  OB_UNIS_DECODE(ser_task_balancer_);
   return ret;
 }
 
@@ -122,6 +125,7 @@ OB_DEF_SERIALIZE_SIZE(ObGIOpInput)
   LST_DO_CODE(OB_UNIS_ADD_LEN, parallelism_, worker_id_);
   len += sizeof(pump_);
   OB_UNIS_ADD_LEN(table_location_keys_);
+  OB_UNIS_ADD_LEN(ser_task_balancer_);
   return len;
 }
 
@@ -150,10 +154,8 @@ ObGranuleIteratorSpec::ObGranuleIteratorSpec(ObIAllocator &alloc, const ObPhyOpe
   partition_wise_join_(false),
   access_all_(false),
   nlj_with_param_down_(false),
-  pw_op_tscs_(alloc),
   pw_dml_tsc_ids_(alloc),
   gi_attri_flag_(0),
-  dml_op_(NULL),
   bf_info_(),
   hash_func_(),
   tablet_id_expr_(NULL),
@@ -478,7 +480,7 @@ int ObGranuleIteratorOp::inner_open()
         LOG_WARN("Failed to get real child", K(ret));
       } else {
         // 如果是 partition wise的情况，就不需要 tsc op io
-        // 因为 partition wise的情况下，获得GI task array是直接通过 `pw_op_tscs_` 数组类实现的
+        // 因为 partition wise的情况下，获得GI task array是直接通过 `pw_dml_tsc_ids_` 数组类实现的
         tsc_op_id_ = real_child->get_spec().id_;
         real_child_ = real_child;
       }
@@ -753,38 +755,20 @@ int ObGranuleIteratorOp::do_get_next_granule_task(bool &partition_pruning, bool 
     }
   } else {
     /* partition wise join */
-    ObSEArray<int64_t, 4> op_ids;
-    const ObIArray<int64_t> *op_ids_pointer = NULL;
-    if (MY_SPEC.pw_dml_tsc_ids_.count() > 0) {
-      op_ids_pointer = &(MY_SPEC.pw_dml_tsc_ids_);
-    } else {
-      op_ids_pointer = &op_ids;
-      if (OB_NOT_NULL(MY_SPEC.dml_op_)) {
-         //GI对INSERT表进行任务划分，获取对应的INSERT的op id
-        if (OB_FAIL(op_ids.push_back(MY_SPEC.dml_op_->id_))) {
-          LOG_WARN("failed to push back op ids", K(ret));
-        }
-      }
-      if (OB_SUCC(ret)) {
-        // GI对TSCs进行划分，获得对应的TSC的op id
-        for (int i = 0 ; i < MY_SPEC.pw_op_tscs_.count() && OB_SUCC(ret); i++) {
-          const ObTableScanSpec *tsc = MY_SPEC.pw_op_tscs_.at(i);
-          if (OB_FAIL(op_ids.push_back(tsc->id_))) {
-            LOG_WARN("failed to push back op ids", K(ret));
-          }
-        }
-      }
-    }
     // 获得gi tasks:
     // 每一个`op_id`都会对应一个`gi_task_info`
-    if (OB_SUCC(ret)) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_UNLIKELY(MY_SPEC.pw_dml_tsc_ids_.empty())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("array is empty", K(ret));
+    } else {
       if (is_rescan_) {
-        if (OB_FAIL(fetch_rescan_pw_task_infos(*op_ids_pointer, gi_prepare_map, gi_task_infos))) {
+        if (OB_FAIL(fetch_rescan_pw_task_infos(MY_SPEC.pw_dml_tsc_ids_, gi_prepare_map, gi_task_infos))) {
           if (OB_ITER_END != ret) {
             LOG_WARN("fail to fetch rescan pw task infos", K(ret));
           }
         }
-      } else if (OB_FAIL(fetch_normal_pw_task_infos(*op_ids_pointer, gi_prepare_map, gi_task_infos))) {
+      } else if (OB_FAIL(fetch_normal_pw_task_infos(MY_SPEC.pw_dml_tsc_ids_, gi_prepare_map, gi_task_infos))) {
         if (OB_ITER_END != ret) {
           LOG_WARN("fail to fetch normal pw task infos", K(ret));
         }
@@ -982,27 +966,6 @@ int ObGranuleIteratorOp::prepare_table_scan()
   return ret;
 }
 
-int ObGranuleIteratorOp::set_tscs(ObIArray<const ObTableScanSpec *> &tscs)
-{
-  int ret = OB_SUCCESS;
-  //重复调用是安全的.
-  //如果旧的count比新旧的大，会报错误OB_SIZE_OVERFLOW.否则维持旧的大小.
-  ObGranuleIteratorSpec *gi_spec = static_cast<ObGranuleIteratorSpec*>(const_cast<ObOpSpec*>(&spec_));
-  if (OB_FAIL(gi_spec->pw_op_tscs_.prepare_allocate(tscs.count()))) {
-    LOG_WARN("Failed to init fixed array", K(ret));
-  };
-  ARRAY_FOREACH_X(tscs, idx, cnt, OB_SUCC(ret)) {
-    gi_spec->pw_op_tscs_.at(idx) = tscs.at(idx);
-  }
-  LOG_DEBUG("Set table scan to GI", K(tscs), K(ret));
-  return ret;
-}
-int ObGranuleIteratorOp::set_dml_op(const ObTableModifySpec *dml_op)
-{
-  const_cast<ObGranuleIteratorSpec &>(MY_SPEC).dml_op_ = const_cast<ObTableModifySpec *>(dml_op);
-  return OB_SUCCESS;
-}
-
 // NOTE: this function is only used for the GI which only control one scan operator.
 // Think about the following case, the GI attempt to control the right tsc op rather than
 // the values table op(or maybe json table op), thus we need to traverse the OP tree to find the
@@ -1027,9 +990,12 @@ int ObGranuleIteratorOp::get_gi_task_consumer_node(ObOperator *cur,
     if (PHY_TABLE_SCAN == cur->get_spec().type_
         || PHY_BLOCK_SAMPLE_SCAN == cur->get_spec().type_
         || PHY_ROW_SAMPLE_SCAN == cur->get_spec().type_) {
-      consumer = cur;
-      LOG_TRACE("find the gi_task consumer node", K(cur->get_spec().id_),
-                K(cur->get_spec().type_));
+      const ObTableScanSpec &tsc_spec = static_cast<const ObTableScanSpec&>(cur->get_spec());
+      if (!tsc_spec.use_dist_das_) {
+        consumer = cur;
+        LOG_TRACE("find the gi_task consumer node", K(cur->get_spec().id_),
+                  K(cur->get_spec().type_));
+      }
     }
   } else {
     ObOperator *child = nullptr;

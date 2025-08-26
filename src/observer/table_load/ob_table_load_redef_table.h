@@ -144,6 +144,10 @@ public:
                    sql::ObSQLSessionInfo &session_info);
   static int finish(const ObTableLoadRedefTableFinishArg &arg, sql::ObSQLSessionInfo &session_info);
   static int abort(const ObTableLoadRedefTableAbortArg &arg, sql::ObSQLSessionInfo &session_info);
+  static int create_hidden_table(const ObTableLoadRedefTableStartArg &arg,
+                                 ObTableLoadRedefTableStartRes &res,
+                                 sql::ObSQLSessionInfo &session_info,
+                                 obrpc::ObCreateHiddenTableRes &create_table_res);
 private:
   // 检查原表和隐藏表是否一致
   static int check_table_consistency(const uint64_t tenant_id,

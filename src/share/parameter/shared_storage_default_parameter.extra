@@ -8,9 +8,49 @@
           "name": "_enable_obdal",
           "value": true,
           "comment": "Enable or disable use obdal to access object storage."
-        },
+        }
       ],
       "tenant": [
+        {
+          "name": "_tempstore_read_alignment_size",
+          "value": "1MB",
+          "comment": "The size of data read by tempstore each time is 1MB in shared storage mode."
+        },
+        {
+          "name": "inc_sstable_upload_thread_score",
+          "value": 30,
+          "comment": "The number of upload threads needs to be increased. This value needs to be explored and is tentatively set at 30"
+        },
+        {
+          "name": "_enable_active_txn_transfer",
+          "value": false,
+          "comment": "Temporarily disable transfer to avoid killing transactions. Reopen it after testing for stability"
+        },
+        {
+          "name": "_io_read_redundant_limit_percentage",
+          "value": 50,
+          "comment": "Maximum percentage of redundant size in one read io request, redundant data means blocks in the middle of the batch that hit in cache or filtered by skipping index but must be read"
+        },
+        {
+          "name": "_io_read_batch_size",
+          "value": "128KB",
+          "comment": "Maximum batch size in one read io request"
+        },
+        {
+          "name": "log_storage_compress_all",
+          "value": 1,
+          "comment": "specifies whether to compress logs before storing"
+        },
+        {
+          "name": "log_transport_compress_all",
+          "value": 0,
+          "comment": "In scenarios with limited bandwidth, network bandwidth can be saved with a small amount of CPU overhead through RPC compression"
+        },
+        {
+          "name": "_object_storage_io_timeout",
+          "value": "120s",
+          "comment": "default value of object storage io timeout"
+        }
       ]
     }
   },
@@ -23,9 +63,49 @@
           "name": "_enable_obdal",
           "value": true,
           "comment": "Enable or disable use obdal to access object storage."
-        },
+        }
       ],
       "tenant": [
+        {
+          "name": "_tempstore_read_alignment_size",
+          "value": "1MB",
+          "comment": "The size of data read by tempstore each time is 1MB in shared storage mode."
+        },
+        {
+          "name": "inc_sstable_upload_thread_score",
+          "value": 30,
+          "comment": "The number of upload threads needs to be increased. This value needs to be explored and is tentatively set at 30"
+        },
+        {
+          "name": "_enable_active_txn_transfer",
+          "value": false,
+          "comment": "Temporarily disable transfer to avoid killing transactions. Reopen it after testing for stability"
+        },
+        {
+          "name": "log_transport_compress_all",
+          "value": 0,
+          "comment": "In scenarios with limited bandwidth, network bandwidth can be saved with a small amount of CPU overhead through RPC compression"
+        },
+        {
+          "name": "_io_read_redundant_limit_percentage",
+          "value": 50,
+          "comment": "Maximum percentage of redundant size in one read io request, redundant data means blocks in the middle of the batch that hit in cache or filtered by skipping index but must be read"
+        },
+        {
+          "name": "_io_read_batch_size",
+          "value": "128KB",
+          "comment": "Maximum batch size in one read io request"
+        },
+        {
+          "name": "log_storage_compress_all",
+          "value": 1,
+          "comment": "specifies whether to compress logs before storing"
+        },
+        {
+          "name": "_object_storage_io_timeout",
+          "value": "120s",
+          "comment": "default value of object storage io timeout"
+        }
       ]
     }
   },
@@ -38,9 +118,49 @@
           "name": "_enable_obdal",
           "value": true,
           "comment": "Enable or disable use obdal to access object storage."
-        },
+        }
       ],
       "tenant": [
+        {
+          "name": "_tempstore_read_alignment_size",
+          "value": "1MB",
+          "comment": "The size of data read by tempstore each time is 1MB in shared storage mode."
+        },
+        {
+          "name": "_io_read_batch_size",
+          "value": "512KB",
+          "comment": "Maximum batch size in one read io request"
+        },
+        {
+          "name": "inc_sstable_upload_thread_score",
+          "value": 30,
+          "comment": "The number of upload threads needs to be increased. This value needs to be explored and is tentatively set at 30"
+        },
+        {
+          "name": "_enable_active_txn_transfer",
+          "value": false,
+          "comment": "Temporarily disable transfer to avoid killing transactions. Reopen it after testing for stability"
+        },
+        {
+          "name": "_io_read_redundant_limit_percentage",
+          "value": 50,
+          "comment": "Maximum percentage of redundant size in one read io request, redundant data means blocks in the middle of the batch that hit in cache or filtered by skipping index but must be read"
+        },
+        {
+          "name": "log_storage_compress_all",
+          "value": 1,
+          "comment": "specifies whether to compress logs before storing"
+        },
+        {
+          "name": "log_transport_compress_all",
+          "value": 0,
+          "comment": "In scenarios with limited bandwidth, network bandwidth can be saved with a small amount of CPU overhead through RPC compression"
+        },
+        {
+          "name": "_object_storage_io_timeout",
+          "value": "120s",
+          "comment": "default value of object storage io timeout"
+        }
       ]
     }
   },
@@ -53,9 +173,49 @@
           "name": "_enable_obdal",
           "value": true,
           "comment": "Enable or disable use obdal to access object storage."
-        },
+        }
       ],
       "tenant": [
+        {
+          "name": "_tempstore_read_alignment_size",
+          "value": "1MB",
+          "comment": "The size of data read by tempstore each time is 1MB in shared storage mode."
+        },
+        {
+          "name": "inc_sstable_upload_thread_score",
+          "value": 30,
+          "comment": "The number of upload threads needs to be increased. This value needs to be explored and is tentatively set at 30"
+        },
+        {
+          "name": "_enable_active_txn_transfer",
+          "value": false,
+          "comment": "Temporarily disable transfer to avoid killing transactions. Reopen it after testing for stability"
+        },
+        {
+          "name": "log_transport_compress_all",
+          "value": 0,
+          "comment": "In scenarios with limited bandwidth, network bandwidth can be saved with a small amount of CPU overhead through RPC compression"
+        },
+        {
+          "name": "_io_read_redundant_limit_percentage",
+          "value": 50,
+          "comment": "Maximum percentage of redundant size in one read io request, redundant data means blocks in the middle of the batch that hit in cache or filtered by skipping index but must be read"
+        },
+        {
+          "name": "_io_read_batch_size",
+          "value": "128KB",
+          "comment": "Maximum batch size in one read io request"
+        },
+        {
+          "name": "log_storage_compress_all",
+          "value": 1,
+          "comment": "specifies whether to compress logs before storing"
+        },
+        {
+          "name": "_object_storage_io_timeout",
+          "value": "120s",
+          "comment": "default value of object storage io timeout"
+        }
       ]
     }
   },
@@ -68,9 +228,49 @@
           "name": "_enable_obdal",
           "value": true,
           "comment": "Enable or disable use obdal to access object storage."
-        },
+        }
       ],
       "tenant": [
+        {
+          "name": "_tempstore_read_alignment_size",
+          "value": "1MB",
+          "comment": "The size of data read by tempstore each time is 1MB in shared storage mode."
+        },
+        {
+          "name": "inc_sstable_upload_thread_score",
+          "value": 30,
+          "comment": "The number of upload threads needs to be increased. This value needs to be explored and is tentatively set at 30"
+        },
+        {
+          "name": "_enable_active_txn_transfer",
+          "value": false,
+          "comment": "Temporarily disable transfer to avoid killing transactions. Reopen it after testing for stability"
+        },
+        {
+          "name": "log_transport_compress_all",
+          "value": 0,
+          "comment": "In scenarios with limited bandwidth, network bandwidth can be saved with a small amount of CPU overhead through RPC compression"
+        },
+        {
+          "name": "_io_read_redundant_limit_percentage",
+          "value": 50,
+          "comment": "Maximum percentage of redundant size in one read io request, redundant data means blocks in the middle of the batch that hit in cache or filtered by skipping index but must be read"
+        },
+        {
+          "name": "_io_read_batch_size",
+          "value": "128KB",
+          "comment": "Maximum batch size in one read io request"
+        },
+        {
+          "name": "log_storage_compress_all",
+          "value": 1,
+          "comment": "specifies whether to compress logs before storing"
+        },
+        {
+          "name": "_object_storage_io_timeout",
+          "value": "120s",
+          "comment": "default value of object storage io timeout"
+        }
       ]
     }
   },
@@ -83,9 +283,49 @@
           "name": "_enable_obdal",
           "value": true,
           "comment": "Enable or disable use obdal to access object storage."
-        },
+        }
       ],
       "tenant": [
+        {
+          "name": "_tempstore_read_alignment_size",
+          "value": "1MB",
+          "comment": "The size of data read by tempstore each time is 1MB in shared storage mode."
+        },
+        {
+          "name": "inc_sstable_upload_thread_score",
+          "value": 30,
+          "comment": "The number of upload threads needs to be increased. This value needs to be explored and is tentatively set at 30"
+        },
+        {
+          "name": "_enable_active_txn_transfer",
+          "value": false,
+          "comment": "Temporarily disable transfer to avoid killing transactions. Reopen it after testing for stability"
+        },
+        {
+          "name": "_io_read_redundant_limit_percentage",
+          "value": 50,
+          "comment": "Maximum percentage of redundant size in one read io request, redundant data means blocks in the middle of the batch that hit in cache or filtered by skipping index but must be read"
+        },
+        {
+          "name": "_io_read_batch_size",
+          "value": "128KB",
+          "comment": "Maximum batch size in one read io request"
+        },
+        {
+          "name": "log_storage_compress_all",
+          "value": 1,
+          "comment": "specifies whether to compress logs before storing"
+        },
+        {
+          "name": "log_transport_compress_all",
+          "value": 0,
+          "comment": "In scenarios with limited bandwidth, network bandwidth can be saved with a small amount of CPU overhead through RPC compression"
+        },
+        {
+          "name": "_object_storage_io_timeout",
+          "value": "120s",
+          "comment": "default value of object storage io timeout"
+        }
       ]
     }
   }

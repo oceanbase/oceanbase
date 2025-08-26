@@ -231,19 +231,16 @@ int ObFTRangeDict::find_first_char_range(const ObString &single_word, ObIFTDict 
 int ObFTRangeDict::build_dict_from_cache(const ObFTCacheRangeContainer &range_container)
 {
   int ret = OB_SUCCESS;
-  for (ObList<ObFTCacheRangeHandle *, ObIAllocator>::const_iterator iter
-       = range_container.get_handles().begin();
+  for (ObList<ObFTCacheRangeHandle *, ObIAllocator>::const_iterator iter = range_container.get_handles().begin();
        OB_SUCC(ret) && iter != range_container.get_handles().end();
        iter++) {
     ObFTCacheRangeHandle *ptr = *iter;
     ObFTCacheDict *dict = nullptr;
-
-    if (OB_ISNULL(dict = static_cast<ObFTCacheDict *>(range_alloc_.alloc(sizeof(ObFTCacheDict))))) {
+    ObFTDAT *dat = ptr->value_->dat_block_;
+    if (OB_ISNULL(dict = OB_NEWx(ObFTCacheDict, &range_alloc_, ObCollationType::CS_TYPE_UTF8MB4_BIN, dat))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("Failed to alloc memory.", K(ret));
     } else {
-      ObFTDAT *dat = ptr->value_->dat_block_;
-      new (dict) ObFTCacheDict(ObCollationType::CS_TYPE_UTF8MB4_BIN, dat);
       ObFTRange range;
       range.start_ = dat->start_word_;
       range.end_ = dat->end_word_;

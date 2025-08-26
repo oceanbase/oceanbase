@@ -790,7 +790,7 @@ int ObDirectLoadTabletMergeCtx::build_del_lob_task(
     const ObLobId &min_insert_lob_id =
       static_cast<ObDirectLoadInsertLobTabletContext *>(insert_tablet_ctx_)
         ->get_min_insert_lob_id();
-    const ObMacroDataSeq &last_data_seq = insert_tablet_ctx_->get_last_data_seq();
+    const int64_t last_parallel_idx = ObDDLUtil::get_parallel_idx(insert_tablet_ctx_->get_last_data_seq());
     int64_t first_no_insert_front_idx = -1;
     if (OB_FAIL(range_splitter.split_range(tablet_id_, nullptr /*origin_table*/,
                                            max_parallel_degree, range_array_, allocator_))) {
@@ -853,13 +853,12 @@ int ObDirectLoadTabletMergeCtx::build_del_lob_task(
         parallel_idx = 0;
       }
       if (insert_front) {
-        if (OB_FAIL(data_seq.set_parallel_degree(parallel_idx))) {
-          LOG_WARN("fail to set parallel degree", KR(ret), K(parallel_idx));
+        if (OB_FAIL(ObDDLUtil::init_macro_block_seq(parallel_idx, data_seq))) {
+          LOG_WARN("fail to init macro block seq", KR(ret), K(parallel_idx));
         }
       } else {
-        if (OB_FAIL(
-              data_seq.set_parallel_degree(last_data_seq.get_parallel_idx() + parallel_idx + 1))) {
-          LOG_WARN("fail to set parallel degree", KR(ret), K(parallel_idx));
+        if (OB_FAIL(ObDDLUtil::init_macro_block_seq(last_parallel_idx + parallel_idx + 1, data_seq))) {
+          LOG_WARN("fail to init macro block seq", KR(ret), K(last_parallel_idx), K(parallel_idx));
         }
       }
       if (OB_FAIL(ret)) {

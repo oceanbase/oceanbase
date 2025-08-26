@@ -16,6 +16,7 @@
 #include "share/external_table/ob_external_table_utils.h"
 #include "sql/engine/expr/ob_datum_cast.h"
 #include "sql/engine/ob_exec_context.h"
+#include "sql/engine/ob_diagnosis_manager.h"
 
 namespace oceanbase
 {
@@ -120,6 +121,30 @@ int ObCSVTableRowIterator::init(const storage::ObTableScanParam *scan_param)
         }
       }
     }
+
+    if (OB_SUCC(ret)) {
+      if (scan_param->external_file_format_.csv_format_.file_column_nums_ *
+          scan_param_->op_->get_eval_ctx().max_batch_size_ * sizeof(ObCSVGeneralParser::FieldValue)
+          > OB_MAX_CSV_BATCHLINE_BUF_SIZE) {
+        if (OB_FAIL(parser_.get_fields_per_line().prepare_allocate(
+                    scan_param->external_file_format_.csv_format_.file_column_nums_))) {
+          LOG_WARN("failed to prepare_allocate parser_.fields_per_line_",
+            K(scan_param->external_file_format_.csv_format_.file_column_nums_));
+        } else {
+          use_handle_batch_lines_ = false;
+        }
+      } else {
+        if (OB_FAIL(parser_.get_fields_per_line().prepare_allocate(
+                    scan_param->external_file_format_.csv_format_.file_column_nums_ *
+                    scan_param_->op_->get_eval_ctx().max_batch_size_))) {
+          LOG_WARN("failed to prepare_allocate parser_.fields_per_line_",
+            K(scan_param->external_file_format_.csv_format_.file_column_nums_),
+            K(scan_param_->op_->get_eval_ctx().max_batch_size_));
+        } else {
+          use_handle_batch_lines_ = true;
+        }
+      }
+    }
   }
   for (int i = 0; i < scan_param_->key_ranges_.count(); ++i) {
     int64_t start = 0;
@@ -127,6 +152,16 @@ int ObCSVTableRowIterator::init(const storage::ObTableScanParam *scan_param)
     int64_t part_id = scan_param_->key_ranges_.at(i).get_start_key().get_obj_ptr()[ObExternalTableUtils::PARTITION_ID].get_int();
     const ObString &file_url = scan_param_->key_ranges_.at(i).get_start_key().get_obj_ptr()[ObExternalTableUtils::FILE_URL].get_string();
     int64_t file_id = scan_param_->key_ranges_.at(i).get_start_key().get_obj_ptr()[ObExternalTableUtils::FILE_ID].get_int();
+  }
+
+  ObEvalCtx &eval_ctx = scan_param_->op_->get_eval_ctx();
+  const ObSQLSessionInfo *session = nullptr;
+  if (OB_ISNULL(session = eval_ctx.exec_ctx_.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid session", K(ret));
+  } else if (session->is_diagnosis_enabled() &&
+            !session->get_diagnosis_info().bad_file_.empty()) {
+    is_bad_file_enabled_ = true;
   }
 
   return ret;
@@ -296,6 +331,10 @@ int ObCSVTableRowIterator::skip_lines()
       UNUSED(param);
       return OB_SUCCESS;
     }
+    int operator()(ObCSVGeneralParser::HandleBatchLinesParam param) {
+      UNUSED(param);
+      return OB_SUCCESS;
+    }
   };
   struct Functor temp_handle;
   do {
@@ -320,45 +359,56 @@ void ObCSVTableRowIterator::dump_error_log(ObIArray<ObCSVGeneralParser::LineErrR
   }
 }
 
-int ObCSVTableRowIterator::record_err_for_select_data(int err_ret,
-                                                      const char *message,
-                                                      int64_t limit_num)
-{
-  int ret = OB_SUCCESS;
-  ObWarningBuffer *buffer = ob_get_tsi_warning_buffer();
-
-  if (OB_NOT_NULL(buffer)) {
-    buffer->append_warning(message, err_ret);
-  }
-  if (limit_num >= 0 && buffer->get_total_warning_count() > limit_num) {
-    ret = OB_REACH_DIAGNOSIS_ERROR_LIMIT;
-  }
-  return ret;
-}
-
 int ObCSVTableRowIterator::handle_error_msgs(
                                       common::ObIArray<ObCSVGeneralParser::LineErrRec> &error_msgs)
 {
   int ret = OB_SUCCESS;
-  ObSQLSessionInfo* session_info = scan_param_->op_->get_eval_ctx().exec_ctx_.get_my_session();
+  ObExecContext &exec_ctx = scan_param_->op_->get_eval_ctx().exec_ctx_;
+  ObSQLSessionInfo* session_info = exec_ctx.get_my_session();
+  ObDiagnosisManager& diagnosis_manager = exec_ctx.get_diagnosis_manager();
+
   if (session_info->is_diagnosis_enabled()) {
     for (int i = 0; OB_SUCC(ret) && i < error_msgs.count(); ++i) {
-      ObSqlString err_msg;
-      if (OB_FAIL(err_msg.append_fmt("parse row warning: file_name=%.*s, rownum=%ld, error=%s",
-                      static_cast<int>(state_.cur_file_name_.length()), state_.cur_file_name_.ptr(),
-                      error_msgs.at(i).line_no + 1 + parser_.get_format().skip_header_lines_,
-                      common::ob_strerror(error_msgs.at(i).err_code)))) {
-        LOG_WARN("failed to append error message", K(ret));
-      } else if (OB_FAIL(record_err_for_select_data(error_msgs.at(i).err_code,
-                                                    err_msg.ptr(),
-                                                    session_info->get_diagnosis_limit_num()))) {
-        LOG_WARN("failed to record error", K(ret));
+      int64_t line_num = error_msgs.at(i).line_no + 1 + parser_.get_format().skip_header_lines_;
+      if (OB_FAIL(diagnosis_manager.missing_col_idxs_.push_back(line_num))) {
+        LOG_WARN("failed to push back missing column number into array", K(ret), K(line_num));
       }
     }
   } else {
     dump_error_log(error_msgs);
   }
 
+  return ret;
+}
+
+int ObCSVTableRowIterator::handle_bad_file_line(ObCSVTableRowIterator *csv_iter,
+                                                ObEvalCtx &eval_ctx,
+                                                ObCSVGeneralParser::HandleOneLineParam &param)
+{
+  int ret = OB_SUCCESS;
+  // Add a "line term" at the end to prevent data from being
+  // on the same line with the next line of data
+  if (param.is_file_end_) {
+    ObSqlString line_data_with_term;
+    ObString tmp_str;
+    ObString line_term_str = csv_iter->parser_.get_format().line_term_str_;
+    if (OB_FAIL(line_data_with_term.append(param.line_data_))) {
+      LOG_WARN("failed to append line data", K(ret), K(param.line_data_));
+    } else if (OB_FAIL(line_data_with_term.append(line_term_str))) {
+      LOG_WARN("failed to append line term str", K(ret), K(line_term_str));
+    } else if (OB_FAIL(ob_write_string(csv_iter->arena_alloc_,
+                                      line_data_with_term.string(), tmp_str))) {
+      LOG_WARN("failed to write string", K(ret), K(line_data_with_term));
+    } else {
+      param.line_data_ = tmp_str;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ObDiagnosisManager& diagnosis_manager = eval_ctx.exec_ctx_.get_diagnosis_manager();
+    if (OB_FAIL(diagnosis_manager.data_.push_back(param.line_data_))) {
+      LOG_WARN("failed to push back line data into array", K(ret), K(param.line_data_));
+    }
+  }
   return ret;
 }
 
@@ -375,16 +425,18 @@ int ObCSVTableRowIterator::get_next_row()
             const ExprFixedArray &file_column_exprs,
             ObEvalCtx &eval_ctx,
             bool is_oracle_mode,
-            int64_t &returned_row_cnt) :
+            int64_t &returned_row_cnt,
+            bool is_bad_file_enabled) :
             csv_iter_(csv_iter), file_column_exprs_(file_column_exprs), eval_ctx_(eval_ctx),
-            is_oracle_mode_(is_oracle_mode), returned_row_cnt_(returned_row_cnt)
+            is_oracle_mode_(is_oracle_mode), returned_row_cnt_(returned_row_cnt),
+            is_bad_file_enabled_(is_bad_file_enabled)
     {}
     ObCSVTableRowIterator *csv_iter_;
     const ExprFixedArray &file_column_exprs_;
     ObEvalCtx &eval_ctx_;
     bool is_oracle_mode_;
     int64_t &returned_row_cnt_;
-
+    bool is_bad_file_enabled_;
     int operator()(ObCSVGeneralParser::HandleOneLineParam param) {
       int ret = OB_SUCCESS;
       for (int i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); ++i) {
@@ -419,12 +471,23 @@ int ObCSVTableRowIterator::get_next_row()
         }
       }
 
+      if (OB_SUCC(ret) && is_bad_file_enabled_) {
+        if (OB_FAIL(handle_bad_file_line(csv_iter_, eval_ctx_, param))) {
+           LOG_WARN("failed to handle bad file line data", K(ret));
+        }
+      }
+
       returned_row_cnt_++;
       return ret;
     }
+    int operator()(ObCSVGeneralParser::HandleBatchLinesParam param) {
+      UNUSED(param);
+      return OB_SUCCESS;
+    }
   };
 
-  struct Functor handle_one_line(this, file_column_exprs, eval_ctx, is_oracle_mode, returned_row_cnt);
+  struct Functor handle_one_line(this, file_column_exprs, eval_ctx, is_oracle_mode,
+                                returned_row_cnt, is_bad_file_enabled_);
 
   int64_t nrows = 0;
   do {
@@ -487,6 +550,7 @@ int ObCSVTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
   ObSEArray<ObCSVGeneralParser::LineErrRec, 4> error_msgs;
   const ExprFixedArray &file_column_exprs = *(scan_param_->ext_file_column_exprs_);
   ObEvalCtx &eval_ctx = scan_param_->op_->get_eval_ctx();
+  bool enable_rich_format = scan_param_->op_->enable_rich_format_;
   int64_t batch_size = capacity;
   int64_t returned_row_cnt = 0; // rows count for scan output, exclude blank lines or skip header
   bool is_oracle_mode = lib::is_oracle_mode();
@@ -506,61 +570,133 @@ int ObCSVTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
             const ExprFixedArray &file_column_exprs,
             ObEvalCtx &eval_ctx,
             bool is_oracle_mode,
-            int64_t &returned_row_cnt) :
+            int64_t &returned_row_cnt,
+            bool is_bad_file_enabled) :
             csv_iter_(csv_iter), file_column_exprs_(file_column_exprs), eval_ctx_(eval_ctx),
-            is_oracle_mode_(is_oracle_mode), returned_row_cnt_(returned_row_cnt)
+            is_oracle_mode_(is_oracle_mode), returned_row_cnt_(returned_row_cnt),
+            is_bad_file_enabled_(is_bad_file_enabled)
     {}
     ObCSVTableRowIterator *csv_iter_;
     const ExprFixedArray &file_column_exprs_;
     ObEvalCtx &eval_ctx_;
     bool is_oracle_mode_;
     int64_t &returned_row_cnt_;
+    bool is_bad_file_enabled_;
 
     int operator()(ObCSVGeneralParser::HandleOneLineParam param) {
       int ret = OB_SUCCESS;
-    for (int i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); ++i) {
-      ObDatum *datums = file_column_exprs_.at(i)->locate_batch_datums(eval_ctx_);
-      if (file_column_exprs_.at(i)->type_ == T_PSEUDO_EXTERNAL_FILE_URL) {
-        if (csv_iter_->file_reader_.get_storage_type() == OB_STORAGE_FILE) {
-          datums[returned_row_cnt_].set_string(csv_iter_->state_.cur_file_url_.ptr(), csv_iter_->state_.cur_file_url_.length());
-        } else {
-          datums[returned_row_cnt_].set_string(csv_iter_->state_.cur_file_name_.ptr(), csv_iter_->state_.cur_file_name_.length());
-        }
-      } else if (file_column_exprs_.at(i)->type_ == T_PSEUDO_PARTITION_LIST_COL) {
-        int64_t loc_idx = file_column_exprs_.at(i)->extra_ - 1;
-        if (OB_UNLIKELY(loc_idx < 0 || loc_idx >= csv_iter_->state_.part_list_val_.get_count())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("loc idx is out of range", K(loc_idx), K(csv_iter_->state_.part_list_val_), K(csv_iter_->state_.part_id_), K(ret));
-        } else {
-          if (csv_iter_->state_.part_list_val_.get_cell(loc_idx).is_null()) {
-            datums[returned_row_cnt_].set_null();
+      for (int i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); ++i) {
+        ObDatum *datums = file_column_exprs_.at(i)->locate_batch_datums(eval_ctx_);
+        if (file_column_exprs_.at(i)->type_ == T_PSEUDO_EXTERNAL_FILE_URL) {
+          if (csv_iter_->file_reader_.get_storage_type() == OB_STORAGE_FILE) {
+            datums[returned_row_cnt_].set_string(csv_iter_->state_.cur_file_url_.ptr(), csv_iter_->state_.cur_file_url_.length());
           } else {
-            CK (OB_NOT_NULL(datums[returned_row_cnt_].ptr_));
-            OZ (datums[returned_row_cnt_].from_obj(csv_iter_->state_.part_list_val_.get_cell(loc_idx)));
+            datums[returned_row_cnt_].set_string(csv_iter_->state_.cur_file_name_.ptr(), csv_iter_->state_.cur_file_name_.length());
           }
-        }
-      } else if (file_column_exprs_.at(i)->type_ == T_PSEUDO_EXTERNAL_FILE_COL) {
-        int64_t loc_idx = file_column_exprs_.at(i)->extra_ - 1;
-        if (OB_UNLIKELY(loc_idx < 0 || loc_idx > param.fields_.count())) {
-          ret = OB_ERR_UNEXPECTED;
-        } else {
-          if (param.fields_.at(loc_idx).is_null_ || (0 == param.fields_.at(loc_idx).len_ && is_oracle_mode_)) {
-            datums[returned_row_cnt_].set_null();
+        } else if (file_column_exprs_.at(i)->type_ == T_PSEUDO_PARTITION_LIST_COL) {
+          int64_t loc_idx = file_column_exprs_.at(i)->extra_ - 1;
+          if (OB_UNLIKELY(loc_idx < 0 || loc_idx >= csv_iter_->state_.part_list_val_.get_count())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("loc idx is out of range", K(loc_idx), K(csv_iter_->state_.part_list_val_), K(csv_iter_->state_.part_id_), K(ret));
           } else {
-            datums[returned_row_cnt_].set_string(param.fields_.at(loc_idx).ptr_, param.fields_.at(loc_idx).len_);
+            if (csv_iter_->state_.part_list_val_.get_cell(loc_idx).is_null()) {
+              datums[returned_row_cnt_].set_null();
+            } else {
+              CK (OB_NOT_NULL(datums[returned_row_cnt_].ptr_));
+              OZ (datums[returned_row_cnt_].from_obj(csv_iter_->state_.part_list_val_.get_cell(loc_idx)));
+            }
+          }
+        } else if (file_column_exprs_.at(i)->type_ == T_PSEUDO_EXTERNAL_FILE_COL) {
+          int64_t loc_idx = file_column_exprs_.at(i)->extra_ - 1;
+          if (OB_UNLIKELY(loc_idx < 0 || loc_idx > param.fields_.count())) {
+            ret = OB_ERR_UNEXPECTED;
+          } else {
+            if (param.fields_.at(loc_idx).is_null_ || (0 == param.fields_.at(loc_idx).len_ && is_oracle_mode_)) {
+              datums[returned_row_cnt_].set_null();
+            } else {
+              datums[returned_row_cnt_].set_string(param.fields_.at(loc_idx).ptr_, param.fields_.at(loc_idx).len_);
+            }
           }
         }
       }
+      if (OB_SUCC(ret) && is_bad_file_enabled_) {
+        if (OB_FAIL(handle_bad_file_line(csv_iter_, eval_ctx_, param))) {
+            LOG_WARN("failed to handle bad file line data", K(ret));
+        }
+      }
+      returned_row_cnt_++;
+      return ret;
     }
-    returned_row_cnt_++;
-    return ret;
+
+    int operator()(ObCSVGeneralParser::HandleBatchLinesParam param) {
+      int ret = OB_SUCCESS;
+      for (int i = 0; OB_SUCC(ret) && i < file_column_exprs_.count() && param.batch_size_ > 0; ++i) {
+        if (file_column_exprs_.at(i)->type_ == T_PSEUDO_EXTERNAL_FILE_URL) {
+          ObDatum *datums = file_column_exprs_.at(i)->locate_batch_datums(eval_ctx_);
+          if (csv_iter_->file_reader_.get_storage_type() == OB_STORAGE_FILE) {
+            for (int j = 0; OB_SUCC(ret) && j < param.batch_size_; ++j) {
+              datums[j].set_string(csv_iter_->state_.cur_file_url_.ptr(), csv_iter_->state_.cur_file_url_.length());
+            }
+          } else {
+            for (int j = 0; OB_SUCC(ret) && j < param.batch_size_; ++j) {
+              datums[j].set_string(csv_iter_->state_.cur_file_name_.ptr(), csv_iter_->state_.cur_file_name_.length());
+            }
+          }
+        } else if (file_column_exprs_.at(i)->type_ == T_PSEUDO_PARTITION_LIST_COL) {
+          ObDatum *datums = file_column_exprs_.at(i)->locate_batch_datums(eval_ctx_);
+          int64_t loc_idx = file_column_exprs_.at(i)->extra_ - 1;
+          if (OB_UNLIKELY(loc_idx < 0 || loc_idx >= csv_iter_->state_.part_list_val_.get_count())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("loc idx is out of range", K(loc_idx), K(csv_iter_->state_.part_list_val_), K(csv_iter_->state_.part_id_), K(ret));
+          } else {
+            if (csv_iter_->state_.part_list_val_.get_cell(loc_idx).is_null()) {
+              for (int j = 0; OB_SUCC(ret) && j < param.batch_size_; ++j) {
+                datums[j].set_null();
+              }
+            } else {
+              for (int j = 0; OB_SUCC(ret) && j < param.batch_size_; ++j) {
+                CK (OB_NOT_NULL(datums[j].ptr_));
+                OZ (datums[j].from_obj(csv_iter_->state_.part_list_val_.get_cell(loc_idx)));
+              }
+            }
+          }
+        } else if (file_column_exprs_.at(i)->type_ == T_PSEUDO_EXTERNAL_FILE_COL) {
+          StrDiscVec *string_vec = NULL;
+          if (OB_FAIL(file_column_exprs_.at(i)->init_vector_for_write(eval_ctx_, VectorFormat::VEC_DISCRETE,
+              eval_ctx_.max_batch_size_))) {
+            LOG_WARN("init_vector failed");
+          } else if (OB_ISNULL(string_vec =
+              static_cast<StrDiscVec *>(file_column_exprs_.at(i)->get_vector(eval_ctx_)))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("string vec is null", K(ret));
+          } else {
+            int64_t loc_idx = file_column_exprs_.at(i)->extra_ - 1;
+            if (OB_UNLIKELY(loc_idx < 0 || (loc_idx + (param.batch_size_ - 1) * param.field_cnt_) > param.fields_.count())) {
+              ret = OB_ERR_UNEXPECTED;
+            } else {
+              for (int j = 0; OB_SUCC(ret) && j < param.batch_size_; ++j) {
+                const ObCSVGeneralParser::FieldValue& field = param.fields_.at(loc_idx);
+                if (field.is_null_ || (0 == field.len_ && is_oracle_mode_)) {
+                  string_vec->set_null(j);
+                } else {
+                  string_vec->set_string(j, field.ptr_, field.len_);
+                }
+                loc_idx += param.field_cnt_;
+              }
+            }
+          }
+        }
+      }
+      returned_row_cnt_+= param.batch_size_;
+      return ret;
     }
   };
   if (state_.need_expand_buf_) {
     OZ (expand_buf());
     state_.need_expand_buf_ = false;
   }
-  struct Functor handle_one_line(this, file_column_exprs, eval_ctx, is_oracle_mode, returned_row_cnt);
+  struct Functor handle_one_line(this, file_column_exprs, eval_ctx, is_oracle_mode,
+                                returned_row_cnt, is_bad_file_enabled_);
   int64_t nrows = 0;
   if (OB_SUCC(ret)) {
     do {
@@ -573,13 +709,27 @@ int ObCSVTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
           // if line_count_limit = 0, get next file.
         } else {
           if (state_.has_escape_) {
-            ret = parser_.scan<decltype(handle_one_line), true>(state_.pos_, state_.data_end_, nrows,
-                                          state_.escape_buf_, state_.escape_buf_end_, handle_one_line,
-                                          error_msgs, file_reader_.eof());
+            // only use handle_batch_lines when enable_rich_format is true, and is_bad_file_enabled_ = false
+            // to do : is_bad_file_enabled_ is not surport in handle_batch_lines way
+            if (use_handle_batch_lines_ && enable_rich_format && !is_bad_file_enabled_) {
+              ret = parser_.scan<decltype(handle_one_line), true, true>(state_.pos_, state_.data_end_, nrows,
+                                            state_.escape_buf_, state_.escape_buf_end_, handle_one_line,
+                                            error_msgs, file_reader_.eof());
+            } else {
+              ret = parser_.scan<decltype(handle_one_line), true, false>(state_.pos_, state_.data_end_, nrows,
+                                            state_.escape_buf_, state_.escape_buf_end_, handle_one_line,
+                                            error_msgs, file_reader_.eof());
+            }
           } else {
-            ret = parser_.scan<decltype(handle_one_line), false>(state_.pos_, state_.data_end_, nrows,
-                                          state_.escape_buf_, state_.escape_buf_end_, handle_one_line,
-                                          error_msgs, file_reader_.eof());
+            if (use_handle_batch_lines_ && enable_rich_format && !is_bad_file_enabled_) {
+              ret = parser_.scan<decltype(handle_one_line), false, true>(state_.pos_, state_.data_end_, nrows,
+                                            NULL, NULL, handle_one_line,
+                                            error_msgs, file_reader_.eof());
+            } else {
+              ret = parser_.scan<decltype(handle_one_line), false, false>(state_.pos_, state_.data_end_, nrows,
+                                            NULL, NULL, handle_one_line,
+                                            error_msgs, file_reader_.eof());
+            }
           }
           if (OB_FAIL(ret)) {
             LOG_WARN("fail to scan csv", K(ret));
@@ -612,17 +762,51 @@ int ObCSVTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
     file_column_exprs.at(i)->set_evaluated_flag(eval_ctx);
   }
 
-  for (int i = 0; OB_SUCC(ret) && i < column_exprs_.count(); i++) {
-    ObExpr *column_expr = column_exprs_.at(i);
-    ObExpr *column_convert_expr = scan_param_->ext_column_convert_exprs_->at(i);
-    OZ (column_convert_expr->eval_batch(eval_ctx, *bit_vector_cache_, returned_row_cnt));
-    if (OB_SUCC(ret)) {
-      MEMCPY(column_expr->locate_batch_datums(eval_ctx),
-            column_convert_expr->locate_batch_datums(eval_ctx), sizeof(ObDatum) * returned_row_cnt);
-      column_expr->set_evaluated_flag(eval_ctx);
+  if (enable_rich_format) {
+    for (int i = 0; OB_SUCC(ret) && i < column_exprs_.count(); i++) {
+      ObExpr *column_expr = column_exprs_.at(i);
+      ObExpr *column_convert_expr = scan_param_->ext_column_convert_exprs_->at(i);
+      OZ (column_convert_expr->eval_vector(eval_ctx, *bit_vector_cache_, returned_row_cnt, true));
+      if (OB_SUCC(ret)) {
+        ObExpr *to = column_exprs_.at(i);
+        ObExpr *from = scan_param_->ext_column_convert_exprs_->at(i);
+        VectorHeader &to_vec_header = to->get_vector_header(eval_ctx);
+        VectorHeader &from_vec_header = from->get_vector_header(eval_ctx);
+        if (from_vec_header.format_ == VEC_UNIFORM_CONST) {
+          ObDatum *from_datum =
+            static_cast<ObUniformBase *>(from->get_vector(eval_ctx))->get_datums();
+          OZ(to->init_vector(eval_ctx, VEC_UNIFORM, returned_row_cnt));
+          ObUniformBase *to_vec = static_cast<ObUniformBase *>(to->get_vector(eval_ctx));
+          ObDatum *to_datums = to_vec->get_datums();
+          for (int64_t j = 0; j < returned_row_cnt && OB_SUCC(ret); j++) {
+            to_datums[j] = *from_datum;
+          }
+        } else if (from_vec_header.format_ == VEC_UNIFORM) {
+          ObUniformBase *uni_vec = static_cast<ObUniformBase *>(from->get_vector(eval_ctx));
+          ObDatum *src = uni_vec->get_datums();
+          ObDatum *dst = to->locate_batch_datums(eval_ctx);
+          if (src != dst) {
+            MEMCPY(dst, src, returned_row_cnt * sizeof(ObDatum));
+          }
+          OZ(to->init_vector(eval_ctx, VEC_UNIFORM, returned_row_cnt));
+        } else if (OB_FAIL(to_vec_header.assign(from_vec_header))) {
+          LOG_WARN("assign vector header failed", K(ret));
+        }
+        column_exprs_.at(i)->set_evaluated_projected(eval_ctx);
+      }
+    }
+  } else {
+    for (int i = 0; OB_SUCC(ret) && i < column_exprs_.count(); i++) {
+      ObExpr *column_expr = column_exprs_.at(i);
+      ObExpr *column_convert_expr = scan_param_->ext_column_convert_exprs_->at(i);
+      OZ (column_convert_expr->eval_batch(eval_ctx, *bit_vector_cache_, returned_row_cnt));
+      if (OB_SUCC(ret)) {
+        MEMCPY(column_expr->locate_batch_datums(eval_ctx),
+              column_convert_expr->locate_batch_datums(eval_ctx), sizeof(ObDatum) * returned_row_cnt);
+        column_expr->set_evaluated_flag(eval_ctx);
+      }
     }
   }
-
   count = returned_row_cnt;
   return ret;
 }

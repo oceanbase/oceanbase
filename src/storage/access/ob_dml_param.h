@@ -142,7 +142,8 @@ public:
         read_version_range_(),
         need_update_tablet_param_(false),
         in_row_cache_threshold_(common::DEFAULT_MAX_MULTI_GET_CACHE_AWARE_ROW_NUM),
-        mds_collector_(nullptr)
+        mds_collector_(nullptr),
+        row_scan_cnt_(NULL)
   {}
   virtual ~ObTableScanParam() {}
 public:
@@ -180,6 +181,7 @@ public:
   bool need_update_tablet_param_; // whether need to update tablet-level param, such as split filter param
   int64_t in_row_cache_threshold_;
   ObMdsReadInfoCollector *mds_collector_; // used for collect mds info when query mds sstable
+  uint64_t *row_scan_cnt_;
 
   DECLARE_VIRTUAL_TO_STRING;
 private:
@@ -211,7 +213,8 @@ struct ObDMLBaseParam
         check_schema_version_(true),
         ddl_task_id_(0),
         lob_allocator_(ObModIds::OB_LOB_ACCESS_BUFFER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
-        data_row_for_lob_(nullptr)
+        data_row_for_lob_(nullptr),
+        is_main_table_in_fts_ddl_(false)
   {
   }
 
@@ -248,6 +251,7 @@ struct ObDMLBaseParam
   int64_t ddl_task_id_;
   mutable ObArenaAllocator lob_allocator_;
   const blocksstable::ObDatumRow *data_row_for_lob_; // for tablet split
+  bool is_main_table_in_fts_ddl_; // whether the main table is in fts ddl when dml is executed
   bool is_valid() const { return (timeout_ > 0 && schema_version_ >= 0) && nullptr != store_ctx_guard_; }
   DECLARE_TO_STRING;
 };

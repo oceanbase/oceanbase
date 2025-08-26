@@ -271,13 +271,11 @@ public:
            const ObITable::TableKey &table_key,
            const char* buf,
            const int64_t buf_len,
-           const blocksstable::MacroBlockId &macro_block_id,
            const uint64_t data_format_version);
   int assign(const storage::ObDDLFinishLogInfo &other);
 
   bool is_valid() const { return finish_info_.is_valid(); }
   ObITable::TableKey get_table_key() const { return finish_info_.table_key_; }
-  blocksstable::MacroBlockId get_macro_block_id() const { return finish_info_.macro_block_id_; }
   ObString get_data_buffer() const { return finish_info_.data_buffer_; }
   share::ObLSID get_ls_id() const { return finish_info_.ls_id_; }
   storage::ObDDLFinishLogInfo get_log_info() const { return finish_info_; }

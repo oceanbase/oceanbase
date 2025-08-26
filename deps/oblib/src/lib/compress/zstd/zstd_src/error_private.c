@@ -11,33 +11,58 @@
 
 #include "error_private.h"
 
-const char* ERR_getErrorString(ERR_enum code)
-{
-    static const char* const notErrorCode = "Unspecified error code";
-    switch( code )
-    {
-    case PREFIX(no_error): return "No error detected";
-    case PREFIX(GENERIC):  return "Error (generic)";
-    case PREFIX(prefix_unknown): return "Unknown frame descriptor";
-    case PREFIX(version_unsupported): return "Version not supported";
-    case PREFIX(parameter_unknown): return "Unknown parameter type";
-    case PREFIX(frameParameter_unsupported): return "Unsupported frame parameter";
-    case PREFIX(frameParameter_unsupportedBy32bits): return "Frame parameter unsupported in 32-bits mode";
-    case PREFIX(frameParameter_windowTooLarge): return "Frame requires too much memory for decoding";
-    case PREFIX(compressionParameter_unsupported): return "Compression parameter is out of bound";
-    case PREFIX(init_missing): return "Context should be init first";
-    case PREFIX(memory_allocation): return "Allocation error : not enough memory";
-    case PREFIX(stage_wrong): return "Operation not authorized at current processing stage";
-    case PREFIX(dstSize_tooSmall): return "Destination buffer is too small";
-    case PREFIX(srcSize_wrong): return "Src size incorrect";
-    case PREFIX(corruption_detected): return "Corrupted block detected";
-    case PREFIX(checksum_wrong): return "Restored data doesn't match checksum";
-    case PREFIX(tableLog_tooLarge): return "tableLog requires too much memory : unsupported";
-    case PREFIX(maxSymbolValue_tooLarge): return "Unsupported max Symbol Value : too large";
-    case PREFIX(maxSymbolValue_tooSmall): return "Specified maxSymbolValue is too small";
-    case PREFIX(dictionary_corrupted): return "Dictionary is corrupted";
-    case PREFIX(dictionary_wrong): return "Dictionary mismatch";
-    case PREFIX(maxCode):
-    default: return notErrorCode;
+// Use macro definition to force string segment concatenation
+#define ERROR_STRING(name, str) __attribute__((used)) static const char name[] = str;
+
+// Define all error strings
+ERROR_STRING(STR_NO_ERROR, "No error detected");
+ERROR_STRING(STR_GENERIC, "Error (generic)");
+ERROR_STRING(STR_PREFIX_UNKNOWN, "Unknown frame descriptor");
+ERROR_STRING(STR_VERSION_UNSUPPORTED, "Version not supported");
+ERROR_STRING(STR_PARAMETER_UNKNOWN, "Unknown parameter type");
+ERROR_STRING(STR_FRAME_PARAM_UNSUPPORTED, "Unsupported frame parameter");
+ERROR_STRING(STR_FRAME_PARAM_32BIT, "Frame parameter unsupported in 32-bits mode");
+ERROR_STRING(STR_FRAME_WINDOW_TOO_LARGE, "Frame requires too much memory for decoding");
+ERROR_STRING(STR_COMPRESSION_PARAM, "Compression parameter is out of bound");
+ERROR_STRING(STR_INIT_MISSING, "Context should be init first");
+ERROR_STRING(STR_MEMORY_ALLOCATION, "Allocation error : not enough memory");
+ERROR_STRING(STR_STAGE_WRONG, "Operation not authorized at current processing stage");
+ERROR_STRING(STR_DST_TOO_SMALL, "Destination buffer is too small");
+ERROR_STRING(STR_SRC_SIZE_WRONG, "Src size incorrect");
+ERROR_STRING(STR_CORRUPTION_DETECTED, "Corrupted block detected");
+ERROR_STRING(STR_CHECKSUM_WRONG, "Restored data doesn't match checksum");
+ERROR_STRING(STR_TABLELOG_TOO_LARGE, "tableLog requires too much memory : unsupported");
+ERROR_STRING(STR_MAX_SYMBOL_TOO_LARGE, "Unsupported max Symbol Value : too large");
+ERROR_STRING(STR_MAX_SYMBOL_TOO_SMALL, "Specified maxSymbolValue is too small");
+ERROR_STRING(STR_DICT_CORRUPTED, "Dictionary is corrupted");
+ERROR_STRING(STR_DICT_WRONG, "Dictionary mismatch");
+ERROR_STRING(STR_NOT_ERROR_CODE, "Unspecified error code");
+
+const char* ERR_getErrorString(ERR_enum code) {
+    static const char* const notErrorCode = STR_NOT_ERROR_CODE;
+    switch(code) {
+        case PREFIX(no_error): return STR_NO_ERROR;
+        case PREFIX(GENERIC): return STR_GENERIC;
+        case PREFIX(prefix_unknown): return STR_PREFIX_UNKNOWN;
+        case PREFIX(version_unsupported): return STR_VERSION_UNSUPPORTED;
+        case PREFIX(parameter_unknown): return STR_PARAMETER_UNKNOWN;
+        case PREFIX(frameParameter_unsupported): return STR_FRAME_PARAM_UNSUPPORTED;
+        case PREFIX(frameParameter_unsupportedBy32bits): return STR_FRAME_PARAM_32BIT;
+        case PREFIX(frameParameter_windowTooLarge): return STR_FRAME_WINDOW_TOO_LARGE;
+        case PREFIX(compressionParameter_unsupported): return STR_COMPRESSION_PARAM;
+        case PREFIX(init_missing): return STR_INIT_MISSING;
+        case PREFIX(memory_allocation): return STR_MEMORY_ALLOCATION;
+        case PREFIX(stage_wrong): return STR_STAGE_WRONG;
+        case PREFIX(dstSize_tooSmall): return STR_DST_TOO_SMALL;
+        case PREFIX(srcSize_wrong): return STR_SRC_SIZE_WRONG;
+        case PREFIX(corruption_detected): return STR_CORRUPTION_DETECTED;
+        case PREFIX(checksum_wrong): return STR_CHECKSUM_WRONG;
+        case PREFIX(tableLog_tooLarge): return STR_TABLELOG_TOO_LARGE;
+        case PREFIX(maxSymbolValue_tooLarge): return STR_MAX_SYMBOL_TOO_LARGE;
+        case PREFIX(maxSymbolValue_tooSmall): return STR_MAX_SYMBOL_TOO_SMALL;
+        case PREFIX(dictionary_corrupted): return STR_DICT_CORRUPTED;
+        case PREFIX(dictionary_wrong): return STR_DICT_WRONG;
+        case PREFIX(maxCode):
+        default: return notErrorCode;
     }
 }

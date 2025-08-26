@@ -63,7 +63,8 @@ private:
       const ObTabletID &tablet_id,
       const ObTabletTransferInfo &transfer_info,
       bool &is_ready,
-      ObTabletHAStatus &ha_status /* source tablet ha status */) const;
+      ObTabletHAStatus &ha_status /* source tablet ha status */,
+      ObTabletTransferInfo &src_transer_info) const;
   void set_errsim_backfill_point_();
 private:
   bool is_inited_;
@@ -119,7 +120,7 @@ public:
   virtual bool is_valid() const override;
   virtual int start_running() override;
   virtual bool operator == (const share::ObIDagNet &other) const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   virtual int fill_comment(char *buf, const int64_t buf_len) const override;
   virtual int fill_dag_net_key(char *buf, const int64_t buf_len) const override;
   virtual int clear_dag_net_ctx();
@@ -146,7 +147,7 @@ public:
   explicit ObBaseTransferBackfillTXDag(const share::ObDagType::ObDagTypeEnum &dag_type);
   virtual ~ObBaseTransferBackfillTXDag();
   virtual bool operator == (const share::ObIDag &other) const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   int prepare_ctx(share::ObIDagNet *dag_net);
 #ifdef ERRSIM
   virtual common::ObErrsimModuleType::TYPE get_module_type() { return ObErrsimModuleType::ERRSIM_MODULE_TRANSFER; }
@@ -247,6 +248,7 @@ private:
       const ObTabletMemberWrapper<ObTabletTableStore> &table_store_wrapper);
   int get_transfer_sstables_info_(
       const ObTablesHandleArray &table_handle_array,
+      const share::SCN &tablet_clog_checkpoint_scn,
       share::SCN &max_minor_end_scn);
   int check_memtable_max_end_scn_(
       ObTablet &tablet);
@@ -264,6 +266,9 @@ private:
       const common::ObTabletID &tablet_id,
       const share::ObStorageHACostItemName name) const;
   void transfer_tablet_restore_stat_() const;
+#ifdef OB_BUILD_SHARED_STORAGE
+  int put_sstables_to_shared_tablet_(ObBatchUpdateTableStoreParam &batch_param, const ObTablet &tablet);
+#endif
 private:
   bool is_inited_;
   ObTabletBackfillInfo tablet_info_;

@@ -394,6 +394,9 @@ int ObVariableSetExecutor::calc_var_value_static_engine(
                                 param_store,
                                 &exec_ctx))) {
     LOG_WARN("calc const expr failed", K(ret));
+  } else if (value_obj.is_pl_extend()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("pl extend type is not supported in set stmt", K(ret), K(value_obj));
   }
   return ret;
 }
@@ -727,6 +730,15 @@ int ObVariableSetExecutor::update_global_variables(ObExecContext &ctx,
       if (OB_FAIL(ObBasicSessionInfo::check_optimizer_features_enable_valid(val))) {
         LOG_WARN("fail check privilege_features_enable valid", K(val), K(ret));
       }
+#ifdef OB_BUILD_CLOSE_MODULES
+    } else if (set_var.var_name_ == OB_SV_EARLY_LOCK_RELEASE) {
+      int64_t early_lock_release = 0;
+      if (OB_FAIL(val.get_int(early_lock_release))) {
+        LOG_WARN("fail get int", K(ret), K(val));
+      } else if (OB_FAIL(do_early_lock_release(ctx, *session, early_lock_release > 0))) {
+        LOG_WARN("fail do early lock release ", K(ret), K(early_lock_release), K(val));
+      }
+#endif
     }
 
     if (OB_SUCC(ret) && should_update_extra_var) {
@@ -916,8 +928,10 @@ int ObVariableSetExecutor::check_and_convert_sys_var(ObExecContext &ctx,
   if (OB_FAIL(ret)) {
   } else if (set_var.var_name_ == OB_SV_DEFAULT_STORAGE_ENGINE) {
     static const common::ObString DEFAULT_VALUE_STORAGE_ENGINE("OceanBase");
+    static const common::ObString INNODB_STORAGE_ENGINE("InnoDB");
     const ObString new_value = out_val.get_string();
-    if (new_value.case_compare(DEFAULT_VALUE_STORAGE_ENGINE) != 0) {
+    if (new_value.case_compare(DEFAULT_VALUE_STORAGE_ENGINE) != 0
+        && new_value.case_compare(INNODB_STORAGE_ENGINE) != 0) {
       ret = OB_ERR_PARAM_VALUE_INVALID;
       LOG_USER_ERROR(OB_ERR_PARAM_VALUE_INVALID);
     }
@@ -1217,7 +1231,7 @@ int ObVariableSetExecutor::switch_to_session_variable(const ObExprCtx &expr_ctx,
     sess_var.value_ = value;
     sess_var.meta_.set_type(value.get_type());
     sess_var.meta_.set_scale(value.get_scale());
-    sess_var.meta_.set_collation_level(CS_LEVEL_IMPLICIT);
+    sess_var.meta_.set_collation_level(value.get_collation_level());
     sess_var.meta_.set_collation_type(value.get_collation_type());
   }
   return ret;
@@ -1238,7 +1252,7 @@ int ObVariableSetExecutor::switch_to_session_variable(const ObObj &value,
     sess_var.value_ = value;
     sess_var.meta_.set_type(value.get_type());
     sess_var.meta_.set_scale(value.get_scale());
-    sess_var.meta_.set_collation_level(CS_LEVEL_IMPLICIT);
+    sess_var.meta_.set_collation_level(value.get_collation_level());
     sess_var.meta_.set_collation_type(value.get_collation_type());
   }
   return ret;

@@ -14,6 +14,7 @@
 #include "ob_tablet_split_mds_user_data.h"
 #include "storage/ls/ob_ls.h"
 #include "storage/tablet/ob_tablet_split_mds_helper.h"
+#include "storage/ddl/ob_tablet_split_util.h"
 
 #define USING_LOG_PREFIX STORAGE
 
@@ -71,18 +72,22 @@ int ObTabletSplitMdsUserData::init_range_part_split_src(
     const ObIArray<ObTabletID> &dst_tablet_ids,
     const ObIArray<uint64_t> &partkey_projector,
     const ObTableSchema &table_schema,
-    const bool is_oracle_mode)
+    const bool is_oracle_mode,
+    const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   reset();
   auto_part_size_ = OB_INVALID_SIZE; // split src tablet can no longer auto split
   status_ = RANGE_PART_SPLIT_SRC;
   const lib::Worker::CompatMode compat_mode = is_oracle_mode ? lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL;
+  uint64_t data_version = 0;
   if (OB_FAIL(ref_tablet_ids_.assign(dst_tablet_ids))) {
     LOG_WARN("failed to assign ref tablet ids", K(ret));
   } else if (OB_FAIL(partkey_projector_.assign(partkey_projector))) {
     LOG_WARN("failed to assign partkey projector", K(ret));
-  } else if (OB_FAIL(storage_schema_.init(allocator_, table_schema, compat_mode, false/*skip_column_info*/))) {
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("failed to get min data version", K(ret), K(tenant_id));
+  } else if (data_version >= DATA_VERSION_4_4_0_0 && OB_FAIL(storage_schema_.init(allocator_, table_schema, compat_mode, false/*skip_column_info*/))) {
     LOG_WARN("failed to assign partkey projector", K(ret));
   }
   return ret;

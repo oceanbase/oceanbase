@@ -213,25 +213,22 @@ int ObDMLRunningCtx::check_need_old_row_legitimacy()
     LOG_WARN("check has udf column failed", K(ret));
   } else if (is_need_check_old_row_) {
     is_udf_ = true;
-  } else if (dml_param_.is_batch_stmt_ && !relative_table_.is_index_table()) {
-    //batch stmt execution dependency defensive check to check
-    //if the same row was modified multiple times
-    is_need_check_old_row_ = true;
-    ret = OB_E(EventTable::EN_INS_MULTI_VALUES_BATCH_OPT) OB_SUCCESS;
-    // no need to check old row, just for bmsql performance optimization
-    // TODO yuchen.ywc
-    if (OB_SUCCESS != ret) {
-      LOG_INFO("error sim when current statement is batch update", K(ret), K_(is_udf));
-      is_need_check_old_row_ = false;
-      ret = OB_SUCCESS;
-    }
   } else if (GCONF.enable_defensive_check()) {
     is_need_check_old_row_ = true;
-    if (relative_table_.is_index_table() && !relative_table_.can_read_index()) {
-      //index can not be read during building index, so does not check old index row
+    if ((relative_table_.is_index_table() && !relative_table_.can_read_index())
+        || dml_param_.is_main_table_in_fts_ddl_ ) {
+      // We should not check old row because domain row may be generated instead of scanned
+      // from domain table when:
+      // 1) index can not be read during building index
+      // 2) or schema shows index ready, but fts ddl is on going when dml start snapshot
       is_need_check_old_row_ = false;
     }
     if (ObDmlFlag::DF_LOCK == dml_flag_) {
+      is_need_check_old_row_ = false;
+    }
+    // skip old row check in foreign key check path
+    if (dml_param_.write_flag_.is_check_row_locked()) {
+      // SQL marks FK-check by setting check_row_locked in ObDMLService::init_dml_write_flag()
       is_need_check_old_row_ = false;
     }
   }

@@ -125,19 +125,21 @@ int ObITransCallback::log_sync_fail_cb(const share::SCN max_committed_scn)
 // All safety check is in before append
 void ObITransCallback::append(ObITransCallback *node)
 {
+  ObITransCallback *next = this->get_next();
   node->set_prev(this);
-  node->set_next(this->get_next());
-  this->get_next()->set_prev(node);
+  node->set_next(next);
   this->set_next(node);
+  next->set_prev(node);
 }
 
 void ObITransCallback::append(ObITransCallback *head,
                               ObITransCallback *tail)
 {
+  ObITransCallback *next = this->get_next();
   head->set_prev(this);
-  tail->set_next(this->get_next());
-  this->get_next()->set_prev(tail);
+  tail->set_next(next);
   this->set_next(head);
+  next->set_prev(tail);
 }
 
 int ObITransCallback::remove()
@@ -542,10 +544,11 @@ int ObTransCallbackMgr::append(ObITransCallback *head,
 void ObTransCallbackMgr::before_append(ObITransCallback *node)
 {
   int64_t size = node->get_data_size();
+  int64_t old_row_size = node->get_old_row_data_size();
   if (for_replay_) {
     inc_flushed_log_size(size);
   } else {
-    inc_pending_log_size(size);
+    inc_pending_log_size(size + old_row_size);
   }
 }
 
@@ -553,10 +556,11 @@ void ObTransCallbackMgr::after_append(ObITransCallback *node, const int ret_code
 {
   if (OB_SUCCESS != ret_code) {
     int64_t size = node->get_data_size();
+    int64_t old_row_size = node->get_old_row_data_size();
     if (for_replay_) {
       inc_flushed_log_size(-1 * size);
     } else {
-      inc_pending_log_size(-1 * size);
+      inc_pending_log_size(-1 * (size + old_row_size));
     }
   }
 }
@@ -816,6 +820,7 @@ void ObTransCallbackMgr::calc_next_to_fill_log_info_(const ObIArray<RedoLogEpoch
   }
 }
 
+//#pragma clang optimize off
 int ObTransCallbackMgr::prep_and_fill_from_list_(ObTxFillRedoCtx &ctx,
                                                  ObITxFillRedoFunctor &func,
                                                  int16 &callback_scope_idx,
@@ -859,6 +864,7 @@ int ObTransCallbackMgr::prep_and_fill_from_list_(ObTxFillRedoCtx &ctx,
   }
   return ret;
 }
+//#pragma clang optimize on
 
 bool ObTransCallbackMgr::check_list_has_min_epoch_(const int my_idx,
                                                    const int64_t my_epoch,
@@ -2034,7 +2040,7 @@ int ObMvccRowCallback::rollback_callback()
   }
 
   if (need_submit_log_ && SCN::max_scn() == scn_) {
-    ctx_.inc_pending_log_size(-1 * data_size_);
+    ctx_.inc_pending_log_size(-1 * (data_size_ + get_old_row_data_size()));
   }
 
   return OB_SUCCESS;

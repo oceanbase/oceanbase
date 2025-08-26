@@ -20,9 +20,6 @@ namespace oceanbase
 {
 namespace common
 {
-class ObFixedLengthBase;
-class ObContinuousBase;
-class ObUniformBase;
 class ObDatum;
 } // namespace common
 namespace share
@@ -33,70 +30,39 @@ class ObColDesc;
 } // namespace schema
 class ObTabletCacheInterval;
 } // namespace share
-namespace blocksstable
-{
-class ObStorageDatum;
-} // namespace blocksstable
-namespace sql
-{
-class ObBatchRows;
-} // namespace sql
 namespace storage
 {
+class ObDirectLoadBatchRows;
+
 class ObDirectLoadVectorUtils
 {
 public:
   static int new_vector(VectorFormat format, VecValueTypeClass value_tc, ObIAllocator &allocator,
                         common::ObIVector *&vector);
-  // 定长类型:VEC_FIXED, 变长类型:VEC_DISCRETE
-  static int new_vector(const share::schema::ObColDesc &col_desc, ObIAllocator &allocator,
-                        common::ObIVector *&vector);
   static int prepare_vector(ObIVector *vector, const int64_t max_batch_size,
                             ObIAllocator &allocator);
 
-  // 按需实现, 目前只支持以下场景:
-  // * VEC_CONTINUOUS, VEC_DISCRETE, VEC_UNIFORM, VEC_UNIFORM_CONST -> VEC_DISCRETE
-  // * VEC_UNIFORM -> VEC_UNIFORM
-  // * VEC_UNIFORM_CONST -> VEC_UNIFORM_CONST
-  static int shallow_copy_vector(ObIVector *src_vec, ObIVector *dest_vec, const int64_t batch_size);
-
-  // 按需实现, 目前只支持以下场景:
-  // * VEC_UNIFORM_CONST -> VEC_DISCRETE
-  // * VEC_UNIFORM_CONST -> VEC_UNIFORM
-  static int expand_const_vector(ObIVector *const_vec, ObIVector *dest_vec, const int64_t batch_size);
-
-  // 按需实现, 目标只支持以下场景
-  // * const_datum -> VEC_DISCRETE
-  // * const_datum -> VEC_UNIFORM
-  static int expand_const_datum(const common::ObDatum &const_datum, ObIVector *dest_vec, const int64_t batch_size);
-
-  // 按需实现, 目前只支持VEC_FIXED, VEC_CONTINUOUS, VEC_DISCRETE
-  static int set_vector_all_null(ObIVector *vector, const int64_t batch_size);
-
-  static int get_payload(ObIVector *vector, const int64_t idx, bool &is_null, const char *&payload,
-                         ObLength &len);
-
   static int to_datum(common::ObIVector *vector, const int64_t idx, common::ObDatum &datum);
-  static int to_datums(const common::ObIArray<common::ObIVector *> &vectors, int64_t idx,
-                       common::ObDatum *datums, const int64_t count);
-  static int to_datums(const common::ObIArray<common::ObIVector *> &vectors, int64_t idx,
-                       blocksstable::ObStorageDatum *datums, const int64_t count);
-  static int set_datum(common::ObIVector *vector, const int64_t idx, const common::ObDatum &datum);
+
+  static int check_rowkey_length(const ObDirectLoadBatchRows &batch_rows,
+                                 const int64_t rowkey_column_count);
 
   // tablet id vector, ginore null value
   static const VecValueTypeClass tablet_id_value_tc = VEC_TC_INTEGER;
   static int make_const_tablet_id_vector(const ObTabletID &tablet_id, ObIAllocator &allocator,
                                          common::ObIVector *&vector);
-  static int set_tablet_id(common::ObIVector *vector, const int64_t batch_idx,
-                           const ObTabletID &tablet_id);
-  static ObTabletID get_tablet_id(common::ObFixedLengthBase *vector, const int64_t batch_idx);
-  template <bool IS_CONST>
-  static ObTabletID get_tablet_id(common::ObUniformBase *vector, const int64_t batch_idx);
   static ObTabletID get_tablet_id(common::ObIVector *vector, const int64_t batch_idx);
-  static bool check_all_tablet_id_is_same(common::ObIVector *vector, const int64_t size);
-  static int check_rowkey_length(const ObIArray<ObIVector *> &vectors,
-                                 const sql::ObBatchRows &batch_rows,
-                                 const int64_t rowkey_column_count);
+
+  static bool check_all_tablet_id_is_same(const uint64_t *tablet_ids, const int64_t size);
+  static bool check_is_same_tablet_id(const ObTabletID &tablet_id, common::ObIVector *vector,
+                                      const int64_t size);
+  static bool check_is_same_tablet_id(const ObTabletID &tablet_id, common::ObIVector *vector,
+                                      const uint16_t *selector, const int64_t size);
+  static bool check_is_same_tablet_id(const ObTabletID &tablet_id,
+                                      const common::ObDatumVector &datum_vec, const int64_t size);
+  static bool check_is_same_tablet_id(const ObTabletID &tablet_id,
+                                      const common::ObDatumVector &datum_vec,
+                                      const uint16_t *selector, const int64_t size);
 
   // hidden pk vector
   static int batch_fill_hidden_pk(common::ObIVector *vector, const int64_t start,

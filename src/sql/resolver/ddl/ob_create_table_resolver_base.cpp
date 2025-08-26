@@ -12,6 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/ddl/ob_create_table_resolver_base.h"
+#include "share/external_table/ob_external_table_utils.h"
+#include "share/ob_license_utils.h"
 
 namespace oceanbase
 {
@@ -264,8 +266,12 @@ int ObCreateTableResolverBase::set_table_option_to_schema(ObTableSchema &table_s
       }
     }
     if (OB_SUCC(ret) && table_schema.is_external_table()) {
+      ObString file_location;
+      ObSchemaGetterGuard *schema_guard = schema_checker_->get_schema_guard();
+      CK (OB_NOT_NULL(schema_guard));
+      OZ (ObExternalTableUtils::get_external_file_location(table_schema, *schema_guard, *allocator_, file_location));
       if ((table_schema.get_external_file_format().empty()
-          || table_schema.get_external_file_location().empty()) &&
+          || file_location.empty()) &&
            table_schema.get_external_properties().empty()) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "Default properties or format or location option for external table");
@@ -389,7 +395,13 @@ int ObCreateTableResolverBase::resolve_column_group_helper(const ParseNode *cg_n
         LOG_WARN("fail to get table store format", K(ret), K(table_store_type));
       } else if (ObTableStoreFormat::is_with_column(table_store_type)) {
         /* for default is column store, must add each column group*/
-        if (OB_FAIL(ObSchemaUtils::build_add_each_column_group(table_schema, table_schema))) {
+        if (OB_FAIL(ObLicenseUtils::check_olap_allowed(tenant_id))) {
+          ret = OB_LICENSE_SCOPE_EXCEEDED;
+          LOG_WARN("default column group is not allowed", KR(ret));
+          LOG_USER_ERROR(OB_LICENSE_SCOPE_EXCEEDED,
+                         "Default column group is not supported due to the absence of the OLAP module. Please check "
+                         "'default_table_store_format' config");
+        } else if (OB_FAIL(ObSchemaUtils::build_add_each_column_group(table_schema, table_schema))) {
           LOG_WARN("fail to add each column group", K(ret));
         }
       }
@@ -465,6 +477,15 @@ int ObCreateTableResolverBase::resolve_table_organization(omt::ObTenantConfigGua
       table_organization_ =
         (0 == ObString::make_string("HEAP").case_compare(ptr)) ?
           ObTableOrganizationType::OB_HEAP_ORGANIZATION : ObTableOrganizationType::OB_INDEX_ORGANIZATION;
+
+      if (ObTableOrganizationType::OB_HEAP_ORGANIZATION == table_organization_ &&
+          OB_FAIL(ObLicenseUtils::check_olap_allowed(session_info_->get_effective_tenant_id()))) {
+        ret = OB_LICENSE_SCOPE_EXCEEDED;
+        LOG_WARN("default heap organization is not allowed", KR(ret));
+        LOG_USER_ERROR(OB_LICENSE_SCOPE_EXCEEDED,
+                       "Default heap organization is not supported due to the absence of the OLAP module. Please check "
+                       "'default_table_store_format' config");
+      }
     }
   }
 

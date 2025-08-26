@@ -271,6 +271,7 @@ public:
   // - OB_INVALID_ARGUMENT: invalid argument
   // - other: bug
   int force_set_member_list(const common::ObMemberList &new_member_list, const int64_t new_replica_num);
+  int inc_config_version(int64_t timeout_us);
 
   int get_ack_info_array(LogMemberAckInfoList &ack_info_array,
                                  common::GlobalLearnerList &degraded_list) const;
@@ -555,10 +556,12 @@ public:
   virtual int register_refresh_priority_cb() override final;
 
   virtual int unregister_refresh_priority_cb() override final;
+
+  virtual int set_allow_election_without_memlist(const bool allow_election_without_memlist) override final;
 #endif
 	//================= 依赖功能注册 ===========================
-  int set_location_cache_cb(PalfLocationCacheCb *lc_cb);
-  int reset_location_cache_cb();
+  virtual int set_location_cache_cb(PalfLocationCacheCb *lc_cb) override final;
+  virtual int reset_location_cache_cb() override final;
   virtual int set_election_priority(election::ElectionPriority *priority) override final;
   virtual int reset_election_priority() override final;
   virtual int set_locality_cb(palf::PalfLocalityInfoCb *locality_cb) override final;

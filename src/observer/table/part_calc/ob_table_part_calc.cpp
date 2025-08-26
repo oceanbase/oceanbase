@@ -43,9 +43,10 @@ int ObTablePartCalculator::init_tb_ctx(const ObSimpleTableSchemaV2 &simple_schem
     tb_ctx_->set_need_dist_das(true); // only need_dist_das will generate calc_tablet_id expr
 
     const ObTableApiCredential *credetial = nullptr;
+    ObTabletID tablet_id; // unused
     if (OB_FAIL(sess_guard_.get_credential(credetial))) {
       LOG_WARN("fail to get credential", K(ret));
-    } else if (OB_FAIL(tb_ctx_->init_common_without_check(const_cast<ObTableApiCredential &>(*credetial), INT64_MAX/*timeout_ts*/))) {
+    } else if (OB_FAIL(tb_ctx_->init_common_without_check(const_cast<ObTableApiCredential &>(*credetial), tablet_id, INT64_MAX/*timeout_ts*/))) {
       LOG_WARN("fail to init table ctx common part", K(ret), KPC(credetial));
     } else if (OB_FAIL(tb_ctx_->init_insert())) {
       LOG_WARN("fail to init insert ctx", K(ret), K_(tb_ctx));
@@ -219,13 +220,187 @@ int ObTablePartCalculator::calc(const ObSimpleTableSchemaV2 &simple_schema,
   return ret;
 }
 
+int ObTablePartCalculator::calc(const ObTableSchema &table_schema,
+                                const ObITableEntity &entity,
+                                ObTabletID &tablet_id)
+{
+  int ret = OB_SUCCESS;
+  ObTableEntity series_entity;
+  const ObITableEntity *calc_entity = &entity;
+  bool is_series_mode = kv_schema_guard_.get_hbase_mode_type() == ObHbaseModeType::OB_HBASE_SERIES_TYPE;
+  uint64_t table_id = table_schema.get_table_id();
+  ObPartitionLevel part_level = table_schema.get_part_level();
+  ObNewRow part_row;
+  ObNewRow subpart_row;
+  ObDASTabletMapper tablet_mapper;
+  tablet_mapper.set_table_schema(&table_schema);
+  if (ObPartitionLevel::PARTITION_LEVEL_ZERO == part_level) {
+    tablet_id = table_schema.get_tablet_id();
+  } else if (is_series_mode) {
+    if (OB_FAIL(construct_series_entity(entity, series_entity))) {
+      LOG_WARN("fail to construct series entity", K(ret), K(entity));
+    } else {
+      calc_entity = &series_entity;
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(construct_part_row(table_schema, *calc_entity, part_row, subpart_row))) {
+    LOG_WARN("fail to construct part row", K(ret), K(entity));
+  } else {
+    ObObjectID part_id;
+    ObObjectID subpart_id;
+    ObTabletID tmp_tablet_id;
+    if (OB_FAIL(calc_partition_id(ObPartitionLevel::PARTITION_LEVEL_ONE,
+                                        OB_INVALID_ID,
+                                        part_row,
+                                        tablet_mapper,
+                                        tmp_tablet_id,
+                                        part_id,
+                                        table_schema.is_hash_like_part()))) {
+      LOG_WARN("fail to calc first partiton id", K(ret), K(part_row));
+    } else if (ObPartitionLevel::PARTITION_LEVEL_ONE == part_level) {
+      if (tmp_tablet_id.is_valid()) {
+        tablet_id = tmp_tablet_id;
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid tablet id", K(ret), K(tmp_tablet_id), K(part_row));
+      }
+    } else if (ObPartitionLevel::PARTITION_LEVEL_TWO == part_level) {
+      if (OB_FAIL(calc_partition_id(ObPartitionLevel::PARTITION_LEVEL_TWO,
+                                    part_id,
+                                    subpart_row,
+                                    tablet_mapper,
+                                    tablet_id,
+                                    subpart_id,
+                                    table_schema.is_hash_like_subpart()))) {
+        LOG_WARN("fail to calc second partiton id", K(ret), K(subpart_row), K(part_id));
+      }
+    }
+  }
+  LOG_DEBUG("ObTablePartCalculator::calc", K(ret), K(table_id), K(part_level),
+          K(part_row), K(subpart_row), KP(tb_ctx_), K(tablet_id));
+
+  return ret;
+}
+
+int ObTablePartCalculator::calc_partition_id(const ObPartitionLevel part_level,
+                                             const ObObjectID part_id,
+                                             const common::ObNewRow &row,
+                                             sql::ObDASTabletMapper &tablet_mapper,
+                                             common::ObTabletID &tablet_id,
+                                             ObObjectID &object_id,
+                                             const bool is_hash_like)
+{
+  int ret = OB_SUCCESS;
+  if (is_hash_like) {
+    ObObj hash_obj;
+    ObNewRow hash_obj_row;
+    if (row.get_count() != 1) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("row count is not expected", K(ret), K(row));
+    } else if (OB_FAIL(get_hash_like_object(row.get_cell(0), hash_obj))) {
+      LOG_WARN("fail to get hash like obj", K(row), K(hash_obj));
+    } else if (FALSE_IT(hash_obj_row.assign(&hash_obj, 1))) {
+    } else if (OB_FAIL(tablet_mapper.get_tablet_and_object_id(part_level,
+                                                              part_id,
+                                                              hash_obj_row,
+                                                              tablet_id,
+                                                              object_id))) {
+      LOG_WARN("fail to get partition id", K(ret), K(hash_obj), K(part_level));
+    }
+  } else if (OB_FAIL(tablet_mapper.get_tablet_and_object_id(part_level,
+                                                            part_id, row,
+                                                            tablet_id,
+                                                            object_id))) {
+    LOG_WARN("fail to get partition id", K(ret), K(row));
+  }
+  return ret;
+}
+
+int ObTablePartCalculator::construct_part_row(const ObTableSchema &table_schema,
+                                              const ObITableEntity &entity,
+                                              ObNewRow &part_row,
+                                              ObNewRow &subpart_row)
+{
+  int ret = OB_SUCCESS;
+  const ObPartitionKeyInfo &key_info = table_schema.get_partition_key_info();
+  const ObPartitionKeyInfo &sub_key_info = table_schema.get_subpartition_key_info();
+  ObSEArray<uint64_t, 1> part_col_ids;
+  ObSEArray<uint64_t, 1> subpart_col_ids;
+  part_col_ids.set_attr(ObMemAttr(MTL_ID(), "PartColIds"));
+  subpart_col_ids.set_attr(ObMemAttr(MTL_ID(), "SubPartColIds"));
+
+  if (OB_FAIL(get_part_column_ids(key_info, part_col_ids))) {
+    LOG_WARN("fail to get part key column ids", K(ret), K(key_info));
+  } else if (OB_FAIL(get_part_column_ids(sub_key_info, subpart_col_ids))) {
+    LOG_WARN("fail to get sub part key column ids", K(ret), K(sub_key_info));
+  } else if (OB_FAIL(construct_part_row(table_schema, entity, part_col_ids, part_row))) {
+    LOG_WARN("fail to construct part row", K(ret));
+  } else if (OB_FAIL(construct_part_row(table_schema, entity, subpart_col_ids, subpart_row))) {
+    LOG_WARN("fail to construct sub part row", K(ret));
+  }
+  return ret;
+}
+
+int ObTablePartCalculator::construct_part_row(const ObTableSchema &table_schema,
+                                              const ObITableEntity &entity,
+                                              const ObIArray<uint64_t> &col_ids,
+                                              ObNewRow &part_row)
+{
+  int ret = OB_SUCCESS;
+  const int64_t part_key_count = col_ids.count();
+  if (part_key_count == 0) {
+    // do nothing
+  } else {
+    ObObj *part_key_objs = nullptr;
+    if (OB_ISNULL(part_key_objs = static_cast<ObObj*>(allocator_.alloc(sizeof(ObObj) * part_key_count)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocate memory for part key objs", K(ret), K(part_key_count));
+    } else {
+      part_row.assign(part_key_objs, part_key_count);
+      for (int i = 0; i < part_key_count && OB_SUCC(ret); i++) {
+        const uint64_t col_id = col_ids.at(i);
+        const ObTableColumnInfo *col_info = nullptr;
+        if (OB_FAIL(kv_schema_guard_.get_column_info(col_id, col_info))) {
+          LOG_WARN("fail to get column info", K(ret), K(col_id));
+        } else if (OB_ISNULL(col_info)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("column info is null", K(ret), K(col_id));
+        } else if (!col_info->is_generated_column()) {
+          if (col_info->is_rowkey_column_) {
+            if (col_info->col_idx_ >= entity.get_rowkey_size()) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("rowkey index is out of range", K(ret), K(col_info->col_idx_), K(entity.get_rowkey_size()));
+            } else if (OB_FAIL(entity.get_rowkey_value(col_info->col_idx_, part_row.get_cell(i)))) {
+              LOG_WARN("fail to get rowkey value", K(ret), K(col_info->col_idx_), K(entity), K(i));
+            }
+          } else if (OB_FAIL(entity.get_property(col_info->column_name_, part_row.get_cell(i)))) {
+            LOG_WARN("fail to get property value", K(ret), K(col_info->column_name_), K(entity), K(i));
+          }
+        } else { // part column is generated column
+          if (OB_FAIL(calc_generated_col(table_schema, entity, *col_info, false /* need_das_ctx*/, part_row.get_cell(i)))) {
+            LOG_WARN("fail to calc generated column", K(ret), K(entity), KPC(col_info));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          part_row.get_cell(i).set_collation_type(col_info->type_.get_collation_type());
+          part_row.get_cell(i).set_collation_level(col_info->type_.get_collation_level());
+          part_row.get_cell(i).set_scale(col_info->type_.get_scale());
+        }
+      } // end for
+    }
+  }
+
+  return ret;
+}
+
 int ObTablePartCalculator::get_simple_schema(uint64_t table_id,
                                              const ObSimpleTableSchemaV2 *&simple_schema)
 {
   int ret = OB_SUCCESS;
   const ObSimpleTableSchemaV2 *tmp_simple_schema = nullptr;
 
-  if (OB_NOT_NULL(simple_schema_)) {
+  if (OB_NOT_NULL(simple_schema_) && simple_schema_->get_table_id() == table_id) {
     simple_schema = simple_schema_;
   } else if (OB_FAIL(schema_guard_.get_simple_table_schema(MTL_ID(), table_id, tmp_simple_schema))) {
     LOG_WARN("fail to get simple schema", K(ret), K(table_id));
@@ -234,6 +409,7 @@ int ObTablePartCalculator::get_simple_schema(uint64_t table_id,
     LOG_WARN("table not exist", K(ret), K(table_id));
   } else {
     simple_schema = tmp_simple_schema;
+    simple_schema_ = simple_schema;
   }
 
   return ret;
@@ -245,13 +421,16 @@ int ObTablePartCalculator::get_table_schema(uint64_t table_id,
   int ret = OB_SUCCESS;
   const ObTableSchema *tmp_table_schema = nullptr;
 
-  if (OB_FAIL(schema_guard_.get_table_schema(MTL_ID(), table_id, tmp_table_schema))) {
+  if (OB_NOT_NULL(table_schema_) && table_schema_->get_table_id() == table_id) {
+    table_schema = table_schema_;
+  } else if (OB_FAIL(schema_guard_.get_table_schema(MTL_ID(), table_id, tmp_table_schema))) {
     LOG_WARN("fail to get simple schema", K(ret), K(table_id));
   } else if (OB_ISNULL(tmp_table_schema) || tmp_table_schema->get_table_id() == OB_INVALID_ID) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("table not exist", K(ret), K(table_id));
   } else {
     table_schema = tmp_table_schema;
+    table_schema_ = table_schema;
   }
 
   return ret;
@@ -264,7 +443,7 @@ int ObTablePartCalculator::get_simple_schema(const ObString table_name,
   const ObTableApiCredential *credetial = nullptr;
   const ObSimpleTableSchemaV2 *tmp_simple_schema = nullptr;
 
-  if (OB_NOT_NULL(simple_schema_)) {
+  if (OB_NOT_NULL(simple_schema_) && table_name.case_compare(simple_schema_->get_table_name_str()) == 0) {
     simple_schema = simple_schema_;
   } else if (OB_FAIL(sess_guard_.get_credential(credetial))) {
     LOG_WARN("fail to get credential", K(ret));
@@ -281,6 +460,7 @@ int ObTablePartCalculator::get_simple_schema(const ObString table_name,
     LOG_WARN("table not exist", K(ret), KPC(credetial), K(table_name));
   } else {
     simple_schema = tmp_simple_schema;
+    simple_schema_ = simple_schema;
   }
 
   return ret;
@@ -293,7 +473,9 @@ int ObTablePartCalculator::get_table_schema(const ObString table_name,
   const ObTableApiCredential *credetial = nullptr;
   const ObTableSchema *tmp_table_schema = nullptr;
 
-  if (OB_FAIL(sess_guard_.get_credential(credetial))) {
+  if (OB_NOT_NULL(table_schema_) && table_name.case_compare(table_schema_->get_table_name_str()) == 0) {
+    table_schema = table_schema_;
+  } else if (OB_FAIL(sess_guard_.get_credential(credetial))) {
     LOG_WARN("fail to get credential", K(ret));
   } else if (OB_FAIL(schema_guard_.get_table_schema(credetial->tenant_id_,
                                                     credetial->database_id_,
@@ -308,6 +490,7 @@ int ObTablePartCalculator::get_table_schema(const ObString table_name,
     LOG_WARN("table not exist", K(ret), KPC(credetial), K(table_name));
   } else {
     table_schema = tmp_table_schema;
+    table_schema_ = table_schema;
   }
 
   return ret;
@@ -318,16 +501,17 @@ int ObTablePartCalculator::calc(uint64_t table_id,
                                 ObTabletID &tablet_id)
 {
   int ret = OB_SUCCESS;
-  const ObSimpleTableSchemaV2 *simple_schema = nullptr;
-
-  if (OB_FAIL(get_simple_schema(table_id, simple_schema))) {
-    LOG_WARN("fail to get simple schema", K(ret), K(table_id));
-  } else if (!simple_schema->is_partitioned_table()) {
-    tablet_id = simple_schema->get_tablet_id();
-  } else if (OB_FAIL(calc(*simple_schema, entity, tablet_id))) {
+  const ObTableSchema *table_schema = nullptr;
+  if (OB_FAIL(get_table_schema(table_id, table_schema))) {
+    LOG_WARN("fail to get table schema", K(ret), K(table_id));
+  } else if (!table_schema->is_partitioned_table()) {
+    tablet_id = table_schema->get_tablet_id();
+  } else if (OB_FAIL(calc(*table_schema, entity, tablet_id))) {
     LOG_WARN("fail to calc part", K(ret), K(entity));
   }
 
+  LOG_DEBUG("ObTablePartCalculator::calc", K(ret), K(table_id), K(entity), K(tablet_id),
+              K(table_schema->is_partitioned_table()), K(table_schema->get_table_name()));
   return ret;
 }
 
@@ -336,14 +520,35 @@ int ObTablePartCalculator::calc(const ObString table_name,
                                 ObTabletID &tablet_id)
 {
   int ret = OB_SUCCESS;
-  const ObSimpleTableSchemaV2 *simple_schema = nullptr;
+  const ObTableSchema *table_schema = nullptr;
 
-  if (OB_FAIL(get_simple_schema(table_name, simple_schema))) {
-    LOG_WARN("fail to get simple schema", K(ret), K(table_name));
-  } else if (!simple_schema->is_partitioned_table()) {
-    tablet_id = simple_schema->get_tablet_id();
-  } else if (OB_FAIL(calc(*simple_schema, entity, tablet_id))) {
+  if (OB_FAIL(get_table_schema(table_name, table_schema))) {
+    LOG_WARN("fail to get table schema", K(ret), K(table_name));
+  } else if (!table_schema->is_partitioned_table()) {
+    tablet_id = table_schema->get_tablet_id();
+  } else if (OB_FAIL(calc(*table_schema, entity, tablet_id))) {
     LOG_WARN("fail to calc part", K(ret), K(entity));
+  }
+
+  return ret;
+}
+
+int ObTablePartCalculator::calc(const ObTableSchema &table_schema,
+                                const ObIArray<ObITableEntity*> &entities,
+                                ObIArray<ObTabletID> &tablet_ids)
+{
+  int ret = OB_SUCCESS;
+  ObTabletID tablet_id(ObTabletID::INVALID_TABLET_ID);
+  for (int i = 0; i < entities.count() && OB_SUCC(ret); i++) {
+    ObITableEntity *entity = entities.at(i);
+    if (OB_ISNULL(entity)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("entity is null", K(ret));
+    } else if (OB_FAIL(calc(table_schema, *entity, tablet_id))) {
+      LOG_WARN("fail to calc part", K(ret), K(entity));
+    } else if (OB_FAIL(tablet_ids.push_back(tablet_id))) {
+      LOG_WARN("fail to push back tablet id", K(ret), K(tablet_ids), K(tablet_id));
+    }
   }
 
   return ret;
@@ -375,15 +580,15 @@ int ObTablePartCalculator::calc(uint64_t table_id,
                                 ObIArray<ObTabletID> &tablet_ids)
 {
   int ret = OB_SUCCESS;
-  const ObSimpleTableSchemaV2 *simple_schema = nullptr;
+  const ObTableSchema *table_schema = nullptr;
 
-  if (OB_FAIL(get_simple_schema(table_id, simple_schema))) {
-    LOG_WARN("fail to get simple schema", K(ret), K(table_id));
-  } else if (!simple_schema->is_partitioned_table()) {
-    if (OB_FAIL(tablet_ids.push_back(simple_schema->get_tablet_id()))) {
+  if (OB_FAIL(get_table_schema(table_id, table_schema))) {
+    LOG_WARN("fail to get table schema", K(ret), K(table_id));
+  } else if (!table_schema->is_partitioned_table()) {
+    if (OB_FAIL(tablet_ids.push_back(table_schema->get_tablet_id()))) {
       LOG_WARN("fail to push back tablet id", K(ret), K(tablet_ids));
     }
-  } else if (OB_FAIL(calc(*simple_schema, entities, tablet_ids))) {
+  } else if (OB_FAIL(calc(*table_schema, entities, tablet_ids))) {
     LOG_WARN("fail to calc part", K(ret), K(entities));
   }
 
@@ -395,15 +600,15 @@ int ObTablePartCalculator::calc(const ObString table_name,
                                 ObIArray<ObTabletID> &tablet_ids)
 {
   int ret = OB_SUCCESS;
-  const ObSimpleTableSchemaV2 *simple_schema = nullptr;
+  const ObTableSchema *table_schema = nullptr;
 
-  if (OB_FAIL(get_simple_schema(table_name, simple_schema))) {
-    LOG_WARN("fail to get simple schema", K(ret), K(table_name));
-  } else if (!simple_schema->is_partitioned_table()) {
-    if (OB_FAIL(tablet_ids.push_back(simple_schema->get_tablet_id()))) {
+  if (OB_FAIL(get_table_schema(table_name, table_schema))) {
+    LOG_WARN("fail to get table schema", K(ret), K(table_name));
+  } else if (!table_schema->is_partitioned_table()) {
+    if (OB_FAIL(tablet_ids.push_back(table_schema->get_tablet_id()))) {
       LOG_WARN("fail to push back tablet id", K(ret), K(tablet_ids));
     }
-  } else if (OB_FAIL(calc(*simple_schema, entities, tablet_ids))) {
+  } else if (OB_FAIL(calc(*table_schema, entities, tablet_ids))) {
     LOG_WARN("fail to calc part", K(ret), K(entities));
   }
 
@@ -567,26 +772,14 @@ int ObTablePartCalculator::eval(const ObIArray<ObExpr *> &new_row,
   return ret;
 }
 
-
-// 1. 构造 insert 执行计划
-// 2. 找到生成列在 new row 中的位置
-// 3. eval 生成列
 int ObTablePartCalculator::calc_generated_col(const ObSimpleTableSchemaV2 &simple_schema,
-                                              const ObNewRange &range,
+                                              const ObITableEntity &entity,
                                               const ObTableColumnInfo &col_info,
-                                              ObObj &start,
-                                              ObObj &end)
+                                              bool need_das_ctx,
+                                              ObObj &gen_col_value)
 {
   int ret = OB_SUCCESS;
-  bool need_das_ctx = true;
-  ObTableEntity start_entity;
-  ObTableEntity end_entity;
-
-  if (OB_FAIL(construct_entity(range.start_key_.get_obj_ptr(), range.start_key_.get_obj_cnt(), start_entity))) {
-    LOG_WARN("fail to construnct start entity", K(ret), K(range));
-  } else if (OB_FAIL(construct_entity(range.end_key_.get_obj_ptr(), range.end_key_.get_obj_cnt(), end_entity))) {
-    LOG_WARN("fail to construnct end entity", K(ret), K(range));
-  } else if (OB_ISNULL(spec_) && OB_FAIL(create_plan(simple_schema, start_entity, need_das_ctx, spec_))) {
+  if (OB_ISNULL(spec_) && OB_FAIL(create_plan(simple_schema, entity, need_das_ctx, spec_))) {
     LOG_WARN("fail to create plan", K(ret));
   } else if (OB_ISNULL(spec_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -613,20 +806,43 @@ int ObTablePartCalculator::calc_generated_col(const ObSimpleTableSchemaV2 &simpl
         if (OB_ISNULL(gen_expr)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("gen expr is null", K(ret));
-        } else if (OB_FAIL(eval(new_row, start_entity, *gen_expr, col_info, start))) {
-          LOG_WARN("fail to eval generated expr by start_entity", K(ret), K(start_entity), KPC(gen_expr));
-        } else if (OB_FAIL(eval(new_row, end_entity, *gen_expr, col_info, end))) {
-          LOG_WARN("fail to eval generated expr by end_entity", K(ret), K(end_entity), KPC(gen_expr));
-        } else {
-          if (start.can_compare(end)) {
-            if (start > end) {
-              ObObj tmp = start;
-              start = end;
-              end = tmp;
-            }
-          }
+        } else if (OB_FAIL(eval(new_row, entity, *gen_expr, col_info, gen_col_value))) {
+          LOG_WARN("fail to eval generated expr by start_entity", K(ret), K(entity), KPC(gen_expr));
         }
       }
+    }
+  }
+  return ret;
+}
+
+
+// 1. 构造 insert 执行计划
+// 2. 找到生成列在 new row 中的位置
+// 3. eval 生成列
+int ObTablePartCalculator::calc_generated_col(const ObSimpleTableSchemaV2 &simple_schema,
+                                              const ObNewRange &range,
+                                              const ObTableColumnInfo &col_info,
+                                              ObObj &start,
+                                              ObObj &end)
+{
+  int ret = OB_SUCCESS;
+  bool need_das_ctx = true;
+  ObTableEntity start_entity;
+  ObTableEntity end_entity;
+
+  if (OB_FAIL(construct_entity(range.start_key_.get_obj_ptr(), range.start_key_.get_obj_cnt(), start_entity))) {
+    LOG_WARN("fail to construnct start entity", K(ret), K(range));
+  } else if (OB_FAIL(construct_entity(range.end_key_.get_obj_ptr(), range.end_key_.get_obj_cnt(), end_entity))) {
+    LOG_WARN("fail to construnct end entity", K(ret), K(range));
+  } else if (OB_FAIL(calc_generated_col(simple_schema, start_entity, col_info, need_das_ctx, start))) {
+    LOG_WARN("fail to calc generated col", K(ret), K(start_entity), K(col_info));
+  } else if (OB_FAIL(calc_generated_col(simple_schema, end_entity, col_info, need_das_ctx, end))) {
+    LOG_WARN("fail to calc generated col", K(ret), K(end_entity), K(col_info));
+  } else if (start.can_compare(end)) {
+    if (start > end) {
+      ObObj tmp = start;
+      start = end;
+      end = tmp;
     }
   }
 

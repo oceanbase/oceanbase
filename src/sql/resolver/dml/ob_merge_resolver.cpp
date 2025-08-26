@@ -49,8 +49,8 @@ int ObMergeResolver::resolve(const ParseNode &parse_tree)
   } else if (OB_ISNULL(merge_stmt = create_stmt<ObMergeStmt>())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("create insert stmt failed", K(merge_stmt));
-  } else if (OB_FAIL(resolve_outline_data_hints())) {
-    LOG_WARN("resolve outline data hints failed", K(ret));
+  } else if (OB_FAIL(pre_process_hints(parse_tree))) {
+    LOG_WARN("pre process hints failed", K(ret));
   } else {
     if (OB_NOT_NULL(parse_tree.children_[insert_idx]) &&
           parse_tree.children_[insert_idx]->type_ != T_INSERT) {
@@ -385,6 +385,11 @@ int ObMergeResolver::resolve_table(const ParseNode &parse_tree, TableItem *&tabl
         LOG_WARN("Unknown table type", "node_type", table_node->type_);
       }
     }
+  }
+  if (OB_ISNULL(table_item) || session_info_->is_inner()) {
+  } else if (OB_UNLIKELY(table_item->is_system_table_ && table_item->table_name_.case_compare(OB_ALL_LICENSE_TNAME) == 0)) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("modify license table is not allowed", KR(ret), K(table_item->table_name_), K(table_item->is_system_table_));
   }
   return ret;
 }

@@ -120,7 +120,8 @@ public:
   */
   typedef hash::ObHashMap<ObDetectableId, ObDMCallbackDList,
                   hash::SpinReadWriteDefendMode, hash::hash_func<ObDetectableId>,
-                  hash::equal_to<ObDetectableId>> CHECK_MAP;
+                  hash::equal_to<ObDetectableId>,
+                  SliceAllocer<typename HashMapTypes<ObDetectableId, ObDMCallbackDList>::AllocType, ObVSliceAlloc>> CHECK_MAP;
   /* tool classes */
   // Atomic insert the first detect callback in link list
   class ObDetectCallbackSetCall
@@ -271,6 +272,11 @@ public:
   bool is_task_alive(const ObDetectableId &detectable_id)
   {
     return OB_HASH_EXIST == detectable_ids_.exist_refactored(detectable_id);
+  }
+
+  bool has_check_item_with_detectable_id(const ObDetectableId &detectable_id)
+  {
+    return nullptr != all_check_items_.get(detectable_id);
   }
 
   lib::MemoryContext &get_mem_context() { return mem_context_; }

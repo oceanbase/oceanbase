@@ -24,10 +24,8 @@
 #include "llvm/ExecutionEngine/Orc/ExecutionUtils.h"
 #include "llvm/ExecutionEngine/JITEventListener.h"
 #include "llvm/IR/Mangler.h"
-#ifdef CPP_STANDARD_20
 #include "llvm/ExecutionEngine/Orc/Shared/ExecutorAddress.h"
 #include "llvm/ExecutionEngine/Orc/Shared/ExecutorSymbolDef.h"
-#endif
 
 #include <string>
 
@@ -118,18 +116,11 @@ typedef ::llvm::TargetMachine ObTargetMachine;
 typedef ::llvm::DataLayout ObDataLayout;
 typedef ::llvm::JITSymbol ObJITSymbol;
 typedef ::llvm::JITEventListener ObJitEventListener;
-#ifdef CPP_STANDARD_20
+
 typedef ::llvm::orc::DefinitionGenerator ObJitDefinitionGenerator;
 using ObObjectKey = ObJitEventListener::ObjectKey;
 using ObSymbolDef = ::llvm::orc::ExecutorSymbolDef;
 using ObExecutorAddr = ::llvm::orc::ExecutorAddr;
-#else
-typedef ::llvm::orc::SymbolResolver ObSymbolResolver;
-typedef ::llvm::orc::JITDylib::DefinitionGenerator ObJitDefinitionGenerator;
-using ObObjectKey = ::llvm::orc::VModuleKey;
-using ObSymbolDef = ::llvm::JITEvaluatedSymbol;
-using ObExecutorAddr = ::llvm::JITTargetAddress;
-#endif
 
 class ObNotifyLoaded: public ObJitEventListener
 {
@@ -171,12 +162,9 @@ private:
 
 class ObJitGlobalSymbolGenerator: public ObJitDefinitionGenerator {
 public:
-#ifdef CPP_STANDARD_20
+
   Error tryToGenerate(orc::LookupState &LS,
                       orc::LookupKind K,
-#else
-  Error tryToGenerate(orc::LookupKind K,
-#endif
                       orc::JITDylib &JD,
                       orc::JITDylibLookupFlags JDLookupFlags,
                       const orc::SymbolLookupSet &LookupSet) override

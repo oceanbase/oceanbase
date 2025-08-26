@@ -21,6 +21,8 @@
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "storage/tablet/ob_tablet_common.h"
 
+#define DATA_VERSION_SUPPORT_EMPTY_TABLE_CREATE_INDEX_OPT(data_version) (data_version > MOCK_DATA_VERSION_4_2_5_3 && data_version < DATA_VERSION_4_3_0_0) || (data_version >= DATA_VERSION_4_4_1_0)
+
 namespace oceanbase
 {
 namespace obrpc
@@ -90,6 +92,7 @@ enum ObDDLType
   DDL_DROP_VEC_IVFPQ_INDEX = 23,
   DDL_DROP_VEC_SPIV_INDEX = 24,
   DDL_REPLACE_MLOG = 25, // placeholder of alter mlog
+  DDL_CREATE_VEC_SPIV_INDEX = 26, // placeholder of spiv post build
 
   ///< @note tablet split.
   DDL_AUTO_SPLIT_BY_RANGE = 100,
@@ -216,6 +219,11 @@ enum ObDDLTaskStatus { // FARM COMPAT WHITELIST
   WAIT_PQ_CENTROID_TABLE_COMPLEMENT = 45,
   LOAD_DICTIONARY = 46,
   PURGE_OLD_MLOG = 47,
+  REGISTER_SPLIT_INFO_MDS = 48,
+  PREPARE_TABLET_SPLIT_RANGES = 49,
+  DROP_VID_ROWKEY_INDEX_TABLE = 50,
+  DROP_ROWKEY_VID_INDEX_TABLE = 51,
+  BUILD_MLOG = 52,
 
   FAIL = 99,
   SUCCESS = 100
@@ -243,7 +251,8 @@ enum ObSplitSSTableType
 {
   SPLIT_BOTH = 0, // Major and Minor
   SPLIT_MAJOR = 1,
-  SPLIT_MINOR = 2
+  SPLIT_MINOR = 2,
+  SPLIT_MDS = 3
 };
 
 static const char* ddl_task_status_to_str(const ObDDLTaskStatus &task_status) {
@@ -393,6 +402,21 @@ static const char* ddl_task_status_to_str(const ObDDLTaskStatus &task_status) {
     case ObDDLTaskStatus::PURGE_OLD_MLOG:
       str = "PURGE_OLD_MLOG";
       break;
+    case ObDDLTaskStatus::REGISTER_SPLIT_INFO_MDS:
+      str = "REGISTER_SPLIT_INFO_MDS";
+      break;
+    case ObDDLTaskStatus::PREPARE_TABLET_SPLIT_RANGES:
+      str = "PREPARE_TABLET_SPLIT_RANGES";
+      break;
+    case ObDDLTaskStatus::DROP_VID_ROWKEY_INDEX_TABLE:
+      str = "DROP_VID_ROWKEY_INDEX_TABLE";
+      break;
+    case ObDDLTaskStatus::DROP_ROWKEY_VID_INDEX_TABLE:
+      str = "DROP_ROWKEY_VID_INDEX_TABLE";
+      break;
+    case ObDDLTaskStatus::BUILD_MLOG:
+      str = "BUILD_MLOG";
+      break;
     case ObDDLTaskStatus::FAIL:
       str = "FAIL";
       break;
@@ -473,6 +497,7 @@ static inline bool is_ddl_stmt_packet_retry_err(const int ret)
       || OB_TRANS_KILLED == ret || OB_TRANS_ROLLBACKED == ret // table lock doesn't support leader switch
       || OB_PARTITION_IS_BLOCKED == ret // when LS is block_tx by a transfer task
       || OB_TRANS_NEED_ROLLBACK == ret // transaction killed by leader switch
+      || OB_ERR_DDL_RESOURCE_NOT_ENOUGH == ret // tenant ddl resource not enough
       ;
 }
 
@@ -635,10 +660,12 @@ struct InsertMonitorNodeInfo final
 {
 public:
   InsertMonitorNodeInfo():
-    tenant_id_(OB_INVALID_ID), task_id_(0), execution_id_(0), thread_id_(0), last_refresh_time_(0), cg_row_inserted_(0), sstable_row_inserted_(0)
+    tenant_id_(OB_INVALID_ID), task_id_(0), execution_id_(0), thread_id_(0), last_refresh_time_(0), cg_row_inserted_(0), sstable_row_inserted_(0),
+    vec_task_thread_pool_cnt_(0), vec_task_total_cnt_(0), vec_task_finish_cnt_(0)
   {}
   ~InsertMonitorNodeInfo() = default;
-  TO_STRING_KV(K(tenant_id_), K(task_id_), K(execution_id_), K(thread_id_), K(last_refresh_time_), K(cg_row_inserted_), K(sstable_row_inserted_));
+  TO_STRING_KV(K(tenant_id_), K(task_id_), K(execution_id_), K(thread_id_), K(last_refresh_time_), K(cg_row_inserted_), K(sstable_row_inserted_),
+  K(vec_task_thread_pool_cnt_), K(vec_task_total_cnt_), K(vec_task_finish_cnt_));
 
 public:
   uint64_t tenant_id_;
@@ -648,6 +675,10 @@ public:
   int64_t last_refresh_time_;
   int64_t cg_row_inserted_;
   int64_t sstable_row_inserted_;
+  // for vec index
+  int64_t vec_task_thread_pool_cnt_;
+  int64_t vec_task_total_cnt_;
+  int64_t vec_task_finish_cnt_;
 };
 
 struct ObSqlMonitorStats final
@@ -798,6 +829,15 @@ public:
     insert_remain_time_ = 0;
     insert_slowest_thread_id_ = 0;
 
+    vec_task_thread_pool_cnt_ = 0;
+    vec_task_total_cnt_ = 0;
+    vec_task_finish_cnt_ = 0;
+    vec_task_trigger_cnt_ = 0;
+    vec_task_progress_ = 1;
+    vec_task_slowest_trigger_id_ = 0;
+    vec_task_slowest_cnt_ = 0;
+    vec_task_slowest_finish_cnt_ = 0;
+
     state_ = RedefinitionState::BEFORESCAN;
     is_empty_ = true;
     finish_ddl_ = false;
@@ -853,6 +893,15 @@ public:
     insert_remain_time_ = 0;
     insert_slowest_thread_id_ = 0;
 
+    vec_task_thread_pool_cnt_ = 0;
+    vec_task_total_cnt_ = 0;
+    vec_task_finish_cnt_ = 0;
+    vec_task_trigger_cnt_ = 0;
+    vec_task_progress_ = 1;
+    vec_task_slowest_trigger_id_ = 0;
+    vec_task_slowest_cnt_ = 0;
+    vec_task_slowest_finish_cnt_ = 0;
+
     state_ = RedefinitionState::BEFORESCAN;
     finish_thread_num_ = 0;
     is_empty_ = true;
@@ -885,6 +934,8 @@ public:
   K(merge_sort_thread_num_), K(row_merge_sorted_), K(expected_round_), K(merge_sort_remain_time_), K(merge_sort_progress_),
   K(dump_size_), K(compress_type_),
   K(row_inserted_cg_), K(row_inserted_file_), K(insert_thread_num_), K(insert_progress_), K(insert_remain_time_),
+  K(vec_task_thread_pool_cnt_), K(vec_task_total_cnt_), K(vec_task_finish_cnt_), K(vec_task_trigger_cnt_), K(vec_task_progress_),
+  K(vec_task_slowest_trigger_id_), K(vec_task_slowest_cnt_), K(vec_task_slowest_finish_cnt_),
   K(state_), K(parallelism_), K(real_parallelism_), K(execution_id_), K(finish_thread_num_),
   K(min_inmem_sort_row_), K(min_merge_sort_row_), K(min_insert_row_));
 
@@ -905,6 +956,7 @@ private:
       const int64_t row_count,
       const SortMonitorNodeInfo &sort_info,
       const ObSqlMonitorStats &sql_monitor_stats);
+  int calculate_vec_task_info(const InsertMonitorNodeInfo &insert_monitor_node);
   int local_index_diagnose();
   int finish_ddl_diagnose();
   int running_ddl_diagnose();
@@ -976,6 +1028,15 @@ private:
   int64_t min_insert_row_;
   double insert_spend_time_;
   int64_t insert_slowest_thread_id_ = 0;
+  // for vec index
+  int64_t vec_task_thread_pool_cnt_;
+  int64_t vec_task_total_cnt_;
+  int64_t vec_task_finish_cnt_;
+  int64_t vec_task_trigger_cnt_;
+  double vec_task_progress_;
+  int64_t vec_task_slowest_trigger_id_;
+  int64_t vec_task_slowest_cnt_;
+  int64_t vec_task_slowest_finish_cnt_;
 
   // analysis data
   bool is_empty_;
@@ -1142,10 +1203,10 @@ public:
 
   static bool need_remote_write(const int ret_code);
 
-  static int check_can_convert_character(const ObObjMeta &obj_meta, const bool is_domain_index)
+  static int check_can_convert_character(const ObObjMeta &obj_meta, const bool is_domain_index, const bool is_string_lob)
   {
-    return (obj_meta.is_string_type() || obj_meta.is_enum_or_set())
-              && CS_TYPE_BINARY != obj_meta.get_collation_type() && !is_domain_index;
+    return (obj_meta.is_string_type() || obj_meta.is_enum_or_set()) &&
+            (is_string_lob || (CS_TYPE_BINARY != obj_meta.get_collation_type() && !is_domain_index));
   }
 
   static int get_sys_ls_leader_addr(
@@ -1314,10 +1375,10 @@ public:
       const bool calc_sstable,
       const bool calc_memtable,
       int64_t &physical_row_count /*OUT*/);
-  static int check_table_empty_in_oracle_mode(
-      const uint64_t tenant_id,
-      const uint64_t table_id,
-      share::schema::ObSchemaGetterGuard &schema_guard,
+  static int check_table_empty(
+      const ObString &database_name,
+      const share::schema::ObTableSchema &table_schema,
+      const ObSQLMode sql_mode,
       bool &is_table_empty);
   static int check_tenant_status_normal(
       ObISQLClient *proxy,
@@ -1327,10 +1388,6 @@ public:
       const int64_t target_schema_version);
   static bool reach_time_interval(const int64_t i, volatile int64_t &last_time);
   static int is_major_exist(const ObLSID &ls_id, const common::ObTabletID &tablet_id, bool &is_exist);
-#ifdef OB_BUILD_SHARED_STORAGE
-  static int upload_block_for_ss(const char* buf, const int64_t len, const blocksstable::MacroBlockId &macro_block_id);
-  static int update_tablet_gc_info(const ObTabletID &tablet_id, const int64_t pre_snapshot_version, const int64_t new_snapshot_version);
-#endif
   static int set_tablet_autoinc_seq(const ObLSID &ls_id, const ObTabletID &tablet_id, const int64_t seq_value);
   static int check_table_compaction_checksum_error(
       const uint64_t tenant_id,
@@ -1450,9 +1507,14 @@ public:
       const ObTableSchema &index_table_schema,
       ObSchemaService *schema_service,
       int64_t &new_fetched_snapshot);
-
   static int get_table_lob_col_idx(const ObTableSchema &table_schema, ObIArray<uint64_t> &lob_col_idxs);
+  static int load_ddl_task(
+      const int64_t tenant_id,
+      const int64_t task_id,
+      ObIAllocator &allocator,
+      rootserver::ObDDLTask &task);
 
+  static int is_ls_leader(ObLS &ls, bool &is_leader);
 private:
   static int hold_snapshot(
       common::ObMySQLTransaction &trans,
@@ -1606,19 +1668,35 @@ class ObSplitTabletInfo final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObSplitTabletInfo() : split_info_(0), split_src_tablet_id_() { }
+  ObSplitTabletInfo() :
+    split_info_(0),
+    split_src_tablet_id_(),
+    split_start_scn_() { }
   ~ObSplitTabletInfo() { reset(); }
-  void reset() { split_info_ = 0; split_src_tablet_id_.reset(); }
+  void reset() {
+    split_info_ = 0;
+    split_src_tablet_id_.reset();
+    split_start_scn_.reset();
+  }
+
   void set_data_incomplete(const bool is_data_incomplete) { is_data_incomplete_ = is_data_incomplete; }
+  void set_can_not_execute_ss_minor(const bool can_not_execute_ss_minor) { cant_execute_ss_minor_ = can_not_execute_ss_minor; }
+  void set_can_not_gc_data_blks(const bool can_not_gc_data_blks) { cant_gc_macro_blks_ = can_not_gc_data_blks; }
   void set_split_src_tablet_id(const ObTabletID &split_src_tablet_id) { split_src_tablet_id_ = split_src_tablet_id; }
+  void set_split_start_scn(const share::SCN &split_scn) { split_start_scn_ = split_scn; }
+
   bool is_data_incomplete() const { return is_data_incomplete_; }
+  bool can_not_execute_ss_minor() const { return cant_execute_ss_minor_; }
+  bool can_not_gc_macro_blks() const { return cant_gc_macro_blks_; }
   const ObTabletID &get_split_src_tablet_id() const { return split_src_tablet_id_; }
-  TO_STRING_KV(K_(split_info), K_(split_src_tablet_id));
+  const share::SCN &get_split_start_scn() const { return split_start_scn_; }
+
+  TO_STRING_KV(K_(split_info), K_(split_src_tablet_id), K_(split_start_scn));
 private:
   union {
     uint32_t split_info_;
     struct {
-      uint32_t is_data_incomplete_: 1; // whether the data of split dest tablet is complete.
+      uint32_t is_data_incomplete_: 1; // whether the data of split dest tablet is incomplete? default = 0 (data complete).
       uint32_t can_reuse_macro_block_: 1;
       uint32_t cant_execute_ss_minor_: 1; // can not execute ss minor compaction? default = 0(can execute ss minor).
       uint32_t cant_gc_macro_blks_: 1; // can not gc macro blocks when gc tablet? default = 0(can gc them).

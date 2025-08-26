@@ -48,11 +48,15 @@ namespace drtask
   const static char * const TRANSFORM_LOCALITY_REPLICA_TYPE = "type transform according to locality";
   const static char * const MODIFY_PAXOS_REPLICA_NUMBER = "modify paxos replica number according to locality";
   const static char * const REMOVE_PERMANENT_OFFLINE_REPLICA = "remove permanent offline replica";
+  const static char * const REMOVE_REPLICA_DUE_TO_SERVER_NOT_EXIST = "remove replica due to replica not in __all_server";
   const static char * const REPLICATE_REPLICA = "replicate to unit task";
   const static char * const REPLACE_LOCALITY_REPLACE_REPLIACE = "replace replica according to single replace locality";
   const static char * const CANCEL_MIGRATE_UNIT_WITH_PAXOS_REPLICA = "cancel migrate unit remove paxos replica";
   const static char * const CANCEL_MIGRATE_UNIT_WITH_NON_PAXOS_REPLICA = "cancel migrate unit remove non-paxos replica";
   const static char * const MIGRATE_REPLICA_DUE_TO_UNIT_GROUP_NOT_MATCH = "migrate replica due to unit group not match";
+  const static char * const TYPE_TRANSFORM_DUE_TO_ADD_SSLOG_REPLICA = "type transform due to add sslog replica";
+  const static char * const TYPE_TRANSFORM_DUE_TO_MIGRATE_SSLOG_REPLICA = "type transform due to migrate sslog replica";
+  const static char * const TYPE_TRANSFORM_DUE_TO_REMOVE_SSLOG_PAXOS_REPLICA = "type transform due to remove sslog paxos replica";
   const static char * const MIGRATE_REPLICA_DUE_TO_UNIT_NOT_MATCH = "migrate replica due to unit not match";
   const static char * const ALTER_SYSTEM_COMMAND_ADD_REPLICA = "add replica by manual";
   const static char * const ALTER_SYSTEM_COMMAND_REMOVE_REPLICA = "remove replica by manual";
@@ -61,6 +65,7 @@ namespace drtask
   const static char * const ALTER_SYSTEM_COMMAND_MODIFY_PAXOS_REPLICA_NUM = "modify paxos_replica_num by manual";
   const static char * const TRANSFORM_DUE_TO_UNIT_DELETING = "transform replica type due to unit deleting";
   const static char * const TRANSFORM_DUE_TO_UNIT_NOT_MATCH = "transform replica type due to unit not match";
+  const static char * const LOCAL_SSLOG_SERVICE_ADD_SSLOG_READONLY_REPLICA = "local sslog service add sslog readonly replica";
 };
 
 namespace drtasklog
@@ -167,6 +172,7 @@ public:
   const share::ObLSID &get_ls_id() const { return ls_id_; }
   const common::ObZone &get_zone() const { return task_execute_zone_; }
   const obrpc::ObDRTaskType &get_task_type() const { return task_type_; }
+  void set_task_type(const obrpc::ObDRTaskType &task_type) { task_type_ = task_type; }
   int build_task_key_from_sql_result(const sqlclient::ObMySQLResult &res);
 private:
   uint64_t tenant_id_;
@@ -225,6 +231,10 @@ public:
   virtual const common::ObAddr &get_dst_server() const = 0;
 
   virtual obrpc::ObDRTaskType get_disaster_recovery_task_type() const = 0;
+  bool is_remove_paxos_task() const { return obrpc::ObDRTaskType::LS_REMOVE_PAXOS_REPLICA == get_disaster_recovery_task_type(); };
+  bool is_remove_non_paxos_task() const { return obrpc::ObDRTaskType::LS_REMOVE_NON_PAXOS_REPLICA == get_disaster_recovery_task_type(); };
+  bool is_migrate_task() const { return obrpc::ObDRTaskType::LS_MIGRATE_REPLICA == get_disaster_recovery_task_type(); };
+  bool is_add_task() const { return obrpc::ObDRTaskType::LS_ADD_REPLICA == get_disaster_recovery_task_type(); };
 
   virtual int log_execute_start() const = 0;
   virtual int log_execute_result() const = 0;
@@ -245,6 +255,11 @@ public:
       share::ObDMLSqlSplicer &dml_splicer,
       const common::ObAddr &force_data_src) const;
 
+  int fill_timestamp_and_flag(
+      const int64_t timestamp,
+      const int64_t flag,
+      share::ObDMLSqlSplicer &dml_splicer) const;
+
   virtual TO_STRING_KV(K_(task_key),
                        K_(cluster_id),
                        K_(transmit_data_size),
@@ -258,6 +273,7 @@ public:
                        K_(task_status));
 public:
   bool is_already_timeout() const;
+  bool is_sslog_dr_task() const { return is_tenant_sslog_ls(task_key_.get_tenant_id(), task_key_.get_ls_id()); }
   const share::ObTaskId &get_task_id() const { return task_id_; }
   // operations of task_key_
   const ObDRTaskKey &get_task_key() const { return task_key_; }
@@ -589,13 +605,15 @@ public:
                             src_member_(),
                             data_src_member_(),
                             orig_paxos_replica_number_(0),
-                            paxos_replica_number_(0) {}
+                            paxos_replica_number_(0),
+                            leader_() {}
   virtual ~ObLSTypeTransformTask() {}
 public:
   int build(
       const ObDRTaskKey &task_key,
       const share::ObTaskId &task_id,
       const ObString &comment,
+      const common::ObAddr &leader,
       const common::ObReplicaMember &dst_member,
       const common::ObReplicaMember &src_member,
       const common::ObReplicaMember &data_src_member,
@@ -614,6 +632,16 @@ public:
   int build_task_from_sql_result(const sqlclient::ObMySQLResult &res);
 public:
   virtual const common::ObAddr &get_dst_server() const override {
+    // When removing a sslog replica, the task is not actually removed, Instead, it is converted into a type transform task.
+    // When removing sslog F, F is converted to R, and when removing R, this task is ignored.
+    // The same logic applies when an sslog replica is permanently offline. However, in the event of a machine shutdown,
+    // the type transform task cannot be completed, so it must be sent to the leader for execution.
+    // For normal LS, type transform requires various pre-checks like transfer requirements.
+    // Therefore, type transform tasks for normal LS still need to be sent to the corresponding server.
+    // For SSLog LS, it do not require transfer operation and can be sent directly to the leader for execution.
+    if (is_sslog_dr_task()) {
+      return leader_;
+    }
     return dst_member_.get_server();
   }
 
@@ -625,7 +653,8 @@ public:
                                K(src_member_),
                                K(data_src_member_),
                                K(orig_paxos_replica_number_),
-                               K(paxos_replica_number_));
+                               K(paxos_replica_number_),
+                               K(leader_));
 
   virtual int log_execute_start() const override;
 
@@ -664,6 +693,8 @@ public:
   // operations of paxos_replica_number_
   void set_paxos_replica_number(const int64_t paxos_replica_number) { paxos_replica_number_ = paxos_replica_number; }
   int64_t get_paxos_replica_number() const { return paxos_replica_number_; }
+  void set_leader(const common::ObAddr &leader) { leader_ = leader; };
+  const common::ObAddr &get_leader() const { return leader_; }
 private:
   int check_online(
       const share::ObLSInfo &ls_info,
@@ -678,6 +709,7 @@ private:
   common::ObReplicaMember data_src_member_;
   int64_t orig_paxos_replica_number_;
   int64_t paxos_replica_number_;
+  common::ObAddr leader_;
 };
 
 class ObRemoveLSReplicaTask : public ObDRTask
@@ -768,7 +800,7 @@ public:
   const common::ObAddr &get_leader() const { return leader_; }
   // operations of remove_server_
   void set_remove_server(const common::ObReplicaMember &d) { remove_server_ = d; }
-  const common::ObReplicaMember &get_remove_server() const { return remove_server_; }
+  const common::ObReplicaMember &get_remove_member() const { return remove_server_; }
   // operations of orig_paxos_replica_number_
   void set_orig_paxos_replica_number(const int64_t q) { orig_paxos_replica_number_ = q; }
   int64_t get_orig_paxos_replica_number() const { return orig_paxos_replica_number_; }

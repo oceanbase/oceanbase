@@ -14,6 +14,7 @@
 // for materialized view
 #include "ob_multi_version_schema_service.h"
 #include "observer/ob_server.h"
+#include "share/schema/ob_dblink_sql_service.h"
 
 namespace oceanbase
 {
@@ -356,11 +357,7 @@ int ObMultiVersionSchemaService::get_latest_schema(
       schema = new_schema;
     } else {
       ObTableSchema *new_table = static_cast<ObTableSchema *>(new_schema);
-      if (MATERIALIZED_VIEW == new_table->get_table_type()) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter materialized view is");
-        LOG_WARN("not support to fetch latest mv", KR(ret), "table_id", schema_id);
-      } else if (is_hardcode_schema_table(schema_id)) {
+      if (is_hardcode_schema_table(schema_id)) {
         // do-nothing
       } else if (!need_construct_aux_infos_(*new_table)) {
         // do-nothing
@@ -4459,7 +4456,7 @@ int ObMultiVersionSchemaService::fetch_link_table_schema(const ObDbLinkSchema *d
   if (OB_ISNULL(schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema service is NULL", K(ret));
-  } else if (OB_FAIL(schema_service_->get_link_table_schema(dblink_schema,
+  } else if (OB_FAIL(schema_service_->get_dblink_sql_service().get_link_table_schema(dblink_schema,
                                                             database_name, table_name,
                                                             allocator, table_schema,
                                                             session_info,

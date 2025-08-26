@@ -15,7 +15,9 @@
 #include "lib/string/ob_string.h"
 #include "lib/hash_func/ob_hash_func.h"
 #include "lib/container/ob_se_array.h"
-#include "sql/resolver/expr/ob_raw_expr.h"
+#include "share/system_variable/ob_sys_var_class_type.h"
+#include "common/ob_version_def.h"
+#include "objit/common/ob_item_type.h"
 #include "sql/optimizer/ob_log_operator_factory.h"
 
 namespace oceanbase
@@ -24,6 +26,13 @@ namespace sql
 {
 struct PlanText;
 struct TableItem;
+class ObRowExpr;
+class ObRawExpr;
+class ObWinFunRawExpr;
+class ObDMLStmt;
+class ObSelectStmt;
+
+#define OB_OUTLINE_DATA_END_STR          " END_OUTLINE_DATA*/"
 
 enum ObHintMergePolicy
 {
@@ -218,6 +227,10 @@ struct ObOptParamHint
     DEF(ENABLE_PDML_INSERT_UP,)                     \
     DEF(PARQUET_FILTER_PUSHDOWN_LEVEL,)             \
     DEF(ORC_FILTER_PUSHDOWN_LEVEL,)                 \
+    DEF(ENABLE_INDEX_MERGE,)                        \
+    DEF(ENABLE_RUNTIME_FILTER_ADAPTIVE_APPLY, )     \
+    DEF(EXTENDED_SQL_PLAN_MONITOR_METRICS, )        \
+    DEF(APPROX_COUNT_DISTINCT_PRECISION,)           \
 
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);
@@ -338,6 +351,8 @@ struct ObGlobalHint {
 #define COMPAT_VERSION_4_2_5_BP1  (oceanbase::common::cal_version(4, 2, 5, 1))
 #define COMPAT_VERSION_4_2_5_BP3  (oceanbase::common::cal_version(4, 2, 5, 3))
 #define COMPAT_VERSION_4_2_5_BP4  (oceanbase::common::cal_version(4, 2, 5, 4))
+#define COMPAT_VERSION_4_2_5_BP5  (oceanbase::common::cal_version(4, 2, 5, 5))
+#define COMPAT_VERSION_4_2_5_BP6  (oceanbase::common::cal_version(4, 2, 5, 6))
 #define COMPAT_VERSION_4_3_0      (oceanbase::common::cal_version(4, 3, 0, 0))
 #define COMPAT_VERSION_4_3_1      (oceanbase::common::cal_version(4, 3, 1, 0))
 #define COMPAT_VERSION_4_3_2      (oceanbase::common::cal_version(4, 3, 2, 0))
@@ -347,21 +362,23 @@ struct ObGlobalHint {
 #define COMPAT_VERSION_4_3_5_BP1  (oceanbase::common::cal_version(4, 3, 5, 1))
 #define COMPAT_VERSION_4_3_5_BP2  (oceanbase::common::cal_version(4, 3, 5, 2))
 #define COMPAT_VERSION_4_3_5_BP3  (oceanbase::common::cal_version(4, 3, 5, 3))
+#define COMPAT_VERSION_4_3_5_BP4  (oceanbase::common::cal_version(4, 3, 5, 4))
 #define COMPAT_VERSION_4_4_0      (oceanbase::common::cal_version(4, 4, 0, 0))
-#define LASTED_COMPAT_VERSION     COMPAT_VERSION_4_4_0
+#define COMPAT_VERSION_4_4_1      (oceanbase::common::cal_version(4, 4, 1, 0))
+#define LASTED_COMPAT_VERSION     COMPAT_VERSION_4_4_1
   static bool is_valid_opt_features_version(uint64_t version)
   { return COMPAT_VERSION_4_0 <= version && (LASTED_COMPAT_VERSION >= version || CLUSTER_CURRENT_VERSION >= version); }
 
-  static const common::ObConsistencyLevel UNSET_CONSISTENCY = common::INVALID_CONSISTENCY;
-  static const int64_t UNSET_QUERY_TIMEOUT = -1;
-  static const int64_t UNSET_MAX_CONCURRENT = -1;
-  static const uint64_t UNSET_OPT_FEATURES_VERSION = 0;
-  static const int64_t DEFAULT_PARALLEL = 1;
-  static const int64_t UNSET_PARALLEL = 0;
-  static const int64_t SET_ENABLE_AUTO_DOP = -1;
-  static const int64_t SET_ENABLE_MANUAL_DOP = -2;
-  static const int64_t UNSET_DYNAMIC_SAMPLING = -1;
-  static const int64_t UNSET_PX_NODE_COUNT = -1;
+  static constexpr common::ObConsistencyLevel UNSET_CONSISTENCY = common::INVALID_CONSISTENCY;
+  static constexpr int64_t UNSET_QUERY_TIMEOUT = -1;
+  static constexpr int64_t UNSET_MAX_CONCURRENT = -1;
+  static constexpr uint64_t UNSET_OPT_FEATURES_VERSION = 0;
+  static constexpr int64_t DEFAULT_PARALLEL = 1;
+  static constexpr int64_t UNSET_PARALLEL = 0;
+  static constexpr int64_t SET_ENABLE_AUTO_DOP = -1;
+  static constexpr int64_t SET_ENABLE_MANUAL_DOP = -2;
+  static constexpr int64_t UNSET_DYNAMIC_SAMPLING = -1;
+  static constexpr int64_t UNSET_PX_NODE_COUNT = -1;
 
   int merge_global_hint(const ObGlobalHint &other);
   int merge_dop_hint(uint64_t dfo, uint64_t dop);
@@ -1077,8 +1094,8 @@ public:
   common::ObIArray<ObTableInHint> &get_mv_list() { return mv_list_; }
   const common::ObIArray<ObTableInHint> &get_mv_list() const { return mv_list_; }
   int check_mv_match_hint(ObCollationType cs_type,
-                          const ObTableSchema *mv_schema,
-                          const ObDatabaseSchema *db_schema,
+                          const share::schema::ObTableSchema *mv_schema,
+                          const share::schema::ObDatabaseSchema *db_schema,
                           bool &is_match) const;
 
   INHERIT_TO_STRING_KV("ObHint", ObHint, K_(mv_list));
@@ -1115,7 +1132,7 @@ public:
                                        T_INDEX_SS_DESC_HINT == get_hint_type(); }
   bool is_match_index(const ObCollationType cs_type,
                       const TableItem &ref_table,
-                      const ObTableSchema &index_schema) const;
+                      const share::schema::ObTableSchema &index_schema) const;
   bool is_asc_hint() const
   {
     return T_INDEX_ASC_HINT == get_hint_type() ||
@@ -1191,7 +1208,8 @@ class ObJoinHint : public ObOptHint
 public:
   ObJoinHint(ObItemType hint_type = T_INVALID)
     : ObOptHint(hint_type),
-      dist_algo_(DistAlgo::DIST_INVALID_METHOD)
+      dist_algo_(DistAlgo::DIST_INVALID_METHOD),
+      parallel_(ObGlobalHint::UNSET_PARALLEL)
   {
     set_hint_class(HINT_JOIN_METHOD);
   }
@@ -1210,12 +1228,15 @@ public:
                                           ? DistAlgo::DIST_PARTITION_WISE | DistAlgo::DIST_EXT_PARTITION_WISE
                                           : dist_algo_; }
   void set_dist_algo(DistAlgo dist_algo) { dist_algo_ = dist_algo; }
+  void set_parallel(int64_t parallel) { parallel_ = parallel; }
+  int64_t get_parallel() const { return parallel_; }
 
-  INHERIT_TO_STRING_KV("ObHint", ObHint, K_(tables), K_(dist_algo));
+  INHERIT_TO_STRING_KV("ObHint", ObHint, K_(tables), K_(dist_algo), K_(parallel));
 
 private:
   common::ObSEArray<ObTableInHint, 4, common::ModulePageAllocator, true> tables_;
   DistAlgo dist_algo_;
+  int64_t parallel_;
 };
 
 class ObJoinFilterHint : public ObOptHint

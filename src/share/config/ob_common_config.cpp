@@ -422,13 +422,15 @@ int ObCommonConfig::add_extra_config_unsafe(const char *config_str,
       if (strncmp(token, "enable_production_mode:", 23) != 0) {
         func();
       }
-// TODO by qingxia: open this feature before release
-// #ifdef OB_BUILD_SHARED_LOG_SERVICE
-//       if (strncmp(token, "logservice_access_point", 23) == 0) {
-//         ret = OB_INVALID_CONFIG;
-//         LOG_ERROR("logservice_access_point cannot be setted by -o", K(ret));
-//       }
-// #endif
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+      constexpr char logservice_access_point_name[] = "logservice_access_point";
+      constexpr int64_t logservice_access_point_name_len = sizeof(logservice_access_point_name) - 1;
+      if (0 == strncmp(token, logservice_access_point_name, logservice_access_point_name_len)
+        && NULL != STRSTR(token, "://")) {
+        ret = OB_INVALID_CONFIG;
+        LOG_ERROR("logservice_access_point cannot be setted by -o", K(ret));
+      }
+#endif
       token = STRTOK_R(NULL, delimiter, &saveptr);
     }
   }
@@ -436,6 +438,28 @@ int ObCommonConfig::add_extra_config_unsafe(const char *config_str,
   if (NULL != buf) {
     delete [] buf;
     buf = NULL;
+  }
+  return ret;
+}
+
+int ObCommonConfig::to_json_array(ObIAllocator &allocator, ObJsonArray &j_arr) const
+{
+  int ret = OB_SUCCESS;
+  for (ObConfigContainer::const_iterator it = container_.begin();
+      OB_SUCC(ret) && it != container_.end(); ++it) {
+    ObConfigItem *item = it->second;
+    ObJsonObject *j_obj = nullptr;
+    if (nullptr == item) {
+      ret = OB_ERR_NULL_VALUE;
+      OB_LOG(WARN, "config item is null", "name", it->first.str(), K(ret));
+    } else if (nullptr == (j_obj = OB_NEW(ObJsonObject, g_config_mem_attr, &allocator))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      OB_LOG(WARN, "create json object failed", K(ret));
+    } else if (OB_FAIL(item->to_json_obj(allocator, *j_obj))) {
+      OB_LOG(WARN, "convert config item to json object failed", "name", it->first.str(), K(ret));
+    } else if (OB_FAIL(j_arr.append(j_obj))) {
+      OB_LOG(WARN, "append json object to json array failed", "name", it->first.str(), K(ret));
+    } else {}
   }
   return ret;
 }

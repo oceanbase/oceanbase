@@ -20,9 +20,6 @@
 #include "storage/compaction/ob_tenant_medium_checker.h"
 #include "storage/compaction/ob_tablet_merge_ctx.h"
 #include "storage/compaction/ob_ckm_error_tablet_info.h"
-#ifdef OB_BUILD_SHARED_STORAGE
-#include "storage/compaction/ob_ls_compaction_list.h"
-#endif
 
 namespace oceanbase
 {
@@ -76,8 +73,7 @@ public:
     const int64_t schema_version,
     const int64_t data_version,
     ObIAllocator &allocator,
-    storage::ObStorageSchema &storage_schema,
-    bool &is_skip_merge_index);
+    storage::ObStorageSchema &storage_schema);
   static int batch_check_medium_finish(
     const hash::ObHashMap<ObLSID, share::ObLSInfo> &ls_info_map,
     ObIArray<ObTabletCheckInfo> &finish_tablet_ls_infos,
@@ -101,10 +97,11 @@ public:
     bool &is_schema_changed);
 #ifdef OB_BUILD_SHARED_STORAGE
   // medium compaction is not considered
-  int prepare_ls_major_merge_info(
+  int try_skip_merge_for_ss(
     const int64_t merge_version,
-    ObAdaptiveMergePolicy::AdaptiveMergeReason &merge_reason,
-    bool &submit_clog_flag);
+    share::ObFreezeInfo &freeze_info,
+    ObMediumCompactionInfo &medium_info,
+    bool &skip);
   int check_tablet_inc_data(
     ObTablet &tablet,
     ObMediumCompactionInfo &medium_info,

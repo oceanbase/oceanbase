@@ -19,6 +19,8 @@
 #include "observer/virtual_table/ob_table_columns.h"
 #include "sql/rewrite/ob_transformer_impl.h"
 #include "storage/mview/ob_mview_refresh.h"
+#include "share/table/ob_ttl_util.h"
+#include "share/ob_license_utils.h"
 
 namespace oceanbase
 {
@@ -139,6 +141,11 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("tenant version is less than 4.3, materialized view is not supported", KR(ret), K(tenant_data_version));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "version is less than 4.3, materialized view is not supported");
+      } else if (OB_FAIL(ObLicenseUtils::check_olap_allowed(session_info_->get_effective_tenant_id()))) {
+        ret = OB_LICENSE_SCOPE_EXCEEDED;
+        LOG_WARN("materialized view is not allowed", KR(ret));
+        LOG_USER_ERROR(OB_LICENSE_SCOPE_EXCEEDED,
+                       "materialized view is not supported due to the absence of the OLAP module");
       }
     }
     bool add_undefined_columns = false;
@@ -171,14 +178,16 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
                                                      || 1 != table_id_node->num_child_))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fail to resolve table_id", K(ret));
-    } else if (OB_ISNULL(schema_checker_)
-               || OB_ISNULL(schema_guard = schema_checker_->get_schema_guard())) {
+    } else if (OB_ISNULL(schema_checker_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null", K(ret));
-    } else if (OB_FAIL(schema_guard->get_database_id(session_info_->get_effective_tenant_id(),
+    } else if (OB_FAIL(schema_checker_->get_database_id(session_info_->get_effective_tenant_id(),
                                                      stmt->get_database_name(),
                                                      database_id))) {
-      LOG_WARN("failed to get database id", K(ret));
+      if (OB_ERR_BAD_DATABASE == ret) {
+          LOG_USER_ERROR(OB_ERR_BAD_DATABASE, stmt->get_database_name().length(), stmt->get_database_name().ptr());
+      }
+      SQL_RESV_LOG(WARN, "failed to get database id", K(ret), K(stmt->get_database_name()), K(session_info_->get_effective_tenant_id()));
     } else if (OB_FALSE_IT(table_schema.set_database_id(database_id))) {
       //never reach
     } else if (OB_FAIL(ob_write_string(*allocator_,
@@ -251,6 +260,7 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
         LOG_WARN("fail to check auto gen column names", K(ret));
       } else if (OB_FAIL(params_.query_ctx_->query_hint_.init_query_hint(params_.allocator_,
                                                                           params_.session_info_,
+                                                                          params_.global_hint_,
                                                           view_table_resolver.get_select_stmt()))) {
         LOG_WARN("failed to init query hint.", K(ret));
       }
@@ -478,7 +488,6 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
       LOG_WARN("fail to check privilege needed", K(ret));
     }
   }
-
   return ret;
 }
 
@@ -733,6 +742,42 @@ int ObCreateViewResolver::check_view_columns(ObSelectStmt &select_stmt,
   return ret;
 }
 
+int ObCreateViewResolver::get_child_stmt_without_view(const ObSelectStmt *select_stmt,
+                                                      ObIArray<ObSelectStmt*> &child_stmts)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(select_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("select_stmt is NULL ptr", K(ret));
+  } else if (OB_FAIL(append(child_stmts, select_stmt->get_set_query()))) {
+    LOG_WARN("failed to append child query", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt->get_table_size(); ++i) {
+    const TableItem *table_item = select_stmt->get_table_item(i);
+    if (OB_ISNULL(table_item)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table_item is null", K(i));
+    } else if (!table_item->is_view_table_ &&
+               (table_item->is_generated_table() ||
+                table_item->is_lateral_table())) {
+      if (OB_FAIL(child_stmts.push_back(table_item->ref_query_))) {
+        LOG_WARN("store child stmt failed", K(ret));
+      }
+    }
+  }
+  for (int64_t j = 0; OB_SUCC(ret) && j < select_stmt->get_subquery_expr_size(); ++j) {
+    ObQueryRefRawExpr *subquery_ref = select_stmt->get_subquery_exprs().at(j);
+    if (OB_ISNULL(subquery_ref) ||
+        OB_ISNULL(subquery_ref->get_ref_stmt())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("subquery reference is null", K(subquery_ref));
+    } else if (OB_FAIL(child_stmts.push_back(subquery_ref->get_ref_stmt()))) {
+      LOG_WARN("stored subquery reference stmt failed", K(ret));
+    }
+  }
+  return ret;
+}
+
 // get all tables/view in subquery.
 int ObCreateViewResolver::get_sel_priv_tables_in_subquery(const ObSelectStmt *select_stmt,
                                          hash::ObHashMap<int64_t, const TableItem *> &select_tables)
@@ -769,7 +814,7 @@ int ObCreateViewResolver::get_sel_priv_tables_in_subquery(const ObSelectStmt *se
     if (OB_SUCC(ret)) {
       // subquery + generated table in child_stmts
       ObSEArray<ObSelectStmt *, 4> child_stmts;
-      if (OB_FAIL(select_stmt->get_child_stmts(child_stmts))) {
+      if (OB_FAIL(get_child_stmt_without_view(select_stmt, child_stmts))) {
         LOG_WARN("get child stmt failed", K(ret));
       } else {
         for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); i++) {
@@ -835,7 +880,7 @@ int ObCreateViewResolver::get_need_priv_tables(ObSelectStmt &root_stmt,
   if (OB_SUCC(ret)) {
     // subquery + generated table in child_stmts
     ObSEArray<ObSelectStmt *, 4> child_stmts;
-    if (OB_FAIL(root_stmt.get_child_stmts(child_stmts))) {
+    if (OB_FAIL(get_child_stmt_without_view(&root_stmt, child_stmts))) {
       LOG_WARN("get child stmt failed", K(ret));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); i++) {
@@ -1574,6 +1619,20 @@ int ObCreateViewResolver::collect_dependency_infos(ObQueryCtx *query_ctx,
       OX (create_arg.schema_.set_max_dependency_version(dep_obj_item->max_ref_obj_schema_version_));
     }
   }
+
+  CK (OB_NOT_NULL(schema_checker_));
+  CK (OB_NOT_NULL(session_info_));
+  if (OB_SUCC(ret)) {
+    ObSchemaGetterGuard *schema_guard = schema_checker_->get_schema_guard();
+    const uint64_t tenant_id = session_info_->get_effective_tenant_id();
+    if (OB_ISNULL(schema_guard)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("schema guard is null", K(ret));
+    } else if (OB_FAIL(ObTTLUtil::check_htable_ddl_supported(*schema_guard, tenant_id, create_arg.dep_infos_))) {
+      LOG_WARN("failed to check htable ddl supported", K(ret), K(tenant_id), K(create_arg.dep_infos_));
+    }
+  }
+
   return ret;
 }
 int ObCreateViewResolver::try_add_undefined_column_infos(const uint64_t tenant_id,

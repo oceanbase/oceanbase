@@ -581,8 +581,8 @@ class ObRootUtils
 public:
   ObRootUtils() {}
   virtual ~ObRootUtils() {}
-
-  static bool if_deployment_mode_match();
+  static int create_sslog_tablet(const uint64_t tenant_id);
+  static bool is_dr_replace_deployment_mode_match();
   static int get_rs_default_timeout_ctx(ObTimeoutCtx &ctx);
   static int get_invalid_server_list(
     const ObIArray<share::ObServerInfoInTable> &servers_info,

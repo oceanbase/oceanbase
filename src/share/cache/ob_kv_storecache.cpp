@@ -138,7 +138,6 @@ const int64_t ObKVGlobalCache::bucket_num_array_[MAX_BUCKET_NUM_LEVEL] =
       201326611l,   // more than 512G, 2G kvcache meta
       402653189ll   // more than 1024G, 4G kvcache meta
     };
-ObKVGlobalCache ObKVGlobalCache::instance_;
 
 ObKVGlobalCache::ObKVGlobalCache()
     : inited_(false),
@@ -162,6 +161,7 @@ ObKVGlobalCache::~ObKVGlobalCache()
 
 ObKVGlobalCache &ObKVGlobalCache::get_instance()
 {
+  static ObKVGlobalCache instance_;
   return instance_;
 }
 
@@ -447,8 +447,9 @@ int ObKVGlobalCache::erase_cache()
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "The ObKVCacheMap has not been inited, ", K(ret));
   } else {
-    store_.flush_washable_mbs();
-    if (OB_FAIL(map_.erase_all())) {
+    if (OB_FAIL(store_.flush_washable_mbs())) {
+      COMMON_LOG(WARN, "failed to flush washable mbs");
+    } else if (OB_FAIL(map_.erase_all())) {
       COMMON_LOG(WARN, "fail to erase cache, ", K(ret));
     }
   }
@@ -462,8 +463,9 @@ int ObKVGlobalCache::erase_cache(const uint64_t tenant_id)
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "The ObKVCacheMap has not been inited, ", K(ret));
   } else {
-    store_.flush_washable_mbs(tenant_id);
-    if (OB_FAIL(map_.erase_tenant(tenant_id))) {
+    if (OB_FAIL(store_.flush_washable_mbs(tenant_id))) {
+      COMMON_LOG(WARN, "failed to flush washable mbs", K(tenant_id));
+    } else if (OB_FAIL(map_.erase_tenant(tenant_id))) {
       COMMON_LOG(WARN, "fail to erase cache, ", K(ret), K(tenant_id));
     }
   }
@@ -890,7 +892,7 @@ int ObKVGlobalCache::get_cache_inst_info(const uint64_t tenant_id, ObIArray<ObKV
   } else if (OB_INVALID_TENANT_ID == tenant_id) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "Invalid argument", K(ret), K(tenant_id));
-  } else if (OB_FAIL(insts_.get_cache_info(tenant_id, inst_handles))) {
+  } else if (OB_FAIL(insts_.get_cache_info(inst_handles, &tenant_id))) {
     COMMON_LOG(WARN, "Fail to get all cache info", K(ret));
   }
 

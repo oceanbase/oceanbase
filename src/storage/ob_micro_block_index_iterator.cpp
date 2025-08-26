@@ -35,6 +35,7 @@ namespace storage
     range_(nullptr),
     is_reverse_scan_(false),
     is_iter_end_(false),
+    has_fetched_micro_info_(false),
     is_inited_(false)
 {
 }
@@ -68,26 +69,39 @@ void ObMicroBlockIndexIterator::reset()
   range_ = nullptr;
   is_reverse_scan_ = false;
   is_iter_end_ = false;
+  has_fetched_micro_info_ = false;
   is_inited_ = false;
 }
 
 int ObMicroBlockIndexIterator::open(
-    const ObSSTable &sstable,
+    ObSSTable &sstable,
     const ObDatumRange &range,
     const ObITableReadInfo &rowkey_read_info,
     ObIAllocator &allocator,
     const bool is_reverse_scan)
 {
   int ret = OB_SUCCESS;
+  ObDatumRowkey sstable_endkey;
+  ObArenaAllocator tmp_arena("MicroIterTmp", OB_MALLOC_MIDDLE_BLOCK_SIZE, MTL_ID());
+  int cmp_ret = 0;
+
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("Inited twice", K(ret));
-  } else if (OB_UNLIKELY(!sstable.is_valid())) {
+  } else if (OB_UNLIKELY(!sstable.is_valid() || !range.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid sstable", K(ret));
+    LOG_WARN("Invalid sstable or range", K(ret), K(sstable), K(range));
   } else if (sstable.is_empty()) {
     is_iter_end_ = true;
     is_inited_ = true;
+  } else if (OB_FAIL(sstable.get_last_rowkey(tmp_arena, sstable_endkey))) {
+    LOG_WARN("Fail to get last rowkey of sstable", K(ret));
+  } else if (OB_FAIL(sstable_endkey.compare(
+      range.get_start_key(), rowkey_read_info.get_datum_utils(), cmp_ret))) {
+    LOG_WARN("Fail to compare sstable endkey and range start key", K(ret));
+  } else if (cmp_ret < 0 || (0 == cmp_ret && !range.get_border_flag().inclusive_start())) {
+    is_iter_end_ = true;
+    ret = OB_BEYOND_THE_RANGE;
   } else if (OB_FAIL(tree_cursor_.init(sstable, allocator, &rowkey_read_info))) {
     LOG_WARN("Fail to init index tree cursor", K(ret), K(sstable));
   } else {
@@ -139,6 +153,7 @@ int ObMicroBlockIndexIterator::open(
     } else {
       allocator_ = &allocator;
       is_reverse_scan_ = is_reverse_scan;
+      has_fetched_micro_info_ = false;
       is_inited_ = true;
     }
   }
@@ -151,7 +166,7 @@ int ObMicroBlockIndexIterator::deep_copy_rowkey(const ObDatumRowkey &src_key, Ob
 
   if (OB_ISNULL(allocator_)) {
     ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "ObIndexBlockMacroIterator is not inited", K(ret), KP(allocator_));
+    STORAGE_LOG(WARN, "ObMicroBlockIndexIterator is not inited", K(ret), KP(allocator_));
   } else if (OB_UNLIKELY(!src_key.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid argument to deep copy datum rowkey", K(ret), K(src_key));
@@ -179,7 +194,6 @@ int ObMicroBlockIndexIterator::get_next(ObMicroIndexInfo &micro_index_info)
   int ret = OB_SUCCESS;
   const ObIndexBlockRowHeader *idx_row_header = nullptr;
   const ObIndexBlockRowParser *idx_row_parser = nullptr;
-  ObLogicMacroBlockId logic_id;
   ObMicroBlockId micro_block_id;
   micro_index_info.reset();
   if (IS_NOT_INIT) {
@@ -187,6 +201,15 @@ int ObMicroBlockIndexIterator::get_next(ObMicroIndexInfo &micro_index_info)
     STORAGE_LOG(WARN, "ObMicroBlockIndexIterator is not inited", K(ret));
   } else if (is_iter_end_) {
     ret = OB_ITER_END;
+  } else if (has_fetched_micro_info_ && OB_FAIL(tree_cursor_.move_forward(is_reverse_scan_))) {
+    if (OB_LIKELY(OB_ITER_END == ret)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Do not reach the end_bound but cursor fail to move forward.",
+                              K(ret), K_(tree_cursor), K(micro_block_id), K_(start_bound_micro_block),
+                              K_(end_bound_micro_block), K_(is_reverse_scan));
+    } else {
+      LOG_WARN("Fail to move cursor forward", K(ret), K_(tree_cursor));
+    }
   } else if (OB_FAIL(tree_cursor_.get_idx_row_header(idx_row_header))) {
     LOG_WARN("Fail to get index block row header", K(ret));
   } else if (OB_FAIL(tree_cursor_.get_idx_parser(idx_row_parser))) {
@@ -226,13 +249,8 @@ int ObMicroBlockIndexIterator::get_next(ObMicroIndexInfo &micro_index_info)
     } else if (idx_row_header->is_pre_aggregated() &&
         OB_FAIL(idx_row_parser->get_agg_row(micro_index_info.agg_row_buf_, micro_index_info.agg_buf_size_))) {
       LOG_WARN("Fail to get aggregated row", K(ret), K(micro_index_info));
-    } else if (!is_iter_end_ && OB_FAIL(tree_cursor_.move_forward(is_reverse_scan_))) {
-      if (OB_LIKELY(OB_ITER_END == ret)) {
-        is_iter_end_ = true;
-        ret = OB_SUCCESS;
-      } else {
-        LOG_WARN("Fail to move cursor forward", K(ret), K_(tree_cursor));
-      }
+    } else {
+      has_fetched_micro_info_ = true;
     }
   }
   return ret;
@@ -247,7 +265,6 @@ int ObMicroBlockIndexIterator::locate_bound_micro_block(
   int ret = OB_SUCCESS;
   is_beyond_range = false;
   const ObIndexBlockRowHeader *idx_header = nullptr;
-  ObLogicMacroBlockId logic_id;
   bool equal = false;
   if (OB_FAIL(tree_cursor_.pull_up_to_root())) {
     LOG_WARN("Fail to pull up tree cursor back to root", K(ret));

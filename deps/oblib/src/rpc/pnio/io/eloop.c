@@ -118,17 +118,32 @@ int eloop_thread_run(eloop_t** udata) {
   return eloop_run(*udata);
 }
 
+#define THREAD_USAGE_STAT_INTERVAL 5000000
 int eloop_run(eloop_t* ep) {
   pn_comm_t* pn = get_current_pnio();
+  uint64_t total_wait_us = 0;
+  time_record_t thread_wait = {0, 0};
   while(!ATOMIC_LOAD(&pn->is_stop_)) {
     int64_t epoll_timeout = 1000;
     ob_update_loop_ts();
     if (ep->ready_link.next != &ep->ready_link) {
       epoll_timeout = 0; // make sure all events handled when progarm is blocked in epoll_ctl
     }
+    int start_epoll_us = rk_get_corse_us();
     eloop_refire(ep, epoll_timeout);
     PNIO_DELAY_WARN(reset_eloop_time_stat());
     PNIO_DELAY_WARN(int64_t start_us = rk_get_corse_us());
+    int ep_sleep_us = start_us - start_epoll_us;
+    total_wait_us += ep_sleep_us;
+    if (start_us - thread_wait.last_update_us > THREAD_USAGE_STAT_INTERVAL) {
+      int64_t delta = total_wait_us - thread_wait.last_value;
+      int usage = 100 - 100.0 * delta / (start_us - thread_wait.last_update_us);
+      thread_wait.last_update_us = start_us;
+      thread_wait.last_value = total_wait_us;
+      int idx = start_us / THREAD_USAGE_STAT_INTERVAL % arrlen(ep->thread_usage);
+      ep->thread_usage[idx] = usage;
+    }
+
     dlink_for(&ep->ready_link, p) {
       eloop_handle_sock_event(structof(p, sock_t, ready_link));
     }
@@ -149,7 +164,13 @@ int eloop_run(eloop_t* ep) {
       // print debug info each 60 seconds
       if (0 == cur_time_us/1000000%60) {
         pn_print_diag_info(pn);
+        // print thrad usage
+        char thread_usage_str[128] = {0};
+        array_t_str(ep->thread_usage, arrlen(ep->thread_usage), thread_usage_str, sizeof(thread_usage_str));
+        rk_info("pn_usage: [%s]", thread_usage_str);
       }
+      // check server socket banlanceing and thread count
+      pkts_sk_rebalance();
     }
   }
   pn_release(pn);

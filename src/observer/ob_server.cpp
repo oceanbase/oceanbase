@@ -71,6 +71,7 @@
 #include "storage/shared_storage/prewarm/ob_replica_prewarm_struct.h"
 #endif
 #include "share/vector_index/ob_plugin_vector_index_utils.h"
+#include "share/config/ob_common_config.h"
 #include "lib/roaringbitmap/ob_rb_memory_mgr.h"
 #ifdef OB_BUILD_AUDIT_SECURITY
 #include "sql/audit/ob_audit_log_mgr.h"
@@ -81,7 +82,8 @@
 #include "common/ob_target_specific.h"
 #include "storage/fts/dict/ob_gen_dic_loader.h"
 #include "plugin/sys/ob_plugin_mgr.h"
-#include "storage/member_table/ob_member_table_schema_helper.h"
+#include "storage/reorganization_info_table/ob_tablet_reorg_info_table_schema_helper.h"
+#include "share/ob_license_utils.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -102,7 +104,7 @@ namespace common
 {
 uint64_t __attribute__((used)) lib_get_cpu_khz()
 {
-  return OBSERVER.get_cpu_frequency_khz();
+  return observer::ObServerFrequence::get_instance().get_cpu_frequency_khz();
 }
 } // namespace common
 
@@ -237,15 +239,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
   init_arches();
   scramble_rand_.init(static_cast<uint64_t>(start_time_), static_cast<uint64_t>(start_time_ / 2));
 
-#if defined(__x86_64__)
-  if (OB_UNLIKELY(!is_arch_supported(ObTargetArch::AVX))) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_ERROR("unsupported CPU platform, AVX instructions are required.");
-  }
-#endif
-
   // server parameters be inited here.
-  if (OB_SUCC(ret) && OB_FAIL(init_config())) {
+  if (OB_FAIL(init_config())) {
     LOG_ERROR("init config failed", KR(ret));
   }
   // set alert log level earlier
@@ -423,9 +418,6 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_ERROR("init storage failed", KR(ret));
     } else if (OB_FAIL(init_tx_data_cache())) {
       LOG_ERROR("init tx data cache failed", KR(ret));
-    } else if (!GCTX.is_shared_storage_mode() &&
-               OB_FAIL(tmp_file::ObTmpBlockCache::get_instance().init("tmp_block_cache", 1))) {
-      LOG_ERROR("init tmp block cache failed", KR(ret));
     } else if (OB_FAIL(tmp_file::ObTmpPageCache::get_instance().init("tmp_page_cache", 1))) {
       LOG_ERROR("init tmp page cache failed", KR(ret));
     } else if (OB_FAIL(init_log_kv_cache())) {
@@ -473,6 +465,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
     } else if (gctx_.is_shared_storage_mode() &&
                OB_FAIL(init_device_manifest_task())) {
       LOG_ERROR("init device manifest task failed", KR(ret));
+    } else if (gctx_.is_shared_storage_mode() && OB_FAIL(ObLSTabletSplitScheduler::get_instance().init())) {
+      LOG_ERROR("init ObLSTabletSplitScheduler failed", KR(ret));
 #endif
     } else if (OB_FAIL(init_refresh_io_calibration())) {
       LOG_ERROR("init refresh io calibration failed", KR(ret));
@@ -678,9 +672,9 @@ void ObServer::destroy()
 
 #ifdef OB_BUILD_SHARED_STORAGE
     if (GCTX.is_shared_storage_mode()) {
-      FLOG_INFO("begin to destroy server gtimer");
+      FLOG_INFO("begin to destroy tenant dir gc gtimer");
       TG_DESTROY(lib::TGDefIDs::TenantDirGCTimer);
-      FLOG_INFO("server gtimer destroyed");
+      FLOG_INFO("tenant dir gc gtimer destroyed");
     }
 #endif
 
@@ -748,11 +742,6 @@ void ObServer::destroy()
     OB_TX_DATA_KV_CACHE.destroy();
     FLOG_INFO("tx data kv cache destroyed");
 
-    if (!GCTX.is_shared_storage_mode()) {
-      FLOG_INFO("begin to destroy tmp block cache");
-      tmp_file::ObTmpBlockCache::get_instance().destroy();
-      FLOG_INFO("tmp block cache destroyed");
-    }
     FLOG_INFO("begin to destroy tmp page cache");
     tmp_file::ObTmpPageCache::get_instance().destroy();
     FLOG_INFO("tmp page cache destroyed");
@@ -987,10 +976,10 @@ int ObServer::start()
       FLOG_INFO("success to init mds schema helper");
     }
 
-    if (FAILEDx(ObMemberTableSchemaHelper::get_instance().init())) {
-      LOG_ERROR("fail to init member table schema helper", K(ret));
+    if (FAILEDx(ObTabletReorgInfoTableSchemaHelper::get_instance().init())) {
+      LOG_ERROR("fail to init tablet reorg info table schema helper", K(ret));
     } else {
-      FLOG_INFO("success to init member table schema helper");
+      FLOG_INFO("success to init tablet reorg info table schema helper");
     }
 
     if (FAILEDx(ObIOManager::get_instance().start())) {
@@ -1044,6 +1033,15 @@ int ObServer::start()
       LOG_ERROR("fail to update hidden sys tenant", KR(ret));
     } else {
       FLOG_INFO("success to update hidden sys tenant");
+    }
+
+    // Before bootstrap create sslog ls, start location service related thread such as rpc refresh timer here.
+    // During the creation of the SYS tenant (before the SYS tenant full schema), we can rely on using rpc to refresh the location,
+    // and other modules can obtain the location of SSLOG LS and SYS LS normally.
+    if (FAILEDx(location_service_.start())) {
+      LOG_ERROR("fail to start location service", KR(ret));
+    } else {
+      FLOG_INFO("success to start location service");
     }
 
     if (FAILEDx(weak_read_service_.start())) {
@@ -1131,12 +1129,6 @@ int ObServer::start()
       LOG_ERROR("fail to init active session history task", KR(ret));
     } else {
       FLOG_INFO("success to init active session history task");
-    }
-
-    if (FAILEDx(location_service_.start())) {
-      LOG_ERROR("fail to start location service", KR(ret));
-    } else {
-      FLOG_INFO("success to start location service");
     }
 
 #ifdef OB_BUILD_ARBITRATION
@@ -1244,6 +1236,14 @@ int ObServer::start()
             "replay_log_cost_us", ObTimeUtility::current_time() - schema_refreshed_ts);
       }
     }
+
+    if (OB_SUCC(ret)) {
+      (void) ObLicenseUtils::clear_license_table_if_need();
+      if (OB_FAIL(ObLicenseUtils::start_license_mgr())) {
+        FLOG_ERROR("failed to start license manager", KR(ret));
+      }
+    }
+
   }
 
   if (OB_FAIL(ret)) {
@@ -1327,11 +1327,23 @@ int ObServer::check_if_schema_ready()
 {
   int ret = OB_SUCCESS;
   bool schema_ready = false;
+  bool in_bootstrap = false;
   LOG_DBA_INFO_V2(OB_SERVER_WAIT_SCHEMA_READY_BEGIN,
                   DBA_STEP_INC_INFO(server_start),
                   "wait schema ready begin.");
   while (OB_SUCC(ret) && !stop_ && !schema_ready) {
-    schema_ready = schema_service_.is_sys_full_schema();
+    if (in_bootstrap) {
+      // GCTX.in_bootstrap_ is set false when tenant full schema refreshed
+      schema_ready = !GCTX.in_bootstrap_;
+    } else {
+      if (GCTX.in_bootstrap_) {
+        in_bootstrap = true;
+      } else {
+        // in bootstrap, refreshed schema version is set to 2 when broadcasting schema
+        // full schema is refreshed later, which will cause write sql failed in the following steps
+        schema_ready = schema_service_.is_sys_full_schema();
+      }
+    }
     if (!schema_ready) {
       SLEEP(1);
     }
@@ -1531,9 +1543,9 @@ int ObServer::stop()
 
 #ifdef OB_BUILD_SHARED_STORAGE
     if (GCTX.is_shared_storage_mode()) {
-      FLOG_INFO("begin to stop timer");
+      FLOG_INFO("begin to stop tenant dir gc timer");
       TG_STOP(lib::TGDefIDs::TenantDirGCTimer);
-      FLOG_INFO("timer stopped");
+      FLOG_INFO("tenant dir gc timer stopped");
     }
 #endif
     FLOG_INFO("begin to stop freeze timer");
@@ -1850,9 +1862,9 @@ int ObServer::wait()
 
 #ifdef OB_BUILD_SHARED_STORAGE
     if (GCTX.is_shared_storage_mode()) {
-      FLOG_INFO("begin to wait server gtimer");
+      FLOG_INFO("begin to wait tenant dir gc gtimer");
       TG_WAIT(lib::TGDefIDs::TenantDirGCTimer);
-      FLOG_INFO("wait server gtimer success");
+      FLOG_INFO("wait tenant dir gc gtimer success");
     }
 #endif
 
@@ -2077,6 +2089,11 @@ int ObServer::init_config()
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(init_local_ip_and_devname())) {
     LOG_ERROR("init local_ip and devname failed", KR(ret));
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  } else if (config_.enable_logservice && is_arbitration_mode()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_ERROR("arbitration and shared log service is not compatible", KR(ret));
+#endif
   } else if (!is_arbitration_mode() && OB_FAIL(config_.strict_check_special())) {
     LOG_ERROR("some config setting is not valid", KR(ret));
   } else if (OB_FAIL(GMEMCONF.reload_config(config_))) {
@@ -2331,7 +2348,7 @@ int ObServer::init_config_module()
 #ifdef OB_BUILD_SHARED_STORAGE
   } else if (GCTX.is_shared_storage_mode()
       && OB_FAIL(TG_START(lib::TGDefIDs::TenantDirGCTimer))) {
-    LOG_ERROR("init timer fail", KR(ret));
+    LOG_ERROR("init tenant dir gc timer fail", KR(ret));
 #endif
   } else if (OB_FAIL(TG_START(lib::TGDefIDs::FreezeTimer))) {
     LOG_ERROR("init freeze timer fail", KR(ret));
@@ -2386,29 +2403,10 @@ int ObServer::init_pre_setting()
 
   // oblog configuration
   if (OB_SUCC(ret)) {
-    const int max_log_cnt = static_cast<int32_t>(config_.max_syslog_file_count);
-    const bool record_old_log_file = config_.enable_syslog_recycle;
-    const bool log_warn = config_.enable_syslog_wf;
-    const bool enable_async_syslog = config_.enable_async_syslog;
-    const int64_t max_disk_size = config_.syslog_disk_size;
-    const int64_t min_uncompressed_count = config_.syslog_file_uncompressed_count;
-    const char *compress_func_ptr = config_.syslog_compress_func.str();
-    OB_LOGGER.set_max_file_index(max_log_cnt);
-    OB_LOGGER.set_record_old_log_file(record_old_log_file);
-    LOG_INFO("Whether record old log file", K(record_old_log_file));
-    OB_LOGGER.set_log_warn(log_warn);
-    LOG_INFO("Whether log warn", K(log_warn));
-    OB_LOGGER.set_enable_async_log(enable_async_syslog);
-    OB_LOG_COMPRESSOR.set_max_disk_size(max_disk_size);
-    LOG_INFO("Whether compress syslog file", K(compress_func_ptr));
-    OB_LOG_COMPRESSOR.set_compress_func(compress_func_ptr);
-    OB_LOG_COMPRESSOR.set_min_uncompressed_count(min_uncompressed_count);
-    LOG_INFO("init log config", K(record_old_log_file), K(log_warn), K(enable_async_syslog),
-             K(max_disk_size), K(compress_func_ptr), K(min_uncompressed_count));
-    if (0 == max_log_cnt) {
-      LOG_INFO("won't recycle log file");
+    if (OB_FAIL(ObConfigManager::ob_logger_config_update(config_))) {
+      LOG_WARN("ob_logger_config_update failed", KR(ret));
     } else {
-      LOG_INFO("recycle log file", "count", max_log_cnt);
+      LOG_INFO("oblog config update success");
     }
   }
 
@@ -3790,11 +3788,11 @@ int ObServer::refresh_cpu_frequency()
 
   if (0 == cpu_frequency) {
     LOG_WARN_RET(OB_ERR_UNEXPECTED, "get cpu frequency failed");
-    cpu_frequency = ObServer::DEFAULT_CPU_FREQUENCY;
+    cpu_frequency = ObServerFrequence::DEFAULT_CPU_FREQUENCY;
   }
   if (cpu_frequency != cpu_frequency_) {
     LOG_INFO("Cpu frequency changed", "from", cpu_frequency_, "to", cpu_frequency);
-    cpu_frequency_ = cpu_frequency;
+    ObServerFrequence::get_instance().get_cpu_frequency_khz() = cpu_frequency;
   }
 
   return ret;
@@ -4390,6 +4388,27 @@ bool ObServer::is_arbitration_mode() const
 #endif
 }
 
+ObServerFrequence::ObServerFrequence()
+  :cpu_frequency_(ObServerFrequence::DEFAULT_CPU_FREQUENCY)
+{
+  refresh_cpu_frequency();
+}
+
+int ObServerFrequence::refresh_cpu_frequency() {
+  int ret = OB_SUCCESS;
+  uint64_t cpu_frequency = get_cpufreq_khz();
+
+  if (0 == cpu_frequency) {
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "get cpu frequency failed");
+    cpu_frequency = ObServerFrequence::DEFAULT_CPU_FREQUENCY;
+  }
+  if (cpu_frequency != cpu_frequency_) {
+    LOG_INFO("Cpu frequency changed", "from", cpu_frequency_, "to", cpu_frequency);
+    cpu_frequency_ = cpu_frequency;
+  }
+
+  return ret;
+};
 
 // ------------------------------- arb server end -------------------------------------------
 } // end of namespace observer

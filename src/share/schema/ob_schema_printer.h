@@ -420,8 +420,7 @@ public:
                                 char *buf,
                                 const int64_t &buf_len,
                                 int64_t &pos) const;
-  int print_element_type(const uint64_t tenant_id,
-                         const uint64_t element_type_id,
+  int print_element_type(const uint64_t element_type_id,
                          const ObUDTBase *element_type_info,
                          char* buf,
                          const int64_t& buf_len,
@@ -536,6 +535,11 @@ public:
                                      char* buf,
                                      const int64_t& buf_len,
                                      int64_t& pos) const;
+  int print_location_definiton(const uint64_t tenant_id,
+                               const uint64_t location_id,
+                               char *buf,
+                               const int64_t &buf_len,
+                               int64_t &pos) const;
   void set_sql_schema_guard(sql::ObSqlSchemaGuard *sql_schema_guard);
 private:
   static bool is_subpartition_valid_in_mysql(const ObTableSchema &table_schema)

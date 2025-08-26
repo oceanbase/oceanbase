@@ -401,6 +401,8 @@ OB_INLINE int get_cast_ret(const ObCastMode cast_mode,
       CM_IS_WARN_ON_FAIL(cast_mode)) {
     warning = ret;
     ret = OB_SUCCESS;
+  } else if (OB_INVALID_ZERO_DATE == ret) {
+    ret = OB_INVALID_DATE_VALUE;
   }
   return ret;
 }
@@ -419,6 +421,7 @@ OB_INLINE int get_cast_ret(const ObCastMode cast_mode,
           || OB_DATA_OUT_OF_RANGE == params.warning_                      \
           || OB_ERR_DATA_TRUNCATED == params.warning_                     \
           || OB_ERR_DOUBLE_TRUNCATED == params.warning_                   \
+          || OB_INVALID_ZERO_DATE == params.warning_                      \
           || OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD == params.warning_) { \
         res.set_##func_val(obj_type comma val);                           \
       } else if (CM_IS_ZERO_ON_WARN(cast_mode)) {                         \
@@ -1285,6 +1288,7 @@ static int int_datetime(const ObObjType expect_type, ObObjCastParams &params,
       ret = ObTimeConverter::int_to_datetime(in.get_int(), 0, cvrt_ctx, value, date_sql_mode);
     }
     if (CAST_FAIL(ret)) {
+      LOG_WARN("fail to cast int to datetime", K(ret));
     } else {
       SET_RES_DATETIME(out);
     }
@@ -1312,6 +1316,7 @@ static int int_mdatetime(const ObObjType expect_type, ObObjCastParams &params,
       ret = ObTimeConverter::int_to_mdatetime(in.get_int(), 0, cvrt_ctx, mdt_value, date_sql_mode);
     }
     if (CAST_FAIL(ret)) {
+      LOG_WARN("int to mdatetime fail", K(ret));
     } else {
       SET_RES_MDATETIME(out);
     }
@@ -1355,6 +1360,7 @@ static int int_date(const ObObjType expect_type, ObObjCastParams &params,
     date_sql_mode.no_zero_date_ = CM_IS_EXPLICIT_CAST(cast_mode)
                                   ? false : CM_IS_NO_ZERO_DATE(cast_mode);
     if (CAST_FAIL(ObTimeConverter::int_to_date(in.get_int(), value, date_sql_mode))) {
+      LOG_WARN("int to date fail", K(ret));
     } else {
       SET_RES_DATE(out);
     }
@@ -1376,6 +1382,7 @@ static int int_mdate(const ObObjType expect_type, ObObjCastParams &params,
     ObMySQLDate md_value = 0;
     ObDateSqlMode date_sql_mode = get_date_sql_mode(cast_mode);
     if (CAST_FAIL(ObTimeConverter::int_to_mdate(in.get_int(), md_value, date_sql_mode))) {
+      LOG_WARN("int to mdate fail", K(ret));
     } else {
       SET_RES_MDATE(out);
     }
@@ -2970,8 +2977,17 @@ static int double_string(const ObObjType expect_type, ObObjCastParams &params,
       if (0 <= scale) {
         length = ob_fcvt(in.get_double(), scale, sizeof(buf) - 1, buf, NULL);
       } else {
+        const int32_t buf_length = static_cast<int32_t>(sizeof(buf) - 1);
+        int32_t double_width = buf_length;
+        if (lib::is_mysql_mode() && CM_IS_COLUMN_CONVERT(cast_mode) && params.dest_max_length_ > 0) {
+          double_width = min(double_width, params.dest_max_length_);
+        }
         length = ob_gcvt_opt(in.get_double(), OB_GCVT_ARG_DOUBLE,
-                              static_cast<int32_t>(sizeof(buf) - 1), buf, NULL, lib::is_oracle_mode(), TRUE);
+                             double_width, buf, NULL, lib::is_oracle_mode(), TRUE);
+        if (length == 0 && double_width < buf_length) {
+          length = double_width;
+          buf[length] = '\0';
+        }
       }
     }
     ObString str(sizeof(buf), static_cast<int32_t>(length), buf);
@@ -3330,6 +3346,7 @@ static int number_datetime(const ObObjType expect_type, ObObjCastParams &params,
       LOG_DEBUG("succ to number_datetime", K(ret), K(in), K(value), K(expect_type), K(int_part), K(dec_part));
     }
     if (CAST_FAIL(ret)) {
+      LOG_WARN("fail to cast int to datetime", K(ret));
     } else if (ObMySQLDateTimeType == expect_type) {
       SET_RES_MDATETIME(out);
     } else {
@@ -13548,7 +13565,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
   },
   {
     /*mysql date-> xxx*/
-    cast_not_expected,/*null*/
+    cast_not_support,/*null*/
     mdate_int,/*int*/
     mdate_uint,/*uint*/
     mdate_float,/*float*/
@@ -13559,13 +13576,13 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     mdate_time,/*time*/
     mdate_year,/*year*/
     mdate_string,/*string*/
-    cast_not_expected,/*extend*/
-    cast_not_expected,/*unknown*/
+    cast_not_support,/*extend*/
+    cast_not_support,/*unknown*/
     mdate_text,/*text*/
     mdate_bit,/*bit*/
     cast_not_expected,/*enumset*/
     cast_not_expected,/*enumset_inner*/
-    cast_not_expected,/*otimestamp*/
+    cast_not_support,/*otimestamp*/
     cast_inconsistent_types,/*raw*/
     cast_not_expected,/*interval*/
     cast_not_expected,/*rowid*/
@@ -13581,7 +13598,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
   },
   {
     /*mysql datetime-> xxx*/
-    cast_not_expected,/*null*/
+    cast_not_support,/*null*/
     mdatetime_int,/*int*/
     mdatetime_uint,/*uint*/
     mdatetime_float,/*float*/
@@ -13592,8 +13609,8 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     mdatetime_time,/*time*/
     mdatetime_year,/*year*/
     mdatetime_string,/*string*/
-    cast_not_expected,/*extend*/
-    cast_not_expected,/*unknown*/
+    cast_not_support,/*extend*/
+    cast_not_support,/*unknown*/
     mdatetime_text,/*text*/
     mdatetime_bit,/*bit*/
     cast_not_expected,/*enumset*/

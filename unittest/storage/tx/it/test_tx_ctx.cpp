@@ -25,7 +25,7 @@ using namespace share;
 static ObSharedMemAllocMgr MTL_MEM_ALLOC_MGR;
 
 namespace share {
-int ObTenantTxDataAllocator::init(const char *label)
+int ObTenantTxDataAllocator::init(const char *label, TxShareThrottleTool* throttle_tool)
 {
   int ret = OB_SUCCESS;
   ObMemAttr mem_attr;
@@ -69,6 +69,23 @@ int check_sequence_set_violation(const concurrent_control::ObWriteFlag,
   return OB_SUCCESS;
 }
 } // namespace concurrent_control
+
+class ReplayLogEntryFunctor
+{
+public:
+  ReplayLogEntryFunctor(ObTxNode *n) : n_(n) {}
+
+  int operator()(const void *buffer,
+                 const int64_t nbytes,
+                 const palf::LSN &lsn,
+                 const int64_t ts_ns)
+  {
+    return n_->replay(buffer, nbytes, lsn, ts_ns);
+  }
+
+private:
+  ObTxNode *n_;
+};
 
 class ObTestTxCtx : public ::testing::Test
 {
@@ -184,6 +201,109 @@ TEST_F(ObTestTxCtx, DelayAbort)
   ASSERT_EQ(OB_SUCCESS, n1->wait_all_tx_ctx_is_destoryed());
   ASSERT_EQ(OB_SUCCESS, n1->txs_.tx_ctx_mgr_.revert_ls_tx_ctx_mgr(ls_tx_ctx_mgr));
 }
+
+TEST_F(ObTestTxCtx, 2PC_ABORT_WITH_SWITCH_TO_FOLLOWER)
+{
+  START_TWO_TX_NODE_WITH_LSID(n1, n2, 1001)
+
+  PREPARE_TX(n1, tx);
+  PREPARE_TX_PARAM(tx_param);
+  // GET_READ_SNAPSHOT(n1, tx, tx_param, snapshot);
+  ASSERT_EQ(OB_SUCCESS, n1->start_tx(tx, tx_param));
+  ASSERT_EQ(OB_SUCCESS, n1->write(tx, 100, 112));
+  ASSERT_EQ(OB_SUCCESS, n2->write(tx, 120, 132));
+
+  ASSERT_EQ(tx.parts_.count(), 2);
+
+  // disable keepalive msg, because switch to follower forcedly will send keepalive msg to notify
+  // scheduler abort tx
+  TRANS_LOG(INFO, "add drop KEEPALIVE msg");
+  n1->add_drop_msg_type(KEEPALIVE);
+  n2->add_drop_msg_type(KEEPALIVE);
+
+  FLUSH_REDO(n1);
+  FLUSH_REDO(n2);
+
+  n1->wait_all_redolog_applied();
+  n2->wait_all_redolog_applied();
+
+  SWITCH_TO_FOLLOWER_FORCEDLY(n2);
+  SWITCH_TO_LEADER(n2);
+
+  ObPartTransCtx * ctx_n2 = nullptr;
+  ASSERT_EQ(OB_SUCCESS, n2->get_tx_ctx(n2->ls_id_, tx.tx_id_, ctx_n2));
+  ASSERT_EQ(ctx_n2->need_force_abort_(), true);
+
+  ObPartTransCtx * ctx_n1 = nullptr;
+  ASSERT_EQ(OB_SUCCESS, n1->get_tx_ctx(n1->ls_id_, tx.tx_id_, ctx_n1));
+  n1->fake_tx_log_adapter_->set_pause();
+
+  n1->fake_tx_log_adapter_-> push_back_block_log_type(ObTxLogType::TX_COMMIT_INFO_LOG);
+  n1->fake_tx_log_adapter_-> push_back_block_log_type(ObTxLogType::TX_PREPARE_LOG);
+  COMMIT_TX(n1, tx, 120 * 1000 * 1000);
+
+  usleep(100*1000);
+
+  TRANS_LOG(INFO,
+            "[DEBUG] print ctx_n1",
+            K(ctx_n1->trans_id_),
+            K(ctx_n1->ls_id_),
+            K(ctx_n1->upstream_state_),
+            K(ctx_n1->exec_info_.state_),
+            KPC(ctx_n1->busy_cbs_.get_first()),
+            KPC(ctx_n1->busy_cbs_.get_last()));
+  ASSERT_EQ(ctx_n1->upstream_state_, ObTxState::ABORT);
+  ASSERT_EQ(ctx_n1->busy_cbs_.get_size(), 1);
+  ASSERT_EQ(is_contain(ctx_n1->busy_cbs_.get_first()->cb_arg_array_, ObTxLogType::TX_ABORT_LOG),
+            true);
+  n1->fake_tx_log_adapter_->clear_block_log_type();
+  SWITCH_TO_FOLLOWER_GRACEFULLY(n1);
+  TRANS_LOG(INFO,
+            "[DEBUG] print ctx_n1 after switch_to_follower",
+            K(ctx_n1->trans_id_),
+            K(ctx_n1->ls_id_),
+            K(ctx_n1->upstream_state_),
+            K(ctx_n1->exec_info_.state_),
+            KPC(ctx_n1->busy_cbs_.get_first()),
+            KPC(ctx_n1->busy_cbs_.get_last()));
+  ASSERT_EQ(ctx_n1->busy_cbs_.get_size(), 1);
+  ASSERT_EQ(is_contain(ctx_n1->busy_cbs_.get_first()->cb_arg_array_, ObTxLogType::TX_ABORT_LOG),
+            true);
+  ASSERT_EQ(is_contain(ctx_n1->busy_cbs_.get_last()->cb_arg_array_, ObTxLogType::TX_COMMIT_INFO_LOG),
+            false);
+  ASSERT_EQ(is_contain(ctx_n1->busy_cbs_.get_last()->cb_arg_array_, ObTxLogType::TX_ACTIVE_INFO_LOG),
+            false);
+  ASSERT_EQ(is_contain(ctx_n1->busy_cbs_.get_last()->cb_arg_array_, ObTxLogType::TX_REDO_LOG),
+            false);
+
+  n1->fake_tx_log_adapter_->clear_pause();
+
+  n2->revert_tx_ctx(ctx_n2);
+  n1->revert_tx_ctx(ctx_n1);
+
+  n1->wait_all_redolog_applied();
+  n2->wait_all_redolog_applied();
+
+
+
+  // auto n1x = new ObTxNode(1010, ObAddr(ObAddr::VER::IPV4, "127.0.0.1", 8888), bus_);
+  // auto n2x = new ObTxNode(1010 + 1, ObAddr(ObAddr::VER::IPV4, "127.0.0.2", 8888), bus_);
+  // ASSERT_EQ(OB_SUCCESS, n1x->start());
+  // ASSERT_EQ(OB_SUCCESS, n2x->start());
+  // n1x->set_as_follower_replica(*n1);
+  // n2x->set_as_follower_replica(*n2);
+  //
+  // ReplayLogEntryFunctor functor1(n1x);
+  // ReplayLogEntryFunctor functor2(n2x);
+  // n1x->fake_tx_log_adapter_->replay_all(functor1);
+  // n2x->fake_tx_log_adapter_->replay_all(functor2);
+
+  ASSERT_EQ(OB_SUCCESS, n1->wait_all_tx_ctx_is_destoryed());
+  ASSERT_EQ(OB_SUCCESS, n1->wait_all_tx_ctx_is_destoryed());
+  // ASSERT_EQ(OB_SUCCESS, n1x->wait_all_tx_ctx_is_destoryed());
+  // ASSERT_EQ(OB_SUCCESS, n1x->wait_all_tx_ctx_is_destoryed());
+}
+
 } // namespace oceanbase
 
 int main(int argc, char **argv)

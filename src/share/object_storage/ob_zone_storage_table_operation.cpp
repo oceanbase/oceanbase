@@ -317,7 +317,7 @@ int ObStorageInfoOperator::parse_storage_path(const char *storage_path, char *ro
     LOG_WARN("invalid args", KR(ret), KP(storage_path));
   } else if (OB_FAIL(get_storage_type_from_path(storage_path_str, type))) {
     LOG_WARN("failed to get storage type", KR(ret));
-  } else if (OB_STORAGE_OSS != type && OB_STORAGE_S3 != type && OB_STORAGE_COS != type) {
+  } else if (OB_STORAGE_OSS != type && OB_STORAGE_S3 != type && OB_STORAGE_AZBLOB != type) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("cannot support this storage type", KR(ret), K(type));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "cannot support this storage type, it is");
@@ -612,12 +612,15 @@ int ObStorageInfoOperator::get_ls_leader_addr(const uint64_t tenant_id, const in
       } else if (OB_SUCC(result->next())) {
         EXTRACT_STRBUF_FIELD_MYSQL(*result, "svr_ip", svr_ip, OB_IP_STR_BUFF, tmp_real_str_len);
         EXTRACT_INT_FIELD_MYSQL(*result, "svr_port", svr_port, int64_t);
-        (void)server.set_ip_addr(svr_ip, static_cast<int32_t>(svr_port));
+        if (OB_UNLIKELY(!server.set_ip_addr(svr_ip, static_cast<int32_t>(svr_port)))) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("fail to set ip addr", KR(ret), K(svr_ip), K(svr_port));
+        }
       } else if (OB_ITER_END == ret) {
         ret = OB_ENTRY_NOT_EXIST;
         LOG_WARN("no exist row", KR(ret), K(sql));
       } else {
-        LOG_WARN("fail to get next row", KR(ret));
+        LOG_WARN("fail to get next row", KR(ret), K(sql));
       }
     }
   }

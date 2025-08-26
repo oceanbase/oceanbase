@@ -14,7 +14,7 @@
 #include "ob_table_batch_service.h"
 #include "ob_table_op_wrapper.h"
 #include "observer/ob_req_time_service.h"
-#include "ob_htable_utils.h"
+#include "utils/ob_htable_utils.h"
 #include "observer/table/ob_table_query_common.h"
 #include "tableapi/ob_table_api_service.h"
 

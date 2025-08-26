@@ -21,50 +21,6 @@
 
 namespace oceanbase {
 namespace storage {
-// `TestDelOp` is used to perform deletion operations on files while listing files.
-class TestDelOp : public ObBaseDirEntryOperator
-{
-public:
-  TestDelOp(const share::ObBackupPath &path, const share::ObBackupStorageInfo *storage_info)
-      : path_(path), storage_info_(storage_info)
-  {}
-  virtual ~TestDelOp()
-  {}
-  int func(const dirent *entry) override;
-
-private:
-  const share::ObBackupPath path_;
-  const share::ObBackupStorageInfo *storage_info_;
-};
-
-int TestDelOp::func(const dirent *entry)
-{
-  int ret = OB_SUCCESS;
-  common::ObBackupIoAdapter io_adapter;
-  share::ObBackupPath tmp_path;
-  if (OB_ISNULL(entry)) {
-    ret = OB_INVALID_ARGUMENT;
-    OB_LOG(WARN, "invalid list entry, entry is null", KR(ret));
-  } else if (OB_ISNULL(entry->d_name)) {
-    ret = OB_INVALID_ARGUMENT;
-    OB_LOG(WARN, "invalid list entry, d_name is null", KR(ret));
-  } else if (OB_FAIL(tmp_path.init(path_.get_obstr()))) {
-    OB_LOG(WARN, "failed to init tmp_path", KR(ret), K_(path));
-  } else if (OB_FAIL(tmp_path.join(entry->d_name, share::ObBackupFileSuffix::NONE))) {
-    OB_LOG(WARN, "failed to join file name", KR(ret), KCSTRING(entry->d_name));
-  } else if (OB_FAIL(io_adapter.del_file(tmp_path.get_ptr(), storage_info_))) {
-    // File does not exist should be considered successful
-    if (OB_OBJECT_NOT_EXIST == ret) {
-      OB_LOG(INFO, "object is not exist", KR(ret), K(tmp_path));
-      ret = OB_SUCCESS;
-    } else {
-      OB_LOG(WARN, "failed to delete file", KR(ret), K(tmp_path));
-    }
-  } else {
-    OB_LOG(INFO, "success to delete file", K(tmp_path));
-  }
-  return ret;
-}
 
 class ResidualDataCleaner
 {
@@ -96,7 +52,7 @@ int ResidualDataCleaner::init(const char *path, const char *endpoint, const char
     OB_LOG(WARN, "failed to set path when initiating residual data cleaner", KR(ret), KCSTRING(path));
   } else if (OB_FAIL(get_storage_type_from_path(path, type))) {
     OB_LOG(WARN, "failed to get storage type when initiating residual data cleaner", KR(ret), KCSTRING(path));
-  } else if (OB_FAIL(storage_info_.set(type, endpoint, access_info, extension))) {
+  } else if (OB_FAIL(storage_info_.set(type, endpoint, access_info, extension, OB_INVALID_DEST_ID))) {
     OB_LOG(WARN, "failed to set storage info when initiating residual data cleaner", KR(ret), KCSTRING(path), KCSTRING(endpoint));
   } else {
     is_inited_ = true;
@@ -123,8 +79,7 @@ int ResidualDataCleaner::clean_residual_data()
 {
   int ret = OB_SUCCESS;
   common::ObBackupIoAdapter io_adapter;
-  TestDelOp del_op(path_, &storage_info_);
-  if (OB_FAIL(io_adapter.list_files(path_.get_obstr(), &storage_info_, del_op))) {
+  if (OB_FAIL(io_adapter.del_dir(path_.get_obstr(), &storage_info_, true/*is_recursive*/))) {
     if (OB_DIR_NOT_EXIST == ret) {
       OB_LOG(INFO, "dir is not exist when cleaning residual data", KR(ret));
       ret = OB_SUCCESS;

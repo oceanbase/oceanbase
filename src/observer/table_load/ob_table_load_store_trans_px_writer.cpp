@@ -19,8 +19,9 @@
 #include "observer/table_load/ob_table_load_store_trans.h"
 #include "observer/table_load/ob_table_load_table_ctx.h"
 #include "observer/table_load/ob_table_load_trans_store.h"
-#include "storage/direct_load/ob_direct_load_vector_utils.h"
 #include "storage/direct_load/ob_direct_load_i_table.h"
+#include "storage/direct_load/ob_direct_load_vector.h"
+#include "storage/direct_load/ob_direct_load_vector_utils.h"
 
 namespace oceanbase
 {
@@ -36,15 +37,13 @@ ObTableLoadStoreTransPXWriter::ObTableLoadStoreTransPXWriter()
     store_ctx_(nullptr),
     trans_(nullptr),
     writer_(nullptr),
-    is_table_without_pk_(false),
     column_count_(0),
-    store_column_count_(0),
-    non_partitioned_tablet_id_vector_(nullptr),
-    tablet_id_set_(),
+    single_tablet_id_vector_(nullptr),
     pre_sort_writer_(nullptr),
     batch_ctx_(nullptr),
     row_count_(0),
     last_check_status_cycle_(0),
+    is_single_part_(false),
     is_vectorized_(false),
     use_rich_format_(false),
     can_write_(false),
@@ -74,13 +73,9 @@ void ObTableLoadStoreTransPXWriter::reset()
     ATOMIC_AAF(&store_ctx_->write_ctx_.px_writer_cnt_, -1);
     store_ctx_ = nullptr;
   }
-  is_table_without_pk_ = false;
   column_count_ = 0;
-  store_column_count_ = 0;
-  non_partitioned_tablet_id_vector_ = nullptr;
-  if (tablet_id_set_.created()) {
-    tablet_id_set_.destroy();
-  }
+  single_tablet_id_.reset();
+  single_tablet_id_vector_ = nullptr;
   if (nullptr != pre_sort_writer_) {
     pre_sort_writer_->~ObTableLoadPreSortWriter();
     allocator_.free(pre_sort_writer_);
@@ -93,6 +88,7 @@ void ObTableLoadStoreTransPXWriter::reset()
   }
   row_count_ = 0;
   last_check_status_cycle_ = 0;
+  is_single_part_ = false;
   is_vectorized_ = false;
   use_rich_format_ = false;
   allocator_.reset();
@@ -116,16 +112,13 @@ int ObTableLoadStoreTransPXWriter::init(ObTableLoadStoreCtx *store_ctx,
     writer_->inc_ref_count();
     ATOMIC_AAF(&store_ctx_->write_ctx_.px_writer_cnt_, 1);
 
-    is_table_without_pk_ = store_ctx_->ctx_->schema_.is_table_without_pk_;
     column_count_ = store_ctx_->write_ctx_.px_column_descs_.count();
-    store_column_count_ = store_ctx_->ctx_->schema_.store_column_count_ - (is_table_without_pk_ ? 1 : 0);
-    if (!store_ctx_->ctx_->schema_.is_partitioned_table_) {
-      non_partitioned_tablet_id_vector_ =
-        store_ctx_->ctx_->schema_.non_partitioned_tablet_id_vector_;
+    is_single_part_ = store_ctx_->write_ctx_.is_single_part_;
+    if (is_single_part_) {
+      single_tablet_id_ = store_ctx_->write_ctx_.single_tablet_id_;
+      single_tablet_id_vector_ = store_ctx_->write_ctx_.single_tablet_id_vector_;
     }
-    if (OB_FAIL(init_tablet_id_set())) {
-      LOG_WARN("fail to init tablet id set", KR(ret));
-    } else if (store_ctx_->write_ctx_.enable_pre_sort_) {
+    if (store_ctx_->write_ctx_.enable_pre_sort_) {
       if (OB_ISNULL(pre_sort_writer_ = OB_NEWx(ObTableLoadPreSortWriter, &allocator_))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to new ObTableLoadPreSortWriter", KR(ret));
@@ -202,8 +195,9 @@ int ObTableLoadStoreTransPXWriter::init_batch_ctx(const bool is_vectorized,
                                                   const bool use_rich_format)
 {
   int ret = OB_SUCCESS;
-  const ObIArray<ObColDesc> &col_descs = store_ctx_->write_ctx_.px_column_descs_;
   const int64_t max_batch_size = store_ctx_->ctx_->param_.batch_size_;
+  const int64_t tablet_cnt = store_ctx_->write_ctx_.tablet_idx_map_.size();
+  const ObDirectLoadRowFlag &row_flag = store_ctx_->write_ctx_.table_data_desc_.row_flag_;
   if (OB_UNLIKELY(nullptr != batch_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected batch ctx not null", KR(ret));
@@ -212,236 +206,30 @@ int ObTableLoadStoreTransPXWriter::init_batch_ctx(const bool is_vectorized,
     LOG_WARN("fail to new BatchCtx", KR(ret));
   } else {
     batch_ctx_->max_batch_size_ = max_batch_size;
-    batch_ctx_->batch_vectors_.set_block_allocator(ModulePageAllocator(allocator_));
-    batch_ctx_->const_vectors_.set_block_allocator(ModulePageAllocator(allocator_));
-    batch_ctx_->append_vectors_.set_block_allocator(ModulePageAllocator(allocator_));
-    batch_ctx_->project_vectors_.set_block_allocator(ModulePageAllocator(allocator_));
-    // non-vectorized
-    if (!is_vectorized) {
-      batch_ctx_->row_flag_.uncontain_hidden_pk_ = is_table_without_pk_;
-      if (OB_FAIL(ObDirectLoadVectorUtils::new_vector(VEC_FIXED,
-                                                      ObDirectLoadVectorUtils::tablet_id_value_tc,
-                                                      allocator_,
-                                                      batch_ctx_->tablet_id_batch_vector_))) {
-        LOG_WARN("fail to new tablet id fixed vector", KR(ret));
-      } else if (OB_FAIL(ObDirectLoadVectorUtils::prepare_vector(batch_ctx_->tablet_id_batch_vector_,
-                                                                 max_batch_size,
-                                                                 allocator_))) {
-        LOG_WARN("fail to prepare tablet id fixed vector", KR(ret), K(max_batch_size));
-      } else if (OB_FAIL(batch_ctx_->batch_buffer_.init(col_descs, max_batch_size))) {
-        LOG_WARN("fail to init batch buffer", KR(ret), K(col_descs), K(max_batch_size));
-      }
-    }
-    // vectorized
-    else {
-      if (!use_rich_format) { // vectorized 1.0
-        // 向量化1.0需要把ObDatumVector转成ObVector
-        if (OB_FAIL(ObDirectLoadVectorUtils::new_vector(VEC_UNIFORM,
-                                                        ObDirectLoadVectorUtils::tablet_id_value_tc,
-                                                        allocator_,
-                                                        batch_ctx_->tablet_id_batch_vector_))) {
-          LOG_WARN("fail to new tablet id uniform vector", KR(ret));
-        } else if (OB_FAIL(ObDirectLoadVectorUtils::new_vector(VEC_UNIFORM_CONST,
-                                                               ObDirectLoadVectorUtils::tablet_id_value_tc,
-                                                               allocator_,
-                                                               batch_ctx_->tablet_id_const_vector_))) {
-          LOG_WARN("fail to new tablet id uniform const vector", KR(ret));
-        }
-      } else { // vectorized 2.0
-        // 向量化2.0拿到的就是ObVector, do nothing
-      }
-      if (OB_FAIL(ret)) {
-      } else if (OB_ISNULL(batch_ctx_->col_fixed_ = to_bit_vector(
-                             allocator_.alloc(ObBitVector::memory_size(column_count_))))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to new ObBitVector", KR(ret), K(column_count_));
-      } else if (OB_ISNULL(batch_ctx_->col_lob_storage_ = to_bit_vector(
-                             allocator_.alloc(ObBitVector::memory_size(column_count_))))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to new ObBitVector", KR(ret), K(column_count_));
-      } else if (OB_FAIL(batch_ctx_->batch_vectors_.prepare_allocate(column_count_))) {
-        LOG_WARN("fail to prepare allocate", KR(ret), K(column_count_));
-      } else if (OB_FAIL(batch_ctx_->const_vectors_.prepare_allocate(column_count_))) {
-        LOG_WARN("fail to prepare allocate", KR(ret), K(column_count_));
-      } else if (OB_FAIL(batch_ctx_->append_vectors_.prepare_allocate(column_count_))) {
-        LOG_WARN("fail to prepare allocate", KR(ret), K(column_count_));
-      } else {
-        batch_ctx_->col_fixed_->reset(column_count_);
-        batch_ctx_->col_lob_storage_->reset(column_count_);
-      }
-      for (int64_t i = 0; OB_SUCC(ret) && i < column_count_; ++i) {
-        const ObColDesc &col_desc = col_descs.at(i);
-        const int16_t precision = col_desc.col_type_.is_decimal_int()
-                                    ? col_desc.col_type_.get_stored_precision()
-                                    : PRECISION_UNKNOWN_YET;
-        VecValueTypeClass value_tc = get_vec_value_tc(col_desc.col_type_.get_type(),
-                                                      col_desc.col_type_.get_scale(),
-                                                      precision);
-        const bool is_fixed = is_fixed_length_vec(value_tc);
-        const bool is_lob_storage = col_desc.col_type_.is_lob_storage();
-        ObIVector *batch_vector = nullptr;
-        ObIVector *const_vector = nullptr;
-        if (is_fixed) {
-          batch_ctx_->col_fixed_->set(i);
-        }
-        if (is_lob_storage) {
-          batch_ctx_->col_lob_storage_->set(i);
-        }
-        if (!use_rich_format) { // vectorized 1.0
-          // 向量化1.0传入的是ObDatumVector, 需要转成ObVector, 都需要构造vector
-          //  * fixed col不用浅拷贝, 不用分配vector成员内存
-          //  * unfixed col要浅拷贝, 需要分配vector成员内存, lob不用构造const_vector
-          if (OB_FAIL(ObDirectLoadVectorUtils::new_vector(VEC_UNIFORM,
-                                                          value_tc,
-                                                          allocator_,
-                                                          batch_vector))) {
-            LOG_WARN("fail to new uniform vector", KR(ret), K(i), K(col_desc), K(value_tc));
-          } else if (!is_fixed && OB_FAIL(ObDirectLoadVectorUtils::prepare_vector(batch_vector,
-                                                                                  max_batch_size,
-                                                                                  allocator_))) {
-            LOG_WARN("fail to prepare uniform vector", KR(ret), K(i), K(col_desc), K(max_batch_size));
-          } else if (is_lob_storage) {
-            // lob不用构造const_vector
-          } else if (OB_FAIL(ObDirectLoadVectorUtils::new_vector(VEC_UNIFORM_CONST,
-                                                                 value_tc,
-                                                                 allocator_,
-                                                                 const_vector))) {
-            LOG_WARN("fail to new uniform const vector", KR(ret), K(i), K(col_desc), K(value_tc));
-          } else if (!is_fixed && OB_FAIL(ObDirectLoadVectorUtils::prepare_vector(const_vector,
-                                                                                  max_batch_size,
-                                                                                  allocator_))) {
-            LOG_WARN("fail to prepare uniform const vector", KR(ret), K(i), K(col_desc), K(max_batch_size));
-          }
-        } else { // vectorized 2.0
-          // 向量化2.0传入的是ObVector
-          //  * fixed col直接用传入的ObVector, 不用构造vector
-          //  * unfixed col需要浅拷贝, 需要构造vector并分配vector成员内存, lob不用构造const_vector
-          if (is_fixed) {
-          } else if (OB_FAIL(ObDirectLoadVectorUtils::new_vector(VEC_DISCRETE,
-                                                                 value_tc,
-                                                                 allocator_,
-                                                                 batch_vector))) {
-            LOG_WARN("fail to new discrete vector", KR(ret), K(i), K(col_desc), K(value_tc));
-          } else if (OB_FAIL(ObDirectLoadVectorUtils::prepare_vector(batch_vector,
-                                                                     max_batch_size,
-                                                                     allocator_))) {
-            LOG_WARN("fail to prepare discrete vector", KR(ret), K(i), K(col_desc), K(max_batch_size));
-          } else if (is_lob_storage) {
-            // lob不用构造const_vector
-          } else if (OB_FAIL(ObDirectLoadVectorUtils::new_vector(VEC_UNIFORM_CONST,
-                                                                 value_tc,
-                                                                 allocator_,
-                                                                 const_vector))) {
-            LOG_WARN("fail to new uniform const vector", KR(ret), K(i), K(col_desc), K(value_tc));
-          } else if (OB_FAIL(ObDirectLoadVectorUtils::prepare_vector(const_vector,
-                                                                     max_batch_size,
-                                                                     allocator_))) {
-            LOG_WARN("fail to prepare uniform const vector", KR(ret), K(i), K(col_desc), K(max_batch_size));
-          }
-        }
-        if (OB_SUCC(ret)) {
-          batch_ctx_->batch_vectors_.at(i) = batch_vector;
-          batch_ctx_->const_vectors_.at(i) = const_vector;
-        }
-      }
-    }
-    if (OB_SUCC(ret)) {
-      // 无主键表或者有xmltype列则需要进行列映射
-      batch_ctx_->need_project_ = store_ctx_->write_ctx_.px_need_project_;
-      if (!batch_ctx_->need_project_) {
-      } else if (OB_FAIL(batch_ctx_->project_vectors_.prepare_allocate(store_column_count_))) {
-        LOG_WARN("fail to prepare allocate", KR(ret), K(store_column_count_));
-      } else {
-        // project null vector to project_vectors_
-        for (int64_t i = 0; i < store_ctx_->write_ctx_.px_null_vectors_.count(); ++i) {
-          ObIVector *null_vector = store_ctx_->write_ctx_.px_null_vectors_.at(i);
-          const int64_t column_idx = store_ctx_->write_ctx_.px_null_vector_project_idxs_.at(i);
-          batch_ctx_->project_vectors_.at(column_idx) = null_vector;
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObTableLoadStoreTransPXWriter::init_tablet_id_set()
-{
-  int ret = OB_SUCCESS;
-  const int64_t bucket_num = 1024;
-  ObMemAttr attr(MTL_ID(), "TLD_TabletIdSet");
-  if (OB_FAIL(tablet_id_set_.create(bucket_num, attr))) {
-    LOG_WARN("fail to create hashset", KR(ret));
-  } else {
-    const ObIArray<ObTableLoadLSIdAndPartitionId> &ls_partition_ids =
-      store_ctx_->data_store_table_ctx_->ls_partition_ids_;
-    for (int64_t i = 0; OB_SUCC(ret) && i < ls_partition_ids.count(); ++i) {
-      const ObTabletID &tablet_id = ls_partition_ids.at(i).part_tablet_id_.tablet_id_;
-      if (OB_FAIL(tablet_id_set_.set_refactored(tablet_id))) {
-        LOG_WARN("fail to set hashset", KR(ret), K(i), K(tablet_id), K(ls_partition_ids));
-        if (OB_LIKELY(OB_HASH_EXIST == ret)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected duplicate tablet id", KR(ret), K(i), K(tablet_id),
-                   K(ls_partition_ids));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObTableLoadStoreTransPXWriter::check_tablet(const ObTabletID &tablet_id)
-{
-  int ret = OB_SUCCESS;
-  ret = tablet_id_set_.exist_refactored(tablet_id);
-  if (OB_LIKELY(OB_HASH_EXIST == ret)) {
-    ret = OB_SUCCESS;
-  } else if (OB_LIKELY(OB_HASH_NOT_EXIST == ret)) {
-    ret = OB_TABLET_NOT_EXIST;
-    LOG_WARN("tablet id not exist", KR(ret), K(tablet_id),
-             K(store_ctx_->data_store_table_ctx_->ls_partition_ids_));
-  } else {
-    LOG_WARN("fail to check exist tablet id", KR(ret));
-  }
-  return ret;
-}
-
-int ObTableLoadStoreTransPXWriter::check_tablet(ObIVector *vector, const ObBatchRows &batch_rows)
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < batch_rows.size_; ++i) {
-    if (!batch_rows.all_rows_active_ && batch_rows.skip_->at(i)) {
-      continue;
-    } else {
-      const ObTabletID tablet_id = ObDirectLoadVectorUtils::get_tablet_id(vector, i);
-      if (OB_FAIL(check_tablet(tablet_id))) {
-        LOG_WARN("fail to check tablet", KR(ret), K(i), K(tablet_id));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObTableLoadStoreTransPXWriter::check_tablet(const ObDatumVector &datum_vector,
-                                                const ObBatchRows &batch_rows)
-{
-  int ret = OB_SUCCESS;
-  if (datum_vector.is_batch()) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < batch_rows.size_; ++i) {
-      if (!batch_rows.all_rows_active_ && batch_rows.skip_->at(i)) {
-        continue;
-      } else {
-        const ObDatum &datum = datum_vector.datums_[i];
-        const ObTabletID tablet_id(datum.get_int());
-        if (OB_FAIL(check_tablet(tablet_id))) {
-          LOG_WARN("fail to check tablet", KR(ret), K(i), K(datum), K(tablet_id));
-        }
-      }
-    }
-  } else {
-    const ObDatum &datum = datum_vector.datums_[0];
-    const ObTabletID tablet_id(datum.get_int());
-    if (OB_FAIL(check_tablet(tablet_id))) {
-      LOG_WARN("fail to check tablet", KR(ret), K(datum), K(tablet_id));
+    batch_ctx_->max_bytes_size_ = DEFAULT_MAX_BYTES_SIZE;
+    batch_ctx_->row_flag_ = row_flag;
+    if (OB_FAIL(ObDirectLoadVector::create_vector(VEC_FIXED,
+                                                  ObDirectLoadVectorUtils::tablet_id_value_tc,
+                                                  false /*is_nullable*/,
+                                                  max_batch_size,
+                                                  allocator_,
+                                                  batch_ctx_->tablet_id_vector_))) {
+      LOG_WARN("fail to create tablet id fixed vector", KR(ret));
+   } else if (OB_FAIL(batch_ctx_->batch_rows_.init(store_ctx_->write_ctx_.px_column_descs_,
+                                                   store_ctx_->write_ctx_.px_column_project_idxs_,
+                                                   store_ctx_->ctx_->schema_.column_descs_,
+                                                   store_ctx_->ctx_->schema_.col_nullables_,
+                                                   row_flag,
+                                                   max_batch_size))) {
+      LOG_WARN("fail to init batch rows", KR(ret));
+    } else if (OB_ISNULL(batch_ctx_->selector_ = static_cast<uint16_t *>(
+                           allocator_.alloc(sizeof(uint16_t) * max_batch_size)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc mem", KR(ret), K(max_batch_size));
+    } else if (OB_ISNULL(batch_ctx_->tablet_offsets_ = static_cast<uint16_t *>(
+                           allocator_.alloc(sizeof(uint16_t) * (tablet_cnt + 1))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc mem", KR(ret), K(tablet_cnt));
     }
   }
   return ret;
@@ -462,9 +250,57 @@ int ObTableLoadStoreTransPXWriter::check_status()
   return ret;
 }
 
+inline void ObTableLoadStoreTransPXWriter::make_selector(const ObBatchRows &brs,
+                                                         uint16_t *selector,
+                                                         int64_t &size)
+{
+  size = 0;
+  for (int64_t i = 0; i < brs.size_; ++i) {
+    if (brs.skip_->at(i)) {
+      continue;
+    } else {
+      selector[size++] = i;
+    }
+  }
+}
+
+int ObTableLoadStoreTransPXWriter::adapt_vectors(const ObIArray<ObIVector *> &vectors,
+                                                 const ObBatchRows &brs)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < vectors.count(); ++i) {
+    ObIVector *vec = vectors.at(i);
+    const VectorFormat format = vec->get_format();
+    switch (format) {
+      case VEC_FIXED:
+      case VEC_CONTINUOUS:
+      case VEC_UNIFORM:
+      case VEC_UNIFORM_CONST:
+        break;
+      case VEC_DISCRETE: {
+        ObDiscreteBase *discrete_vec = static_cast<ObDiscreteBase *>(vec);
+        if (discrete_vec->has_null()) {
+          // 将null对应的len设置为0
+          ObBitVector *nulls = discrete_vec->get_nulls();
+          ObLength *lens = discrete_vec->get_lens();
+          for (int64_t i = 0; i < brs.size_; ++i) {
+            lens[i] *= !nulls->at(i);
+          }
+        }
+        break;
+      }
+      default:
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "unexpected vector format", KR(ret), KPC(this), KPC(vec), K(format));
+        break;
+    }
+  }
+  return ret;
+}
+
 int ObTableLoadStoreTransPXWriter::write_vector(ObIVector *tablet_id_vector,
                                                 const ObIArray<ObIVector *> &vectors,
-                                                const ObBatchRows &batch_rows,
+                                                const ObBatchRows &brs,
                                                 int64_t &affected_rows)
 {
   int ret = OB_SUCCESS;
@@ -477,58 +313,73 @@ int ObTableLoadStoreTransPXWriter::write_vector(ObIVector *tablet_id_vector,
   } else if (OB_UNLIKELY(!is_vectorized_ || !use_rich_format_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected write vector", KR(ret), K(is_vectorized_), K(use_rich_format_));
-  } else if (OB_UNLIKELY(vectors.count() != column_count_ || nullptr == batch_rows.skip_ ||
-                         batch_rows.size_ <= 0 || batch_rows.size_ > batch_ctx_->max_batch_size_ ||
-                         batch_rows.end_)) {
+  } else if (OB_UNLIKELY((!is_single_part_ && nullptr == tablet_id_vector) ||
+                         vectors.count() != column_count_ || nullptr == brs.skip_ ||
+                         brs.size_ <= 0 || brs.size_ > batch_ctx_->max_batch_size_ || brs.end_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(column_count_), K(batch_ctx_->max_batch_size_),
-             K(vectors.count()), K(batch_rows));
-  } else if (nullptr != tablet_id_vector && OB_FAIL(check_tablet(tablet_id_vector, batch_rows))) {
-    LOG_WARN("fail to check tablet", KR(ret), KP(tablet_id_vector));
+    LOG_WARN("invalid args", KR(ret), K(is_single_part_), K(column_count_),
+             K(batch_ctx_->max_batch_size_), KP(tablet_id_vector), K(vectors.count()), K(brs));
+  } else if (OB_FAIL(adapt_vectors(vectors, brs))) {
+    LOG_WARN("fail to adapt vectors", KR(ret));
   } else {
-    if (nullptr == tablet_id_vector) {
-      tablet_id_vector = non_partitioned_tablet_id_vector_;
-    }
-    batch_ctx_->brs_.skip_ = batch_rows.skip_;
-    batch_ctx_->brs_.size_ = batch_rows.size_;
-    batch_ctx_->brs_.all_rows_active_ =
-      (batch_rows.all_rows_active_ || 0 == batch_rows.skip_->accumulate_bit_cnt(batch_rows.size_));
-    for (int64_t i = 0; OB_SUCC(ret) && i < column_count_; ++i) {
-      if (batch_ctx_->col_fixed_->at(i)) {
-        batch_ctx_->append_vectors_.at(i) = vectors.at(i);
-      } else if (batch_ctx_->col_lob_storage_->at(i)) {
-        ObIVector *vector = batch_ctx_->batch_vectors_.at(i);
-        if (VEC_UNIFORM_CONST != vectors.at(i)->get_format()) {
-          // 浅拷贝
-          if (OB_FAIL(ObDirectLoadVectorUtils::shallow_copy_vector(vectors.at(i),
-                                                                   vector,
-                                                                   batch_rows.size_))) {
-            LOG_WARN("fail to shallow copy vector", KR(ret), K(i));
-          }
+    const bool all_rows_active =
+      (brs.all_rows_active_ || 0 == brs.skip_->accumulate_bit_cnt(brs.size_));
+    if (all_rows_active) {
+      // 单分区场景, 检查分区是否一致
+      if (is_single_part_ && OB_UNLIKELY(!ObDirectLoadVectorUtils::check_is_same_tablet_id(
+                               single_tablet_id_, tablet_id_vector, brs.size_))) {
+        ret = OB_TABLET_NOT_EXIST;
+        LOG_WARN("unexpected tablet id not same", KR(ret), K(single_tablet_id_),
+                 KPC(tablet_id_vector));
+      }
+      // buffer不为空则先刷下去
+      else if (!batch_ctx_->batch_rows_.empty() && OB_FAIL(flush_buffer())) {
+        LOG_WARN("fail to flush buffer", KR(ret));
+      }
+      // 浅拷贝数据直接刷下去
+      else if (!is_single_part_ &&
+               OB_FAIL(batch_ctx_->tablet_id_vector_->shallow_copy(tablet_id_vector, brs.size_))) {
+        LOG_WARN("fail to shallow copy", KR(ret));
+      } else if (OB_FAIL(batch_ctx_->batch_rows_.shallow_copy(vectors, brs.size_))) {
+        LOG_WARN("fail to shallow copy vectors", KR(ret));
+      } else if (OB_FAIL(flush_buffer())) {
+        LOG_WARN("fail to flush buffer", KR(ret));
+      } else {
+        affected_rows = brs.size_;
+      }
+    } else {
+      uint16_t *selector = batch_ctx_->selector_;
+      int64_t size = 0;
+      make_selector(brs, batch_ctx_->selector_, size);
+      // 单分区场景, 检查分区是否一致
+      if (is_single_part_ && OB_UNLIKELY(!ObDirectLoadVectorUtils::check_is_same_tablet_id(
+                               single_tablet_id_, tablet_id_vector, selector, size))) {
+        ret = OB_TABLET_NOT_EXIST;
+        LOG_WARN("unexpected tablet id not same", KR(ret), K(single_tablet_id_),
+                 KPC(tablet_id_vector));
+      }
+      while (OB_SUCC(ret) && size > 0) {
+        const int64_t append_size = MIN(size, batch_ctx_->batch_rows_.remain_size());
+        const int64_t batch_idx = batch_ctx_->batch_rows_.size();
+        if (!is_single_part_ &&
+            OB_FAIL(batch_ctx_->tablet_id_vector_->append_selective(batch_idx,
+                                                                    tablet_id_vector,
+                                                                    selector,
+                                                                    append_size))) {
+          LOG_WARN("fail to append selective", KR(ret));
+        } else if (OB_FAIL(batch_ctx_->batch_rows_.append_selective(vectors, selector, append_size))) {
+          LOG_WARN("fail to append selective", KR(ret));
         } else {
-          // 展开
-          if (OB_FAIL(ObDirectLoadVectorUtils::expand_const_vector(vectors.at(i),
-                                                                   vector,
-                                                                   batch_rows.size_))) {
-            LOG_WARN("fail to expand const vector", KR(ret), K(i));
+          size -= append_size;
+          selector += append_size;
+          if (OB_FAIL(flush_buffer_if_need())) {
+            LOG_WARN("fail to flush buffer", KR(ret));
           }
-        }
-        batch_ctx_->append_vectors_.at(i) = vector;
-      } else { // 浅拷贝
-        ObIVector *vector = VEC_UNIFORM_CONST != vectors.at(i)->get_format()
-                              ? batch_ctx_->batch_vectors_.at(i)
-                              : batch_ctx_->const_vectors_.at(i);
-        if (OB_FAIL(ObDirectLoadVectorUtils::shallow_copy_vector(vectors.at(i), vector,
-                                                                 batch_rows.size_))) {
-          LOG_WARN("fail to shallow copy vector", KR(ret), K(i));
-        } else {
-          batch_ctx_->append_vectors_.at(i) = vector;
         }
       }
-    }
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(flush_batch(tablet_id_vector, batch_ctx_->append_vectors_, batch_ctx_->brs_, affected_rows))) {
-      LOG_WARN("fail to flush batch", KR(ret));
+      if (OB_SUCC(ret)) {
+        affected_rows = size;
+      }
     }
   }
   return ret;
@@ -536,7 +387,7 @@ int ObTableLoadStoreTransPXWriter::write_vector(ObIVector *tablet_id_vector,
 
 int ObTableLoadStoreTransPXWriter::write_batch(const ObDatumVector &tablet_id_datum_vector,
                                                const ObIArray<ObDatumVector> &datum_vectors,
-                                               const ObBatchRows &batch_rows,
+                                               const ObBatchRows &brs,
                                                int64_t &affected_rows)
 {
   int ret = OB_SUCCESS;
@@ -549,61 +400,71 @@ int ObTableLoadStoreTransPXWriter::write_batch(const ObDatumVector &tablet_id_da
   } else if (OB_UNLIKELY(!is_vectorized_ || use_rich_format_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected write batch", KR(ret), K(is_vectorized_), K(use_rich_format_));
-  } else if (OB_UNLIKELY(datum_vectors.count() != column_count_ || nullptr == batch_rows.skip_ ||
-                         batch_rows.size_ <= 0 || batch_rows.size_ > batch_ctx_->max_batch_size_ ||
-                         batch_rows.end_)) {
+  } else if (OB_UNLIKELY((!is_single_part_ && nullptr == tablet_id_datum_vector.datums_) ||
+                         datum_vectors.count() != column_count_ || nullptr == brs.skip_ ||
+                         brs.size_ <= 0 || brs.size_ > batch_ctx_->max_batch_size_ || brs.end_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(column_count_), K(batch_ctx_->max_batch_size_),
-             K(datum_vectors), K(batch_rows));
-  } else if (nullptr != tablet_id_datum_vector.datums_ &&
-             OB_FAIL(check_tablet(tablet_id_datum_vector, batch_rows))) {
-    LOG_WARN("fail to check tablet", KR(ret), K(tablet_id_datum_vector));
+    LOG_WARN("invalid args", KR(ret), K(is_single_part_), K(column_count_),
+             K(batch_ctx_->max_batch_size_), K(tablet_id_datum_vector), K(datum_vectors), K(brs));
   } else {
-    ObIVector *tablet_id_vector = nullptr;
-    if (nullptr != tablet_id_datum_vector.datums_) {
-      tablet_id_vector = tablet_id_datum_vector.is_batch() ? batch_ctx_->tablet_id_batch_vector_
-                                                           : batch_ctx_->tablet_id_const_vector_;
-      static_cast<ObUniformBase *>(tablet_id_vector)->set_datums(tablet_id_datum_vector.datums_);
+    const bool all_rows_active =
+      brs.all_rows_active_ || 0 == brs.skip_->accumulate_bit_cnt(brs.size_);
+    if (all_rows_active) {
+      // 单分区场景, 检查分区是否一致
+      if (is_single_part_ && OB_UNLIKELY(!ObDirectLoadVectorUtils::check_is_same_tablet_id(
+                               single_tablet_id_, tablet_id_datum_vector, brs.size_))) {
+        ret = OB_TABLET_NOT_EXIST;
+        LOG_WARN("unexpected tablet id not same", KR(ret), K(single_tablet_id_),
+                 K(tablet_id_datum_vector));
+      }
+      // buffer不为空则先刷下去
+      else if (!batch_ctx_->batch_rows_.empty() && OB_FAIL(flush_buffer())) {
+        LOG_WARN("fail to flush buffer", KR(ret));
+      }
+      // 浅拷贝数据直接刷下去
+      else if (!is_single_part_ &&
+               OB_FAIL(batch_ctx_->tablet_id_vector_->shallow_copy(tablet_id_datum_vector, brs.size_))) {
+        LOG_WARN("fail to shallow copy", KR(ret));
+      } else if (OB_FAIL(batch_ctx_->batch_rows_.shallow_copy(datum_vectors, brs.size_))) {
+        LOG_WARN("fail to shallow copy datum vectors", KR(ret));
+      } else if (OB_FAIL(flush_buffer())) {
+        LOG_WARN("fail to flush buffer", KR(ret));
+      } else {
+        affected_rows = brs.size_;
+      }
     } else {
-      tablet_id_vector = non_partitioned_tablet_id_vector_;
-    }
-    batch_ctx_->brs_.skip_ = batch_rows.skip_;
-    batch_ctx_->brs_.size_ = batch_rows.size_;
-    batch_ctx_->brs_.all_rows_active_ =
-      (batch_rows.all_rows_active_ || 0 == batch_rows.skip_->accumulate_bit_cnt(batch_rows.size_));
-    for (int64_t i = 0; i < column_count_; ++i) {
-      const ObDatumVector &datum_vector = datum_vectors.at(i);
-      ObIVector *vector = nullptr;
-      if (batch_ctx_->col_lob_storage_->at(i)) {
-        vector = batch_ctx_->batch_vectors_.at(i);
-        if (datum_vector.is_batch()) {
-          // 浅拷贝
-          MEMCPY(static_cast<ObUniformBase *>(vector)->get_datums(),
-                datum_vector.datums_,
-                sizeof(ObDatum) * batch_rows.size_);
+      uint16_t *selector = batch_ctx_->selector_;
+      int64_t size = 0;
+      make_selector(brs, batch_ctx_->selector_, size);
+      // 单分区场景, 检查分区是否一致
+      if (is_single_part_ && OB_UNLIKELY(!ObDirectLoadVectorUtils::check_is_same_tablet_id(
+                               single_tablet_id_, tablet_id_datum_vector, selector, size))) {
+        ret = OB_TABLET_NOT_EXIST;
+        LOG_WARN("unexpected tablet id not same", KR(ret), K(single_tablet_id_),
+                 K(tablet_id_datum_vector));
+      }
+      while (OB_SUCC(ret) && size > 0) {
+        const int64_t append_size = MIN(size, batch_ctx_->batch_rows_.remain_size());
+        const int64_t batch_idx = batch_ctx_->batch_rows_.size();
+        if (!is_single_part_ &&
+            OB_FAIL(batch_ctx_->tablet_id_vector_->append_selective(batch_idx,
+                                                                    tablet_id_datum_vector,
+                                                                    selector,
+                                                                    append_size))) {
+          LOG_WARN("fail to append selective", KR(ret));
+        } else if (OB_FAIL(batch_ctx_->batch_rows_.append_selective(datum_vectors, selector, append_size))) {
+          LOG_WARN("fail to append selective", KR(ret));
         } else {
-          // 展开
-          if (OB_FAIL(ObDirectLoadVectorUtils::expand_const_datum(datum_vector.datums_[0],
-                                                                  vector,
-                                                                  batch_rows.size_))) {
-            LOG_WARN("fail to expand const vector", KR(ret), K(i));
+          size -= append_size;
+          selector += append_size;
+          if (OB_FAIL(flush_buffer_if_need())) {
+            LOG_WARN("fail to flush buffer", KR(ret));
           }
         }
-      } else {
-        vector = datum_vector.is_batch() ? batch_ctx_->batch_vectors_.at(i)
-                                         : batch_ctx_->const_vectors_.at(i);
-        if (batch_ctx_->col_fixed_->at(i)) {
-          static_cast<ObUniformBase *>(vector)->set_datums(datum_vector.datums_);
-        } else { // 浅拷贝
-          MEMCPY(static_cast<ObUniformBase *>(vector)->get_datums(),
-                 datum_vector.datums_,
-                 sizeof(ObDatum) * (datum_vector.is_batch() ? batch_rows.size_ : 1));
-        }
       }
-      batch_ctx_->append_vectors_.at(i) = vector;
-    }
-    if (OB_FAIL(flush_batch(tablet_id_vector, batch_ctx_->append_vectors_, batch_ctx_->brs_, affected_rows))) {
-      LOG_WARN("fail to flush batch", KR(ret));
+      if (OB_SUCC(ret)) {
+        affected_rows = size;
+      }
     }
   }
   return ret;
@@ -624,25 +485,51 @@ int ObTableLoadStoreTransPXWriter::write_row(const ObTabletID &tablet_id, const 
   } else if (OB_UNLIKELY(!tablet_id.is_valid() || !row.is_valid() || row.count_ != column_count_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(tablet_id), K(row), K(column_count_));
-  } else if (OB_FAIL(check_tablet(tablet_id))) {
-    LOG_WARN("fail to check tablet", KR(ret), K(tablet_id));
   } else {
-    bool is_full = false;
-    const int64_t batch_idx = batch_ctx_->batch_buffer_.get_row_count();
-    batch_ctx_->datum_row_.storage_datums_ = is_table_without_pk_ ? row.storage_datums_ + 1 : row.storage_datums_;
-    batch_ctx_->datum_row_.count_ = is_table_without_pk_ ? row.count_ - 1 : row.count_;
-    if (OB_FAIL(ObDirectLoadVectorUtils::set_tablet_id(batch_ctx_->tablet_id_batch_vector_,
-                                                       batch_idx,
-                                                       tablet_id))) {
-      LOG_WARN("fail to set tablet id", KR(ret));
-    } else if (OB_FAIL(batch_ctx_->batch_buffer_.append_row(batch_ctx_->datum_row_,
-                                                            batch_ctx_->row_flag_,
-                                                            is_full))) {
+    const int64_t batch_idx = batch_ctx_->batch_rows_.size();
+    batch_ctx_->datum_row_.storage_datums_ = row.storage_datums_;
+    batch_ctx_->datum_row_.count_ = row.count_;
+    ObDatum tablet_id_datum(reinterpret_cast<const char *>(&tablet_id), sizeof(ObTabletID), false);
+    if (is_single_part_ && OB_UNLIKELY(tablet_id != single_tablet_id_)) {
+      ret = OB_TABLET_NOT_EXIST;
+      LOG_WARN("unexpected tablet id not same", KR(ret), K(single_tablet_id_), K(tablet_id));
+    } else if (OB_FAIL(batch_ctx_->tablet_id_vector_->append_datum(batch_idx, tablet_id_datum))) {
+      LOG_WARN("fail to append datum", KR(ret));
+    } else if (OB_FAIL(batch_ctx_->batch_rows_.append_row(batch_ctx_->datum_row_))) {
       LOG_WARN("fail to append row", KR(ret));
-    } else if (is_full) {
-      if (OB_FAIL(flush_buffer())) {
-        LOG_WARN("fail to flush buffer", KR(ret));
-      }
+    } else if (OB_FAIL(flush_buffer_if_need())) {
+      LOG_WARN("fail to flush buffer", KR(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadStoreTransPXWriter::flush_buffer_if_need()
+{
+  int ret = OB_SUCCESS;
+  if (batch_ctx_->batch_rows_.full() ||
+      batch_ctx_->batch_rows_.bytes_usage() >= batch_ctx_->max_bytes_size_) {
+    if (OB_FAIL(flush_buffer())) {
+      LOG_WARN("fail to flush buffer", KR(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadStoreTransPXWriter::check_tablets(ObDirectLoadVector *tablet_id_vector,
+                                                 const int64_t size)
+{
+  int ret = OB_SUCCESS;
+  const ObTableLoadStoreWriteCtx::TabletIdxMap &tablet_idx_map =
+    store_ctx_->write_ctx_.tablet_idx_map_;
+  const uint64_t *tablet_ids = reinterpret_cast<uint64_t *>(
+    static_cast<ObFixedLengthBase *>(tablet_id_vector->get_vector())->get_data());
+  for (int64_t i = 0; OB_SUCC(ret) && i < size; ++i) {
+    const uint64_t tablet_id = tablet_ids[i];
+    const int64_t *tablet_idx = tablet_idx_map.get(tablet_id);
+    if (OB_ISNULL(tablet_idx)) {
+      ret = OB_TABLET_NOT_EXIST;
+      LOG_WARN("unexpected tablet id not found", KR(ret), K(tablet_id));
     }
   }
   return ret;
@@ -651,66 +538,86 @@ int ObTableLoadStoreTransPXWriter::write_row(const ObTabletID &tablet_id, const 
 int ObTableLoadStoreTransPXWriter::flush_buffer()
 {
   int ret = OB_SUCCESS;
-  int64_t affected_rows = 0;
-  batch_ctx_->brs_.size_ = batch_ctx_->batch_buffer_.get_row_count();
-  batch_ctx_->brs_.all_rows_active_ = true;
-  if (OB_FAIL(flush_batch(batch_ctx_->tablet_id_batch_vector_,
-                          batch_ctx_->batch_buffer_.get_vectors(),
-                          batch_ctx_->brs_,
-                          affected_rows))) {
-    LOG_WARN("fail to flush batch", KR(ret));
-  } else if (OB_UNLIKELY(affected_rows != batch_ctx_->brs_.size_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected row count", KR(ret), K(affected_rows), K(batch_ctx_->brs_.size_));
-  } else {
-    batch_ctx_->batch_buffer_.reuse();
-  }
-  return ret;
-}
-
-int ObTableLoadStoreTransPXWriter::flush_batch(ObIVector *tablet_id_vector,
-                                               const ObIArray<ObIVector *> &vectors,
-                                               const ObBatchRows &batch_rows,
-                                               int64_t &affected_rows)
-{
-  int ret = OB_SUCCESS;
-  affected_rows = 0;
-  if (OB_UNLIKELY(nullptr == tablet_id_vector || vectors.count() != column_count_ ||
-                  (!batch_rows.all_rows_active_ && nullptr == batch_rows.skip_) ||
-                  batch_rows.size_ <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(column_count_), KP(tablet_id_vector), K(vectors.count()),
-             K(batch_rows));
-  } else {
-    const ObIArray<ObIVector *> *append_vectors = nullptr;
-    if (batch_ctx_->need_project_) {
-      for (int64_t i = 0; i < store_ctx_->write_ctx_.px_column_project_idxs_.count(); ++i) {
-        const int64_t column_idx = store_ctx_->write_ctx_.px_column_project_idxs_.at(i);
-        if (column_idx >= 0) {
-          batch_ctx_->project_vectors_.at(column_idx) = vectors.at(i);
+  ObDirectLoadBatchRows &batch_rows = batch_ctx_->batch_rows_.get_batch_rows();
+  if (store_ctx_->ctx_->schema_.has_lob_rowkey_ &&
+      OB_FAIL(ObDirectLoadVectorUtils::check_rowkey_length(
+        batch_rows, store_ctx_->ctx_->schema_.rowkey_column_count_))) {
+    LOG_WARN("fail to check rowkey length", KR(ret));
+  } else if (nullptr != pre_sort_writer_) { // pre_sort
+    ObIVector *tablet_id_vector =
+      is_single_part_ ? single_tablet_id_vector_ : batch_ctx_->tablet_id_vector_->get_vector();
+    if (!is_single_part_ &&
+        OB_FAIL(check_tablets(batch_ctx_->tablet_id_vector_, batch_rows.size()))) {
+      LOG_WARN("fail to check tablets", KR(ret));
+    } else if (OB_FAIL(pre_sort_writer_->px_write(tablet_id_vector, batch_rows))) {
+      LOG_WARN("fail to px write", KR(ret));
+    }
+  } else if (is_single_part_) { // 单分区场景
+    if (OB_FAIL(writer_->px_write(single_tablet_id_, batch_rows))) {
+      LOG_WARN("fail to px write", KR(ret));
+    }
+  } else { // 多分区场景
+    const ObTableLoadStoreWriteCtx::TabletIdxMap &tablet_idx_map =
+      store_ctx_->write_ctx_.tablet_idx_map_;
+    const int64_t size = batch_rows.size();
+    const uint64_t *tablet_ids = reinterpret_cast<uint64_t *>(
+      static_cast<ObFixedLengthBase *>(batch_ctx_->tablet_id_vector_->get_vector())->get_data());
+    const bool all_tablet_id_is_same =
+      ObDirectLoadVectorUtils::check_all_tablet_id_is_same(tablet_ids, size);
+    if (all_tablet_id_is_same) { // 数据属于同一个分区
+      const uint64_t tablet_id = tablet_ids[0];
+      const int64_t *tablet_idx = tablet_idx_map.get(tablet_id);
+      if (OB_ISNULL(tablet_idx)) {
+        ret = OB_TABLET_NOT_EXIST;
+        LOG_WARN("unexpected tablet id not found", KR(ret), K(tablet_id));
+      } else if (OB_FAIL(writer_->px_write(ObTabletID(tablet_id), batch_rows))) {
+        LOG_WARN("fail to px write", KR(ret));
+      }
+    } else { // 数据属于多个分区
+      const int64_t tablet_cnt = tablet_idx_map.size();
+      uint16_t *selector = batch_ctx_->selector_;
+      uint16_t *tablet_offsets = batch_ctx_->tablet_offsets_;
+      MEMSET(selector, 0, sizeof(uint16_t) * batch_ctx_->max_batch_size_);
+      MEMSET(tablet_offsets, 0, sizeof(uint16_t) * (tablet_cnt + 1));
+      for (int64_t i = 0; OB_SUCC(ret) && i < size; ++i) {
+        const uint64_t tablet_id = tablet_ids[i];
+        const int64_t *tablet_idx = tablet_idx_map.get(tablet_id);
+        if (OB_ISNULL(tablet_idx)) {
+          ret = OB_TABLET_NOT_EXIST;
+          LOG_WARN("unexpected tablet id not found", KR(ret), K(tablet_id));
+        } else {
+          tablet_offsets[*tablet_idx]++;
         }
       }
-      append_vectors = &batch_ctx_->project_vectors_;
-    } else {
-      append_vectors = &vectors;
+      for (int64_t i = 1; i <= tablet_cnt; ++i) {
+        tablet_offsets[i] += tablet_offsets[i - 1];
+      }
+      for (int i = size - 1; OB_SUCC(ret) && i >= 0; --i) {
+        const uint64_t tablet_id = tablet_ids[i];
+        const int64_t *tablet_idx = tablet_idx_map.get(tablet_id);
+        selector[tablet_offsets[*tablet_idx] - 1] = i;
+        tablet_offsets[*tablet_idx]--;
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < tablet_cnt; ++i) {
+        const int64_t start = tablet_offsets[i];
+        const int64_t size = tablet_offsets[i + 1] - start;
+        if (size > 0) {
+          const uint64_t tablet_id = tablet_ids[selector[start]];
+          if (OB_FAIL(writer_->px_write(ObTabletID(tablet_id),
+                                        batch_rows,
+                                        selector + start,
+                                        size))) {
+            LOG_WARN("fail to px write", KR(ret));
+          }
+        }
+      }
     }
-    if (store_ctx_->ctx_->schema_.has_lob_rowkey_ &&
-        OB_FAIL(ObDirectLoadVectorUtils::check_rowkey_length(*append_vectors, batch_rows, store_ctx_->ctx_->schema_.rowkey_column_count_))) {
-      LOG_WARN("fail to check rowkey length", KR(ret));
-    } else if (nullptr != pre_sort_writer_) {
-      if (OB_FAIL(pre_sort_writer_->px_write(tablet_id_vector, *append_vectors, batch_rows, affected_rows))) {
-        LOG_WARN("fail to px write", KR(ret));
-      }
-    } else {
-      if (OB_FAIL(writer_->px_write(tablet_id_vector, *append_vectors, batch_rows, affected_rows))) {
-        LOG_WARN("fail to px write", KR(ret));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      row_count_ += affected_rows;
-      if (OB_FAIL(check_status())) {
-        LOG_WARN("fail to check status", KR(ret));
-      }
+  }
+  if (OB_SUCC(ret)) {
+    row_count_ += batch_rows.size();
+    batch_ctx_->batch_rows_.reuse();
+    if (OB_FAIL(check_status())) {
+      LOG_WARN("fail to check status", KR(ret));
     }
   }
   return ret;
@@ -722,8 +629,7 @@ int ObTableLoadStoreTransPXWriter::close()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadStoreTransPXWriter not init", KR(ret), KP(this));
-  } else if (nullptr != batch_ctx_ && !batch_ctx_->batch_buffer_.empty() &&
-             OB_FAIL(flush_buffer())) {
+  } else if (nullptr != batch_ctx_ && !batch_ctx_->batch_rows_.empty() && OB_FAIL(flush_buffer())) {
     LOG_WARN("fail to flush buffer", KR(ret));
   } else if (nullptr != pre_sort_writer_ && OB_FAIL(pre_sort_writer_->close())) {
     LOG_WARN("fail to push chunk", KR(ret));

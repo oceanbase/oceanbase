@@ -417,6 +417,16 @@ int ObSchemaUtils::convert_sys_param_to_sysvar_schema(const ObSysParam &sysparam
   return ret;
 }
 
+bool ObSchemaUtils::is_support_parallel_drop(const ObTableType table_type)
+{
+  // TODO(ziqian.zzq): support more table type for parallel drop
+  return USER_TABLE == table_type
+         || TMP_TABLE == table_type
+         || TMP_TABLE_ORA_SESS == table_type
+         || TMP_TABLE_ORA_TRX == table_type
+         || EXTERNAL_TABLE == table_type;
+}
+
 int ObSchemaUtils::get_tenant_int_variable(uint64_t tenant_id,
                                            ObSysVarClassType var_id,
                                            int64_t &v)
@@ -607,7 +617,8 @@ int ObSchemaUtils::add_sys_table_lob_aux_table(
 int ObSchemaUtils::construct_inner_table_schemas(
     const uint64_t tenant_id,
     ObSArray<ObTableSchema> &tables,
-    ObIAllocator &allocator)
+    ObIAllocator &allocator,
+    bool construct_all)
 {
   int ret = OB_SUCCESS;
   const schema_create_func *creator_ptr_arrays[] = {
@@ -635,7 +646,8 @@ int ObSchemaUtils::construct_inner_table_schemas(
         bool exist = false;
         if (OB_FAIL((*creator_ptr)(table_schema))) {
           LOG_WARN("fail to gen sys table schema", KR(ret));
-        } else if (is_sys_tenant(tenant_id) && table_schema.get_table_id() == OB_ALL_CORE_TABLE_TID) {
+        } else if (!construct_all && is_sys_tenant(tenant_id)
+            && table_schema.get_table_id() == OB_ALL_CORE_TABLE_TID) {
           // sys tenant's __all_core_table's schema is built separately in bootstrap
         } else if (OB_FAIL(ObSchemaUtils::construct_tenant_space_full_table(
                 tenant_id, table_schema))) {
@@ -644,7 +656,7 @@ int ObSchemaUtils::construct_inner_table_schemas(
                 tenant_id, table_schema, exist))) {
           LOG_WARN("fail to check inner table exist",
               KR(ret), K(tenant_id), K(table_schema));
-        } else if (!exist) {
+        } else if (!construct_all && !exist) {
           // skip
         } else if (OB_FAIL(tables.push_back(table_schema))) {
           LOG_WARN("fail to push back table schema", KR(ret), K(table_schema));
@@ -660,6 +672,74 @@ int ObSchemaUtils::construct_inner_table_schemas(
           }
         } // end lob aux table
       }
+    }
+  }
+  return ret;
+}
+
+// used for generating hard code schema version when add table in development
+// for virtual table with index, we should make index schema version less than virtual table schema version
+// otherwise, schema service cannot bind index schema to virtual table schema
+// system table index is no need to do this because system table indexes are hard code
+// see also:
+// the algorithm:
+// 1. For the input array, construct a map from table_id to table pointer.
+// 2. Traverse the array in reverse order. For virtual table index, first insert the corresponding virtual table into the table_id array, then insert its own table_id; for other system tables, insert them directly into table_id array. Ensure that the virtual table appears in the array before its index. At this point, the schema_version in the table_id array that ranks higher is larger.
+// 3. Traverse the table_id array in order, if a table does not have a valid schema_version, assign it a schema_version from largest to smallest.
+
+int ObSchemaUtils::generate_hard_code_schema_version(ObIArray<ObTableSchema> &tables)
+{
+  int ret = OB_SUCCESS;
+  hash::ObHashMap<uint64_t, ObTableSchema *> tid2table;
+  if (OB_FAIL(tid2table.create(tables.count(), "Tid2Table"))) {
+    LOG_WARN("failed to create tid2table", KR(ret), K(tables.count()));
+  } else {
+    int64_t current_schema_version = (HARD_CODE_SCHEMA_VERSION_BEGIN + tables.count()) * ObSchemaVersionGenerator::SCHEMA_VERSION_INC_STEP;
+    ObArray<uint64_t> table_id_in_schema_version_order;
+    FOREACH_CNT_X(table, tables, OB_SUCC(ret)) {
+      if (OB_ISNULL(table)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("pointer is null", KR(ret), KP(table));
+      } else if (OB_FAIL(tid2table.set_refactored(table->get_table_id(), table))) {
+        LOG_WARN("failed to add tid to table", KR(ret), K(table));
+      }
+    }
+    for (int64_t i = tables.count() - 1; i >= 0 && OB_SUCC(ret); i--) {
+      ObTableSchema &table = tables.at(i);
+      table.set_schema_version(OB_INVALID_VERSION);
+      if (table.is_index_table() && is_virtual_table(table.get_data_table_id())) {
+        if (OB_FAIL(table_id_in_schema_version_order.push_back(table.get_data_table_id()))) {
+          LOG_WARN("failed to push data_table_id", KR(ret), K(table));
+        }
+      }
+      if (FAILEDx(table_id_in_schema_version_order.push_back(table.get_table_id()))) {
+        LOG_WARN("failed to push table_id", KR(ret), K(table));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < table_id_in_schema_version_order.count(); i++) {
+      const uint64_t table_id = table_id_in_schema_version_order.at(i);
+      ObTableSchema **table_ptr = nullptr;
+      ObTableSchema *table = nullptr;
+      if (OB_ISNULL(table_ptr = tid2table.get(table_id)) || OB_ISNULL(table = *table_ptr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("pointer is null", KR(ret), KP(table_ptr), K(table));
+      } else if (table->get_schema_version() != OB_INVALID_VERSION) {
+        // table schema version is set, ignore
+      } else {
+        table->set_schema_version(current_schema_version);
+        for (ObTableSchema::const_column_iterator iter = table->column_begin();
+            OB_SUCC(ret) && iter != table->column_end(); ++iter) {
+          (*iter)->set_schema_version(current_schema_version);
+          (*iter)->set_tenant_id(OB_INVALID_TENANT_ID);
+          (*iter)->set_table_id(table->get_table_id());
+        }
+        current_schema_version -= ObSchemaVersionGenerator::SCHEMA_VERSION_INC_STEP;
+      }
+    }
+    if (OB_SUCC(ret) && current_schema_version != HARD_CODE_SCHEMA_VERSION_BEGIN *
+        ObSchemaVersionGenerator::SCHEMA_VERSION_INC_STEP) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("schema count not match", KR(ret), K(current_schema_version), K(HARD_CODE_SCHEMA_VERSION_BEGIN));
     }
   }
   return ret;
@@ -784,14 +864,37 @@ int ObSchemaUtils::batch_get_latest_table_schemas(
     common::ObIArray<ObSimpleTableSchemaV2 *> &table_schemas)
 {
   int ret = OB_SUCCESS;
+  const int64_t schema_version = INT64_MAX - 1; // get latest schema
+  if (OB_FAIL(batch_get_table_schemas_by_version(
+      sql_client,
+      allocator,
+      tenant_id,
+      schema_version,
+      table_ids,
+      table_schemas))) {
+    LOG_WARN("batch get table schemas by version failed",
+        KR(ret), K(tenant_id), K(table_ids), K(schema_version));
+  }
+  return ret;
+}
+
+int ObSchemaUtils::batch_get_table_schemas_by_version(
+    common::ObISQLClient &sql_client,
+    common::ObIAllocator &allocator,
+    const uint64_t tenant_id,
+    const int64_t schema_version,
+    const common::ObIArray<ObObjectID> &table_ids,
+    common::ObIArray<ObSimpleTableSchemaV2 *> &table_schemas)
+{
+  int ret = OB_SUCCESS;
   table_schemas.reset();
   ObSchemaService *schema_service = NULL;
   ObArray<ObTableLatestSchemaVersion> table_schema_versions;
   ObArray<SchemaKey> need_refresh_table_schema_keys;
   ObArray<ObSimpleTableSchemaV2 *> table_schemas_from_inner_table;
-  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || table_ids.empty())) {
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || table_ids.empty() || schema_version < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(tenant_id), K(table_ids));
+    LOG_WARN("invalid args", KR(ret), K(tenant_id), K(table_ids), K(schema_version));
   } else if (OB_ISNULL(GCTX.schema_service_)
       || OB_ISNULL(schema_service = GCTX.schema_service_->get_schema_service())) {
     ret = OB_ERR_UNEXPECTED;
@@ -805,6 +908,7 @@ int ObSchemaUtils::batch_get_latest_table_schemas(
   } else if (OB_FAIL(batch_get_table_schemas_from_cache_(
       allocator,
       tenant_id,
+      schema_version,
       table_schema_versions,
       need_refresh_table_schema_keys,
       table_schemas))) {
@@ -813,6 +917,7 @@ int ObSchemaUtils::batch_get_latest_table_schemas(
       sql_client,
       allocator,
       tenant_id,
+      schema_version,
       need_refresh_table_schema_keys,
       table_schemas_from_inner_table))) {
     LOG_WARN("batch get table_schemas from inner table failed", KR(ret), K(need_refresh_table_schema_keys));
@@ -1247,6 +1352,7 @@ int ObSchemaUtils::get_latest_table_schema(
 int ObSchemaUtils::batch_get_table_schemas_from_cache_(
     common::ObIAllocator &allocator,
     const uint64_t tenant_id,
+    const int64_t specified_schema_version,
     const ObIArray<ObTableLatestSchemaVersion> &table_schema_versions,
     common::ObIArray<SchemaKey> &need_refresh_table_schema_keys,
     common::ObIArray<ObSimpleTableSchemaV2 *> &table_schemas)
@@ -1255,9 +1361,9 @@ int ObSchemaUtils::batch_get_table_schemas_from_cache_(
   need_refresh_table_schema_keys.reset();
   table_schemas.reset();
   ObSchemaGetterGuard schema_guard;
-  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || specified_schema_version < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
+    LOG_WARN("invalid args", KR(ret), K(tenant_id), K(specified_schema_version));
   } else if (OB_ISNULL(GCTX.schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("multiversion_schema_service is null", KR(ret));
@@ -1279,7 +1385,8 @@ int ObSchemaUtils::batch_get_table_schemas_from_cache_(
           cached_table_schema))) {
         LOG_WARN("get simple table schema failed", KR(ret), K(tenant_id), K(table_schema_version));
       } else if (OB_ISNULL(cached_table_schema)
-          || (cached_table_schema->get_schema_version() < table_schema_version.get_schema_version())) {
+          || (cached_table_schema->get_schema_version() < table_schema_version.get_schema_version())
+          || (cached_table_schema->get_schema_version() > specified_schema_version)) {
         // need fetch new table schema
         SchemaKey table_schema_key;
         table_schema_key.tenant_id_ = tenant_id;
@@ -1301,6 +1408,7 @@ int ObSchemaUtils::batch_get_table_schemas_from_inner_table_(
     common::ObISQLClient &sql_client,
     common::ObIAllocator &allocator,
     const uint64_t tenant_id,
+    const int64_t schema_version,
     common::ObArray<SchemaKey> &need_refresh_table_schema_keys,
     common::ObIArray<ObSimpleTableSchemaV2 *> &table_schemas)
 {
@@ -1309,10 +1417,9 @@ int ObSchemaUtils::batch_get_table_schemas_from_inner_table_(
   ObSchemaService *schema_service = NULL;
   ObRefreshSchemaStatus schema_status;
   schema_status.tenant_id_ = tenant_id;
-  int64_t schema_version = INT64_MAX - 1; // get latest schema
-  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || schema_version < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
+    LOG_WARN("invalid args", KR(ret), K(tenant_id), K(schema_version));
   } else if (OB_ISNULL(GCTX.schema_service_)
       || OB_ISNULL(schema_service = GCTX.schema_service_->get_schema_service())) {
     ret = OB_ERR_UNEXPECTED;
@@ -1423,8 +1530,7 @@ const char* DDLType[]
 
 const char* NOT_SUPPORT_DDLType[]
 {
-  "CREATE_VIEW",
-  "DROP_TABLE"
+  "CREATE_VIEW"
 };
 
 int ObParallelDDLControlMode::string_to_ddl_type(const ObString &ddl_string, ObParallelDDLType &ddl_type)
@@ -1565,6 +1671,38 @@ int ObParallelDDLControlMode::generate_parallel_ddl_control_config_for_create_te
     config_value.set_length(config_value.length()-2);
   }
   return ret;
+}
+
+int ObTenantDDLCountGuard::try_inc_ddl_count(const int64_t cpu_quota_concurrency)
+{
+  int ret = OB_SUCCESS;
+  omt::ObMultiTenant *omt = GCTX.omt_;
+  if (OB_INVALID_TENANT_ID == tenant_id_) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant id", KR(ret));
+  } else if (OB_ISNULL(omt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("omt is null", KR(ret));
+  } else if (OB_FAIL(omt->inc_tenant_ddl_count(tenant_id_, cpu_quota_concurrency))) {
+    LOG_WARN("fail to inc tenant ddl count", KR(ret), K_(tenant_id));
+  } else {
+    had_inc_ddl_ = true;
+  }
+  return ret;
+}
+
+ObTenantDDLCountGuard::~ObTenantDDLCountGuard()
+{
+  int ret = OB_SUCCESS;
+  if (had_inc_ddl_) {
+    omt::ObMultiTenant *omt = GCTX.omt_;
+    if (OB_ISNULL(omt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("omt is null", KR(ret));
+    } else if (OB_FAIL(omt->dec_tenant_ddl_count(tenant_id_))) {
+      LOG_WARN("fail to dec tenant ddl count", KR(ret), K_(tenant_id));
+    }
+  }
 }
 
 } // end schema

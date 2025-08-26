@@ -227,6 +227,7 @@ private:
   ObLDHandle handle_;
   bool is_inner_session_;
   ObDiagnosticInfo *inner_sql_di_;
+  ObInterruptChecker interrupt_checker_;
 
   DISALLOW_COPY_AND_ASSIGN(ObInnerSQLResult);
 };

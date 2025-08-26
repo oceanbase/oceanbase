@@ -15,6 +15,7 @@
 #include "achunk_mgr.h"
 #include "lib/utility/utility.h"
 #include "lib/resource/ob_affinity_ctrl.h"
+#include "lib/utility/ob_tracepoint.h"
 using namespace oceanbase::lib;
 int ObLargePageHelper::large_page_type_ = INVALID_LARGE_PAGE_TYPE;
 
@@ -58,13 +59,17 @@ AChunkMgr::AChunkMgr()
   }
 }
 
+ERRSIM_POINT_DEF(EN_PHYSICAL_MEMORY_EXHAUST);
 void *AChunkMgr::direct_alloc(const uint64_t size, const int32_t numa_id, const bool can_use_huge_page, bool &huge_page_used, const bool alloc_shadow)
 {
   common::ObTimeGuard time_guard(__func__, 1000 * 1000);
   int orig_errno = errno;
 
   void *ptr = nullptr;
-  ptr = low_alloc(size, numa_id, can_use_huge_page, huge_page_used, alloc_shadow);
+  bool is_errsim = false;
+  if (!(is_errsim = EN_PHYSICAL_MEMORY_EXHAUST)) {
+    ptr = low_alloc(size, numa_id, can_use_huge_page, huge_page_used, alloc_shadow);
+  }
   if (nullptr != ptr) {
     if (((uint64_t)ptr & (ACHUNK_ALIGN_SIZE - 1)) != 0) {
       // not aligned
@@ -94,7 +99,7 @@ void *AChunkMgr::direct_alloc(const uint64_t size, const int32_t numa_id, const 
   } else {
     LOG_ERROR_RET(OB_ALLOCATE_MEMORY_FAILED, "low alloc fail", K(size), K(orig_errno), K(errno));
     auto &afc = g_alloc_failed_ctx();
-    afc.reason_ = PHYSICAL_MEMORY_EXHAUST;
+    afc.reason_ = is_errsim ? ERRSIM_PHYSICAL_MEMORY_EXHAUST : PHYSICAL_MEMORY_EXHAUST;
     afc.alloc_size_ = size;
     afc.errno_ = errno;
   }
@@ -320,13 +325,16 @@ void AChunkMgr::free_co_chunk(AChunk *chunk)
   }
 }
 
+ERRSIM_POINT_DEF(EN_SERVER_HOLD_REACH_LIMIT);
 bool AChunkMgr::update_hold(int64_t bytes, bool high_prio)
 {
   bool bret = true;
   const int64_t limit = high_prio ? limit_ + urgent_ : limit_;
+  bool is_errsim = false;
   if (bytes <= 0) {
     IGNORE_RETURN ATOMIC_AAF(&hold_, bytes);
-  } else if (hold_ + bytes <= limit) {
+  } else if (!(is_errsim = EN_SERVER_HOLD_REACH_LIMIT)
+      && hold_ + bytes <= limit) {
     const int64_t nvalue = ATOMIC_AAF(&hold_, bytes);
     if (nvalue > limit) {
       IGNORE_RETURN ATOMIC_AAF(&hold_, -bytes);
@@ -337,7 +345,7 @@ bool AChunkMgr::update_hold(int64_t bytes, bool high_prio)
   }
   if (!bret) {
     auto &afc = g_alloc_failed_ctx();
-    afc.reason_ = SERVER_HOLD_REACH_LIMIT;
+    afc.reason_ = is_errsim ? ERRSIM_SERVER_HOLD_REACH_LIMIT : SERVER_HOLD_REACH_LIMIT;
     afc.alloc_size_ = bytes;
     afc.server_hold_ = hold_;
     afc.server_limit_ = limit_;

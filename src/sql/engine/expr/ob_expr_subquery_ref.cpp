@@ -226,6 +226,7 @@ int ObExprSubQueryRef::calc_result_type0(ObExprResType &type, ObExprTypeCtx &typ
   UNUSED(type_ctx);
   if (extra_info_.is_cursor_) {
     type.set_ext();
+    type.set_extend_type(pl::PL_REF_CURSOR_TYPE);
   } else if (extra_.is_scalar_) {
     //subquery的结果是一个标量，那么返回类型是标量的实际返回类型
     type = extra_info_.scalar_result_type_;
@@ -364,6 +365,8 @@ int ObExprSubQueryRef::expr_eval(
     OX (obj->set_extend(reinterpret_cast<int64_t>(cursor), pl::PL_REF_CURSOR_TYPE));
     OX (expr_datum.from_obj(*obj));
     OZ (session->get_tmp_table_size(size));
+    OZ (pl::ObPLCursorInfo::prepare_entity(*session, cursor->get_cursor_entity()));
+    OX (cursor->set_spi_cursor(NULL));
     OZ (cursor->prepare_spi_cursor(spi_cursor,
                                    session->get_effective_tenant_id(),
                                    size,

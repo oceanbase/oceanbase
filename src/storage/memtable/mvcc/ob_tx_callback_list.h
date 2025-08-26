@@ -73,11 +73,7 @@ public:
                                        const transaction::ObTxSEQ from_seq,
                                        const share::SCN replay_scn);
 
-  // reverse_search_callback_by_seq_no will search callback from back to front
-  // until callbacks smaller or equal than the seq_no
-  int reverse_search_callback_by_seq_no(const transaction::ObTxSEQ seq_no, ObITransCallback *search_res);
-
-  // get_memtable_key_arr_w_timeout get all memtable key until timeout
+  // get_memtable_key_arr__timeout get all memtable key until timeout
   int get_memtable_key_arr_w_timeout(transaction::ObMemtableKeyArray &memtable_key_arr);
 
   // clean_unlog_callbacks will remove all unlogged callbacks. Which is called
@@ -169,8 +165,9 @@ private:
                 const ObCallbackScope &callbacks,
                 const LockState lock_state);
   int callback_(ObITxCallbackFunctor &func,
-                ObITransCallback *start,
+                ObITransCallback *start, /*inclusive*/
                 ObITransCallback *end,
+                const bool end_inclusive,
                 const LockState lock_state);
   int64_t calc_need_remove_count_for_fast_commit_();
   void ensure_checksum_(const share::SCN scn);
@@ -178,7 +175,7 @@ private:
 public:
   ObITransCallback *get_guard() { return &head_; }
   ObITransCallback *get_tail() { return head_.get_prev(); }
-  ObITransCallback *get_log_cursor() const { return log_cursor_; }
+  ObITransCallback *get_log_cursor() const { return ATOMIC_LOAD(&log_cursor_); }
   int64_t get_log_epoch() const;
   share::SCN get_sync_scn() const { return sync_scn_; }
   bool check_all_redo_flushed(const bool quite = true) const;

@@ -785,6 +785,7 @@ int ObBasicStatsEstimator::estimate_stale_partition(ObExecContext &ctx,
             LOG_WARN("failed to push back part ids occurred in monitor_modified", K(ret));
           } else if (OB_FAIL(add_var_to_array_no_dup(monitor_modified_part_ids, cur_part_id))) {
             LOG_WARN("failed to push back part ids occurred in monitor_modified", K(ret));
+          // cacl inc_mod_count in order
           } else if (ObDbmsStatsUtils::is_subpart_id(partition_infos, dst_partition, dst_part_id)) {
             has_subpart_invalid_inc |= inc_mod_count < 0;
             if (cur_part_id == dst_part_id) {
@@ -803,10 +804,13 @@ int ObBasicStatsEstimator::estimate_stale_partition(ObExecContext &ctx,
               has_subpart_invalid_inc = false;
             }
           }
+
           has_part_invalid_inc |= inc_mod_count < 0;
           is_check_global = true;
           table_inc_modified += inc_mod_count;
         }
+
+        // cacl global part
         if (OB_FAIL(ret)) {
           if (OB_ITER_END != ret) {
             LOG_WARN("failed to get result", K(ret));
@@ -830,6 +834,7 @@ int ObBasicStatsEstimator::estimate_stale_partition(ObExecContext &ctx,
           }
         }
       }
+
       int tmp_ret = OB_SUCCESS;
       if (NULL != client_result) {
         if (OB_SUCCESS != (tmp_ret = client_result->close())) {
@@ -838,24 +843,25 @@ int ObBasicStatsEstimator::estimate_stale_partition(ObExecContext &ctx,
         }
       }
     }
+
     ObSEArray<int64_t, 4> record_first_part_ids;
-    for (int64_t i = 0; OB_SUCC(ret) && i < partition_infos.count(); ++i) {
-      int64_t partition_id = partition_infos.at(i).part_id_;
-      int64_t first_part_id = partition_infos.at(i).first_part_id_;
+    for (int64_t i = 0; OB_SUCC(ret) && i < partition_stat_infos.count(); ++i) {
+      int64_t partition_id = partition_stat_infos.at(i).partition_id_;
+      int64_t first_part_id = OB_INVALID_ID;
       // Partitions who not have dml infos are no need to regather stats
       if (!is_contain(monitor_modified_part_ids, partition_id)) {
         if (OB_FAIL(set_partition_stat_no_regather(partition_id, partition_stat_infos))) {
           LOG_WARN("failed to set paritition stat no regather", K(ret));
         }
       }
-      if (OB_SUCC(ret) &&
-          first_part_id != OB_INVALID_ID &&
-          !is_contain(monitor_modified_part_ids, first_part_id) &&
-          !is_contain(record_first_part_ids, first_part_id)) {
-        if (OB_FAIL(set_partition_stat_no_regather(first_part_id, partition_stat_infos))) {
-          LOG_WARN("failed to set paritition stat no regather", K(ret));
-        } else if (OB_FAIL(record_first_part_ids.push_back(first_part_id))) {
-          LOG_WARN("failed to push back", K(ret));
+      if (OB_SUCC(ret) && ObDbmsStatsUtils::is_subpart_id(partition_infos, partition_id, first_part_id)) {
+        if (first_part_id != OB_INVALID_ID && !is_contain(monitor_modified_part_ids, first_part_id) &&
+            !is_contain(record_first_part_ids, first_part_id)) {
+          if (OB_FAIL(set_partition_stat_no_regather(first_part_id, partition_stat_infos))) {
+            LOG_WARN("failed to set paritition stat no regather", K(ret));
+          } else if (OB_FAIL(record_first_part_ids.push_back(first_part_id))) {
+            LOG_WARN("failed to push back", K(ret));
+          }
         }
       }
     }
@@ -948,7 +954,7 @@ int ObBasicStatsEstimator::check_table_statistics_state(ObExecContext &ctx,
     // do nothing
   } else if (OB_FAIL(select_sql.append_fmt(
         "select partition_id, stattype_locked, row_cnt, spare2 from %s where tenant_id = %lu and " \
-        "table_id = %lu order by 1;",
+        "table_id = %lu and last_analyzed > 0 order by 1;",
         share::OB_ALL_TABLE_STAT_TNAME,
         share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
         share::schema::ObSchemaUtils::get_extract_schema_id(tenant_id, table_id)))) {
@@ -1146,13 +1152,6 @@ int ObBasicStatsEstimator::get_need_stats_tables(ObExecContext &ctx,
                                            " FROM   %s t "\
                                            " WHERE  table_id > %ld"
                                            "  AND  table_type IN %s"\
-                                           "  AND  (table_type = %u "\
-                                           "       OR EXISTS(SELECT 1 "\
-                                           "                 FROM   %s m"\
-                                           "                 WHERE  t.table_id = m.table_id"\
-                                           "                        AND t.tenant_id = m.tenant_id"\
-                                           "                        AND inserts + deletes + updates > 0"\
-                                           "                 limit 1)) "
                                            " AND table_id  not in (select distinct table_id from %s "\
                                            " WHERE table_id > %ld AND spare2 >= 5) "\
                                            " ORDER  BY tenant_id, table_id "\
@@ -1160,8 +1159,6 @@ int ObBasicStatsEstimator::get_need_stats_tables(ObExecContext &ctx,
                                            share::OB_ALL_TABLE_TNAME,
                                            last_table_id,
                                            gather_table_type_list.ptr(),
-                                           share::schema::ObTableType::VIRTUAL_TABLE,
-                                           share::OB_ALL_MONITOR_MODIFIED_TNAME,
                                            share::OB_ALL_TABLE_STAT_TNAME,
                                            last_table_id,
                                            slice_cnt))) {
@@ -1345,6 +1342,8 @@ int ObBasicStatsEstimator::fill_hints(common::ObIAllocator &alloc,
                                               table_name.length(),
                                               table_name.ptr()))) {
     LOG_WARN("failed to append fmt", K(ret));
+  } else if (OB_FAIL(default_hints.append_fmt(" OPT_PARAM('APPROX_COUNT_DISTINCT_PRECISION', 10) "))) {
+    LOG_WARN("failed to append fmt", K(ret));
   } else if (use_column_store && OB_FAIL(default_hints.append_fmt(use_col_tab_hint,
                                                                   table_name.length(),
                                                                   table_name.ptr()))) {
@@ -1431,6 +1430,9 @@ int ObBasicStatsEstimator::get_async_gather_stats_tables(ObExecContext &ctx,
                                                          ObIArray<AsyncStatTable> &stat_tables)
 {
   int ret = OB_SUCCESS;
+  //  avoid too many index tablet-id,
+  // set 11*10^12 as max_tablet_id from experiments
+  const int64_t MAX_TABLE_TABLET_ID = 110000000000000000 ;
   ObSqlString select_sql;
   if (OB_FAIL(select_sql.append_fmt(
           "SELECT table_id, tablet_id, avg(changed_ratio) over (partition by table_id)  ratio from "\
@@ -1447,6 +1449,7 @@ int ObBasicStatsEstimator::get_async_gather_stats_tables(ObExecContext &ctx,
           " double) "\
           "    ELSE (m.inserts - m.last_inserts + m.updates - m.last_updates + m.deletes - m.last_deletes) * 1.0 "\
           " / (m.last_inserts-m.last_deletes) END) > cast(coalesce(up.valchar, gp.spare4) as double))t "\
+          " and m.tablet_id < %lu "\
           " order by ratio desc,table_id  limit %lu ",
           share::OB_ALL_MONITOR_MODIFIED_TNAME,
           share::OB_ALL_OPTSTAT_USER_PREFS_TNAME,

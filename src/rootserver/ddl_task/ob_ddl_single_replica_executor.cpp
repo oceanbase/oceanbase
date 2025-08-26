@@ -15,6 +15,7 @@
 #include "rootserver/ob_root_service.h"
 #include "share/ob_ddl_sim_point.h"
 #include "share/location_cache/ob_location_service.h"
+#include "storage/ddl/ob_tablet_split_util.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
@@ -45,11 +46,11 @@ int ObSingleReplicaBuildCtx::init(
              tablet_task_id == 0 ||
              !src_tablet_id.is_valid() ||
              !dest_tablet_id.is_valid() ||
-             (is_tablet_split(ddl_type) && (compaction_scn == 0 || parallel_datum_rowkey_list.empty()))) {
+             (is_tablet_split(ddl_type) && (parallel_datum_rowkey_list.empty()))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(addr), K(src_table_id), K(dest_table_id),
                                  K(tablet_task_id), K(src_tablet_id), K(dest_tablet_id),
-                                 K(ddl_type), K(compaction_scn), K(parallel_datum_rowkey_list));
+                                 K(ddl_type), K(parallel_datum_rowkey_list));
   } else if (OB_FAIL(parallel_datum_rowkey_list_.assign(parallel_datum_rowkey_list))) { // shallow copy.
     LOG_WARN("assign failed", K(ret), K(parallel_datum_rowkey_list));
   } else {
@@ -78,6 +79,7 @@ void ObSingleReplicaBuildCtx::reset_build_stat()
   row_inserted_ = 0;
   row_scanned_ = 0;
   physical_row_count_ = 0;
+  sess_not_found_times_= 0;
 }
 
 bool ObSingleReplicaBuildCtx::is_valid() const
@@ -87,7 +89,7 @@ bool ObSingleReplicaBuildCtx::is_valid() const
                 dest_schema_version_ != 0 && tablet_task_id_ != 0 &&
                 src_tablet_id_.is_valid() && dest_tablet_id_.is_valid();
   if (is_tablet_split(ddl_type_)) {
-    valid &= (compaction_scn_ != 0 && !parallel_datum_rowkey_list_.empty());
+    valid &= (!parallel_datum_rowkey_list_.empty());
   }
   return valid;
 }
@@ -115,6 +117,7 @@ int ObSingleReplicaBuildCtx::assign(const ObSingleReplicaBuildCtx &other)
     row_inserted_ = other.row_inserted_;
     row_scanned_ = other.row_scanned_;
     physical_row_count_ = other.physical_row_count_;
+    sess_not_found_times_ = other.sess_not_found_times_;
     dest_tablet_id_ = other.dest_tablet_id_;
   }
   return ret;
@@ -130,9 +133,9 @@ int ObSingleReplicaBuildCtx::check_need_schedule(bool &need_schedule) const
   } else {
     const int64_t elapsed_time = ObTimeUtility::current_time() - heart_beat_time_;
     const bool timeout = (elapsed_time > REPLICA_BUILD_HEART_BEAT_TIME);
-    if (stat_ == ObReplicaBuildStat::BUILD_INIT ||
+    if ((stat_ == ObReplicaBuildStat::BUILD_INIT ||
         stat_ == ObReplicaBuildStat::BUILD_RETRY ||
-        (stat_ == ObReplicaBuildStat::BUILD_REQUESTED && timeout)) {
+        (stat_ == ObReplicaBuildStat::BUILD_REQUESTED && timeout))) {
       need_schedule = true;
     }
   }
@@ -190,16 +193,28 @@ int ObDDLReplicaBuildExecutor::build(const ObDDLReplicaBuildExecutorParam &param
   //   "type", type_,
   //   K_(schema_version),
   //   table_id_buffer);
-
-  if (OB_SUCC(ret)) {
+#ifdef OB_BUILD_SHARED_STORAGE
+  uint64_t data_version = 0;
+#endif
+  if (OB_FAIL(ret)) {
+    LOG_INFO("fail to build single replica task", K(ret), "ddl_event_info", ObDDLEventInfo());
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {
+    LOG_WARN("get_min_data_version failed", KR(ret), K_(tenant_id));
+  } else if (data_version >= DATA_VERSION_4_4_0_0 && is_tablet_split(ddl_type_) && GCTX.is_shared_storage_mode()) {
+    if (OB_FAIL(schedule_tablet_split_to_leader(param))) {
+      LOG_WARN("failed to schedule tablet split to leader", K(ret));
+    }
+#endif
+  }
+  if (OB_FAIL(ret)) {
+  } else {
     LOG_INFO("start to schedule task", K(src_tablet_ids_.count()), "ddl_event_info", ObDDLEventInfo());
     if (OB_FAIL(schedule_task())) {
       LOG_WARN("fail to schedule tasks", K(ret));
     } else {
       LOG_INFO("start to schedule task", K(param.source_tablet_ids_));
     }
-  } else {
-    LOG_INFO("fail to build single replica task", K(ret), "ddl_event_info", ObDDLEventInfo());
   }
   return ret;
 }
@@ -464,6 +479,7 @@ int ObDDLReplicaBuildExecutor::construct_rpc_arg(
     arg.consumer_group_id_ = consumer_group_id_;
     arg.compaction_scn_ = replica_build_ctx.compaction_scn_;
     arg.can_reuse_macro_block_ = replica_build_ctx.can_reuse_macro_block_;
+    arg.split_sstable_type_ = share::ObSplitSSTableType::SPLIT_BOTH;
     arg.min_split_start_scn_   = min_split_start_scn_;
     /** handle OB_SESSION_NOT_FOUND(-4067) may lead to infinite retry of table recovery task.
       * Due to the number limit(100) of blocked thread stream rpc receiver
@@ -815,6 +831,49 @@ int ObDDLReplicaBuildExecutor::get_replica_build_ctx(
   }
   return ret;
 }
+
+#ifdef OB_BUILD_SHARED_STORAGE
+int ObDDLReplicaBuildExecutor::schedule_tablet_split_to_leader(const ObDDLReplicaBuildExecutorParam &param)
+{
+  int ret = OB_SUCCESS;
+  const int64_t cluster_id = GCONF.cluster_id;
+  oceanbase::obrpc::ObSrvRpcProxy *srv_rpc_proxy = GCTX.srv_rpc_proxy_;
+  ObAddr leader_addr;
+  oceanbase::obrpc::ObTabletSplitScheduleArg arg;
+  oceanbase::obrpc::ObLSTabletSplitScheduleRes res;
+  uint64_t tenant_id = param.tenant_id_;
+  int64_t ddl_rpc_timeout_us = -1;
+  //since src data tablet, all local index tablets and lob data tablet are located in the same ls
+  ObTabletID src_data_tablet_id = param.source_tablet_ids_.at(0);
+  int64_t schedule_time = ObTimeUtility::current_time();
+  if (OB_ISNULL(srv_rpc_proxy)) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("root service or location_cache is null", K(ret), KP(srv_rpc_proxy));
+  } else if (OB_FAIL(ObDDLUtil::get_tablet_leader(tenant_id, src_data_tablet_id, leader_addr))) {
+    LOG_WARN("failed to get tablet leader", K(ret), K(tenant_id), K(src_data_tablet_id));
+  } else if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(param.source_tablet_ids_.count(), ddl_rpc_timeout_us))) {
+    LOG_WARN("failed to get ddl rpc timeout", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < param.source_tablet_ids_.count(); ++i) {
+    oceanbase::common::ObTabletID source_tablet_id = param.source_tablet_ids_.at(i);
+    if (OB_FAIL(arg.tablet_ids_.push_back(source_tablet_id))) {
+      LOG_WARN("failed ot push back into task array", K(ret), K(source_tablet_id));
+    } else if (OB_FAIL(arg.tenant_ids_.push_back(tenant_id))) {
+      LOG_WARN("failed to push back into tenant_ids", K(ret), K(tenant_id));
+    } else if (OB_FAIL(arg.schedule_time_.push_back(schedule_time))) {
+      LOG_WARN("failed to pusch back into schedule_time_", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(srv_rpc_proxy->to(leader_addr).timeout(ddl_rpc_timeout_us).schedule_tablet_split(arg, res))) {
+    LOG_WARN("fail to schedule_tablet_split", K(ret));
+  } else if (OB_FAIL(res.ret_code_)) {
+    LOG_WARN("failed to schedule_tablet_split", K(ret));
+  }
+  return ret;
+}
+#endif
+
 
 // NOTE as caller, update_build_progress(), update_build_ctx() will hold lock
 int ObDDLReplicaBuildExecutor::update_replica_build_ctx(

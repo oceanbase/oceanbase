@@ -36,12 +36,6 @@ int ObMediumListChecker::validate_medium_info_list(
 
   if (skip_validate) {
     // do nothing
-  } else if (GCTX.is_shared_storage_mode()) {
-#ifdef OB_BUILD_SHARED_STORAGE
-    if (OB_FAIL(inner_check_medium_list_for_ss(extra_info, medium_info_array, last_major_snapshot))) {
-      LOG_WARN("failed to inner check medium info list for ss", K(ret));
-    }
-#endif
   } else if (OB_FAIL(inner_check_medium_list(extra_info, medium_info_array, last_major_snapshot))) {
     LOG_WARN("failed to inner check medium info list", K(ret));
   }

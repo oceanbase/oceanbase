@@ -63,7 +63,8 @@ public:
                                    const ObStorageSchema &storage_schema,
                                    const int64_t snapshot_version,
                                    const int64_t column_group_idx,
-                                   const bool has_all_column_group);
+                                   const bool has_all_column_group,
+                                   const bool is_shared);
 
   // Without checking the validity of the input parameters, necessary to ensure the correctness of the method call.
   int init_for_small_sstable(const blocksstable::ObSSTableMergeRes &res,
@@ -103,6 +104,7 @@ public:
                      const ObITable::TableKey &src_table_key,
                      const blocksstable::ObSSTableBasicMeta &basic_meta,
                      const int64_t schema_version,
+                     const ObIArray<blocksstable::MacroBlockId> &split_point_macros_id,
                      const blocksstable::ObSSTableMergeRes &res);
 
   // Without checking the validity of the input parameters, necessary to ensure the correctness of the method call.
@@ -127,13 +129,17 @@ public:
                   const blocksstable::ObSSTableMergeRes &res);
 
   // Without checking the validity of the input parameters, necessary to ensure the correctness of the method call.
-  int init_for_ha(const blocksstable::ObMigrationSSTableParam &migration_param);
+  int init_for_ha(
+      const blocksstable::ObMigrationSSTableParam &migration_param,
+      const common::ObIArray<blocksstable::MacroBlockId> &data_block_ids,
+      const common::ObIArray<blocksstable::MacroBlockId> &other_block_ids);
 
   // Without checking the validity of the input parameters, necessary to ensure the correctness of the method call.
-  int init_for_transfer_empty_minor_sstable(const common::ObTabletID &tablet_id,
-                                            const share::SCN &start_scn,
-                                            const share::SCN &end_scn,
-                                            const ObStorageSchema &table_schema);
+  int init_for_transfer_empty_mini_minor_sstable(const common::ObTabletID &tablet_id,
+                                                 const share::SCN &start_scn,
+                                                 const share::SCN &end_scn,
+                                                 const ObStorageSchema &table_schema,
+                                                 const ObITable::TableType &table_type);
 
   // Without checking the validity of the input parameters, necessary to ensure the correctness of the method call.
   int init_for_remote(const blocksstable::ObMigrationSSTableParam &migration_param);
@@ -151,6 +157,7 @@ public:
   inline bool is_co_table_without_cgs() const { return is_co_table_without_cgs_; }
   inline int64_t column_group_cnt() const { return column_group_cnt_; }
   inline int64_t full_column_cnt() const { return full_column_cnt_; }
+  inline int64_t co_base_snapshot_version() const { return co_base_snapshot_version_; }
 
   // TODO: delete this interface
   // ObTabletMergeInfo::record_start_tx_scn_for_tx_data
@@ -209,7 +216,10 @@ public:
 private:
   static const int64_t DEFAULT_MACRO_BLOCK_CNT = 64;
   int inner_init_with_merge_res(const blocksstable::ObSSTableMergeRes &res);
-  int inner_init_with_shared_sstable(const blocksstable::ObMigrationSSTableParam &migration_param);
+  int inner_init_with_shared_sstable(
+      const blocksstable::ObMigrationSSTableParam &migration_param,
+      const common::ObIArray<blocksstable::MacroBlockId> &data_block_ids,
+      const common::ObIArray<blocksstable::MacroBlockId> &other_block_ids);
   void set_init_value_for_column_store_();
 private:
   friend class blocksstable::ObSSTableMeta;

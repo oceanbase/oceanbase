@@ -145,12 +145,15 @@ bool ObTabletCreateSSTableParam::is_valid() const
   } else if (!is_block_meta_valid(data_block_macro_meta_addr_, data_block_macro_meta_)) {
     ret = false;
     LOG_WARN("invalid data meta", K(data_block_macro_meta_addr_), K(data_block_macro_meta_));
-  } else if (table_shared_flag_.is_shared_sstable() && (data_blocks_cnt_ + index_blocks_cnt_) > 0 && 0 == root_macro_seq_) {
+  } else if (table_shared_flag_.is_shared_sstable() && (data_blocks_cnt_ + index_blocks_cnt_) > 0
+      && table_key_.is_major_sstable() && 0 == root_macro_seq_) {
     ret = false;
     LOG_ERROR("invalid root macro seq", K(data_blocks_cnt_), K(data_blocks_cnt_), K(root_macro_seq_));
-  } else if (!table_key_.get_tablet_id().is_ls_inner_tablet() && table_key_.is_minor_sstable() && filled_tx_scn_ < table_key_.get_end_scn()) {
+  } else if (!table_key_.get_tablet_id().is_ls_inner_tablet()
+             && table_key_.is_multi_version_minor_sstable()
+             && (filled_tx_scn_.is_min() || filled_tx_scn_.is_max())) {
     ret = false;
-    LOG_WARN("filled tx scn is invalid", K(filled_tx_scn_), K(table_key_));
+    LOG_ERROR("filled tx scn is invalid", K(filled_tx_scn_), K(table_key_));
   }
   return ret;
 }
@@ -204,7 +207,8 @@ int ObTabletCreateSSTableParam::init_for_empty_major_sstable(const ObTabletID &t
                                                              const ObStorageSchema &storage_schema,
                                                              const int64_t snapshot_version,
                                                              const int64_t column_group_idx,
-                                                             const bool has_all_column_group)
+                                                             const bool has_all_column_group,
+                                                             const bool is_shared)
 {
   int ret = OB_SUCCESS;
   set_init_value_for_column_store_();
@@ -255,7 +259,7 @@ int ObTabletCreateSSTableParam::init_for_empty_major_sstable(const ObTabletID &t
     original_size_ = 0;
     compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
     table_backup_flag_.reset();
-    table_shared_flag_.reset();
+    is_shared ? table_shared_flag_.set_shared_sstable() : table_shared_flag_.reset();
     sstable_logic_seq_ = 0;
     row_count_ = 0;
     recycle_version_ = 0;
@@ -369,24 +373,30 @@ int ObTabletCreateSSTableParam::init_for_split_empty_minor_sstable(const ObTable
   root_macro_seq_ = 0;
   full_column_cnt_ = 0;
   column_group_cnt_ = 1;
+
+  if (GCTX.is_shared_storage_mode()) {
+    table_shared_flag_.set_is_split_sstable();
+    table_shared_flag_.set_shared_sstable();
+  }
   return ret;
 }
 
-int ObTabletCreateSSTableParam::init_for_transfer_empty_minor_sstable(const common::ObTabletID &tablet_id,
-                                                                      const share::SCN &start_scn,
-                                                                      const share::SCN &end_scn,
-                                                                      const ObStorageSchema &table_schema)
+int ObTabletCreateSSTableParam::init_for_transfer_empty_mini_minor_sstable(const common::ObTabletID &tablet_id,
+                                                                           const share::SCN &start_scn,
+                                                                           const share::SCN &end_scn,
+                                                                           const ObStorageSchema &table_schema,
+                                                                           const ObITable::TableType &table_type)
 {
   int ret = OB_SUCCESS;
   set_init_value_for_column_store_();
   master_key_id_ = table_schema.get_master_key_id();
   MEMCPY(encrypt_key_, table_schema.get_encrypt_key_str(), table_schema.get_encrypt_key_len());
   const int64_t multi_version_col_cnt = ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
-  table_key_.table_type_ = ObITable::TableType::MINOR_SSTABLE;
+  table_key_.table_type_ = table_type;
   table_key_.tablet_id_ = tablet_id;
   table_key_.scn_range_.start_scn_ = start_scn;
   table_key_.scn_range_.end_scn_ = end_scn;
-  max_merged_trans_version_ = 0;
+  max_merged_trans_version_ = end_scn.get_val_for_tx();
 
   schema_version_ = table_schema.get_schema_version();
   create_snapshot_version_ = 0;
@@ -399,8 +409,8 @@ int ObTabletCreateSSTableParam::init_for_transfer_empty_minor_sstable(const comm
           + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
   root_block_addr_.set_none_addr();
   data_block_macro_meta_addr_.set_none_addr();
-  root_row_store_type_ = ObRowStoreType::FLAT_ROW_STORE;
-  latest_row_store_type_ = ObRowStoreType::FLAT_ROW_STORE;
+  root_row_store_type_ = ObMicroBlockFormatVersionHelper::decide_flat_format(table_schema.get_micro_block_format_version());
+  latest_row_store_type_ = ObMicroBlockFormatVersionHelper::decide_flat_format(table_schema.get_micro_block_format_version());
   data_index_tree_height_ = 0;
   index_blocks_cnt_ = 0;
   data_blocks_cnt_ = 0;
@@ -430,7 +440,10 @@ int ObTabletCreateSSTableParam::init_for_transfer_empty_minor_sstable(const comm
   is_co_table_without_cgs_ = false;
   co_base_snapshot_version_ = 0;
 
-  if (OB_FAIL(table_schema.get_encryption_id(encrypt_id_))) {
+  if (!table_key_.is_minor_sstable()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("table type is not mini/minor", K(ret), K(table_key_));
+  } else if (OB_FAIL(table_schema.get_encryption_id(encrypt_id_))) {
     LOG_WARN("fail to get encryption id", K(ret), K(table_schema));
   }
 
@@ -1026,6 +1039,7 @@ int ObTabletCreateSSTableParam::init_for_split(const ObTabletID &dst_tablet_id,
                                                const ObITable::TableKey &src_table_key,
                                                const blocksstable::ObSSTableBasicMeta &basic_meta,
                                                const int64_t schema_version,
+                                               const ObIArray<blocksstable::MacroBlockId> &split_point_macros_id,
                                                const blocksstable::ObSSTableMergeRes &res)
 {
   int ret = OB_SUCCESS;
@@ -1058,7 +1072,13 @@ int ObTabletCreateSSTableParam::init_for_split(const ObTabletID &dst_tablet_id,
 
   if (OB_FAIL(inner_init_with_merge_res(res))) {
     LOG_WARN("fail to inner init with merge res", K(ret), K(res));
+  } else if (OB_FAIL(append(data_block_ids_/*dst*/, split_point_macros_id/*src*/))) {
+    LOG_WARN("append failed", K(ret));
+  } else if (GCTX.is_shared_storage_mode()) {
+    table_shared_flag_.set_is_split_sstable();
+    table_shared_flag_.set_shared_sstable();
   }
+
   if (OB_SUCC(ret) && table_key_.is_major_sstable()) {
     if (OB_FAIL(column_checksums_.assign(res.data_column_checksums_))) {
       LOG_WARN("fill column checksum failed", K(ret), K(res));
@@ -1121,7 +1141,11 @@ int ObTabletCreateSSTableParam::init_for_lob_split(const ObTabletID &new_tablet_
 
   if (OB_FAIL(inner_init_with_merge_res(res))) {
     LOG_WARN("fail to inner init with merge res", K(ret), K(res));
+  } else if (GCTX.is_shared_storage_mode()) {
+    table_shared_flag_.set_is_split_sstable();
+    table_shared_flag_.set_shared_sstable();
   }
+
   if (OB_SUCC(ret) && table_key.is_major_sstable()) {
     if (OB_FAIL(column_checksums_.assign(res.data_column_checksums_))) {
       LOG_WARN("fill column checksum failed", K(ret), K(res));
@@ -1186,7 +1210,10 @@ int ObTabletCreateSSTableParam::init_for_ha(
   return ret;
 }
 
-int ObTabletCreateSSTableParam::init_for_ha(const blocksstable::ObMigrationSSTableParam &sstable_param)
+int ObTabletCreateSSTableParam::init_for_ha(
+    const blocksstable::ObMigrationSSTableParam &sstable_param,
+    const common::ObIArray<blocksstable::MacroBlockId> &data_block_ids,
+    const common::ObIArray<blocksstable::MacroBlockId> &other_block_ids)
 {
   int ret = OB_SUCCESS;
   set_init_value_for_column_store_();
@@ -1245,7 +1272,8 @@ int ObTabletCreateSSTableParam::init_for_ha(const blocksstable::ObMigrationSSTab
     LOG_WARN("failed to fix filled tx scn value for compact", K(ret), K(table_key_), K(sstable_param));
   } else if (OB_FAIL(blocksstable::ObSSTableMetaCompactUtil::fix_rec_scn_value_for_compact(table_key_, rec_scn_))) {
     LOG_WARN("failed to fix rec scn value for compact", K(ret), K(table_key_), K(sstable_param));
-  } else if (sstable_param.is_shared_sstable() && OB_FAIL(inner_init_with_shared_sstable(sstable_param))) {
+  } else if (sstable_param.is_shared_sstable() && OB_FAIL(inner_init_with_shared_sstable(sstable_param,
+      data_block_ids, other_block_ids))) {
     LOG_WARN("failed to inner init with shared sstable", K(ret), K(sstable_param));
   } else if (!is_valid()) {
     ret = OB_INVALID_ARGUMENT;
@@ -1387,6 +1415,10 @@ int ObTabletCreateSSTableParam::init_for_mds(
     }
   }
 
+  if (OB_SUCC(ret) && is_output_exec_mode(ctx.get_exec_mode())) {
+    table_shared_flag_.set_shared_sstable();
+  }
+
   if (OB_SUCC(ret)) {
     if (!is_valid()) {
       ret = OB_INVALID_ARGUMENT;
@@ -1396,7 +1428,10 @@ int ObTabletCreateSSTableParam::init_for_mds(
   return ret;
 }
 
-int ObTabletCreateSSTableParam::inner_init_with_shared_sstable(const blocksstable::ObMigrationSSTableParam &sstable_param)
+int ObTabletCreateSSTableParam::inner_init_with_shared_sstable(
+    const blocksstable::ObMigrationSSTableParam &sstable_param,
+    const common::ObIArray<blocksstable::MacroBlockId> &data_block_ids,
+    const common::ObIArray<blocksstable::MacroBlockId> &other_block_ids)
 {
   int ret = OB_SUCCESS;
   if (sstable_param.root_block_addr_.is_valid()) {
@@ -1434,6 +1469,11 @@ int ObTabletCreateSSTableParam::inner_init_with_shared_sstable(const blocksstabl
   MEMCPY(encrypt_key_, sstable_param.basic_meta_.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
   table_backup_flag_ = sstable_param.basic_meta_.table_backup_flag_;
   co_base_snapshot_version_ = sstable_param.basic_meta_.co_base_snapshot_version_;
+  if (OB_FAIL(data_block_ids_.assign(data_block_ids))) {
+    LOG_WARN("failed to assign data block ids", K(ret), K(data_block_ids));
+  } else if (OB_FAIL(other_block_ids_.assign(other_block_ids))) {
+    LOG_WARN("failed to assign other block ids", K(ret), K(other_block_ids));
+  }
   return ret;
 }
 

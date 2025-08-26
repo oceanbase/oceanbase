@@ -1433,11 +1433,11 @@ bool ObQueryRange::can_be_extract_range(ObItemType cmp_type,
         bret = true;
       } else if (col_type.get_collation_type() == calc_type.get_collation_type()) {
         bret = true;
-      } else if (OB_FAIL(ObExprRangeConverter::is_implicit_collation_range_valid(
-                                               cmp_type,
-                                               col_type.get_collation_type(),
-                                               calc_type.get_collation_type(),
-                                               is_valid))) {
+      } else if (OB_FAIL(ObOptimizerUtil::is_implicit_collation_range_valid(
+                                          cmp_type,
+                                          col_type.get_collation_type(),
+                                          calc_type.get_collation_type(),
+                                          is_valid))) {
         LOG_WARN("failed to check is implicit collation range valid", K(ret));
       } else if (is_valid) {
         bret = true;
@@ -7671,7 +7671,11 @@ int ObQueryRange::direct_get_tablet_ranges(ObIAllocator &allocator,
                                           const ObDataTypeCastParams &dtc_params) const
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(table_graph_.key_part_head_->is_always_true() ||
+  if (OB_ISNULL(table_graph_.key_part_head_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr", K(ret), K(all_single_value_ranges),
+                                   K(state_), K(range_size_), K(column_count_), K(contain_geo_filters_));
+  } else if (OB_UNLIKELY(table_graph_.key_part_head_->is_always_true() ||
                   table_graph_.key_part_head_->is_always_false())) {
     ObNewRange *range = NULL;
     bool is_get_range = false;
@@ -9973,6 +9977,7 @@ int ObQueryRange::get_geo_intersects_keypart(uint32_t input_srid,
   ObS2Adapter *s2object = NULL;
   ObString buffer_geo;
   double distance = NAN;
+  bool set_whole_range = false;
 
   // todo : fix me, get effective tenant_id
   if ((input_srid != 0) && OB_FAIL(OTSRS_MGR->get_tenant_srs_guard(srs_guard))) {
@@ -9984,9 +9989,19 @@ int ObQueryRange::get_geo_intersects_keypart(uint32_t input_srid,
     LOG_WARN("failed to get srs item", K(ret));
   } else if (op_type == ObDomainOpType::T_GEO_DWITHIN) {
     distance = out_key_part->domain_keypart_->extra_param_.get_double();
+    bool is_valid = true;
     if (out_key_part->domain_keypart_->extra_param_.is_unknown() || std::isnan(distance)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid distance para", K(ret));
+    } else if (OB_FAIL(ObGeoTypeUtil::geo_isvalid(&tmp_alloc, wkb_str, srs_item, is_valid))) {
+      LOG_WARN("failed to check geo is valid", K(ret));
+    } else if (!is_valid) {
+      // for invalid geometry, set whole range
+      if (OB_FAIL(set_geo_keypart_whole_range(*out_key_part))) {
+        LOG_WARN("set keypart whole range failed", K(ret));
+      } else {
+        set_whole_range = true;
+      }
     } else if (input_srid != 0 && srs_item->is_geographical_srs()) {
       double sphere_radius = (srs_item->semi_major_axis() * 2 + srs_item->semi_minor_axis()) /  3;
       const double SPHERIOD_ERR_FRACTION = 0.005;
@@ -10007,7 +10022,7 @@ int ObQueryRange::get_geo_intersects_keypart(uint32_t input_srid,
       }
     }
   }
-  if (s2object == NULL && OB_SUCC(ret)) {
+  if (s2object == NULL && !set_whole_range && OB_SUCC(ret)) {
     s2object = OB_NEWx(ObS2Adapter, (&tmp_alloc), (&tmp_alloc), (input_srid != 0 ? srs_item->is_geographical_srs() : false), true);
     if (OB_ISNULL(s2object)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -10015,7 +10030,7 @@ int ObQueryRange::get_geo_intersects_keypart(uint32_t input_srid,
     }
   }
 
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && !set_whole_range) {
     lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "S2Adapter"));
     // build s2 object from wkb
     if (OB_FAIL(ObGeoTypeUtil::get_type_from_wkb((buffer_geo.empty() ? wkb_str : buffer_geo), geo_type))) {

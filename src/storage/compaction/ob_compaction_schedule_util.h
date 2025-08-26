@@ -105,7 +105,7 @@ protected:
   void try_finish_merge_progress(const int64_t merge_version);
 protected:
   static const int64_t PRINT_SLOG_REPLAY_INVERVAL = 10_s;
-  mutable obsys::ObRWLock frozen_version_lock_;
+  mutable obsys::ObRWLock<> frozen_version_lock_;
   int64_t frozen_version_;
   int64_t inner_table_merged_scn_;
   int64_t merged_version_; // the merged major version of the local server, may be not accurate after reboot

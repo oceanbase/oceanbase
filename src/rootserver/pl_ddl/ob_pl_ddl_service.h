@@ -18,6 +18,7 @@
 #include "share/ob_rpc_struct.h"
 #include "share/schema/ob_schema_struct.h"
 #include "share/schema/ob_dependency_info.h"
+#include "share/ob_external_resource_rpc_struct.h"
 
 namespace oceanbase
 {
@@ -110,6 +111,16 @@ public:
                                ObMySQLTransaction &trans,
                                rootserver::ObDDLOperator &ddl_operator);
   //----End of functions for managing trigger----
+
+  //----Functions for managing external resource----
+  static int create_external_resource(const obrpc::ObCreateExternalResourceArg &arg,
+                                      obrpc::ObCreateExternalResourceRes &result,
+                                      rootserver::ObDDLService &ddl_service);
+  static int drop_external_resource(const obrpc::ObDropExternalResourceArg &arg,
+                                    obrpc::ObDropExternalResourceRes &result,
+                                    rootserver::ObDDLService &ddl_service);
+  //----End of functions for managing external resource----
+
 private:
   template <typename ArgType>
   static int check_env_before_ddl(share::schema::ObSchemaGetterGuard &schema_guard,

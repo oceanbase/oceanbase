@@ -16,6 +16,9 @@
 #include "lib/ash/ob_active_session_guard.h"
 #include "share/schema/ob_schema_struct.h"
 #include "share/ob_rpc_struct.h"
+#include "observer/ob_srv_network_frame.h"
+#include "share/schema/ob_schema_service_sql_impl.h"
+#include "rootserver/ob_tenant_info_loader.h" // ObTenantInfoLoader
 
 using namespace oceanbase::common;
 using namespace oceanbase::common::number;
@@ -292,7 +295,8 @@ int ObSequenceCache::need_refill_cache(const ObSequenceSchema &schema,
 
 int ObSequenceCache::refill_sequence_cache(const ObSequenceSchema &schema,
                                            common::ObIAllocator &allocator,
-                                           ObSequenceCacheItem &cache)
+                                           ObSequenceCacheItem &cache,
+                                           bool &wrap_around)
 {
   int ret = OB_SUCCESS;
   SequenceCacheNode next_range;
@@ -303,12 +307,14 @@ int ObSequenceCache::refill_sequence_cache(const ObSequenceSchema &schema,
   do {
     times++;
     need_refetch = false;
+    bool wrap_around = false;
     if (OB_FAIL(dml_proxy_.next_batch(schema.get_tenant_id(),
                                       schema.get_sequence_id(),
                                       schema.get_schema_version(),
                                       schema.get_sequence_option(),
                                       next_range,
-                                      cache))) {
+                                      cache,
+                                      wrap_around))) {
       LOG_WARN("fail get next sequence batch", K(schema), K(ret));
     } else {
       // 判断是否需要重取，确保取得的值够一次 increment
@@ -372,7 +378,8 @@ int ObSequenceCache::refill_sequence_cache(const ObSequenceSchema &schema,
 
 int ObSequenceCache::prefetch_sequence_cache(const ObSequenceSchema &schema,
                                              ObSequenceCacheItem &cache,
-                                             ObSequenceCacheItem &old_cache)
+                                             ObSequenceCacheItem &old_cache,
+                                             bool &wrap_around)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(dml_proxy_.prefetch_next_batch(schema.get_tenant_id(),
@@ -380,7 +387,8 @@ int ObSequenceCache::prefetch_sequence_cache(const ObSequenceSchema &schema,
                                              schema.get_schema_version(),
                                              schema.get_sequence_option(),
                                              cache.prefetch_node_,
-                                             old_cache))) {
+                                             old_cache,
+                                             wrap_around))) {
     LOG_WARN("fail get next sequence batch", K(schema), K(ret));
   } else {
     cache.last_refresh_ts_ = ObTimeUtility::current_time();
@@ -395,14 +403,22 @@ int ObSequenceCache::prefetch_sequence_cache(const ObSequenceSchema &schema,
 int ObSequenceCache::get_item(CacheItemKey &key, ObSequenceCacheItem *&item)
 {
   int ret = OB_SUCCESS;
+  rootserver::ObTenantInfoLoader *tenant_info_loader = MTL(rootserver::ObTenantInfoLoader*);
+  int64_t switchover_epoch = 0;
   if (OB_ENTRY_NOT_EXIST == (ret = sequence_cache_.get(key, item))) {
     lib::ObMutexGuard guard(cache_mutex_); // 加锁再次确认，避免并发加入新节点
     if (OB_ENTRY_NOT_EXIST == (ret = sequence_cache_.get(key, item))) {
       if (OB_FAIL(sequence_cache_.alloc_value(item))) {
         LOG_WARN("fail alloc value", K(ret));
+      } else if (OB_ISNULL(tenant_info_loader)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ObTenantInfoLoader is NULL", K(ret));
+      } else if (OB_FAIL(tenant_info_loader->get_switchover_epoch(switchover_epoch))) {
+        LOG_WARN("fail to get switchover_epoch", K(ret));
       } else if (OB_FAIL(sequence_cache_.insert_and_get(key, item))) {
         LOG_WARN("fail set cache item", K(key), K(ret));
       }
+      item->epoch_version_ = switchover_epoch;
       if (OB_FAIL(ret) && nullptr != item) {
         sequence_cache_.free_value(item);
         item = nullptr;
@@ -429,7 +445,7 @@ int ObSequenceCache::del_item(uint64_t tenant_id, CacheItemKey &key, obrpc::ObSe
     } else if ((compat_version >= MOCK_DATA_VERSION_4_2_5_0
                 && compat_version < DATA_VERSION_4_3_0_0)
                || compat_version >= DATA_VERSION_4_3_5_0) {
-      lib::ObMutexGuard guard(item->alloc_mutex_);
+      lib::ObMutexGuard guard(item->fetch_);
       if (OB_FAIL(ret) || item->last_refresh_ts_ <= SequenceCacheStatus::INITED) {
         // do nothing
       } else if (OB_FAIL(cache_res.cache_node_.set_start(item->last_number()))) {
@@ -456,10 +472,13 @@ int ObSequenceCache::del_item(uint64_t tenant_id, CacheItemKey &key, obrpc::ObSe
 
 int ObSequenceCache::nextval(const ObSequenceSchema &schema,
                              ObIAllocator &allocator, // 用于各种临时计算
-                             ObSequenceValue &nextval)
+                             ObSequenceValue &nextval,
+                             sql::ObSQLSessionInfo *session)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_sequence_load);
   int ret = OB_SUCCESS;
+  bool wrap_around_clean_cache = !OB_ISNULL(session) && session->is_enable_seq_wrap_around_flush_cache();
+  bool wrap_around = false;
   /* 1. if cache item not exist, create a obsolete cache item
    * 2. read and lock cache item
    * 3. if cache item obsolete
@@ -472,16 +491,30 @@ int ObSequenceCache::nextval(const ObSequenceSchema &schema,
   bool need_prefetch = false;
   CacheItemKey key(schema.get_tenant_id(), schema.get_sequence_id());
   ObSequenceCacheItem *item = nullptr;
+  rootserver::ObTenantInfoLoader *tenant_info_loader = MTL(rootserver::ObTenantInfoLoader*);
+  int64_t switchover_epoch = 0;
   if (OB_FAIL(get_item(key, item))) {
     LOG_WARN("fail get item", K(key), K(ret));
   } else if (OB_ISNULL(item)) {
     ret = OB_ERR_UNEXPECTED;
+  } else if (OB_ISNULL(tenant_info_loader)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ObTenantInfoLoader is NULL", K(ret));
+  } else if (OB_FAIL(tenant_info_loader->get_switchover_epoch(switchover_epoch))) {
+    LOG_WARN("fail to get switchover_epoch", K(ret));
+  } else if (item->epoch_version_ != switchover_epoch) {
+    obrpc::ObSeqCleanCacheRes cache_res;
+    sequence_cache_.revert(item);
+    remove(schema.get_tenant_id(), schema.get_sequence_id(), cache_res);
+    item = nullptr;
+    ret = OB_AUTOINC_CACHE_NOT_EQUAL;
+    LOG_WARN("cache is out of date, need to be cleared and retry", K(ret));
   } else {
     lib::ObMutexGuard guard(item->fetch_);
     item->alloc_mutex_.lock();
     if (item->last_refresh_ts_ == SequenceCacheStatus::DELETED) {
       ret = OB_AUTOINC_CACHE_NOT_EQUAL;
-      LOG_WARN("cache has been cleared", K(ret), K(*item));
+      LOG_WARN("cache has been cleared, need retry", K(ret), K(*item));
     } else {
       /* refill_sequence_cache 期间禁止调度器挂起 query */
       lib::DisableSchedInterGuard sched_guard;
@@ -495,7 +528,7 @@ int ObSequenceCache::nextval(const ObSequenceSchema &schema,
         // 注意：预取功能正常的情况下，不会走到这个分支
         if (OB_SIZE_OVERFLOW == ret) {
           LOG_INFO("no more avaliable value in current cache, try refill cache", K(*item), K(ret));
-          if (OB_FAIL(refill_sequence_cache(schema, allocator, *item))) {
+          if (OB_FAIL(refill_sequence_cache(schema, allocator, *item, wrap_around))) {
             LOG_WARN("fail refill sequence cache", K(*item), K(ret));
           } else if (OB_FAIL(move_next(schema, *item, allocator, nextval))) {
             LOG_WARN("fail move next", K(*item), K(ret));
@@ -544,7 +577,7 @@ int ObSequenceCache::nextval(const ObSequenceSchema &schema,
 
       if (OB_SUCC(ret) && need_prefetch) {
         ObSequenceCacheItem mock_item;
-        if (OB_FAIL(prefetch_sequence_cache(schema, mock_item, *item))) {
+        if (OB_FAIL(prefetch_sequence_cache(schema, mock_item, *item, wrap_around))) {
           int prefetch_err = ret;
           ret = OB_SUCCESS;
           LOG_WARN("fail refill sequence cache. ignore prefrech error", K(prefetch_err), K(ret));
@@ -552,6 +585,14 @@ int ObSequenceCache::nextval(const ObSequenceSchema &schema,
           LOG_INFO("dump item", K(mock_item), K(*item));
           if (item->with_prefetch_node_) {
             LOG_INFO("new item has been fetched by other, ignore");
+          } else if (wrap_around && wrap_around_clean_cache) {
+            item->last_refresh_ts_ = mock_item.last_refresh_ts_;
+            item->with_prefetch_node_ = false;
+            if (OB_FAIL(item->curr_node_.set_start(mock_item.prefetch_node_.start()))) {
+              LOG_WARN("fail set start for cur node", K(ret));
+            } else if (OB_FAIL(item->curr_node_.set_end(mock_item.prefetch_node_.end()))) {
+              LOG_WARN("fail set end for cur node", K(ret));
+            }
           } else {
             item->last_refresh_ts_ = mock_item.last_refresh_ts_;
             item->with_prefetch_node_ = true;
@@ -570,6 +611,16 @@ int ObSequenceCache::nextval(const ObSequenceSchema &schema,
     item->alloc_mutex_.unlock();
     sequence_cache_.revert(item);
   }
+  if (OB_SUCC(ret) && wrap_around && wrap_around_clean_cache) {
+    ObNumber inner_next_value; // default to zero
+    obrpc::ObSeqCleanCacheRes cache_res;
+    ObSchemaService *schema_service = dml_proxy_.get_schema_service()->get_schema_service();
+    if (OB_FAIL(schema_service->get_sequence_sql_service().clean_sequence_cache(
+          schema.get_tenant_id(), schema.get_sequence_id(), inner_next_value, cache_res, allocator,
+          false))) {
+      LOG_WARN("fail clean sequence cache", K(ret));
+    }
+  }
   return ret;
 }
 
@@ -577,4 +628,27 @@ int ObSequenceCache::remove(uint64_t tenant_id, uint64_t sequence_id, obrpc::ObS
 {
   CacheItemKey key(tenant_id, sequence_id);
   return del_item(tenant_id, key, cache_res);
+}
+
+int ObSequenceCache::flush_sequence_cache(const uint64_t tenant_id, const uint64_t database_id, const ObString sequence_name)
+{
+  int ret = OB_SUCCESS;
+  const ObSequenceSchema *schema = NULL;
+  share::ObSequenceCache &sequence_cache = share::ObSequenceCache::get_instance();
+  ObSeqCleanCacheRes cache_res;
+  ObSchemaGetterGuard guard;
+  if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get schema service", K(ret));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, guard))) {
+    LOG_WARN("fail to get schema guard", K(ret));
+  } else if (OB_FAIL(
+                guard.get_sequence_schema_with_name(tenant_id, database_id, sequence_name, schema))) {
+    LOG_WARN("get sequence schema failed", K(ret), K(tenant_id), K(database_id), K(sequence_name));
+  } else if (OB_ISNULL(schema)) {
+    // do nothing
+  } else if (OB_FAIL(sequence_cache.remove(tenant_id, schema->get_sequence_id(), cache_res))) {
+    LOG_WARN("remove sequence item from sequence cache failed", K(ret));
+  }
+  return ret;
 }

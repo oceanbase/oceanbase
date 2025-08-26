@@ -213,11 +213,11 @@ int ObTransService::reuse_tx(ObTxDesc &tx, const uint64_t data_version)
         TRANS_LOG(WARN, "blocking to wait tx referent quiescent cost too much time",
                   "tx_id", orig_tx_id, KP(&tx), K(final_ref_cnt), K(spin_cnt), K(tx.get_ref()), K(cb_tid));
         tx.print_trace();
-        usleep(2000000); // 2s
+        ob_usleep(2000000); // 2s
       } else if (spin_cnt > 200) {
-        usleep(2000);    // 2ms
+        ob_usleep(2000);    // 2ms
       } else if (spin_cnt > 100) {
-        usleep(200);     // 200us
+        ob_usleep(200);     // 200us
       }
 #ifdef ENABLE_DEBUG_LOG
       if (spin_cnt > 2300) {
@@ -294,6 +294,38 @@ int ObTransService::start_tx(ObTxDesc &tx, const ObTxParam &tx_param, const ObTr
     tx.inc_op_sn();
     if (!tx_id.is_valid()) {
       ret = tx_desc_mgr_.add(tx);
+#ifdef OB_BUILD_SHARED_STORAGE
+      if (OB_GTI_NOT_READY == ret && is_tenant_has_sslog(MTL_ID())) {
+        ObTransID tmp_tx_id;
+        int tmp_ret = OB_SUCCESS;
+        ObSchemaGetterGuard schema_guard;
+        const ObSimpleTenantSchema *tenant_schema = NULL;
+        if (OB_ISNULL(GCTX.schema_service_)) {
+          tmp_ret = OB_ERR_UNEXPECTED;
+          TRANS_LOG(WARN, "GCTX.schema_service_ is null", K(tmp_ret), KP(GCTX.schema_service_));
+        } else if (OB_SUCCESS != (tmp_ret = GCTX.schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard))) {
+          TRANS_LOG(WARN, "failed to get_tenant_schema_guard", K(tmp_ret));
+        } else if (OB_SUCCESS != (tmp_ret = schema_guard.get_tenant_info(MTL_ID(), tenant_schema))) {
+          TRANS_LOG(WARN, "fail to get tenant schema", K(tmp_ret));
+        } else if (OB_ISNULL(tenant_schema)) {
+          tmp_ret = OB_TENANT_NOT_EXIST;
+          TRANS_LOG(WARN, "tenant not exist", K(tmp_ret), KP(tenant_schema));
+        } else if (GCTX.in_bootstrap_ || tenant_schema->is_creating()) {
+          // get tx id from sslog
+          // GCTX.in_bootstrap_ is true, indicating that the sys tenant is being created
+          if (OB_SUCCESS != (tmp_ret = gen_trans_id_for_sslog(tmp_tx_id))) {
+            TRANS_LOG(WARN, "generate trans id for sslog failed", K(tmp_ret), K(tmp_tx_id));
+          } else if (!tmp_tx_id.is_valid()) {
+            ret = OB_ERR_UNEXPECTED;
+            TRANS_LOG(WARN, "unexpeccted trans id", K(tmp_ret), K(tmp_tx_id));
+          } else if (OB_FAIL(tx_desc_mgr_.add_with_txid(tmp_tx_id, tx))) {
+            TRANS_LOG(WARN, "failed to register with txMgr", K(ret), K(tmp_tx_id));
+          } else {
+            TRANS_LOG(INFO, "add tx desc with txid for sslog", K(tmp_tx_id));
+          }
+        }
+      }
+#endif
     } else {
       ret = tx_desc_mgr_.add_with_txid(tx_id, tx);
     }
@@ -550,6 +582,7 @@ int ObTransService::submit_commit_tx(ObTxDesc &tx,
         tx.state_ == ObTxDesc::State::ACTIVE ||
         tx.state_ == ObTxDesc::State::IMPLICIT_ACTIVE)) {
       ObTxDesc::State state0 = tx.state_;
+      tx.commit_expire_ts_ = expire_ts;
       tx.state_ = ObTxDesc::State::IN_TERMINATE;
       // record trace_info
       if (OB_NOT_NULL(trace_info) &&
@@ -623,7 +656,8 @@ void ObTransService::direct_execute_commit_cb_(ObTxDesc &tx)
 int ObTransService::get_read_snapshot(ObTxDesc &tx,
                                       const ObTxIsolationLevel iso_level,
                                       const int64_t expire_ts,
-                                      ObTxReadSnapshot &snapshot)
+                                      ObTxReadSnapshot &snapshot,
+                                      const bool is_for_sslog)
 {
   int ret = OB_SUCCESS;
   ObSpinLockGuard guard(tx.lock_);
@@ -641,7 +675,7 @@ int ObTransService::get_read_snapshot(ObTxDesc &tx,
         !tx.snapshot_version_.is_valid()/*version invalid*/) {
       SCN version;
       int64_t uncertain_bound = 0;
-      if (OB_FAIL(sync_acquire_global_snapshot_(tx, expire_ts, version, uncertain_bound))) {
+      if (OB_FAIL(sync_acquire_global_snapshot_(tx, expire_ts, version, uncertain_bound, is_for_sslog))) {
         TRANS_LOG(WARN, "acquire global snapshot fail", K(ret), K(tx));
       } else if (tx.access_mode_ != ObTxAccessMode::STANDBY_RD_ONLY &&
                  !tx.tx_id_.is_valid()
@@ -669,7 +703,8 @@ int ObTransService::get_read_snapshot(ObTxDesc &tx,
     if (OB_FAIL(sync_acquire_global_snapshot_(tx,
                                               expire_ts,
                                               snapshot.core_.version_,
-                                              snapshot.uncertain_bound_))) {
+                                              snapshot.uncertain_bound_,
+                                              is_for_sslog))) {
       TRANS_LOG(WARN, "acquire global snapshot fail", K(ret), K(tx));
     } else {
       adjust_tx_snapshot_(tx, snapshot);
@@ -725,8 +760,9 @@ int ObTransService::get_ls_read_snapshot(ObTxDesc &tx,
   ObRole role = common::ObRole::INVALID_ROLE;
   // if txn is active use txn's isolation instead
   ObTxIsolationLevel isolation = tx.is_in_tx() ? tx.isolation_ : iso_level;
+  const bool is_for_sslog = is_tenant_sslog_ls(tenant_id_, lsid);
   if (is_RR_or_SERIAL_isolevel(isolation)) {
-    ret = get_read_snapshot(tx, isolation, expire_ts, snapshot);
+    ret = get_read_snapshot(tx, isolation, expire_ts, snapshot, is_for_sslog);
   } else if (!lsid.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid lsid", K(ret), K(lsid));
@@ -767,7 +803,7 @@ int ObTransService::get_ls_read_snapshot(ObTxDesc &tx,
     }
   }
   if (fallback_get_global_snapshot) {
-    ret = get_read_snapshot(tx, isolation, expire_ts, snapshot);
+    ret = get_read_snapshot(tx, isolation, expire_ts, snapshot, is_for_sslog);
   }
   ObTransTraceLog &tlog = tx.get_tlog();
   common::ObTraceIdAdaptor trace_id;
@@ -793,7 +829,8 @@ int ObTransService::get_read_snapshot_version(const int64_t expire_ts,
   ret = acquire_global_snapshot__(expire_ts,
                                   0,
                                   snapshot_version,
-                                  uncertain_bound);
+                                  uncertain_bound,
+                                  false);
   return ret;
 }
 
@@ -1042,11 +1079,29 @@ int ObTransService::create_global_implicit_savepoint_(ObTxDesc &tx,
     tx.inc_op_sn();
     savepoint = tx.inc_and_get_tx_seq(0);
     if (tx.state_ == ObTxDesc::State::IDLE && !tx.tx_id_.is_valid()) {
-      if (tx.has_implicit_savepoint()) {
-        ret = OB_TRANS_INVALID_STATE;
-        TRANS_LOG(WARN, "has implicit savepoint, but tx_id is invalid", K(ret), K(tx));
-      } else if (OB_FAIL(tx_desc_mgr_.add(tx))) {
-        TRANS_LOG(WARN, "failed to register with txMgr", K(ret), K(tx));
+      if (tx_param.is_for_sslog_) {
+        ObTransID tx_id;
+        // TODO, ob_query_timeout
+        if (tx.has_implicit_savepoint()) {
+          ret = OB_TRANS_INVALID_STATE;
+          TRANS_LOG(WARN, "has implicit savepoint, but tx_id is invalid", K(ret), K(tx));
+        } else if (OB_FAIL(gen_trans_id_for_sslog(tx_id))) {
+          TRANS_LOG(WARN, "generate trans id for sslog failed", K(ret), K(tx));
+        } else if (!tx_id.is_valid()) {
+          ret = OB_ERR_UNEXPECTED;
+          TRANS_LOG(WARN, "unexpeccted trans id", K(ret), K(tx_id));
+        } else if (OB_FAIL(tx_desc_mgr_.add_with_txid(tx_id, tx))) {
+          TRANS_LOG(WARN, "failed to register with txMgr", K(ret), K(tx_id), K(tx));
+        } else {
+          TRANS_LOG(INFO, "add tx desc with txid for sslog", K(tx_id));
+        }
+      } else {
+        if (tx.has_implicit_savepoint()) {
+          ret = OB_TRANS_INVALID_STATE;
+          TRANS_LOG(WARN, "has implicit savepoint, but tx_id is invalid", K(ret), K(tx));
+        } else if (OB_FAIL(tx_desc_mgr_.add(tx))) {
+          TRANS_LOG(WARN, "failed to register with txMgr", K(ret), K(tx));
+        }
       }
     }
   }
@@ -1347,7 +1402,7 @@ int ObTransService::ls_sync_rollback_savepoint__(ObPartTransCtx *part_ctx,
                                           input_transfer_epoch,
                                           output_transfer_epoch,
                                           downstream_parts);
-    if ((OB_NEED_RETRY == ret || OB_EAGAIN == ret) && blockable) {
+    if ((OB_NEED_RETRY == ret || OB_EAGAIN == ret || OB_TX_NOLOGCB == ret) && blockable) {
       if (ObTimeUtility::current_time() >= expire_ts) {
         ret = OB_TIMEOUT;
         TRANS_LOG(WARN, "can not retry rollback_to because of timeout", K(ret), K(retry_cnt));
@@ -1359,7 +1414,7 @@ int ObTransService::ls_sync_rollback_savepoint__(ObPartTransCtx *part_ctx,
         ob_usleep(50 * 1000);
       }
     }
-  } while ((OB_NEED_RETRY == ret || OB_EAGAIN == ret) && blockable && !part_ctx->is_transfer_deleted());
+  } while ((OB_NEED_RETRY == ret || OB_EAGAIN == ret || OB_TX_NOLOGCB == ret) && blockable && !part_ctx->is_transfer_deleted());
 #ifndef NDEBUG
   TRANS_LOG(INFO, "rollback to savepoint sync", K(ret),
             K(part_ctx->get_trans_id()), K(part_ctx->get_ls_id()), K(retry_cnt),

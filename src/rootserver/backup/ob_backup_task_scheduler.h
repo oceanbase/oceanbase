@@ -75,16 +75,20 @@ public:
 
 private:
   int push_task_without_lock_(const ObBackupScheduleTask &task);
-  virtual int get_backup_region_and_zone_(ObIArray<share::ObBackupZone> &backup_zone,
-                                          ObIArray<share::ObBackupRegion> &backup_region);
+  virtual int get_backup_zone_idc_region_(ObIArray<share::ObBackupZone> &backup_zone,
+                                          ObIArray<share::ObBackupRegion> &backup_region,
+                                          ObIArray<share::ObBackupIdc> &backup_idc);
   virtual int get_all_servers_(const ObIArray<share::ObBackupZone> &backup_zone,
                                const ObIArray<share::ObBackupRegion> &backup_region,
+                               const ObIArray<share::ObBackupIdc> &backup_idc,
                                ObIArray<share::ObBackupServer> &servers);
   virtual int get_all_zones_(const ObIArray<share::ObBackupZone> &backup_zone,
                              const ObIArray<share::ObBackupRegion> &backup_region,
+                             const ObIArray<share::ObBackupIdc> &backup_idc,
                              ObIArray<share::ObBackupZone> &zones);
   int get_tenant_zone_list_(const uint64_t tenant_id, ObIArray<common::ObZone> &zone_list);
   int get_zone_list_from_region_(const ObRegion &region, ObIArray<common::ObZone> &zone_list);
+  int get_zone_list_from_idc_(const ObIDC &idc, ObIArray<common::ObZone> &zone_list);
   int choose_dst_(const ObBackupScheduleTask &task, 
                   const ObIArray<share::ObBackupServer> &servers,
                   ObAddr &dst,

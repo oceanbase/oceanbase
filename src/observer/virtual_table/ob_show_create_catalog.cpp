@@ -188,8 +188,8 @@ int ObShowCreateCatalog::print_catalog_definition(const uint64_t tenant_id,
   } else if (OB_FAIL(databuff_printf(buf,
                                      buf_len,
                                      pos,
-                                     is_oracle_mode ? "CREATE CATALOG "
-                                                    : "CREATE CATALOG IF NOT EXISTS "))) {
+                                     is_oracle_mode ? "CREATE EXTERNAL CATALOG "
+                                                    : "CREATE EXTERNAL CATALOG IF NOT EXISTS "))) {
     LOG_WARN("failed to print create catalog prefix",
              K(ret),
              K(catalog_schema->get_catalog_name()));

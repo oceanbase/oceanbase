@@ -63,6 +63,8 @@ int ObMvccValueIterator::init(ObMvccAccessCtx &ctx,
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_LOCK_FOR_READ_SLEEP);
+
 int ObMvccValueIterator::lock_for_read_(const ObQueryFlag &flag)
 {
   int ret = OB_SUCCESS;
@@ -70,6 +72,13 @@ int ObMvccValueIterator::lock_for_read_(const ObQueryFlag &flag)
   ObMvccTransNode *iter = value_->get_list_head();
   // the resolved mvcc read position
   version_iter_ = NULL;
+
+#ifdef ENABLE_DEBUG_LOG
+  if (OB_UNLIKELY(OB_SUCCESS != ERRSIM_LOCK_FOR_READ_SLEEP)) {
+    ob_usleep(5_ms);
+    TRANS_LOG(WARN, "lock for read injection sleep finish", K(ret));
+  }
+#endif
 
   while (OB_SUCC(ret) && NULL != iter && NULL == version_iter_) {
     if (OB_FAIL(lock_for_read_inner_(flag, iter))) {
@@ -274,7 +283,7 @@ int ObMvccValueIterator::lock_for_read_inner_(const ObQueryFlag &flag,
 
         }
 
-        usleep(10); // 10us
+        ob_usleep(10); // 10us
       }
       version_iter_ = iter;
     } else {
@@ -437,7 +446,7 @@ int ObMvccRowIterator::get_next_row(
     } else if (NULL == (value = query_engine_iter_->get_value())) {
       TRANS_LOG(ERROR, "unexpected value null pointer", "ctx", *ctx_);
       ret = OB_ERR_UNEXPECTED;
-    } else if (query_flag_.is_for_foreign_key_check()) {
+    } else if (query_flag_.is_for_foreign_key_check() || query_flag_.is_plain_insert_gts_opt()) {
       if (OB_FAIL(ObRowConflictHandler::check_foreign_key_constraint_for_memtable(*ctx_, value, lock_state))) {
         // we will throw error code if it's failed here, but we need to
         // post lock with key outside, so we have to set it here.

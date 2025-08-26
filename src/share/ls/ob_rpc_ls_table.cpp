@@ -14,6 +14,7 @@
 
 #include "ob_rpc_ls_table.h"           // for declarations of functions in this cpp
 #include "share/ob_common_rpc_proxy.h"         // for ObCommonRpcProxy
+#include "storage/tx_storage/ob_ls_service.h" // ObLSService
 #include "rootserver/ob_rs_async_rpc_proxy.h"//async
 
 namespace oceanbase
@@ -85,14 +86,14 @@ int ObRpcLSTable::get(
   } else if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_UNLIKELY(!is_sys_tenant(tenant_id)
-             || !ls_id.is_sys_ls()
-             || ObLSTable::INNER_TABLE_ONLY_MODE == mode)) {
+                      || (!ls_id.is_sys_ls() && !ls_id.is_sslog_ls()) // only surport sys tenant SSLOG LS and SYS LS
+                      || ObLSTable::INNER_TABLE_ONLY_MODE == mode)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument for sys tenant's sys ls",
              KR(ret), KT(tenant_id), K(ls_id), K(mode));
   } else if (local_cluster_id == cluster_id) {
-    if (OB_FAIL(get_ls_info_(ls_info))) {
-      LOG_WARN("failed to get ls info", KR(ret));
+    if (OB_FAIL(get_ls_info_(ls_id, ls_info))) {
+      LOG_WARN("failed to get ls info", KR(ret), K(ls_id));
     }
   } else if (OB_FAIL(get_ls_info_across_cluster_(cluster_id, ls_info))) {
     LOG_WARN("failed to get ls info", KR(ret), K(cluster_id));
@@ -100,51 +101,183 @@ int ObRpcLSTable::get(
   return ret;
 }
 
-int ObRpcLSTable::get_ls_info_(ObLSInfo &ls_info)
+int ObRpcLSTable::do_detect_sslog_ls_(
+    const common::ObIArray<common::ObAddr> &server_list,
+    ObLSInfo &ls_info)
 {
   int ret = OB_SUCCESS;
+  ObTimeoutCtx ctx;
+  int64_t timeout = GCONF.rpc_timeout;
+  int tmp_ret = share::ObShareUtil::set_default_timeout_ctx(ctx, timeout);
+  timeout = max(timeout, ctx.get_timeout());
+  ObDetectSSlogLSArg arg;
+  ObArray<int> return_ret_array;
+  if (OB_UNLIKELY(server_list.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(server_list));
+  } else if (OB_FAIL(ls_info.init(OB_SYS_TENANT_ID, SSLOG_LS))) { // reset ls_info to get a new one
+    LOG_WARN("fail to init ls info", KR(ret));
+  } else if (OB_ISNULL(srv_rpc_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("src_rpc_proxy is nullptr", KR(ret), KP(srv_rpc_proxy_));
+  } else {
+    rootserver::ObDetectSSlogLSProxy proxy(*srv_rpc_proxy_, &obrpc::ObSrvRpcProxy::detect_sslog_ls);
+    for (int64_t i = 0; OB_SUCC(ret) && i < server_list.count(); i++) {
+      const ObAddr &addr = server_list.at(i);
+      if (OB_UNLIKELY(!addr.is_valid())) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid argument", KR(ret), K(addr));
+      } else if (OB_FAIL(arg.init(addr))) {
+        LOG_WARN("fail to init arg", KR(ret), K(addr));
+      } else if (OB_TMP_FAIL(proxy.call(addr, timeout, GCONF.cluster_id, OB_SYS_TENANT_ID, share::OBCG_DETECT_RS, arg))) {
+        // same as sys tenant 1 LS, use OBCG_DETECT_RS thread pool
+        LOG_WARN("fail to send rpc", KR(tmp_ret), K(addr), K(timeout), K(arg));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_TMP_FAIL(proxy.wait_all(return_ret_array))) {
+      LOG_WARN("wait batch result failed", KR(tmp_ret), KR(ret));
+    } else {
+      common::ObArray<ObLSReplica> leader_replicas;
+      const bool ret_count_match = (OB_SUCCESS == proxy.check_return_cnt(return_ret_array.count()));
+      for (int64_t i = 0; OB_SUCC(ret) && i < proxy.get_results().count(); i++) {
+        const ObDetectSSlogLSResult *result = proxy.get_results().at(i);
+        if (ret_count_match && OB_SUCCESS != return_ret_array.at(i)) {
+          LOG_WARN("fail to get result by rpc, just ignore", "return_ret", return_ret_array.at(i));
+        } else if (OB_ISNULL(result)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("nullptr result", KR(ret), KP(result));
+        } else if (OB_UNLIKELY(!result->has_sslog() || !result->is_valid())) {
+          LOG_INFO("server has no sslog LS, invalid replica, skip", KPC(result));
+        } else {
+          ObLSReplica tmp_replica;
+          if (OB_FAIL(tmp_replica.assign(result->get_replica()))) {
+            LOG_WARN("fail to assign replica", KR(ret), KPC(result));
+          } else if (is_strong_leader(tmp_replica.get_role()) && OB_FAIL(leader_replicas.push_back(tmp_replica))) {
+            LOG_WARN("fail to push back replica", KR(ret), K(tmp_replica));
+          } else if (is_follower(tmp_replica.get_role())) {
+            tmp_replica.update_to_follower_role();
+            if (OB_FAIL(ls_info.add_replica(tmp_replica))) {
+              LOG_WARN("fail to add replica", KR(ret), K(tmp_replica));
+            }
+            // Here, we use update_to_follower_role() to set replica's proposal_id to 0 and role to follower.
+            // In rpc mode, only get SSLOG LS info needs to do this , SYS LS does not need to.
+            // For SYS LS, we record it's info in RS memory, when updating RS memory and meta table, the same treatment has been done for the follower.
+            // Getting SYS LS info via RPC is equivalent to reading the memory of RS, so no further processing is required.
+
+            // Next, let's explain why we need to set replica's proposal_id to 0 and role to follower:
+            //   Since RS LS info is reported asynchronously, it may not be accurate enough.
+            //   In some scenarios, it is possible that follower has a larger proposal_id. for exeample:
+            //     1. A is leader, proposal_id is 1.
+            //     2. B become leader, proposal_id is 2, B later became follower.
+            //     3. C is new leader, but has no report yet.
+            //   When looking for a leader, we can’t just judge whether the role is the leader, need find the leader has max proposal_id among replicas.
+            //   But in normal cases, proposal_id is equal in all reported replica, which unable to make the above judgment.
+            //   So RS made adjustments to LS replica proposal_id which recorded in RS memory or meta table, only the leader's proposal_id is valid,
+            //   the follower's proposal_id is set to 0.
+            //   Attention:
+            //     In the above situation, RS cannot get a correct leader because the correct leader has not yet reported.
+            //     Here it depends on the subsequent report of the new leader.
+          }
+        }
+      }
+      LOG_TRACE("before update_replica_status", KR(ret), K(leader_replicas), K(ls_info));
+      if (FAILEDx(check_sslog_leader_replicas_(leader_replicas, ls_info))) {
+        LOG_WARN("failed to check sslog leader replicas", KR(ret), K(leader_replicas), K(ls_info));
+      } else if (OB_FAIL(ls_info.update_replica_status())) {
+        LOG_WARN("update replica status failed", KR(ret), K(ls_info));
+      }
+      LOG_TRACE("aftr update_replica_status", KR(ret), K(ls_info));
+    }
+  }
+  return ret;
+}
+
+int ObRpcLSTable::check_sslog_leader_replicas_(
+    common::ObArray<ObLSReplica> &leader_replicas,
+    ObLSInfo &ls_info)
+{
+  /*
+  When multiple members are returned as leaders in a query, it is necessary to judge based on proposal_id.
+  The member with the max proposal_id is the leader, and all other members need to be set to follower.
+  */
+  int ret = OB_SUCCESS;
+  int64_t max_proposal_id = palf::INVALID_PROPOSAL_ID;
+  int64_t idx = OB_INVALID_INDEX; // -1, max leader proposal_id position
+  for (int64_t index = 0; OB_SUCC(ret) && index < leader_replicas.count(); index++) {
+    const ObLSReplica &replica = leader_replicas.at(index);
+    if (palf::INVALID_PROPOSAL_ID == max_proposal_id || replica.get_proposal_id() > max_proposal_id) {
+      max_proposal_id = replica.get_proposal_id();
+      idx = index;
+    }
+  }
+  for (int64_t index = 0; OB_SUCC(ret) && index < leader_replicas.count(); index++) {
+    if (index != idx) {
+      // set all other members to follower
+      leader_replicas.at(index).update_to_follower_role();
+    }
+    if (OB_FAIL(ls_info.add_replica(leader_replicas.at(index)))) {
+      LOG_WARN("fail to add replica", KR(ret), K(index), K(leader_replicas));
+    }
+  }
+  return ret;
+}
+
+int ObRpcLSTable::get_ls_info_(
+    const ObLSID &ls_id,
+    ObLSInfo &ls_info)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   const int64_t local_cluster_id = GCONF.cluster_id;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
-  } else if (!ls_info.is_valid()) {
+  } else if (OB_UNLIKELY(!ls_info.is_valid()
+                      || (!ls_id.is_sys_ls() && !ls_id.is_sslog_ls()))) { // only surport sys tenant SSLOG LS and SYS LS
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(ls_info));
+    LOG_WARN("invalid argument", KR(ret), K(ls_id), K(ls_info));
   } else {
-    int tmp_ret = OB_SUCCESS;
-    ObArray<ObAddr> rs_list;
+    ObArray<ObAddr> server_list;
     bool need_retry = false;
     const ObLSReplica *leader = NULL;
-    const bool check_ls_service = true;
     /*
-     * case 1: get rs from ObRsMgr
-     * case 2: get rs_list from local configure
-     * case 3: try get __all_core_table's member_list from ObLSService
+      case 1. Get rs from ObRsMgr
+      case 2. Get rs_list from local configure
+      case 3. Try get SYS LS member_list or SSLOG LS member_list and learner_list from ObLSService
+            a. For SSLOG LS, we did not record the LS information in the RS memory, so need to ask all members(member_list and learner_list)
+            b. For SYS LS, RS memory contains all reported LS information, So only need to find the location of RS(in member_list).
      */
-    if (OB_FAIL(rs_mgr_->construct_initial_server_list(check_ls_service, rs_list))) {
+    if (OB_FAIL(rs_mgr_->construct_initial_server_list(true/*check_ls_service*/, ls_id, server_list))) {
       LOG_WARN("fail to construct initial server list", KR(ret));
-    } else if (OB_FAIL(do_detect_master_rs_ls_(local_cluster_id, rs_list, ls_info))) {
+    } else if (ls_id.is_sslog_ls() && OB_FAIL(do_detect_sslog_ls_(server_list, ls_info))) {
       need_retry = true;
-      LOG_WARN("fail to detect master rs, try use all_server_list",
-               KR(ret), K(local_cluster_id), K(rs_list));
-    } else if (OB_SUCCESS != (tmp_ret = ls_info.find_leader(leader))
-               || OB_ISNULL(leader)) {
+      LOG_WARN("fail to detect sslog ls, try use all_server_list", KR(ret), K(server_list));
+    } else if (ls_id.is_sys_ls() && OB_FAIL(do_detect_master_rs_ls_(local_cluster_id, server_list, ls_info))) {
       need_retry = true;
-      LOG_INFO("leader doesn't exist, try use all_server_list", KR(tmp_ret), K(ls_info));
+      LOG_WARN("fail to detect master rs, try use all_server_list", KR(ret), K(local_cluster_id), K(server_list));
+    } else if (OB_TMP_FAIL(ls_info.find_leader(leader)) || OB_ISNULL(leader)) {
+      need_retry = true;
+      LOG_INFO("leader doesn't exist, try use all_server_list", KR(tmp_ret), K(ls_id), K(ls_info));
     } else {
-      LOG_INFO("fetch root ls success", K(local_cluster_id), K(ls_info), K(rs_list));
+      LOG_INFO("fetch ls success", K(local_cluster_id), K(ls_id), K(ls_info), K(server_list));
     }
     // case 4: try use all_server_list from local configure
     if (need_retry) { // overwrite ret
-      ObArray<ObAddr> server_list;
-      if (OB_FAIL(ObShareUtil::parse_all_server_list(rs_list, server_list))) {
-        LOG_WARN("fail to construct all server list", KR(ret), K(rs_list));
-      } else if (server_list.empty()) {
-        // server_list is empty, do nothing
-        LOG_INFO("server_list is empty, do nothing", KR(ret), K(server_list));
-      } else if (OB_FAIL(do_detect_master_rs_ls_(local_cluster_id, server_list, ls_info))) {
-        LOG_WARN("fail to detect master rs", KR(ret), K(local_cluster_id), K(server_list));
+      ObArray<ObAddr> all_server_list;
+      ObArray<ObAddr> empty_list;
+      const ObArray<ObAddr> &excluded_list = ls_id.is_sys_ls() ? server_list : empty_list;
+      // For SSLOG LS, need to request all servers to get results, for SYS LS, only need to find RS.
+      if (OB_FAIL(ObShareUtil::parse_all_server_list(excluded_list, all_server_list))) {
+        LOG_WARN("fail to construct all server list", KR(ret), K(excluded_list));
+      } else if (all_server_list.empty()) {
+        // all_server_list is empty, do nothing
+        LOG_INFO("all_server_list is empty, do nothing", KR(ret), K(all_server_list));
+      } else if (ls_id.is_sslog_ls() && OB_FAIL(do_detect_sslog_ls_(all_server_list, ls_info))) {
+        LOG_WARN("fail to detect sslog ls", KR(ret), K(all_server_list));
+      } else if (ls_id.is_sys_ls() && OB_FAIL(do_detect_master_rs_ls_(local_cluster_id, all_server_list, ls_info))) {
+        LOG_WARN("fail to detect master rs", KR(ret), K(local_cluster_id), K(all_server_list));
       } else {
-        LOG_INFO("fetch root ls success", K(local_cluster_id), K(ls_info), K(server_list));
+        LOG_INFO("fetch ls success", K(local_cluster_id), K(ls_id), K(ls_info), K(all_server_list));
       }
     }
   }
@@ -168,7 +301,7 @@ int ObRpcLSTable::update(
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (!replica.is_valid()
       || !is_sys_tenant(replica.get_tenant_id())
-      || !replica.get_ls_id().is_sys_ls()
+      || !replica.get_ls_id().is_sys_ls() // only surport SYS LS, not surport SSLOG LS
       || inner_table_only) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(replica), K(inner_table_only));
@@ -388,7 +521,7 @@ int ObRpcLSTable::remove(
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_UNLIKELY(!is_sys_tenant(tenant_id)
-      || !ls_id.is_sys_ls()
+      || !ls_id.is_sys_ls() // only surport SYS LS, not surport SSLOG LS
       || !server.is_valid())
       || inner_table_only) {
     ret = OB_INVALID_ARGUMENT;

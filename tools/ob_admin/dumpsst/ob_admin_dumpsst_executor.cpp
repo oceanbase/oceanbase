@@ -126,7 +126,6 @@ int ObAdminDumpsstExecutor::execute(int argc, char *argv[])
       }
     }
   }
-
   return ret;
 }
 
@@ -353,18 +352,19 @@ void ObAdminDumpsstExecutor::dump_macro_block(const ObDumpMacroBlockContext &mac
         buf_size = macro_handle.get_data_size();
       }
     }
+    const ObDumpMacroBlockParam param(dump_macro_context_, hex_print_);
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(common_header.deserialize(macro_buf, buf_size, pos))) {
       STORAGE_LOG(ERROR, "deserialize common header fail", K(ret), K(pos));
     } else if (OB_FAIL(common_header.check_integrity())) {
       STORAGE_LOG(ERROR, "invalid common header", K(ret), K(common_header));
     } else if (ObMacroBlockCommonHeader::SharedSSTableData == common_header.get_type()) {
-      if (OB_FAIL(ObAdminCommonUtils::dump_shared_macro_block(dump_macro_context_, macro_buf, buf_size))) {
-        STORAGE_LOG(ERROR, "dump shared block fail", K(ret));
+      if (OB_FAIL(ObAdminCommonUtils::dump_shared_macro_block(param, macro_buf, buf_size))) {
+        STORAGE_LOG(ERROR, "dump shared block fail", K(ret), K(param));
       }
     } else {
-      if (OB_FAIL(ObAdminCommonUtils::dump_single_macro_block(dump_macro_context_, macro_buf, buf_size))) {
-        STORAGE_LOG(ERROR, "dump single block fail", K(ret));
+      if (OB_FAIL(ObAdminCommonUtils::dump_single_macro_block(param, macro_buf, buf_size))) {
+        STORAGE_LOG(ERROR, "dump single block fail", K(ret), K(param));
       }
     }
   }
@@ -376,54 +376,8 @@ void ObAdminDumpsstExecutor::dump_macro_block(const ObDumpMacroBlockContext &mac
 
 void ObAdminDumpsstExecutor::dump_tablet_meta(const ObDumpMacroBlockContext &macro_block_context)
 {
-  int ret = OB_SUCCESS;
-  if (STRLEN(macro_block_context.object_file_path_) <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(ERROR, "object path is null", K(ret), KP(macro_block_context.object_file_path_));
-  } else {
-    int64_t pos = 0;
-    io_allocator_.reuse();
-    char *macro_buf = nullptr;
-    int64_t read_size = 0;
-    ObIOFd fd;
-    const int64_t offset = 0;
-    const int64_t size = OB_DEFAULT_MACRO_BLOCK_SIZE;
-    ObTablet tablet;
-    ObArenaAllocator arena_allocator;
-    MacroBlockId tablet_meta_obj_id;
-    tablet_meta_obj_id.set_version_v2();
-    tablet_meta_obj_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
-    tablet_meta_obj_id.set_storage_object_type((uint64_t)ObStorageObjectType::SHARED_MAJOR_TABLET_META);
-    tablet_meta_obj_id.set_incarnation_id(0);
-    tablet_meta_obj_id.set_column_group_id(0);
-    tablet_meta_obj_id.set_second_id(88888888); // mock tablet id
-    tablet_meta_obj_id.set_third_id(88888888); // mock major snapshot version
-
-    ObMetaDiskAddr disk_addr;
-
-    if (OB_ISNULL(macro_buf = reinterpret_cast<char*>(io_allocator_.alloc(size)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      STORAGE_LOG(WARN, "failed to alloc macro read info buffer", K(ret), K(size));
-    } else if (OB_FAIL(LOCAL_DEVICE_INSTANCE.open(macro_block_context.object_file_path_, O_RDONLY, 0, fd))) {
-      STORAGE_LOG(ERROR, "open file failed", K(macro_block_context));
-    } else if (OB_FAIL(LOCAL_DEVICE_INSTANCE.pread(fd, offset, size, macro_buf, read_size))) {
-      STORAGE_LOG(ERROR, "read block failed", K(macro_block_context));
-    } else if (FALSE_IT(disk_addr.set_block_addr(tablet_meta_obj_id, 0/*offset*/, size, ObMetaDiskAddr::DiskType::RAW_BLOCK))) {
-    } else if (FALSE_IT(tablet.set_tablet_addr(disk_addr))) {
-    } else if (OB_FAIL(tablet.deserialize_for_replay(arena_allocator, macro_buf, size, pos))) {
-      STORAGE_LOG(ERROR, "fail to deserialize tablet", K(ret), KP(macro_buf), K(size));
-    } else {
-      ObCStringHelper helper;
-      fprintf(stdout, "TabletMeta: %s\n", helper.convert(tablet));
-    }
-
-    if (fd.is_valid()) {
-      (void) LOCAL_DEVICE_INSTANCE.close(fd);
-    }
-  }
-  if (OB_FAIL(ret)) {
-    fprintf(stderr, "fail to dump_tablet_meta, ret=%s\n", ob_error_name(ret));
-  }
+  int ret = OB_NOT_SUPPORTED;
+  STORAGE_LOG(ERROR, "not implemented yet", K(ret));
 }
 
 void ObAdminDumpsstExecutor::dump_table_store(const ObDumpMacroBlockContext &macro_block_context)

@@ -867,6 +867,7 @@ private:
       const lib::Worker::CompatMode compat_mode,
       const uint64_t unit_config_id,
       const bool if_not_grant,
+      const bool fill_data_version,
       obrpc::TenantServerUnitConfig &rpc_arg) const;
   int check_dest_data_version_is_loaded_(
       const uint64_t tenant_id, const ObAddr &addr);
@@ -1153,7 +1154,6 @@ private:
     }
     return str;
   }
-  void print_user_error_(const uint64_t tenant_id);
 
 private:
   bool inited_;

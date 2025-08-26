@@ -270,6 +270,8 @@ constexpr int OB_IMPROPER_OS_PARAM = -4403;
 constexpr int OB_IO_TIMEOUT = -4404;
 constexpr int OB_LICENSE_EXPIRED = -4406;
 constexpr int OB_MIGRATE_TX_DATA_NOT_CONTINUES = -4408;
+constexpr int OB_INVALID_ZERO_DATE = -4409;
+constexpr int OB_LS_NOT_IN_LEARNER_LIST = -4410;
 constexpr int OB_IMPORT_NOT_IN_SERVER = -4505;
 constexpr int OB_CONVERT_ERROR = -4507;
 constexpr int OB_BYPASS_TIMEOUT = -4510;
@@ -1473,6 +1475,9 @@ constexpr int OB_SEQUENCE_NOT_MATCH = -7121;
 constexpr int OB_SEQUENCE_TOO_SMALL = -7122;
 constexpr int OB_TRANSFER_CANNOT_START = -7123;
 constexpr int NEW_MV_MAJOR_VERSION_NOT_MATCH = -7125;
+constexpr int OB_TABLET_REORG_SCN_NOT_MATCH = -7126;
+constexpr int OB_WAIT_LS_REPLACE_COMPLETE_TIMEOUT = -7127;
+constexpr int OB_LS_REPLACE_FAILED = -7128;
 constexpr int OB_ERR_DIMENSION_NUMBER_IS_OUT_OF_RANGE = -7290;
 constexpr int OB_ERR_INVALID_SRID_IN_SDO_GEOMETRY = -7292;
 constexpr int OB_ERR_INVALID_GTYPE_FOR_POINT_OBJECT = -7293;
@@ -1513,6 +1518,7 @@ constexpr int OB_ERR_PARAM_OUT_OF_RANGE = -7435;
 constexpr int OB_ERR_BAD_VEC_INDEX_COLUMN = -7601;
 constexpr int OB_ERR_VSAG_MEM_LIMIT_EXCEEDED = -7603;
 constexpr int OB_ERR_VSAG_RETURN_ERROR = -7604;
+constexpr int OB_VECTOR_INDEX_ADAPTIVE_NEED_RETRY = -7605;
 constexpr int OB_SERVER_IS_INIT = -8001;
 constexpr int OB_SERVER_IS_STOPPING = -8002;
 constexpr int OB_PACKET_CHECKSUM_ERROR = -8003;
@@ -1567,7 +1573,6 @@ constexpr int OB_ARCHIVE_LOG_NOT_CONTINUES_WITH_DATA = -9064;
 constexpr int OB_AGENT_HAS_SUSPENDED = -9065;
 constexpr int OB_BACKUP_CONFLICT_VALUE = -9066;
 constexpr int OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED = -9069;
-constexpr int OB_BACKUP_DEST_NOT_CONNECT = -9070;
 constexpr int OB_ESI_SESSION_CONFLICTS = -9072;
 constexpr int OB_BACKUP_VALIDATE_TASK_SKIPPED = -9074;
 constexpr int OB_ESI_IO_ERROR = -9075;
@@ -1599,6 +1604,12 @@ constexpr int OB_FILE_DELETE_FAILED = -9128;
 constexpr int OB_BACKUP_MISSING_MVIEW_DEP_TABLET_SSTABLE = -9136;
 constexpr int OB_NO_LS_REPLICA_CAN_DO_BACKUP = -9138;
 constexpr int OB_RESOURCE_RELEASED = -9141;
+constexpr int OB_UNEXPECTED_MACRO_CACHE_FILE = -9144;
+constexpr int OB_OBJECT_STORAGE_CONDITION_NOT_MATCH = -9145;
+constexpr int OB_DISK_QUOTA_EXCEEDED = -9148;
+constexpr int OB_BACKUP_DEST_NOT_ALLOWED_TO_SET = -9149;
+constexpr int OB_LOG_ONLY_POLICY_NOT_ALLOWED_TO_SET = -9150;
+constexpr int OB_BACKUP_CLEAN_CAN_NOT_START = -9151;
 constexpr int OB_ERR_RESIZE_FILE_TO_SMALLER = -9200;
 constexpr int OB_MARK_BLOCK_INFO_TIMEOUT = -9201;
 constexpr int OB_NOT_READY_TO_EXTEND_FILE = -9202;
@@ -1909,6 +1920,29 @@ constexpr int OB_ERR_INVALID_PLSQL_UNIT = -9807;
 constexpr int OB_ERR_MVIEW_INVALID_TABLE_TYPE = -9808;
 constexpr int OB_ERR_MVIEW_BASE_TABLE_ALTERED = -9809;
 constexpr int OB_ERR_MVIEW_MISSING_DEPENDENCE = -9810;
+constexpr int OB_ERR_INVALID_NESTED_CURSOR = -9811;
+constexpr int OB_ERR_MVIEW_CAN_NOT_NESTED_CONSISTENT_REFRESH = -9812;
+constexpr int OB_UTL_HTTP_BAD_ARGUMENT = -9813;
+constexpr int OB_UTL_HTTP_BAD_URL = -9814;
+constexpr int OB_UTL_HTTP_END_OF_BODY = -9815;
+constexpr int OB_UTL_HTTP_HTTP_CLIENT_ERROR = -9816;
+constexpr int OB_UTL_HTTP_HTTP_SERVER_ERROR = -9817;
+constexpr int OB_UTL_HTTP_NETWORK_ACCESS_DENIED = -9818;
+constexpr int OB_UTL_HTTP_PARTIAL_MULTIBYTE_EXCEPTION = -9819;
+constexpr int OB_UTL_HTTP_PROTOCOL_ERROR = -9820;
+constexpr int OB_UTL_HTTP_REQUEST_FAILED = -9821;
+constexpr int OB_UTL_HTTP_TOO_MANY_REQUESTS = -9822;
+constexpr int OB_UTL_HTTP_TRANSFER_TIMEOUT = -9823;
+constexpr int OB_UTL_HTTP_UNKNOWN_SCHEME = -9824;
+constexpr int OB_ERR_EXECUTE_CODE_COVERAGE = -9825;
+constexpr int OB_PYTHON_PARAMS_ERROR = -9827;
+constexpr int OB_PYTHON_EXEC_ERROR = -9828;
+constexpr int OB_ERR_ALTER_ATTR_NOT_EXIST = -9829;
+constexpr int OB_ERR_ALTER_ATTR_LENGTH_ILLEGAL = -9830;
+constexpr int OB_ERR_ALTER_ATTR_DUPLICATE = -9831;
+constexpr int OB_ERR_ALTER_INVALID_UDT = -9832;
+constexpr int OB_ERR_ALTER_ATTR_TYPE_ILLEGAL = -9833;
+constexpr int OB_ERR_ALTER_HAS_DEPENDENT = -9834;
 constexpr int OB_ERR_KV_GLOBAL_INDEX_ROUTE = -10500;
 constexpr int OB_TTL_NOT_ENABLE = -10501;
 constexpr int OB_TTL_COLUMN_NOT_EXIST = -10502;
@@ -1930,6 +1964,10 @@ constexpr int OB_KV_REDIS_ERROR = -10517;
 constexpr int OB_KV_CHECK_FAILED = -10518;
 constexpr int OB_KV_TABLE_NOT_DISABLED = -10519;
 constexpr int OB_KV_TABLE_NOT_ENABLED = -10520;
+constexpr int OB_KV_HBASE_NAMESPACE_NOT_FOUND = -10521;
+constexpr int OB_KV_HBASE_TABLE_EXISTS = -10522;
+constexpr int OB_KV_HBASE_TABLE_NOT_FOUND = -10523;
+constexpr int OB_KV_SESS_NOT_EXIST = -10524;
 constexpr int OB_KV_ODP_TIMEOUT = -10650;
 constexpr int OB_ERR_VALUES_CLAUSE_NEED_HAVE_COLUMN = -11000;
 constexpr int OB_ERR_VALUES_CLAUSE_CANNOT_USE_DEFAULT_VALUES = -11001;
@@ -1985,6 +2023,32 @@ constexpr int OB_LOCATION_IN_USE = -11089;
 constexpr int OB_ERR_LOCATION_ACCESS_DENIED = -11090;
 constexpr int OB_LOCATION_OBJ_EXIST = -11091;
 constexpr int OB_LOCATION_OBJ_NOT_EXIST = -11092;
+constexpr int OB_SENSITIVE_RULE_EXIST = -11094;
+constexpr int OB_SENSITIVE_RULE_NOT_EXIST = -11095;
+constexpr int OB_SENSITIVE_COLUMN_EXIST = -11096;
+constexpr int OB_SENSITIVE_COLUMN_NOT_EXIST = -11097;
+constexpr int OB_ERR_NO_SENSITIVE_RULE_PRIVILEGE = -11098;
+constexpr int OB_WRONG_SENSITIVE_RULE_NAME = -11099;
+constexpr int OB_KERBEROS_ERROR = -11100;
+constexpr int OB_HMS_ERROR = -11101;
+constexpr int OB_INVALID_HMS_HOST = -11102;
+constexpr int OB_INVALID_HMS_PORT = -11103;
+constexpr int OB_INVALID_HMS_TABLE_LOCATION = -11104;
+constexpr int OB_INVALID_HMS_SERVICE = -11105;
+constexpr int OB_INVALID_HMS_SERVICE_FQDN = -11106;
+constexpr int OB_INVALID_HMS_TRANSPORT = -11107;
+constexpr int OB_INVALID_HMS_METASTORE = -11108;
+constexpr int OB_HMS_PARTITION_ERROR = -11109;
+constexpr int OB_HMS_DB_NOT_FOUND = -11110;
+constexpr int OB_HMS_TABLE_NOT_FOUND = -11111;
+constexpr int OB_AI_FUNC_ENDPOINT_NOT_FOUND = -11112;
+constexpr int OB_AI_FUNC_ENDPOINT_EXISTS = -11113;
+constexpr int OB_AI_FUNC_PARAM_EMPTY = -11114;
+constexpr int OB_AI_FUNC_PARAM_INVALID = -11115;
+constexpr int OB_AI_FUNC_PARAM_VALUE_INVALID = -11116;
+constexpr int OB_AI_FUNC_PARAM_TYPE_INVALID = -11117;
+constexpr int OB_AI_FUNC_MODEL_NOT_FOUND = -11118;
+constexpr int OB_AI_FUNC_MODEL_EXISTS = -11119;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR = -20000;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR_NUM = -21000;
 constexpr int OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN = -22998;
@@ -2363,8 +2427,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_IO_TIMEOUT__USER_ERROR_MSG "IO timeout"
 #define OB_INVALID_LICENSE__USER_ERROR_MSG "license is invalid because: %s"
 #define OB_LICENSE_EXPIRED__USER_ERROR_MSG "license is expired"
-#define OB_LICENSE_SCOPE_EXCEEDED__USER_ERROR_MSG "current license does not allow this operation: %s"
+#define OB_LICENSE_SCOPE_EXCEEDED__USER_ERROR_MSG "The current license does not include this feature module: %s"
 #define OB_MIGRATE_TX_DATA_NOT_CONTINUES__USER_ERROR_MSG "migrate tx data not continues"
+#define OB_INVALID_ZERO_DATE__USER_ERROR_MSG "invalid zero date in no_zero_date mode"
+#define OB_LS_NOT_IN_LEARNER_LIST__USER_ERROR_MSG "ls not in learner list"
 #define OB_IMPORT_NOT_IN_SERVER__USER_ERROR_MSG "Import not in service"
 #define OB_CONVERT_ERROR__USER_ERROR_MSG "Convert error"
 #define OB_BYPASS_TIMEOUT__USER_ERROR_MSG "Bypass timeout"
@@ -3706,6 +3772,9 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_TRANSFER_CANNOT_START__USER_ERROR_MSG "transfer cannot start"
 #define OB_PARTITION_ALREADY_BALANCED__USER_ERROR_MSG "partitions are already balanced, %s"
 #define NEW_MV_MAJOR_VERSION_NOT_MATCH__USER_ERROR_MSG "new mv major version is not match"
+#define OB_TABLET_REORG_SCN_NOT_MATCH__USER_ERROR_MSG "compare tablet reorganization scn not match"
+#define OB_WAIT_LS_REPLACE_COMPLETE_TIMEOUT__USER_ERROR_MSG "wait ls replace complete timeout"
+#define OB_LS_REPLACE_FAILED__USER_ERROR_MSG "ls replace failed"
 #define OB_ERR_GIS_DIFFERENT_SRIDS__USER_ERROR_MSG "Binary geometry function %s given two geometries of different srids: %u and %u, which should have been identical."
 #define OB_ERR_GIS_UNSUPPORTED_ARGUMENT__USER_ERROR_MSG "Calling geometry function %s with unsupported types of arguments."
 #define OB_ERR_GIS_UNKNOWN_ERROR__USER_ERROR_MSG "Unknown GIS error occurred in function %s."
@@ -3846,6 +3915,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_ARRAY_TYPE_MISMATCH__USER_ERROR_MSG "array type mismatch found between definition(%.*s) and data(%.*s)"
 #define OB_ERR_VSAG_MEM_LIMIT_EXCEEDED__USER_ERROR_MSG "Vector index memory usage exceeds user defined limit '%d'M."
 #define OB_ERR_VSAG_RETURN_ERROR__USER_ERROR_MSG "Using the vsag interface returns an error"
+#define OB_VECTOR_INDEX_ADAPTIVE_NEED_RETRY__USER_ERROR_MSG "vector index adaptive plan need retry"
 #define OB_SERVER_IS_INIT__USER_ERROR_MSG "Server is initializing"
 #define OB_SERVER_IS_STOPPING__USER_ERROR_MSG "Server is stopping"
 #define OB_PACKET_CHECKSUM_ERROR__USER_ERROR_MSG "Packet checksum error"
@@ -3915,7 +3985,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_AGENT_HAS_SUSPENDED__USER_ERROR_MSG "agent has suspended"
 #define OB_BACKUP_CONFLICT_VALUE__USER_ERROR_MSG "%.*s is conflict with %.*s"
 #define OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED__USER_ERROR_MSG "deleting backup piece is not allowed"
-#define OB_BACKUP_DEST_NOT_CONNECT__USER_ERROR_MSG "can not connect to backup destination"
+#define OB_BACKUP_DEST_NOT_CONNECT__USER_ERROR_MSG "please check server %s"
 #define OB_BACKUP_PERMISSION_DENIED__USER_ERROR_MSG "no I/O operation permission at the backup destination"
 #define OB_ESI_SESSION_CONFLICTS__USER_ERROR_MSG "obesi process session conflicts"
 #define OB_ESI_OBS_ERROR__USER_ERROR_MSG "external storage OBS error"
@@ -3989,6 +4059,16 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_RESOURCE_RELEASED__USER_ERROR_MSG "the resource has been released"
 #define OB_OBJECT_STORAGE_OVERWRITE_CONTENT_MISMATCH__USER_ERROR_MSG "the object can not be overwritten with different content"
 #define OB_DAG_TASK_IS_SUSPENDED__USER_ERROR_MSG "dag task is pending, need to wait for resources"
+#define OB_UNEXPECTED_MACRO_CACHE_FILE__USER_ERROR_MSG "unexpected macro cache file, which is not inner file"
+#define OB_OBJECT_STORAGE_CONDITION_NOT_MATCH__USER_ERROR_MSG "object storage condition not match"
+#define OB_SSLOG_LS_NOT_EXIST__USER_ERROR_MSG "sslog ls do not exist"
+#define OB_CANNOT_ACCESS_BACKUP_SET__USER_ERROR_MSG "can not access backup set file"
+#define OB_DISK_QUOTA_EXCEEDED__USER_ERROR_MSG "disk quota is exceeded"
+#define OB_BACKUP_DEST_NOT_ALLOWED_TO_SET__USER_ERROR_MSG "backup dest is not allowed to set when log_only policy exists"
+#define OB_LOG_ONLY_POLICY_NOT_ALLOWED_TO_SET__USER_ERROR_MSG "log_only policy is not allowed to set when backup dest exists"
+#define OB_BACKUP_CLEAN_CAN_NOT_START__USER_ERROR_MSG "backup clean can not start, because %s"
+#define OB_BACKUP_DEVICE_NOT_MOUNTED__USER_ERROR_MSG "backup device may be not mounted, %s did not read any data written by %s"
+#define OB_BACKUP_DEVICE_NOT_STRONG_RW_CONSISTENT__USER_ERROR_MSG "backup device is not read and write strongly consistent. %s did not read the latest data written by %s."
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__USER_ERROR_MSG "Extend ssblock file to smaller is not allowed"
 #define OB_MARK_BLOCK_INFO_TIMEOUT__USER_ERROR_MSG "Mark blocks timeout(5s) in auto extend process when alloc block fail"
 #define OB_NOT_READY_TO_EXTEND_FILE__USER_ERROR_MSG "Auto extend param is not ready to start extending file"
@@ -4301,6 +4381,30 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_MVIEW_INVALID_TABLE_TYPE__USER_ERROR_MSG "Table type is not valid, the definition of materialized view can only reference user tables or other materialized views"
 #define OB_ERR_MVIEW_BASE_TABLE_ALTERED__USER_ERROR_MSG "Base tables are altered during the creation or complete refresh of materialized views, please try again when base tables have no ongoing DDL operations"
 #define OB_ERR_MVIEW_MISSING_DEPENDENCE__USER_ERROR_MSG "Materialized view %s.%s has invalid dependency info, please perform a complete refresh to recover."
+#define OB_ERR_INVALID_NESTED_CURSOR__USER_ERROR_MSG "Cursor Variable in record, object, or collection is not supported by this release"
+#define OB_ERR_MVIEW_CAN_NOT_NESTED_CONSISTENT_REFRESH__USER_ERROR_MSG "materialized view can not nested consistent refresh"
+#define OB_UTL_HTTP_BAD_ARGUMENT__USER_ERROR_MSG "bad argument"
+#define OB_UTL_HTTP_BAD_URL__USER_ERROR_MSG "bad URL"
+#define OB_UTL_HTTP_END_OF_BODY__USER_ERROR_MSG "end-of-body reached"
+#define OB_UTL_HTTP_HTTP_CLIENT_ERROR__USER_ERROR_MSG "HTTP client error"
+#define OB_UTL_HTTP_HTTP_SERVER_ERROR__USER_ERROR_MSG "HTTP server error"
+#define OB_UTL_HTTP_NETWORK_ACCESS_DENIED__USER_ERROR_MSG "network access denied by access control list (ACL)"
+#define OB_UTL_HTTP_PARTIAL_MULTIBYTE_EXCEPTION__USER_ERROR_MSG "partial multibyte character"
+#define OB_UTL_HTTP_PROTOCOL_ERROR__USER_ERROR_MSG "HTTP protocol error"
+#define OB_UTL_HTTP_REQUEST_FAILED__USER_ERROR_MSG "HTTP request failed"
+#define OB_UTL_HTTP_TOO_MANY_REQUESTS__USER_ERROR_MSG "too many open HTTP requests"
+#define OB_UTL_HTTP_TRANSFER_TIMEOUT__USER_ERROR_MSG "transfer timeout"
+#define OB_UTL_HTTP_UNKNOWN_SCHEME__USER_ERROR_MSG "unknown or unsupported URL scheme"
+#define OB_ERR_EXECUTE_CODE_COVERAGE__USER_ERROR_MSG "error executing PL/SQL code coverage"
+#define OB_PYTHON_ENV_ERROR__USER_ERROR_MSG "Python env could not be found"
+#define OB_PYTHON_PARAMS_ERROR__USER_ERROR_MSG "%s"
+#define OB_PYTHON_EXEC_ERROR__USER_ERROR_MSG "%s"
+#define OB_ERR_ALTER_ATTR_NOT_EXIST__USER_ERROR_MSG "attribute or method by name '%.*s' does not exist"
+#define OB_ERR_ALTER_ATTR_LENGTH_ILLEGAL__USER_ERROR_MSG "only widening of attribute '%.*s' constraints is allowed"
+#define OB_ERR_ALTER_ATTR_DUPLICATE__USER_ERROR_MSG "Attribute/method '%.*s' can occur only once in an ALTER TYPE statement"
+#define OB_ERR_ALTER_INVALID_UDT__USER_ERROR_MSG "cannot alter a type that is not valid"
+#define OB_ERR_ALTER_ATTR_TYPE_ILLEGAL__USER_ERROR_MSG "type of attribute '%.*s' does not allow modifications to the attribute"
+#define OB_ERR_ALTER_HAS_DEPENDENT__USER_ERROR_MSG "must specify either CASCADE or INVALIDATE option"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__USER_ERROR_MSG "incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__USER_ERROR_MSG "TTL feature is not enabled"
 #define OB_TTL_COLUMN_NOT_EXIST__USER_ERROR_MSG "TTL column '%.*s' not exists"
@@ -4322,6 +4426,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_KV_CHECK_FAILED__USER_ERROR_MSG "Check failed in %.*s"
 #define OB_KV_TABLE_NOT_DISABLED__USER_ERROR_MSG "'%.*s' is not disabled"
 #define OB_KV_TABLE_NOT_ENABLED__USER_ERROR_MSG "'%.*s' is not enabled"
+#define OB_KV_HBASE_NAMESPACE_NOT_FOUND__USER_ERROR_MSG "namespace '%.*s' is not found"
+#define OB_KV_HBASE_TABLE_EXISTS__USER_ERROR_MSG "table '%.*s' already exists"
+#define OB_KV_HBASE_TABLE_NOT_FOUND__USER_ERROR_MSG "table '%.*s' not found"
+#define OB_KV_SESS_NOT_EXIST__USER_ERROR_MSG "Hbase scan session not exist, session id is: %lu"
 #define OB_KV_ODP_TIMEOUT__USER_ERROR_MSG "ODP process timeout"
 #define OB_ERR_VALUES_CLAUSE_NEED_HAVE_COLUMN__USER_ERROR_MSG "Each row of a VALUES clause must have at least one column, unless when used as source in an INSERT statement."
 #define OB_ERR_VALUES_CLAUSE_CANNOT_USE_DEFAULT_VALUES__USER_ERROR_MSG "A VALUES clause cannot use DEFAULT values, unless used as a source in an INSERT statement."
@@ -4388,7 +4496,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INCORRECT_STRING_VALUE_FOR_INET__USER_ERROR_MSG "Incorrect string value for function %s"
 #define OB_EXTERNAL_TABLE_FORMAT_ERROR__USER_ERROR_MSG "missing format for external table"
 #define OB_EXTERNAL_ACCESS_PATH_ERROR__USER_ERROR_MSG "missing access path for external table"
-#define OB_ORC_READ_ERROR__USER_ERROR_MSG "fair to read orc file, message: %s"
+#define OB_ORC_READ_ERROR__USER_ERROR_MSG "fail to read orc file, message: %s"
 #define OB_JNI_JAVA_EXCEPTION_ERROR__USER_ERROR_MSG "Java exception: %.*s"
 #define OB_JNI_ENV_SETUP_ERROR__USER_ERROR_MSG "Setup java env with error: %.*s"
 #define OB_JNI_DETACH_THREAD_ERROR__USER_ERROR_MSG "Detach thread with error: %.*s"
@@ -4417,6 +4525,32 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_LOCATION_OBJ_EXIST__USER_ERROR_MSG "Can't create location '%.*s'; location exists"
 #define OB_LOCATION_OBJ_NOT_EXIST__USER_ERROR_MSG "location '%.*s' doesn\'t exist"
 #define OB_LOGSERVICE_RPC_ERROR__USER_ERROR_MSG "OBLogService rpc execute failed"
+#define OB_SENSITIVE_RULE_EXIST__USER_ERROR_MSG "Sensitive rule '%.*s' exists"
+#define OB_SENSITIVE_RULE_NOT_EXIST__USER_ERROR_MSG "Sensitive rule '%.*s' does not exist"
+#define OB_SENSITIVE_COLUMN_EXIST__USER_ERROR_MSG "Sensitive column %.*s(%.*s) exists"
+#define OB_SENSITIVE_COLUMN_NOT_EXIST__USER_ERROR_MSG "Sensitive column %.*s(%.*s) does not exist"
+#define OB_ERR_NO_SENSITIVE_RULE_PRIVILEGE__USER_ERROR_MSG "Access sensitive field protected by sensitive rule '%.*s' denied to user '%.*s'@'%.*s'"
+#define OB_WRONG_SENSITIVE_RULE_NAME__USER_ERROR_MSG "Invalid sensitive rule name '%.*s'"
+#define OB_KERBEROS_ERROR__USER_ERROR_MSG "Kereberos execution error"
+#define OB_HMS_ERROR__USER_ERROR_MSG "HMS execution error"
+#define OB_INVALID_HMS_HOST__USER_ERROR_MSG "HMS host: '%.*s' is invalid"
+#define OB_INVALID_HMS_PORT__USER_ERROR_MSG "HMS port: '%.*s' is invalid"
+#define OB_INVALID_HMS_TABLE_LOCATION__USER_ERROR_MSG "HMS table location: '%.*s' is invalid"
+#define OB_INVALID_HMS_SERVICE__USER_ERROR_MSG "HMS service: '%.*s' is invalid"
+#define OB_INVALID_HMS_SERVICE_FQDN__USER_ERROR_MSG "HMS service FQDN: '%.*s' is invalid"
+#define OB_INVALID_HMS_TRANSPORT__USER_ERROR_MSG "HMS transport: '%.*s' is invalid"
+#define OB_INVALID_HMS_METASTORE__USER_ERROR_MSG "HMS metastore: '%.*s' is invalid"
+#define OB_HMS_PARTITION_ERROR__USER_ERROR_MSG "HMS partition error"
+#define OB_HMS_DB_NOT_FOUND__USER_ERROR_MSG "HMS database: '%.*s' not found"
+#define OB_HMS_TABLE_NOT_FOUND__USER_ERROR_MSG "HMS table: '%.*s' not found"
+#define OB_AI_FUNC_ENDPOINT_NOT_FOUND__USER_ERROR_MSG "This ai model endpoint \'%.*s\' not found in the tenant"
+#define OB_AI_FUNC_ENDPOINT_EXISTS__USER_ERROR_MSG "This ai model endpoint \'%.*s\' is already exists"
+#define OB_AI_FUNC_PARAM_EMPTY__USER_ERROR_MSG "The param \'%.*s\' is empty or null"
+#define OB_AI_FUNC_PARAM_INVALID__USER_ERROR_MSG "The param \'%.*s\' is invalid"
+#define OB_AI_FUNC_PARAM_VALUE_INVALID__USER_ERROR_MSG "The value of param \'%.*s\' is invalid"
+#define OB_AI_FUNC_PARAM_TYPE_INVALID__USER_ERROR_MSG "This type of param \'%.*s\' is invalid, should be %.*s"
+#define OB_AI_FUNC_MODEL_NOT_FOUND__USER_ERROR_MSG "This ai model \'%.*s\' not found in the tenant"
+#define OB_AI_FUNC_MODEL_EXISTS__USER_ERROR_MSG "This ai model \'%.*s\' is already exists"
 #define OB_SP_RAISE_APPLICATION_ERROR__USER_ERROR_MSG "%.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__USER_ERROR_MSG "error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__USER_ERROR_MSG "CLOB or NCLOB in multibyte character set not supported"
@@ -5162,10 +5296,14 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_INVALID_LICENSE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4405, license is invalid because: %s"
 #define OB_LICENSE_EXPIRED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4406, license is expired"
 #define OB_LICENSE_EXPIRED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4406, license is expired"
-#define OB_LICENSE_SCOPE_EXCEEDED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4407, current license does not allow this operation: %s"
-#define OB_LICENSE_SCOPE_EXCEEDED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4407, current license does not allow this operation: %s"
+#define OB_LICENSE_SCOPE_EXCEEDED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4407, The current license does not include this feature module: %s"
+#define OB_LICENSE_SCOPE_EXCEEDED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4407, The current license does not include this feature module: %s"
 #define OB_MIGRATE_TX_DATA_NOT_CONTINUES__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4408, migrate tx data not continues"
 #define OB_MIGRATE_TX_DATA_NOT_CONTINUES__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4408, migrate tx data not continues"
+#define OB_INVALID_ZERO_DATE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4409, invalid zero date in no_zero_date mode"
+#define OB_INVALID_ZERO_DATE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4409, invalid zero date in no_zero_date mode"
+#define OB_LS_NOT_IN_LEARNER_LIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4410, ls not in learner list"
+#define OB_LS_NOT_IN_LEARNER_LIST__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4410, ls not in learner list"
 #define OB_IMPORT_NOT_IN_SERVER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4505, Import not in service"
 #define OB_IMPORT_NOT_IN_SERVER__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4505, Import not in service"
 #define OB_CONVERT_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4507, Convert error"
@@ -7848,6 +7986,12 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_PARTITION_ALREADY_BALANCED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -7124, partitions are already balanced, %s"
 #define NEW_MV_MAJOR_VERSION_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7125, new mv major version is not match"
 #define NEW_MV_MAJOR_VERSION_NOT_MATCH__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -7125, new mv major version is not match"
+#define OB_TABLET_REORG_SCN_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7126, compare tablet reorganization scn not match"
+#define OB_TABLET_REORG_SCN_NOT_MATCH__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -7126, compare tablet reorganization scn not match"
+#define OB_WAIT_LS_REPLACE_COMPLETE_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7127, wait ls replace complete timeout"
+#define OB_WAIT_LS_REPLACE_COMPLETE_TIMEOUT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -7127, wait ls replace complete timeout"
+#define OB_LS_REPLACE_FAILED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7128, ls replace failed"
+#define OB_LS_REPLACE_FAILED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -7128, ls replace failed"
 #define OB_ERR_GIS_DIFFERENT_SRIDS__ORA_USER_ERROR_MSG "ORA-00600: Binary geometry function %s given two geometries of different srids: %u and %u, which should have been identical."
 #define OB_ERR_GIS_DIFFERENT_SRIDS__OBE_USER_ERROR_MSG "OBE-00600: Binary geometry function %s given two geometries of different srids: %u and %u, which should have been identical."
 #define OB_ERR_GIS_UNSUPPORTED_ARGUMENT__ORA_USER_ERROR_MSG "ORA-00600: Calling geometry function %s with unsupported types of arguments."
@@ -8128,6 +8272,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_VSAG_MEM_LIMIT_EXCEEDED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -7603, Vector index memory usage exceeds user defined limit '%d'M."
 #define OB_ERR_VSAG_RETURN_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7604, Using the vsag interface returns an error"
 #define OB_ERR_VSAG_RETURN_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -7604, Using the vsag interface returns an error"
+#define OB_VECTOR_INDEX_ADAPTIVE_NEED_RETRY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7605, vector index adaptive plan need retry"
+#define OB_VECTOR_INDEX_ADAPTIVE_NEED_RETRY__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -7605, vector index adaptive plan need retry"
 #define OB_SERVER_IS_INIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -8001, Server is initializing"
 #define OB_SERVER_IS_INIT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -8001, Server is initializing"
 #define OB_SERVER_IS_STOPPING__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -8002, Server is stopping"
@@ -8266,8 +8412,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_BACKUP_CONFLICT_VALUE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9066, %.*s is conflict with %.*s"
 #define OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9069, deleting backup piece is not allowed"
 #define OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9069, deleting backup piece is not allowed"
-#define OB_BACKUP_DEST_NOT_CONNECT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9070, can not connect to backup destination"
-#define OB_BACKUP_DEST_NOT_CONNECT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9070, can not connect to backup destination"
+#define OB_BACKUP_DEST_NOT_CONNECT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9070, please check server %s"
+#define OB_BACKUP_DEST_NOT_CONNECT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9070, please check server %s"
 #define OB_BACKUP_PERMISSION_DENIED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9071, no I/O operation permission at the backup destination"
 #define OB_BACKUP_PERMISSION_DENIED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9071, no I/O operation permission at the backup destination"
 #define OB_ESI_SESSION_CONFLICTS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9072, obesi process session conflicts"
@@ -8414,6 +8560,26 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_OBJECT_STORAGE_OVERWRITE_CONTENT_MISMATCH__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9142, the object can not be overwritten with different content"
 #define OB_DAG_TASK_IS_SUSPENDED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9143, dag task is pending, need to wait for resources"
 #define OB_DAG_TASK_IS_SUSPENDED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9143, dag task is pending, need to wait for resources"
+#define OB_UNEXPECTED_MACRO_CACHE_FILE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9144, unexpected macro cache file, which is not inner file"
+#define OB_UNEXPECTED_MACRO_CACHE_FILE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9144, unexpected macro cache file, which is not inner file"
+#define OB_OBJECT_STORAGE_CONDITION_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9145, object storage condition not match"
+#define OB_OBJECT_STORAGE_CONDITION_NOT_MATCH__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9145, object storage condition not match"
+#define OB_SSLOG_LS_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9146, sslog ls do not exist"
+#define OB_SSLOG_LS_NOT_EXIST__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9146, sslog ls do not exist"
+#define OB_CANNOT_ACCESS_BACKUP_SET__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9147, can not access backup set file"
+#define OB_CANNOT_ACCESS_BACKUP_SET__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9147, can not access backup set file"
+#define OB_DISK_QUOTA_EXCEEDED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9148, disk quota is exceeded"
+#define OB_DISK_QUOTA_EXCEEDED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9148, disk quota is exceeded"
+#define OB_BACKUP_DEST_NOT_ALLOWED_TO_SET__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9149, backup dest is not allowed to set when log_only policy exists"
+#define OB_BACKUP_DEST_NOT_ALLOWED_TO_SET__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9149, backup dest is not allowed to set when log_only policy exists"
+#define OB_LOG_ONLY_POLICY_NOT_ALLOWED_TO_SET__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9150, log_only policy is not allowed to set when backup dest exists"
+#define OB_LOG_ONLY_POLICY_NOT_ALLOWED_TO_SET__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9150, log_only policy is not allowed to set when backup dest exists"
+#define OB_BACKUP_CLEAN_CAN_NOT_START__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9151, backup clean can not start, because %s"
+#define OB_BACKUP_CLEAN_CAN_NOT_START__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9151, backup clean can not start, because %s"
+#define OB_BACKUP_DEVICE_NOT_MOUNTED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9152, backup device may be not mounted, %s did not read any data written by %s"
+#define OB_BACKUP_DEVICE_NOT_MOUNTED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9152, backup device may be not mounted, %s did not read any data written by %s"
+#define OB_BACKUP_DEVICE_NOT_STRONG_RW_CONSISTENT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9153, backup device is not read and write strongly consistent. %s did not read the latest data written by %s."
+#define OB_BACKUP_DEVICE_NOT_STRONG_RW_CONSISTENT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9153, backup device is not read and write strongly consistent. %s did not read the latest data written by %s."
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9200, Extend ssblock file to smaller is not allowed"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9200, Extend ssblock file to smaller is not allowed"
 #define OB_MARK_BLOCK_INFO_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9201, Mark blocks timeout(5s) in auto extend process when alloc block fail"
@@ -9038,6 +9204,54 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_MVIEW_BASE_TABLE_ALTERED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9809, Base tables are altered during the creation or complete refresh of materialized views, please try again when base tables have no ongoing DDL operations"
 #define OB_ERR_MVIEW_MISSING_DEPENDENCE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9810, Materialized view %s.%s has invalid dependency info, please perform a complete refresh to recover."
 #define OB_ERR_MVIEW_MISSING_DEPENDENCE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9810, Materialized view %s.%s has invalid dependency info, please perform a complete refresh to recover."
+#define OB_ERR_INVALID_NESTED_CURSOR__ORA_USER_ERROR_MSG "PLS-00989: Cursor Variable in record, object, or collection is not supported by this release"
+#define OB_ERR_INVALID_NESTED_CURSOR__OBE_USER_ERROR_MSG "PLS-00989: Cursor Variable in record, object, or collection is not supported by this release"
+#define OB_ERR_MVIEW_CAN_NOT_NESTED_CONSISTENT_REFRESH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9812, materialized view can not nested consistent refresh"
+#define OB_ERR_MVIEW_CAN_NOT_NESTED_CONSISTENT_REFRESH__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9812, materialized view can not nested consistent refresh"
+#define OB_UTL_HTTP_BAD_ARGUMENT__ORA_USER_ERROR_MSG "ORA-29261: bad argument"
+#define OB_UTL_HTTP_BAD_ARGUMENT__OBE_USER_ERROR_MSG "OBE-29261: bad argument"
+#define OB_UTL_HTTP_BAD_URL__ORA_USER_ERROR_MSG "ORA-29262: bad URL"
+#define OB_UTL_HTTP_BAD_URL__OBE_USER_ERROR_MSG "OBE-29262: bad URL"
+#define OB_UTL_HTTP_END_OF_BODY__ORA_USER_ERROR_MSG "ORA-29266: end-of-body reached"
+#define OB_UTL_HTTP_END_OF_BODY__OBE_USER_ERROR_MSG "OBE-29266: end-of-body reached"
+#define OB_UTL_HTTP_HTTP_CLIENT_ERROR__ORA_USER_ERROR_MSG "ORA-29268: HTTP client error"
+#define OB_UTL_HTTP_HTTP_CLIENT_ERROR__OBE_USER_ERROR_MSG "OBE-29268: HTTP client error"
+#define OB_UTL_HTTP_HTTP_SERVER_ERROR__ORA_USER_ERROR_MSG "ORA-29269: HTTP server error"
+#define OB_UTL_HTTP_HTTP_SERVER_ERROR__OBE_USER_ERROR_MSG "OBE-29269: HTTP server error"
+#define OB_UTL_HTTP_NETWORK_ACCESS_DENIED__ORA_USER_ERROR_MSG "ORA-24247: network access denied by access control list (ACL)"
+#define OB_UTL_HTTP_NETWORK_ACCESS_DENIED__OBE_USER_ERROR_MSG "OBE-24247: network access denied by access control list (ACL)"
+#define OB_UTL_HTTP_PARTIAL_MULTIBYTE_EXCEPTION__ORA_USER_ERROR_MSG "ORA-29275: partial multibyte character"
+#define OB_UTL_HTTP_PARTIAL_MULTIBYTE_EXCEPTION__OBE_USER_ERROR_MSG "OBE-29275: partial multibyte character"
+#define OB_UTL_HTTP_PROTOCOL_ERROR__ORA_USER_ERROR_MSG "ORA-29263: HTTP protocol error"
+#define OB_UTL_HTTP_PROTOCOL_ERROR__OBE_USER_ERROR_MSG "OBE-29263: HTTP protocol error"
+#define OB_UTL_HTTP_REQUEST_FAILED__ORA_USER_ERROR_MSG "ORA-29273: HTTP request failed"
+#define OB_UTL_HTTP_REQUEST_FAILED__OBE_USER_ERROR_MSG "OBE-29273: HTTP request failed"
+#define OB_UTL_HTTP_TOO_MANY_REQUESTS__ORA_USER_ERROR_MSG "ORA-29270: too many open HTTP requests"
+#define OB_UTL_HTTP_TOO_MANY_REQUESTS__OBE_USER_ERROR_MSG "OBE-29270: too many open HTTP requests"
+#define OB_UTL_HTTP_TRANSFER_TIMEOUT__ORA_USER_ERROR_MSG "ORA-29276: transfer timeout"
+#define OB_UTL_HTTP_TRANSFER_TIMEOUT__OBE_USER_ERROR_MSG "OBE-29276: transfer timeout"
+#define OB_UTL_HTTP_UNKNOWN_SCHEME__ORA_USER_ERROR_MSG "ORA-29264: unknown or unsupported URL scheme"
+#define OB_UTL_HTTP_UNKNOWN_SCHEME__OBE_USER_ERROR_MSG "OBE-29264: unknown or unsupported URL scheme"
+#define OB_ERR_EXECUTE_CODE_COVERAGE__ORA_USER_ERROR_MSG "ORA-08402: error executing PL/SQL code coverage"
+#define OB_ERR_EXECUTE_CODE_COVERAGE__OBE_USER_ERROR_MSG "OBE-08402: error executing PL/SQL code coverage"
+#define OB_PYTHON_ENV_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9826, Python env could not be found"
+#define OB_PYTHON_ENV_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9826, Python env could not be found"
+#define OB_PYTHON_PARAMS_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9827, %s"
+#define OB_PYTHON_PARAMS_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9827, %s"
+#define OB_PYTHON_EXEC_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9828, %s"
+#define OB_PYTHON_EXEC_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9828, %s"
+#define OB_ERR_ALTER_ATTR_NOT_EXIST__ORA_USER_ERROR_MSG "PLS-00715: attribute or method by name '%.*s' does not exist"
+#define OB_ERR_ALTER_ATTR_NOT_EXIST__OBE_USER_ERROR_MSG "PLS-00715: attribute or method by name '%.*s' does not exist"
+#define OB_ERR_ALTER_ATTR_LENGTH_ILLEGAL__ORA_USER_ERROR_MSG "PLS-00719: only widening of attribute '%.*s' constraints is allowed"
+#define OB_ERR_ALTER_ATTR_LENGTH_ILLEGAL__OBE_USER_ERROR_MSG "PLS-00719: only widening of attribute '%.*s' constraints is allowed"
+#define OB_ERR_ALTER_ATTR_DUPLICATE__ORA_USER_ERROR_MSG "PLS-00716: Attribute/method '%.*s' can occur only once in an ALTER TYPE statement"
+#define OB_ERR_ALTER_ATTR_DUPLICATE__OBE_USER_ERROR_MSG "PLS-00716: Attribute/method '%.*s' can occur only once in an ALTER TYPE statement"
+#define OB_ERR_ALTER_INVALID_UDT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9832, cannot alter a type that is not valid"
+#define OB_ERR_ALTER_INVALID_UDT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9832, cannot alter a type that is not valid"
+#define OB_ERR_ALTER_ATTR_TYPE_ILLEGAL__ORA_USER_ERROR_MSG "PLS-00718: type of attribute '%.*s' does not allow modifications to the attribute"
+#define OB_ERR_ALTER_ATTR_TYPE_ILLEGAL__OBE_USER_ERROR_MSG "PLS-00718: type of attribute '%.*s' does not allow modifications to the attribute"
+#define OB_ERR_ALTER_HAS_DEPENDENT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9834, must specify either CASCADE or INVALIDATE option"
+#define OB_ERR_ALTER_HAS_DEPENDENT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9834, must specify either CASCADE or INVALIDATE option"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10500, incorrect route for obkv global index, client router should refresh."
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -10500, incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10501, TTL feature is not enabled"
@@ -9080,6 +9294,14 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_KV_TABLE_NOT_DISABLED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -10519, '%.*s' is not disabled"
 #define OB_KV_TABLE_NOT_ENABLED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10520, '%.*s' is not enabled"
 #define OB_KV_TABLE_NOT_ENABLED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -10520, '%.*s' is not enabled"
+#define OB_KV_HBASE_NAMESPACE_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10521, namespace '%.*s' is not found"
+#define OB_KV_HBASE_NAMESPACE_NOT_FOUND__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -10521, namespace '%.*s' is not found"
+#define OB_KV_HBASE_TABLE_EXISTS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10522, table '%.*s' already exists"
+#define OB_KV_HBASE_TABLE_EXISTS__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -10522, table '%.*s' already exists"
+#define OB_KV_HBASE_TABLE_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10523, table '%.*s' not found"
+#define OB_KV_HBASE_TABLE_NOT_FOUND__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -10523, table '%.*s' not found"
+#define OB_KV_SESS_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10524, Hbase scan session not exist, session id is: %lu"
+#define OB_KV_SESS_NOT_EXIST__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -10524, Hbase scan session not exist, session id is: %lu"
 #define OB_KV_ODP_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10650, ODP process timeout"
 #define OB_KV_ODP_TIMEOUT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -10650, ODP process timeout"
 #define OB_ERR_VALUES_CLAUSE_NEED_HAVE_COLUMN__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11000, Each row of a VALUES clause must have at least one column, unless when used as source in an INSERT statement."
@@ -9212,8 +9434,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_EXTERNAL_TABLE_FORMAT_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11063, missing format for external table"
 #define OB_EXTERNAL_ACCESS_PATH_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11064, missing access path for external table"
 #define OB_EXTERNAL_ACCESS_PATH_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11064, missing access path for external table"
-#define OB_ORC_READ_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11065, fair to read orc file, message: %s"
-#define OB_ORC_READ_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11065, fair to read orc file, message: %s"
+#define OB_ORC_READ_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11065, fail to read orc file, message: %s"
+#define OB_ORC_READ_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11065, fail to read orc file, message: %s"
 #define OB_JNI_JAVA_EXCEPTION_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11066, Java exception: %.*s"
 #define OB_JNI_JAVA_EXCEPTION_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11066, Java exception: %.*s"
 #define OB_JNI_ENV_SETUP_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11067, Setup java env with error: %.*s"
@@ -9270,6 +9492,58 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_LOCATION_OBJ_NOT_EXIST__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11092, location '%.*s' doesn\'t exist"
 #define OB_LOGSERVICE_RPC_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11093, OBLogService rpc execute failed"
 #define OB_LOGSERVICE_RPC_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11093, OBLogService rpc execute failed"
+#define OB_SENSITIVE_RULE_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11094, Sensitive rule '%.*s' exists"
+#define OB_SENSITIVE_RULE_EXIST__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11094, Sensitive rule '%.*s' exists"
+#define OB_SENSITIVE_RULE_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11095, Sensitive rule '%.*s' does not exist"
+#define OB_SENSITIVE_RULE_NOT_EXIST__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11095, Sensitive rule '%.*s' does not exist"
+#define OB_SENSITIVE_COLUMN_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11096, Sensitive column %.*s(%.*s) exists"
+#define OB_SENSITIVE_COLUMN_EXIST__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11096, Sensitive column %.*s(%.*s) exists"
+#define OB_SENSITIVE_COLUMN_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11097, Sensitive column %.*s(%.*s) does not exist"
+#define OB_SENSITIVE_COLUMN_NOT_EXIST__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11097, Sensitive column %.*s(%.*s) does not exist"
+#define OB_ERR_NO_SENSITIVE_RULE_PRIVILEGE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11098, Access sensitive field protected by sensitive rule '%.*s' denied to user '%.*s'@'%.*s'"
+#define OB_ERR_NO_SENSITIVE_RULE_PRIVILEGE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11098, Access sensitive field protected by sensitive rule '%.*s' denied to user '%.*s'@'%.*s'"
+#define OB_WRONG_SENSITIVE_RULE_NAME__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11099, Invalid sensitive rule name '%.*s'"
+#define OB_WRONG_SENSITIVE_RULE_NAME__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11099, Invalid sensitive rule name '%.*s'"
+#define OB_KERBEROS_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11100, Kereberos execution error"
+#define OB_KERBEROS_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11100, Kereberos execution error"
+#define OB_HMS_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11101, HMS execution error"
+#define OB_HMS_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11101, HMS execution error"
+#define OB_INVALID_HMS_HOST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11102, HMS host: '%.*s' is invalid"
+#define OB_INVALID_HMS_HOST__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11102, HMS host: '%.*s' is invalid"
+#define OB_INVALID_HMS_PORT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11103, HMS port: '%.*s' is invalid"
+#define OB_INVALID_HMS_PORT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11103, HMS port: '%.*s' is invalid"
+#define OB_INVALID_HMS_TABLE_LOCATION__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11104, HMS table location: '%.*s' is invalid"
+#define OB_INVALID_HMS_TABLE_LOCATION__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11104, HMS table location: '%.*s' is invalid"
+#define OB_INVALID_HMS_SERVICE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11105, HMS service: '%.*s' is invalid"
+#define OB_INVALID_HMS_SERVICE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11105, HMS service: '%.*s' is invalid"
+#define OB_INVALID_HMS_SERVICE_FQDN__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11106, HMS service FQDN: '%.*s' is invalid"
+#define OB_INVALID_HMS_SERVICE_FQDN__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11106, HMS service FQDN: '%.*s' is invalid"
+#define OB_INVALID_HMS_TRANSPORT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11107, HMS transport: '%.*s' is invalid"
+#define OB_INVALID_HMS_TRANSPORT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11107, HMS transport: '%.*s' is invalid"
+#define OB_INVALID_HMS_METASTORE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11108, HMS metastore: '%.*s' is invalid"
+#define OB_INVALID_HMS_METASTORE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11108, HMS metastore: '%.*s' is invalid"
+#define OB_HMS_PARTITION_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11109, HMS partition error"
+#define OB_HMS_PARTITION_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11109, HMS partition error"
+#define OB_HMS_DB_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11110, HMS database: '%.*s' not found"
+#define OB_HMS_DB_NOT_FOUND__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11110, HMS database: '%.*s' not found"
+#define OB_HMS_TABLE_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11111, HMS table: '%.*s' not found"
+#define OB_HMS_TABLE_NOT_FOUND__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11111, HMS table: '%.*s' not found"
+#define OB_AI_FUNC_ENDPOINT_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11112, This ai model endpoint \'%.*s\' not found in the tenant"
+#define OB_AI_FUNC_ENDPOINT_NOT_FOUND__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11112, This ai model endpoint \'%.*s\' not found in the tenant"
+#define OB_AI_FUNC_ENDPOINT_EXISTS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11113, This ai model endpoint \'%.*s\' is already exists"
+#define OB_AI_FUNC_ENDPOINT_EXISTS__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11113, This ai model endpoint \'%.*s\' is already exists"
+#define OB_AI_FUNC_PARAM_EMPTY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11114, The param \'%.*s\' is empty or null"
+#define OB_AI_FUNC_PARAM_EMPTY__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11114, The param \'%.*s\' is empty or null"
+#define OB_AI_FUNC_PARAM_INVALID__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11115, The param \'%.*s\' is invalid"
+#define OB_AI_FUNC_PARAM_INVALID__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11115, The param \'%.*s\' is invalid"
+#define OB_AI_FUNC_PARAM_VALUE_INVALID__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11116, The value of param \'%.*s\' is invalid"
+#define OB_AI_FUNC_PARAM_VALUE_INVALID__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11116, The value of param \'%.*s\' is invalid"
+#define OB_AI_FUNC_PARAM_TYPE_INVALID__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11117, This type of param \'%.*s\' is invalid, should be %.*s"
+#define OB_AI_FUNC_PARAM_TYPE_INVALID__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11117, This type of param \'%.*s\' is invalid, should be %.*s"
+#define OB_AI_FUNC_MODEL_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11118, This ai model \'%.*s\' not found in the tenant"
+#define OB_AI_FUNC_MODEL_NOT_FOUND__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11118, This ai model \'%.*s\' not found in the tenant"
+#define OB_AI_FUNC_MODEL_EXISTS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11119, This ai model \'%.*s\' is already exists"
+#define OB_AI_FUNC_MODEL_EXISTS__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11119, This ai model \'%.*s\' is already exists"
 #define OB_SP_RAISE_APPLICATION_ERROR__ORA_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR__OBE_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__ORA_USER_ERROR_MSG "ORA-21000: error number argument to raise_application_error of '%d' is out of range"
@@ -9289,7 +9563,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2428];
+extern int g_all_ob_errnos[2498];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

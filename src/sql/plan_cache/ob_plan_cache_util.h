@@ -506,6 +506,57 @@ struct AdaptivePCConf
   int64_t pc_adaptive_effectiveness_ratio_threshold_;
 };
 
+enum ObPlanExpiredStat  {
+  NOT_EXPIRED = 0,
+  EXPIRED_BY_OPT_STAT,    //  expired by statistics
+  EXPIRED_BY_EXEC_ERROR,  //  expired by query exec error in ObPhysicalPlan::check_if_is_expired_by_error
+  EXPIRED_BY_TABLE_ACCESS_ROW_COUNT,  //  expired by unstable query range access row count
+  EXPIRED_BY_EXEC_TIME,   //  expired by unstable execution time
+};
+
+struct ObPlanExecutingStat
+{
+  static const int32_t MAX_EXECUTING_SIZE = 100;
+
+  int get_executing_info(int64_t &exec_time, int64_t &exec_cnt) const;
+  int set_executing_record(const int64_t exec_start_timestamp);
+  int erase_executing_record(const int64_t exec_start_timestamp);
+
+  ObPlanExecutingStat()
+    : exec_cnt_(0)
+    {
+      MEMSET(exec_start_timestamps_, 0, MAX_EXECUTING_SIZE * sizeof(int64_t));
+    }
+  ObPlanExecutingStat(const ObPlanExecutingStat &other)
+    : exec_cnt_(other.exec_cnt_)
+    {
+      MEMCPY(exec_start_timestamps_, other.exec_start_timestamps_, MAX_EXECUTING_SIZE * sizeof(int64_t));
+    }
+  private:
+  int64_t exec_cnt_;
+  int64_t exec_start_timestamps_[MAX_EXECUTING_SIZE];
+};
+
+struct ObVecIndexExecCtx {
+  ObVecIndexExecCtx()
+    : cur_path_(0),
+      pre_filter_chosen_times_(0),
+      iter_filter_chosen_times_(0),
+      in_filter_chosen_times_(0),
+      record_count_(0)
+  {}
+  TO_STRING_KV(K_(cur_path),
+               K_(pre_filter_chosen_times),
+               K_(iter_filter_chosen_times),
+               K_(in_filter_chosen_times),
+               K_(record_count));
+  uint8_t cur_path_;               // cur path
+  int64_t pre_filter_chosen_times_; // times of changing to pre-filter
+  int64_t iter_filter_chosen_times_;// times of changing to iter-filter
+  int64_t in_filter_chosen_times_;  // times of changing toin-filter
+  int32_t record_count_;            // window size
+};
+
 struct ObPlanStat
 {
   enum PlanStatus
@@ -610,7 +661,7 @@ struct ObPlanStat
   /** 记录第一次计划执行时计划涉及的各个表的行数的数组，数组应该有access_table_num_个元素 */
   ObTableRowCount *table_row_count_first_exec_;
   int64_t access_table_num_;         //plan访问的表的个数，目前只统计whole range扫描的表
-  bool is_expired_; // 这个计划是否已经由于数据的表行数变化和执行时间变化而失效
+  ObPlanExpiredStat is_expired_; // 这个计划是否已经由于数据的表行数变化和执行时间变化而失效
 
   // check whether plan has stable performance
   bool enable_plan_expiration_;
@@ -656,7 +707,9 @@ struct ObPlanStat
   bool is_inner_;
   bool is_use_auto_dop_;
   AdaptivePCInfo adaptive_pc_info_;
-
+  ObVecIndexExecCtx vec_index_exec_ctx_;
+  ObPlanExecutingStat executing_stat_;
+  uint64_t gen_plan_usec_;  // plan generation time cost
 
   ObPlanStat()
     : plan_id_(0),
@@ -707,7 +760,7 @@ struct ObPlanStat
       ps_stmt_id_(common::OB_INVALID_ID),
       table_row_count_first_exec_(NULL),
       access_table_num_(0),
-      is_expired_(false),
+      is_expired_(NOT_EXPIRED),
       enable_plan_expiration_(false),
       first_exec_row_count_(-1),
       first_exec_usec_(0),
@@ -736,7 +789,10 @@ struct ObPlanStat
       hints_all_worked_(true),
       is_inner_(false),
       is_use_auto_dop_(false),
-      adaptive_pc_info_()
+      adaptive_pc_info_(),
+      vec_index_exec_ctx_(),
+      executing_stat_(),
+      gen_plan_usec_(0)
 {
   exact_mode_sql_id_[0] = '\0';
 }
@@ -789,7 +845,7 @@ struct ObPlanStat
       ps_stmt_id_(rhs.ps_stmt_id_),
       table_row_count_first_exec_(NULL),
       access_table_num_(0),
-      is_expired_(false),
+      is_expired_(NOT_EXPIRED),
       enable_plan_expiration_(rhs.enable_plan_expiration_),
       first_exec_row_count_(rhs.first_exec_row_count_),
       first_exec_usec_(rhs.first_exec_usec_),
@@ -818,7 +874,10 @@ struct ObPlanStat
       hints_all_worked_(rhs.hints_all_worked_),
       is_inner_(rhs.is_inner_),
       is_use_auto_dop_(rhs.is_use_auto_dop_),
-      adaptive_pc_info_(rhs.adaptive_pc_info_)
+      adaptive_pc_info_(rhs.adaptive_pc_info_),
+      vec_index_exec_ctx_(rhs.vec_index_exec_ctx_),
+      executing_stat_(rhs.executing_stat_),
+      gen_plan_usec_(rhs.gen_plan_usec_)
   {
     exact_mode_sql_id_[0] = '\0';
     MEMCPY(plan_sel_info_str_, rhs.plan_sel_info_str_, rhs.plan_sel_info_str_len_);
@@ -922,6 +981,19 @@ struct ObPlanStat
     return last_active_time_ != 0;
   }
 
+  inline void set_executing_record(const int64_t exec_start_timestamp)
+  {
+    if (is_evolution_) {
+      executing_stat_.set_executing_record(exec_start_timestamp);
+    }
+  }
+  inline void erase_executing_record(const int64_t exec_start_timestamp)
+  {
+    if (is_evolution_) {
+      executing_stat_.erase_executing_record(exec_start_timestamp);
+    }
+  }
+
   /* XXX: support printing maxium 30 class members.
    * if you want to print more members, remove some first
    */
@@ -958,7 +1030,8 @@ struct ObPlanStat
                K_(timeout_count),
                K_(evolution_stat),
                K_(plan_hash_value),
-               K_(hints_all_worked));
+               K_(hints_all_worked),
+               K_(vec_index_exec_ctx));
 };
 
 struct SysVarNameVal
@@ -1009,11 +1082,10 @@ struct ObPhyLocationGetter
 {
 public:
   // used for getting plan
-  // In this interface, we first process the table locations that were marked select_leader, the tablet
-  // locations of them will be added to das_ctx directly, without the need to construct candi_table_locs.
-  // For the remaining table locations that are not marked select_leader, continue to use the previous
-  // logic where a candi_table_loc is generated for each table location. These candi_table_locs will be
-  // added to das_ctx by @build_candi_table_locs().
+  // In this interface, we will first verify whether all tables were marked select_leader.
+  // If confirmed, the fast path will be activated to directly select leader replicas for each table
+  // and add them to das ctx, without the need to construct candi table locs.
+  // Otherwise, fallback to the original path and add candi table locs to das ctx manually.
   static int get_phy_locations(const ObIArray<ObTableLocation> &table_locations,
                                const ObPlanCacheCtx &pc_ctx,
                                ObIArray<ObCandiTableLoc> &phy_location_infos);
@@ -1097,6 +1169,8 @@ public:
     ndv_runtime_bloom_filter_size_(false),
     enable_topn_runtime_filter_(false),
     min_const_integer_precision_(1),
+    enable_runtime_filter_adaptive_apply_(false),
+    extend_sql_plan_monitor_metrics_(false),
     cluster_config_version_(-1),
     tenant_config_version_(-1),
     tenant_id_(0)
@@ -1155,6 +1229,8 @@ public:
   bool ndv_runtime_bloom_filter_size_;
   bool enable_topn_runtime_filter_;
   int8_t min_const_integer_precision_;
+  bool enable_runtime_filter_adaptive_apply_;
+  bool extend_sql_plan_monitor_metrics_;
 
 private:
   // current cluster config version_

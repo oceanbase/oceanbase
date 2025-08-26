@@ -277,11 +277,10 @@ TEST_F(TestObGuard, ob_shared_guard_make_and_alloc) {
   ObSharedGuard<TestObj2> shared_ptr;
   ASSERT_EQ(OB_SUCCESS, ob_make_shared<TestObj2>(shared_ptr, 1, a));
   ASSERT_EQ(&a, &shared_ptr->get_b());
-  ASSERT_EQ(OB_ALLOCATE_MEMORY_FAILED, ob_alloc_shared<TestObj2>(shared_ptr, bad_allocator));
+  ASSERT_EQ(OB_ALLOCATE_MEMORY_FAILED, ob_alloc_shared<TestObj2>(shared_ptr, bad_allocator, 1, a));
   auto ptr = shared_ptr.get_ptr();
   ASSERT_EQ(&a, &shared_ptr->get_b());// 强异常安全保证
-  ASSERT_EQ(OB_SUCCESS, ob_alloc_shared<TestObj2>(shared_ptr, default_allocator1));
-  new(shared_ptr.get_ptr()) TestObj2(1, a);
+  ASSERT_EQ(OB_SUCCESS, ob_alloc_shared<TestObj2>(shared_ptr, default_allocator1, 1, a));
   ASSERT_NE(ptr, shared_ptr.get_ptr());
 }
 

@@ -187,8 +187,8 @@ public:
   int get_cg_sstable(const uint32_t cg_idx, ObSSTableWrapper &cg_wrapper) const;
   int get_all_tables(common::ObIArray<ObSSTableWrapper> &table_wrappers) const;
 
-  virtual int64_t get_serialize_size() const override;
-  virtual int serialize(char *buf, const int64_t buf_len, int64_t &pos) const override;
+  virtual int64_t get_serialize_size(const uint64_t data_version) const override;
+  virtual int serialize(const uint64_t data_version, char *buf, const int64_t buf_len, int64_t &pos) const override;
   virtual int deserialize(
       common::ObArenaAllocator &allocator,
       const char *buf,
@@ -199,8 +199,8 @@ public:
       common::ObArenaAllocator &allocator,
       const common::ObIArray<ObMetaDiskAddr> &cg_addrs,
       ObCOSSTableV2 *&co_sstable);
-  virtual int serialize_full_table(char *buf, const int64_t buf_len, int64_t &pos) const override;
-  virtual int64_t get_full_serialize_size() const override;
+  virtual int serialize_full_table(const uint64_t data_version, char *buf, const int64_t buf_len, int64_t &pos) const override;
+  virtual int64_t get_full_serialize_size(const uint64_t data_version) const override;
 
   virtual int deep_copy(char *buf, const int64_t buf_len, ObIStorageMetaObj *&value) const override;
   virtual int64_t get_deep_copy_size() const override

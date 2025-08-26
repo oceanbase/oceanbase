@@ -15,6 +15,7 @@
 
 #include "ob_dbms_sched_job_utils.h"
 #include "share/stat/ob_dbms_stats_maintenance_window.h"
+#include "share/balance/ob_scheduled_trigger_partition_balance.h" // ObScheduledTriggerPartitionBalance
 #include "observer/dbms_scheduler/ob_dbms_sched_table_operator.h"
 #include "storage/ob_common_id_utils.h"
 #include "observer/dbms_scheduler/ob_dbms_sched_job_rpc_proxy.h"
@@ -341,6 +342,8 @@ ObDBMSSchedFuncType ObDBMSSchedJobInfo::get_func_type() const
   if (func_type == ObDBMSSchedFuncType::USER_JOB) { // update old inner job func type
     if (ObDbmsStatsMaintenanceWindow::is_stats_job(job_name_)) {
       func_type = ObDBMSSchedFuncType::STAT_MAINTENANCE_JOB;
+    } else if (ObScheduledTriggerPartitionBalance::is_trigger_job(job_name_)) {
+      func_type = ObDBMSSchedFuncType::NODE_BALANCE_JOB;
     } else if (!!(scheduler_flags_ & JOB_SCHEDULER_FLAG_DATE_EXPRESSION_JOB_CLASS)) {
       func_type = ObDBMSSchedFuncType::MVIEW_JOB;
     } else if (0 == job_class_.case_compare("MYSQL_EVENT_JOB_CLASS")) {

@@ -2548,47 +2548,42 @@ int ObMulValueIndexBuilderUtil::append_mulvalue_arg(
 
 
 int ObMulValueIndexBuilderUtil::is_multivalue_index_type(
-  const ObString& column_string,
-  bool& is_multi_value_index)
+  const ParseNode *expr_node,
+  bool &is_multi_value_index)
 {
   INIT_SUCC(ret);
-
-  char* buf = nullptr;
-  if (column_string.length() == 0 || column_string.length() > OB_MAX_COLUMN_NAMES_LENGTH) {
+  is_multi_value_index = false;
+  if (OB_ISNULL(expr_node)) {
+    // do nothing
   } else {
-    SMART_VAR(char[OB_MAX_COLUMN_NAMES_LENGTH * 2], buf) {
-      MEMCPY(buf, column_string.ptr(), column_string.length());
-      buf[column_string.length()] = 0;
-
-      std::regex pattern(R"(CAST\s*\(\s*.*\s*as\s*.*\s*array\s*\))", std::regex_constants::icase);
-      if (std::regex_match(buf, pattern)) {
-        is_multi_value_index = true;
-      } else {
-        is_multi_value_index = false;
-        std::regex pattern1(R"(JSON_QUERY\s*\(\s*.*\s*ASIS\s*.*\s*\))", std::regex_constants::icase);
-        if (std::regex_match(buf, pattern1)) {
+    if (expr_node->type_ != T_FUN_SYS_JSON_QUERY || expr_node->num_child_ != 13) {
+      // not a normalized JSON_QUERY(...)
+    } else {
+      const ParseNode *asis = expr_node->children_[8];
+      const ParseNode *multi = expr_node->children_[12];
+      if (OB_NOT_NULL(asis) && OB_NOT_NULL(multi)) {
+        if (asis->type_ == T_INT && multi->type_ == T_INT
+            && asis->value_ == 1 && multi->value_ == 0) {
           is_multi_value_index = true;
         }
       }
     }
   }
-
   return ret;
 }
-
-int ObMulValueIndexBuilderUtil::adjust_index_type(const ObString& column_string,
-                                          bool& is_multi_value_index,
-                                          int* index_keyname)
+int ObMulValueIndexBuilderUtil::adjust_index_type(
+  const ParseNode *expr_node,
+  bool &is_multi_value_index,
+  int *index_keyname)
 {
   INIT_SUCC(ret);
-
-  char* buf = nullptr;
   if (OB_ISNULL(index_keyname)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null param input", K(ret));
-  } else if (OB_FAIL(is_multivalue_index_type(column_string, is_multi_value_index))) {
-    LOG_WARN("failed to resolve index type", K(ret), K(column_string));
+  } else if (OB_FAIL(is_multivalue_index_type(expr_node, is_multi_value_index))) {
+    LOG_WARN("failed to resolve index type by parse node", K(ret));
   } else if (!is_multi_value_index) {
+    // do nothing
   } else if (*index_keyname == static_cast<int>(sql::ObDDLResolver::NORMAL_KEY)) {
     *index_keyname = static_cast<int>(sql::ObDDLResolver::MULTI_KEY);
   } else if (*index_keyname == static_cast<int>(sql::ObDDLResolver::UNIQUE_KEY)) {
@@ -2724,14 +2719,27 @@ int ObMulValueIndexBuilderUtil::build_and_generate_multivalue_column_raw(
   }
 
   int64_t expr_idx = 0;
+  bool has_functional_index = false;
   for (size_t i = 0; OB_SUCC(ret) && i < sort_items.count(); ++i) {
     ObColumnSortItem& sort_item = sort_items.at(i);
     bool is_multi_value_index = false;
     if (sort_item.prefix_len_ > 0) {
     } else if (!sort_item.is_func_index_) {
-    } else if (OB_FAIL(is_multivalue_index_type(sort_item.column_name_, is_multi_value_index))) {
-      LOG_WARN("failed to calc index type", K(ret), K(sort_item.column_name_));
-    } else if (is_multi_value_index) {
+    } else {
+      const ParseNode *expr_node = nullptr;
+      if (OB_FAIL(ObRawExprUtils::parse_expr_node_from_str(sort_item.column_name_,
+                                                           ObCharsets4Parser(),
+                                                           allocator,
+                                                           expr_node))) {
+        LOG_WARN("failed to parse expr node from string", K(ret), K(sort_item.column_name_));
+      } else if (OB_FAIL(is_multivalue_index_type(expr_node, is_multi_value_index))) {
+        LOG_WARN("failed to calc index type by parse node", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && sort_item.is_func_index_ && !is_multi_value_index) {
+      has_functional_index = true;
+    }
+    if (OB_SUCC(ret) && is_multi_value_index) {
       is_add_column++;
       expr_idx = i;
       expr_def_string = sort_item.column_name_;
@@ -3190,6 +3198,8 @@ int ObMulValueIndexBuilderUtil::set_multivalue_index_table_columns(
     const ObColumnSchemaV2 *mvi_array_column = nullptr;
     int32_t multi_column_cnt = 0;
     ObArray<const ObColumnSchemaV2 *> tmp_cols;
+    bool has_mv_col = false;
+    bool has_func_col = false;
 
     for (int64_t i = 0; OB_SUCC(ret) && i < arg.index_columns_.count(); ++i) {
       const ObColumnSchemaV2 *mvi_column = nullptr;
@@ -3216,12 +3226,19 @@ int ObMulValueIndexBuilderUtil::set_multivalue_index_table_columns(
               mvi_col_item.order_type_, K(row_desc), K(ret));
         } else if (mvi_column->is_multivalue_generated_column()) {
           multi_column_cnt++;
+          has_mv_col = true;
           if (multi_column_cnt > 1) {
             ret = OB_NOT_MULTIVALUE_SUPPORT;
             LOG_USER_ERROR(OB_NOT_MULTIVALUE_SUPPORT, "more than one multi-valued key part per index");
           }
+        } else if (mvi_column->is_generated_column()) {
+          has_func_col = true;
         } else if (mvi_column->is_rowkey_column() && OB_FAIL(tmp_cols.push_back(mvi_column))) {
           LOG_WARN("failed to tmp save rowkey column", K(ret));
+        }
+        if (OB_SUCC(ret) && has_mv_col && has_func_col) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "multivalue index combined with functional index in composite index is");
         }
       } else if (mvi_column->is_multivalue_generated_array_column()) {
         mvi_array_column = mvi_column;
@@ -3306,6 +3323,43 @@ int ObMulValueIndexBuilderUtil::set_multivalue_index_table_columns(
   return ret;
 }
 
-
-}//end namespace rootserver
+int ObFtsIndexSchemaPrinter::print_fts_parser_info(
+    const ObTableSchema &table_schema,
+    const bool strict_compat,
+    char *&buf,
+    const int64_t &buf_len,
+    int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  storage::ObFTParser parser;
+  storage::ObFTParserJsonProps parser_properties;
+  bool is_mysql_compat = false;
+  if (OB_FAIL(parser.parse_from_str(table_schema.get_parser_name_str().ptr(), table_schema.get_parser_name_str().length()))) {
+    LOG_WARN("fail to parse name from cstring", K(ret), K(parser));
+  } else if (strict_compat
+             && OB_FAIL(is_mysql_compat_parser(ObString(parser.get_parser_name().len(), parser.get_parser_name().str()),
+                                               is_mysql_compat))) {
+    LOG_WARN("fail to check if parser is mysql compat", K(ret), K(parser));
+  } else if (strict_compat && !is_mysql_compat) {
+    // do nothing
+  } else if (OB_FAIL(databuff_printf(
+                 buf,
+                 buf_len,
+                 pos,
+                 "WITH PARSER %.*s ",
+                 parser.get_parser_name().len(),
+                 parser.get_parser_name().str()))) {
+    SHARE_SCHEMA_LOG(WARN, "print parser name failed", K(ret), K(parser));
+  } else if (strict_compat || table_schema.get_parser_property_str().empty()) {
+    // do nothing.
+  } else if (OB_FAIL(parser_properties.init())) {
+    LOG_WARN("fail to init parser properties", K(ret));
+  } else if (OB_FAIL(parser_properties.parse_from_valid_str(table_schema.get_parser_property_str()))) { // TODO: check valid.
+    LOG_WARN("fail to parse properties", K(ret), K(parser), K(table_schema.get_parser_property_str()));
+  } else if (OB_FAIL(ObFTParserJsonProps::show_parser_properties(parser_properties, buf, buf_len, pos))) {
+    LOG_WARN("fail to show parser properties", K(ret), K(parser_properties));
+  }
+  return ret;
+}
+} // namespace share
 }//end namespace oceanbase

@@ -285,6 +285,8 @@ int ObTableLoadMemCompactor::init(ObTableLoadMergeMemSortOp *op)
                  K(mem_ctx_.dump_thread_cnt_), K(mem_ctx_.load_thread_cnt_));
       } else if (OB_FAIL(mem_ctx_.init())) {
         LOG_WARN("fail to init compactor ctx", KR(ret));
+      } else if (OB_FAIL(mem_ctx_.init_enc_params(store_ctx_->ctx_->param_.dup_action_, store_table_ctx_->schema_->column_descs_))) {
+        LOG_WARN("fail to init enc params", KR(ret));
       } else if (OB_FAIL(init_scheduler())) {
         LOG_WARN("fail to init_scheduler", KR(ret));
       } else {

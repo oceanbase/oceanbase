@@ -22,6 +22,13 @@ namespace oceanbase
 {
 namespace sql
 {
+
+static bool is_string_text_cast(const ObExpr &expr)
+{
+  return lib::is_mysql_mode() && ob_is_text_tc(expr.datum_meta_.type_)
+      && T_FUN_SYS_CAST == expr.args_[4]->type_ && ob_is_string_tc(expr.args_[4]->args_[0]->datum_meta_.type_);
+}
+
 ObFastColumnConvExpr::ObFastColumnConvExpr(ObIAllocator &alloc)
     : ObBaseExprColumnConv(alloc),
       ObFastExprOperator(T_FUN_COLUMN_CONV),
@@ -307,6 +314,9 @@ int ObExprColumnConv::calc_result_typeN(ObExprResType &type,
         } else if (ob_is_user_defined_type(type.get_type())
             || ob_is_collection_sql_type(type.get_type())) { // if calc meta is udt, set calc udt id
           types[4].set_calc_accuracy(type.get_accuracy());
+        } else if (lib::is_mysql_mode() &&
+            ob_is_double_tc(types[4].get_type()) && ob_is_string_tc(type.get_type())) {
+          types[4].set_calc_accuracy(type.get_accuracy());
         }
       }
     }
@@ -402,7 +412,7 @@ int ObExprColumnConv::cg_expr(ObExprCGCtx &op_cg_ctx,
         if (!is_lob_storage(rt_expr.datum_meta_.type_)
             || GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_0) {
           rt_expr.eval_batch_func_ = column_convert_batch;
-          if (!is_lob_storage(rt_expr.datum_meta_.type_)) {
+          if (!is_lob_storage(rt_expr.datum_meta_.type_) || is_string_text_cast(rt_expr)) {
             rt_expr.eval_vector_func_ = column_convert_vector;
           }
         }
@@ -433,7 +443,8 @@ static OB_INLINE int column_convert_datum_accuracy_check(const ObExpr &expr,
     LOG_WARN("fail to check accuracy", K(ret), K(expr), K(warning));
     //compatible with old code
     if (OB_ERR_DATA_TOO_LONG == ret && lib::is_oracle_mode()
-        && ObExprColumnConv::PARAMS_COUNT_WITH_COLUMN_INFO == expr.arg_cnt_) {
+        && ObExprColumnConv::PARAMS_COUNT_WITH_COLUMN_INFO == expr.arg_cnt_
+        && !ctx.exec_ctx_.get_my_session()->is_diagnosis_enabled()) {
       ObString column_info_str;
       ObDatum *column_info = NULL;
       if (OB_FAIL(expr.args_[5]->eval(ctx, column_info))) {
@@ -488,7 +499,8 @@ static OB_INLINE int column_convert_vector_accuracy_check(const ObExpr &expr,
     LOG_WARN("fail to check accuracy", K(ret), K(expr), K(warning));
     //compatible with old code
     if (OB_ERR_DATA_TOO_LONG == ret && lib::is_oracle_mode()
-        && ObExprColumnConv::PARAMS_COUNT_WITH_COLUMN_INFO == expr.arg_cnt_) {
+        && ObExprColumnConv::PARAMS_COUNT_WITH_COLUMN_INFO == expr.arg_cnt_
+        && !ctx.exec_ctx_.get_my_session()->is_diagnosis_enabled()) {
       ObString column_info_str;
       ObDatum *column_info = NULL;
       ObEvalCtx::BatchInfoScopeGuard batch_info_guard(ctx);
@@ -721,6 +733,7 @@ int ObExprColumnConv::column_convert_batch(const ObExpr &expr,
     ObDatum *results = expr.locate_batch_datums(ctx);
     ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
     bool is_string_type = ob_is_string_type(out_type);
+    bool is_string2text = is_string_text_cast(expr);
     bool is_int_tc = ob_is_int_uint_tc(out_type);
     bool is_decimal_int_tc = ob_is_decimal_int_tc(out_type);
     ObAccuracy accuracy;
@@ -733,8 +746,13 @@ int ObExprColumnConv::column_convert_batch(const ObExpr &expr,
     }
     ObEvalCtx::BatchInfoScopeGuard batch_info_guard(ctx);
     batch_info_guard.set_batch_size(batch_size);
-    if (!is_lob_storage(out_type)) {
-      if (is_string_type
+    if (!is_lob_storage(out_type) || is_string2text) {
+      if (is_string2text
+          && OB_SUCCESS != (ret = inner_loop_for_convert_batch<PARAM_TC::TEXT_TC>(expr, ctx, skip, batch_size,
+                                                                             is_strict, max_accuracy_len, cast_mode,
+                                                                             eval_flags, vals, results,
+                                                                             batch_info_guard))) {
+      } else if (is_string_type
           && OB_SUCCESS != (ret = inner_loop_for_convert_batch<PARAM_TC::STRING_TC>(expr, ctx, skip, batch_size,
                                                                              is_strict, max_accuracy_len, cast_mode,
                                                                              eval_flags, vals, results,
@@ -816,8 +834,9 @@ int ObExprColumnConv::column_convert_batch(const ObExpr &expr,
                 }
               }
             }
+           int64_t ori_len = str.length();
            if (OB_FAIL(ret)) {
-           }  else if (!check_is_ascii(str)
+           }  else if (!storage::is_ascii_str(str.ptr(), str.length())
                         && OB_FAIL(string_collation_check(is_strict, out_cs_type, out_type, str))) {
               LOG_WARN("fail to check collation", K(ret), K(str), K(is_strict), K(expr));
             }
@@ -829,7 +848,9 @@ int ObExprColumnConv::column_convert_batch(const ObExpr &expr,
             const int64_t str_len_byte = static_cast<int64_t>(datum_for_check.len_);
             bool need_check_length = true;
             if (OB_FAIL(ret)) {
-            } else if (max_accuracy_len > 0 && str.length() < max_accuracy_len) {
+            } else if (ori_len == str.length()
+                       && max_accuracy_len > 0
+                       && str.length() < max_accuracy_len) {
               need_check_length = false;
               results[i].set_datum(datum_for_check);
             } else if (OB_FAIL(column_convert_datum_accuracy_check(expr, ctx, has_lob_header_for_check, results[i],
@@ -899,17 +920,13 @@ int ObExprColumnConv::calc_column_name_for_diagnosis(const ObExpr &expr,
         && OB_SUCCESS == expr.args_[5]->eval(ctx, column_info)) {
       ObString column_name(column_info->get_string().length(), column_info->get_string().ptr());
 
-      ObString tmp_str;
-      if (OB_FAIL(ob_write_string(diagnosis_manager.allocator_, column_name, tmp_str, true))) {
-        LOG_WARN("failed to write string", K(ret));
-      } else {
-        int64_t gap_cnt = diagnosis_manager.rets_.count() - diagnosis_manager.col_names_.count();
-        for (int64_t i = 0; OB_SUCC(ret) && i < gap_cnt; i++) {
-          if (OB_FAIL(diagnosis_manager.col_names_.push_back(tmp_str))) {
-            LOG_WARN("failed to push back column name into array", K(ret), K(tmp_str));
-          }
+      int64_t gap_cnt = diagnosis_manager.rets_.count() - diagnosis_manager.col_names_.count();
+      for (int64_t i = 0; OB_SUCC(ret) && i < gap_cnt; i++) {
+        if (OB_FAIL(diagnosis_manager.col_names_.push_back(column_name))) {
+          LOG_WARN("failed to push back column name into array", K(ret), K(column_name));
         }
       }
+
     }
   } else {
     // do nothing
@@ -937,6 +954,7 @@ int ObExprColumnConv::column_convert_vector(const ObExpr &expr,
   } else {
     ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
     bool is_string_type = ob_is_string_type(out_type);
+    bool is_string2text = is_string_text_cast(expr);
     bool is_int_tc = ob_is_int_uint_tc(out_type);
     bool is_decimal_int_tc = ob_is_decimal_int_tc(out_type);
     ObAccuracy accuracy;
@@ -949,8 +967,40 @@ int ObExprColumnConv::column_convert_vector(const ObExpr &expr,
     if (is_string_type) {
       accuracy.set_length_semantics(expr.datum_meta_.length_semantics_);
     }
-    if (!is_lob_storage(out_type)) {
-      if (is_string_type) {
+    if (!is_lob_storage(out_type) || is_string2text) {
+      if (is_string2text) {
+        if (VEC_DISCRETE == arg_format && VEC_DISCRETE == res_format) {
+          bool has_null = expr.args_[4]->get_vector(ctx)->has_null()
+                          && (static_cast<ObDiscreteBase *>
+                              (expr.args_[4]->get_vector(ctx))->get_nulls()->accumulate_bit_cnt(bound) != 0);
+          if (bound.get_all_rows_active()) {
+            if (has_null) {
+              ret = inner_loop_for_convert_vector<PARAM_TC::TEXT_TC, ObDiscreteFormat, ObDiscreteFormat, true, true>(expr, ctx, skip, bound,
+                                                                             is_strict, max_accuracy_len, cast_mode,
+                                                                             eval_flags);
+            } else {
+              ret = inner_loop_for_convert_vector<PARAM_TC::TEXT_TC, ObDiscreteFormat, ObDiscreteFormat, true, false>(expr, ctx, skip, bound,
+                                                                             is_strict, max_accuracy_len, cast_mode,
+                                                                             eval_flags);
+            }
+          } else {
+            ret = inner_loop_for_convert_vector<PARAM_TC::TEXT_TC, ObDiscreteFormat, ObDiscreteFormat, false, true>(expr, ctx, skip, bound,
+                                                                             is_strict, max_accuracy_len, cast_mode,
+                                                                             eval_flags);
+          }
+        } else if (VEC_UNIFORM == arg_format && VEC_UNIFORM == res_format) {
+          ret = inner_loop_for_convert_vector<PARAM_TC::TEXT_TC, ObUniformFormat<false>, ObUniformFormat<false>, false, true>(expr, ctx, skip, bound,
+                                                                             is_strict, max_accuracy_len, cast_mode,
+                                                                             eval_flags);
+        } else {
+          ret = inner_loop_for_convert_vector<PARAM_TC::TEXT_TC, ObVectorBase, ObVectorBase, false, true>(expr, ctx, skip, bound,
+                                                                             is_strict, max_accuracy_len, cast_mode,
+                                                                             eval_flags);
+        }
+        if (OB_FAIL(ret)) {
+          LOG_WARN("failed to convert batch", K(ret));
+        }
+      } else if (is_string_type) {
         if (VEC_DISCRETE == arg_format && VEC_DISCRETE == res_format) {
           bool has_null = expr.args_[4]->get_vector(ctx)->has_null()
                           && (static_cast<ObDiscreteBase *>
@@ -1220,6 +1270,7 @@ int ObExprColumnConv::inner_loop_for_convert_batch(const ObExpr &expr,
   int32_t int_bytes = 0;
   const ObDecimalInt *min_decint = nullptr, *max_decint = nullptr;
   common::ObPrecision precision = expr.datum_meta_.precision_;
+  const bool has_lob_header = expr.args_[4]->obj_meta_.has_lob_header();
   decint_cmp_fp cmp_fp;
   if (TC == PARAM_TC::DECIMAL_INT_TC) {
     min_decint = wide::ObDecimalIntConstValue::get_min_value(precision);
@@ -1237,16 +1288,46 @@ int ObExprColumnConv::inner_loop_for_convert_batch(const ObExpr &expr,
       batch_info_guard.set_batch_idx(i);
       if (TC == PARAM_TC::STRING_TC) {
         ObString str = vals[i].get_string();
-        if (!check_is_ascii(str)
+        if (!storage::is_ascii_str(str.ptr(), str.length())
             && OB_FAIL(string_collation_check(is_strict, out_cs_type, out_type, str))) {
           LOG_WARN("fail to check collation", K(ret), K(str), K(is_strict), K(expr));
         } else {
           vals[i].set_string(str);
         }
+      } else if (TC == PARAM_TC::TEXT_TC) {
+        ObString str = vals[i].get_string();
+        const char* origin_ptr = str.ptr();
+        int64_t origin_len = str.length();
+        if (! has_lob_header) { // tinytext
+        } else if (has_lob_header && vals[i].len_ != 0 && ! vals[i].get_lob_data().is_mem_loc_ && vals[i].get_lob_data().in_row_) {
+          const ObLobCommon& lob = vals[i].get_lob_data();
+          origin_ptr = lob.get_inrow_data_ptr();
+          origin_len = lob.get_byte_size(str.length());
+          str.assign_ptr(origin_ptr, origin_len);
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("should not reach here", K(ret), K(str));
+        }
+        if (OB_FAIL(ret)) {
+        }  else if (!storage::is_ascii_str(str.ptr(), str.length())
+                      && OB_FAIL(string_collation_check(is_strict, out_cs_type, out_type, str))) {
+            LOG_WARN("fail to check collation", K(ret), K(str), K(is_strict), K(expr));
+        } else if (origin_len != str.length()) {
+          if (has_lob_header) {
+            if (origin_ptr != str.ptr()) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("data memroy is changed", K(ret), K(i), KP(origin_ptr), K(origin_len), KP(str.ptr()), K(str.length()));
+            } else {
+              vals[i].set_string(vals[i].ptr_, sizeof(ObLobCommon) + str.length());
+            }
+          } else {
+            vals[i].set_string(str);
+          }
+        }
       }
       if (OB_FAIL(ret)) {
       } else if (TC == PARAM_TC::INT_TC
-                 || (TC == PARAM_TC::STRING_TC
+                 || ((TC == PARAM_TC::STRING_TC || TC == PARAM_TC::TEXT_TC)
                      && max_accuracy_len > 0
                      && vals[i].len_ < max_accuracy_len)) {
         results[i].set_datum(vals[i]);
@@ -1255,7 +1336,7 @@ int ObExprColumnConv::inner_loop_for_convert_batch(const ObExpr &expr,
                  && cmp_fp(vals[i].get_decimal_int(), max_decint) <= 0) {
         results[i].set_datum(vals[i]);
       } else if (OB_FAIL(column_convert_datum_accuracy_check(expr, ctx,
-                                                             false, results[i],
+                                                             has_lob_header, results[i],
                                                              cast_mode, vals[i]))) {
         LOG_WARN("fail do datum_accuracy_check for lob res", K(ret), K(expr));
       }
@@ -1291,6 +1372,7 @@ int ObExprColumnConv::inner_loop_for_convert_vector(const ObExpr &expr,
   int32_t int_bytes = 0;
   const ObDecimalInt *min_decint = nullptr, *max_decint = nullptr;
   common::ObPrecision precision = expr.datum_meta_.precision_;
+  const bool has_lob_header = expr.args_[4]->obj_meta_.has_lob_header();
   decint_cmp_fp cmp_fp;
   ResVec *res_vec = static_cast<ResVec *> (expr.get_vector(ctx));
   ArgVec *arg_vec = static_cast<ArgVec *> (expr.args_[4]->get_vector(ctx));
@@ -1313,16 +1395,46 @@ int ObExprColumnConv::inner_loop_for_convert_vector(const ObExpr &expr,
       if (TC == PARAM_TC::STRING_TC) {
         ObString str = arg_vec->get_string(i);
         int64_t orign_len = str.length();
-        if (!check_is_ascii(str)
+        if (!storage::is_ascii_str(str.ptr(), str.length())
             && OB_FAIL(string_collation_check(is_strict, out_cs_type, out_type, str))) {
           LOG_WARN("fail to check collation", K(i), K(bound), K(ret), K(str), K(is_strict), K(expr));
         } else if (orign_len != str.length()) {
           arg_vec->set_string(i, str);
         }
+      } else if (TC == PARAM_TC::TEXT_TC) {
+        ObString str = arg_vec->get_string(i);
+        const char* origin_ptr = str.ptr();
+        int64_t origin_len = str.length();
+        if (! has_lob_header) { // tinytext
+        } else if (has_lob_header && str.length() != 0 && ! arg_vec->get_lob_data(i).is_mem_loc_ && arg_vec->get_lob_data(i).in_row_) {
+          const ObLobCommon& lob = arg_vec->get_lob_data(i);
+          origin_ptr = lob.get_inrow_data_ptr();
+          origin_len = lob.get_byte_size(str.length());
+          str.assign_ptr(origin_ptr, origin_len);
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("should not reach here", K(ret), K(str));
+        }
+        if (OB_FAIL(ret)) {
+        }  else if (!storage::is_ascii_str(str.ptr(), str.length())
+                      && OB_FAIL(string_collation_check(is_strict, out_cs_type, out_type, str))) {
+            LOG_WARN("fail to check collation", K(ret), K(str), K(is_strict), K(expr));
+        } else if (origin_len != str.length()) {
+          if (has_lob_header) {
+            if (origin_ptr != str.ptr()) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("data memroy is changed", K(ret), K(i), KP(origin_ptr), K(origin_len), KP(str.ptr()), K(str.length()));
+            } else {
+              arg_vec->set_string(i, arg_vec->get_string(i).ptr(), sizeof(ObLobCommon) + str.length());
+            }
+          } else {
+            arg_vec->set_string(i, str);
+          }
+        }
       }
       if (OB_FAIL(ret)) {
       } else if (TC == PARAM_TC::INT_TC
-                 || (TC == PARAM_TC::STRING_TC
+                 || ((TC == PARAM_TC::STRING_TC || TC == PARAM_TC::TEXT_TC)
                      && max_accuracy_len > 0
                      && arg_vec->get_length(i) < max_accuracy_len)) {
         res_vec->set_payload_shallow(i, arg_vec->get_payload(i), arg_vec->get_length(i));
@@ -1331,7 +1443,7 @@ int ObExprColumnConv::inner_loop_for_convert_vector(const ObExpr &expr,
                  && cmp_fp(arg_vec->get_decimal_int(i), max_decint) <= 0) {
         res_vec->set_payload_shallow(i, arg_vec->get_payload(i), arg_vec->get_length(i));
       } else if (OB_FAIL(column_convert_vector_accuracy_check(expr, ctx, skip,
-                                                             false, cast_mode,
+                                                             has_lob_header, cast_mode,
                                                              i, *arg_vec, *res_vec))) {
         LOG_WARN("fail do datum_accuracy_check for lob res", K(ret), K(expr));
       }

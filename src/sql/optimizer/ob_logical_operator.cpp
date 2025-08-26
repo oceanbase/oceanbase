@@ -3668,8 +3668,7 @@ void ObLogicalOperator::do_project_pruning(ObIArray<ObRawExpr *> &exprs, PPDeps 
   int64_t j = 0;
   LOG_TRACE("start to do project pruning", K(type_), K(exprs), K(deps));
   for (i = 0, j = 0; i < exprs.count(); i++) {
-    if (deps.has_member(static_cast<int32_t>(i))
-        || T_ORA_ROWSCN == exprs.at(i)->get_expr_type()) {
+    if (deps.has_member(static_cast<int32_t>(i))) {
       exprs.at(j++) = exprs.at(i);
     } else {
       LOG_TRACE("project pruning remove expr", K(exprs.at(i)), K(*exprs.at(i)),
@@ -3955,6 +3954,7 @@ int ObLogicalOperator::explain_print_partitions(ObTablePartitionInfo &table_part
     LOG_WARN("fail to get index schema", K(ret), K(ref_table_id), K(table_id));
   }
   int64_t N = partitions.count();
+  ObArray<int64_t> table_part_ids;
   for (int64_t i = 0; OB_SUCC(ret) && i < N; i++) {
     ObLogicalOperator::PartInfo part_info;
     const ObOptTabletLoc &part_loc = partitions.at(i).get_partition_location();
@@ -3987,17 +3987,27 @@ int ObLogicalOperator::explain_print_partitions(ObTablePartitionInfo &table_part
           }
         }
         OZ(part_infos.push_back(part_info));
+        LOG_TRACE("explain print partition", K(tablet_id), K(part_info), K(ref_table_id));
       } else {
-        OZ(table_schema->get_part_idx_by_tablet(tablet_id, part_info.part_id_, part_info.subpart_id_));
-        OZ(part_infos.push_back(part_info));
+        OZ(table_part_ids.push_back(part_loc.get_partition_id()));
       }
-      // if (OB_FAIL(ret) || part_info.part_id_ == OB_INVALID_INDEX) {
-      //   //do nothing
-      // } else if (!table_schema->is_external_table() || common::ObTabletID::INVALID_TABLET_ID == tablet_id.id()) {
-      //   //do nothing
-      // } else {
-      // }
-      LOG_TRACE("explain print partition", K(tablet_id), K(part_info), K(ref_table_id));
+    }
+  }
+  if (OB_SUCC(ret) && table_part_ids.count() > 0) {
+    ObArray<int64_t> part_idx;
+    ObArray<int64_t> subpart_idx;
+    if (OB_FAIL(table_schema->get_part_idx_by_part_id(table_part_ids, part_idx, subpart_idx))) {
+      LOG_WARN("failed to get part idx", K(ret));
+    } else if (OB_UNLIKELY(part_idx.count() != subpart_idx.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected part idx", K(part_idx), K(subpart_idx));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < part_idx.count(); ++i) {
+      ObLogicalOperator::PartInfo part_info;
+      part_info.part_id_ = part_idx.at(i);
+      part_info.subpart_id_ = subpart_idx.at(i);
+      OZ(part_infos.push_back(part_info));
+      LOG_TRACE("explain print partition", K(part_info), K(ref_table_id));
     }
   }
   if (OB_SUCC(ret)) {
@@ -4377,7 +4387,9 @@ int ObLogicalOperator::allocate_granule_nodes_above(AllocGIContext &ctx)
         gi_op->add_flag(GI_PARTITION_WISE);
       }
       if (LOG_TABLE_SCAN == get_type()) {
-        if (static_cast<ObLogTableScan*>(this)->is_text_retrieval_scan() || static_cast<ObLogTableScan*>(this)->is_vec_idx_scan_post_filter()) {
+        if (static_cast<ObLogTableScan*>(this)->is_text_retrieval_scan() ||
+            static_cast<ObLogTableScan*>(this)->is_vec_idx_scan_post_filter() ||
+            static_cast<ObLogTableScan*>(this)->use_index_merge()) {
           gi_op->add_flag(GI_FORCE_PARTITION_GRANULE);
         }
         if (static_cast<ObLogTableScan *>(this)->get_join_filter_info().is_inited_) {
@@ -5354,6 +5366,10 @@ int ObLogicalOperator::check_sort_key_can_pushdown_to_tsc_detail(
             LOG_WARN("failed to has_exec_param");
           } else if (has_exec_param) {
             OPT_TRACE("[TopN Filter] can not pushdown to tsc with exec param");
+          } else if (scan->use_index_merge()) {
+            OPT_TRACE("[TopN Filter] can not pushdown to index merge table scan");
+          } else if (OB_NOT_NULL(scan->get_limit_expr())) {
+            OPT_TRACE("[TopN Filter] can not pushdown tsc with limit");
           } else {
             scan_op = op;
             find_table_scan = true;
@@ -5662,6 +5678,8 @@ int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo
       && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_3_0) {
     can_join_filter_material = true;
   }
+  bool enable_runtime_filter_adaptive_apply =
+      get_plan()->get_optimizer_context().enable_runtime_filter_adaptive_apply();
   int64_t last_valid_join_filter_info_idx = -1;
   if (OB_SUCC(ret)) {
     for (int i = 0; i < infos.count() && OB_SUCC(ret); ++i) {
@@ -5770,9 +5788,16 @@ int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo
                                                            node, info))) {
           LOG_WARN("failed to prepare_rf_query_range_info");
         }
-        if (OB_SUCC(ret) && LOG_TABLE_SCAN == node->get_type()) {
+        if (OB_FAIL(ret)) {
+        } else if (!enable_runtime_filter_adaptive_apply) {
+          join_filter_use->set_runtime_filter_adaptive_apply(false);
+        } else if (LOG_TABLE_SCAN == node->get_type()) {
           ObLogTableScan *scan = static_cast<ObLogTableScan*>(node);
           scan->set_use_column_store(info.use_column_store_);
+          if (scan->get_scan_order() == common::ObQueryFlag::ScanOrder::NoOrder) {
+            // for table engine delete insert, we should disable runtime filter adaptive apply
+            join_filter_use->set_runtime_filter_adaptive_apply(false);
+          }
         }
 
         if (OB_SUCC(ret) && can_join_filter_material) {

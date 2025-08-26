@@ -292,48 +292,60 @@ int64_t ObTxCallbackList::concat_callbacks(ObTxCallbackList &that)
 
 int ObTxCallbackList::callback_(ObITxCallbackFunctor &functor, const LockState lock_state)
 {
-  return callback_(functor, get_guard(), get_guard(), lock_state);
+  int ret = OB_SUCCESS;
+  if (functor.is_reverse()) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "not support reverse iter", K(ret));
+  } else if (!empty()) {
+    ObITransCallback *start = get_guard()->get_next();
+    ObITransCallback *end = get_guard();
+    ret = callback_(functor, start, end, false, lock_state);
+  }
+  return ret;
 }
 
 int ObTxCallbackList::callback_(ObITxCallbackFunctor &functor,
                                 const ObCallbackScope &callbacks,
                                 const LockState lock_state)
 {
-  ObITransCallback *start = (ObITransCallback *)*(callbacks.start_);
-  ObITransCallback *end = (ObITransCallback *)*(callbacks.end_);
+  int ret = OB_SUCCESS;
   if (functor.is_reverse()) {
-    return callback_(functor, start->get_next(), end->get_prev(), lock_state);
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "reverse scan not support", K(ret));
   } else {
-    return callback_(functor, start->get_prev(), end->get_next(), lock_state);
+    ret = callback_(functor, *callbacks.start_, *callbacks.end_, true, lock_state);
   }
+  return ret;
 }
 
+//#pragma clang optimize off
 int ObTxCallbackList::callback_(ObITxCallbackFunctor &functor,
-                                ObITransCallback *start /*exclusive*/,
-                                ObITransCallback *end /*exclusive*/,
+                                ObITransCallback *start /*inclusive*/,
+                                ObITransCallback *end,
+                                const bool end_inclusive,
                                 const LockState lock_state)
 {
   int ret = OB_SUCCESS;
   int64_t traverse_count = 0;
   int64_t remove_count = 0;
   ObITransCallback *next = nullptr;
-  bool iter_end = false;
+  bool iter_end = !end_inclusive && end == start;
   const bool is_reverse = functor.is_reverse();
-  for (ObITransCallback *iter = (is_reverse ? start->get_prev() : start->get_next());
-       OB_SUCC(ret) && !iter_end && iter != NULL && iter != end;
-       iter = next) {
+  STORAGE_LOG(TRACE, "callback", K(start), K(end));
+  for (ObITransCallback *iter = start; OB_SUCC(ret) && !iter_end; iter = next) {
     functor.refresh();
     if (OB_UNLIKELY(iter->get_scn().is_min())) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "callback with min_scn", K(ret), KPC(iter), KPC(this));
 #ifdef ENABLE_DEBUG_LOG
-      usleep(5000);
+      ob_usleep(5000);
       ob_abort();
 #endif
     } else if (functor.is_iter_end(iter)) {
       iter_end = true;
     } else {
       next = (is_reverse ? iter->get_prev() : iter->get_next());
+      iter_end = end_inclusive ? iter == end : next == end;
       if (OB_FAIL(functor(iter))) {
         // don't print log, print it in functor
       } else if (functor.need_remove_callback()) {
@@ -348,7 +360,7 @@ int ObTxCallbackList::callback_(ObITxCallbackFunctor &functor,
           ret = OB_ERR_UNEXPECTED;
           TRANS_LOG(ERROR, "remove parallel callback while serial part not all replayed", K(ret), KPC(iter), KPC(this));
 #ifdef ENABLE_DEBUG_LOG
-          usleep(5000);
+          ob_usleep(5000);
           ob_abort();
 #endif
         } else {
@@ -358,19 +370,14 @@ int ObTxCallbackList::callback_(ObITxCallbackFunctor &functor,
           }
           // the del operation must serialize with append operation
           // if it is operating on the list tail
-          bool deleted = false;
-          if (next == end) {
-            if (!lock_state.APPEND_LOCKED_) {
-              LockGuard guard(*this, LOCK_MODE::LOCK_APPEND);
-              ret = iter->del();
-              deleted = true;
-            } else {
-              ret = iter->del();
-              deleted = true;
-            }
+          if (iter_end && !lock_state.APPEND_LOCKED_) {
+            LockGuard guard(*this, LOCK_MODE::LOCK_APPEND);
+            ret = iter->del();
+          } else {
+            ret = iter->del();
           }
-          if ((deleted && OB_FAIL(ret)) || (!deleted && OB_FAIL(iter->del()))) {
-            TRANS_LOG(ERROR, "remove callback failed", K(ret), KPC(iter), K(deleted));
+          if (OB_FAIL(ret)) {
+            TRANS_LOG(ERROR, "remove callback failed", K(ret), KPC(iter));
           } else {
             if (log_cursor_ == iter) {
               set_log_cursor_(next);
@@ -405,6 +412,7 @@ int ObTxCallbackList::callback_(ObITxCallbackFunctor &functor,
   ATOMIC_AAF(&length_, -remove_count);
   return ret;
 }
+//#pragma clang optimize on
 
 int64_t ObTxCallbackList::calc_need_remove_count_for_fast_commit_()
 {
@@ -424,27 +432,31 @@ int ObTxCallbackList::remove_callbacks_for_fast_commit(const share::SCN stop_scn
   LockGuard guard(*this, LOCK_MODE::TRY_LOCK_ITERATE);
   if (guard.is_locked()) {
     int64_t remove_cnt = calc_need_remove_count_for_fast_commit_();
-    share::SCN right_bound;
-    if (!stop_scn.is_valid()) {
-      // unspecified stop_scn, used callback_list's sync_scn_
-      right_bound = sync_scn_;
-    } else if (!sync_scn_.is_min()) {
-      // specified stop_scn, and callback_list's sync_scn_ is valid
-      // use mininum
-      right_bound = SCN::min(stop_scn, sync_scn_);
+    if (remove_cnt <= 0) {
+      // no callback can removed
     } else {
-      // callback_list's sync_scn is invalid, use stop_scn
-      right_bound = stop_scn;
-    }
-    ObRemoveCallbacksForFastCommitFunctor functor(remove_cnt, right_bound);
-    if (!is_skip_checksum_()) {
-      functor.set_checksumer(checksum_scn_, &batch_checksum_);
-    }
-    if (OB_FAIL(callback_(functor, get_guard(), log_cursor_, guard.state_))) {
-      TRANS_LOG(ERROR, "remove callbacks for fast commit wont report error", K(ret), K(functor));
-    } else {
-      callback_mgr_.add_fast_commit_callback_remove_cnt(functor.get_remove_cnt());
-      ensure_checksum_(functor.get_checksum_last_scn());
+      share::SCN right_bound;
+      if (!stop_scn.is_valid()) {
+        // unspecified stop_scn, used callback_list's sync_scn_
+        right_bound = sync_scn_;
+      } else if (!sync_scn_.is_min()) {
+        // specified stop_scn, and callback_list's sync_scn_ is valid
+        // use mininum
+        right_bound = SCN::min(stop_scn, sync_scn_);
+      } else {
+        // callback_list's sync_scn is invalid, use stop_scn
+        right_bound = stop_scn;
+      }
+      ObRemoveCallbacksForFastCommitFunctor functor(remove_cnt, right_bound);
+      if (!is_skip_checksum_()) {
+        functor.set_checksumer(checksum_scn_, &batch_checksum_);
+      }
+      if (OB_FAIL(callback_(functor, get_guard()->get_next(), get_log_cursor(), false, guard.state_))) {
+        TRANS_LOG(ERROR, "remove callbacks for fast commit wont report error", K(ret), K(functor));
+      } else {
+        callback_mgr_.add_fast_commit_callback_remove_cnt(functor.get_remove_cnt());
+        ensure_checksum_(functor.get_checksum_last_scn());
+      }
     }
   }
   return ret;
@@ -568,33 +580,9 @@ int ObTxCallbackList::remove_callbacks_for_rollback_to(const transaction::ObTxSE
   return ret;
 }
 
-int ObTxCallbackList::reverse_search_callback_by_seq_no(const transaction::ObTxSEQ seq_no,
-                                                        ObITransCallback *search_res)
-{
-  int ret = OB_SUCCESS;
-
-  ObSearchCallbackWCondFunctor functor(
-    [seq_no](ObITransCallback *callback) -> bool {
-      if (callback->get_seq_no() <= seq_no) {
-        return true;
-      } else {
-        return false;
-      }
-    }, true/*is_reverse*/);
-
-  LockGuard guard(*this, LOCK_MODE::LOCK_ALL);
-  if (OB_FAIL(callback_(functor, guard.state_))) {
-    TRANS_LOG(ERROR, "search callbacks wont report error", K(ret), K(functor));
-  } else {
-    search_res = functor.get_search_result();
-  }
-
-  return ret;
-}
-
 // caller must has hold log_latch_
 // fill log from log_cursor -> end
-__attribute__((noinline))
+//#pragma clang optimize off
 int ObTxCallbackList::fill_log(ObITransCallback* log_cursor, ObTxFillRedoCtx &ctx, ObITxFillRedoFunctor &functor)
 {
   // the remove callback operations is either remove logged callback or unlogged cabback
@@ -609,15 +597,23 @@ int ObTxCallbackList::fill_log(ObITransCallback* log_cursor, ObTxFillRedoCtx &ct
   } else {
     functor.reset();
     LockState lock_state;
-    ret = callback_(functor, log_cursor->get_prev(), &head_, lock_state);
-    ctx.helper_->max_seq_no_ = MAX(functor.get_max_seq_no(), ctx.helper_->max_seq_no_);
-    ctx.helper_->data_size_ += functor.get_data_size();
-    ctx.callback_scope_->data_size_ += functor.get_data_size();
+    if (!log_cursor->need_submit_log()) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(ERROR, "log cursor need not submit log", K(ret), KPC(log_cursor));
+#ifdef ENABLE_DEBUG_LOG
+      ob_abort();
+#endif
+    } else {
+      ret = callback_(functor, log_cursor, get_guard(), false, lock_state);
+      ctx.helper_->max_seq_no_ = MAX(functor.get_max_seq_no(), ctx.helper_->max_seq_no_);
+      ctx.helper_->data_size_ += functor.get_data_size();
+      ctx.callback_scope_->data_size_ += functor.get_data_size();
+    }
   }
   TRANS_LOG(TRACE, "[FILL LOG] list_fill_log done", K(ret), K(log_cursor));
   return ret;
 }
-
+//#pragma clang optimize on
 int ObTxCallbackList::submit_log_succ(const ObCallbackScope &callbacks)
 {
   int ret = OB_SUCCESS;
@@ -678,7 +674,7 @@ int ObTxCallbackList::clean_unlog_callbacks(int64_t &removed_cnt, common::ObFunc
   LockGuard guard(*this, LOCK_MODE::LOCK_ALL);
   if (log_cursor_ == &head_) {
     // empty set, all were logged
-  } else if (OB_FAIL(callback_(functor, log_cursor_->get_prev(), &head_, guard.state_))) {
+  } else if (OB_FAIL(callback_(functor, log_cursor_, get_guard(), false,guard.state_))) {
     TRANS_LOG(WARN, "clean unlog callbacks failed", K(ret), K(functor));
   } else {
     TRANS_LOG(INFO, "clean unlog callbacks", K(functor), K(*this));
@@ -858,20 +854,22 @@ int ObTxCallbackList::replay_fail(const SCN scn, const bool serial_replay)
   LockGuard guard(*this, LOCK_MODE::LOCK_ALL);
   //
   // for replay fail of serial log, if parallel replay has happened,
-  // must reverse traversal from parallel_start_pos_.prev_
+  // must *reverse* traversal from parallel_start_pos_.prev_
   //
   // head_ --> ... -> parallel_start_pos_ -> ... -> head_
   //
   ObITransCallback *start_pos = NULL;
   ObITransCallback *end_pos = NULL;
+  bool end_inclusive = false;
   if (serial_replay) {
-    start_pos = parallel_start_pos_ ?: get_guard();
+    start_pos = parallel_start_pos_ ? parallel_start_pos_->get_prev() : get_guard()->get_prev();
     end_pos = get_guard();
   } else {
-    start_pos = get_guard();
-    end_pos = parallel_start_pos_ ? parallel_start_pos_->get_prev() : get_guard();
+    start_pos = get_guard()->get_prev();
+    end_pos = parallel_start_pos_ ? parallel_start_pos_ : get_guard()->get_next();
+    end_inclusive = true;
   }
-  if (OB_FAIL(callback_(functor, start_pos, end_pos, guard.state_))) {
+  if (OB_FAIL(callback_(functor, start_pos, end_pos, end_inclusive, guard.state_))) {
     TRANS_LOG(ERROR, "replay fail failed", K(ret), K(functor));
   } else {
     TRANS_LOG(INFO, "replay log failed, revert its callbacks done",

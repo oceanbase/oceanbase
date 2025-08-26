@@ -129,10 +129,9 @@ int ObMultipleMultiScanMerge::inner_calc_scan_range(const ObIArray<blocksstable:
             range.change_boundary(curr_rowkey, is_reverse_scan, calc_di_base_range);
             // As memtable will use reverse scan when start rowkey is greater than end rowkey instead of
             // empty result, make the range correct
-            if (access_ctx_->query_flag_.is_reverse_scan() && curr_rowkey_.is_min_rowkey())
-            {
+            if (access_ctx_->query_flag_.is_reverse_scan() && curr_rowkey.is_min_rowkey()) {
               range.start_key_.set_min_rowkey();
-            } else if (curr_rowkey_.is_max_rowkey()) {
+            } else if (!access_ctx_->query_flag_.is_reverse_scan() && curr_rowkey.is_max_rowkey()) {
               range.end_key_.set_max_rowkey();
             }
             if (OB_FAIL(cow_ranges.push_back(range))) {
@@ -174,10 +173,10 @@ int ObMultipleMultiScanMerge::construct_iters()
   } else if (OB_UNLIKELY(iters_.count() > 0 && iters_.count() + di_base_iters_.count() != tables_.count())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "iter cnt is not equal to table cnt", K(ret), "iter cnt", iters_.count(),
-        "di_base_iter cnt", di_base_iters_.count(), "table cnt", tables_.count(), KP(this));
+                "di_base_iter cnt", di_base_iters_.count(), "table cnt", tables_.count(), KP(this));
   } else if (tables_.count() > 0) {
     STORAGE_LOG(TRACE, "construct iters begin", K(tables_.count()), K(iters_.count()), K(di_base_iters_.count()),
-                K(access_param_->iter_param_.is_delete_insert_), KPC_(ranges), KPC_(di_base_ranges), K_(tables), KPC_(access_param));
+                K(access_param_->iter_param_.is_delete_insert_), KPC_(ranges), KPC_(di_base_ranges), K_(access_ctx_->trans_version_range), K_(tables), KPC_(access_param));
     ObITable *table = NULL;
     ObStoreRowIterator *iter = NULL;
     const ObTableIterParam *iter_param = NULL;

@@ -618,10 +618,6 @@ public:
   }
   virtual ~ObTableLocation() { reset(); }
 
-  ObTableLocation(const ObTableLocation &other);
-
-  ObTableLocation &operator=(const ObTableLocation &other);
-
   int assign(const ObTableLocation &other);
 
   void reset();
@@ -657,7 +653,8 @@ public:
            const common::ObDataTypeCastParams &dtc_params,
            const bool is_dml_table,
            common::ObIArray<ObRawExpr*> *sort_exprs = NULL);
-  int init(const share::schema::ObTableSchema *table_schema,
+  int init(ObSchemaGetterGuard &schema_guard,
+           const share::schema::ObTableSchema *table_schema,
            const ObDMLStmt &stmt,
            ObExecContext *exec_ctx,
            const common::ObIArray<ObRawExpr*> &filter_exprs,
@@ -1276,6 +1273,8 @@ public:
   {
     return part_hint_ids_;
   }
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObTableLocation);
 private:
   bool inited_;
   bool is_partitioned_;

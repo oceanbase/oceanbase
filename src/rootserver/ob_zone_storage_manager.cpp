@@ -269,6 +269,10 @@ int ObZoneStorageManagerBase::add_storage(const ObString &storage_path, const Ob
       }
     }
   }
+
+  if (OB_INVALID_BACKUP_DEST == ret) {
+    ret = OB_INVALID_STORAGE_DEST;
+  }
   return ret;
 }
 
@@ -514,6 +518,10 @@ int ObZoneStorageManagerBase::alter_storage(const ObString &storage_path, const 
         ROOTSERVICE_EVENT_ADD("storage", "alter storage attribute", "path", storage_path, "wait_type", wait_type, "attribute", attribute);
       }
     }
+  }
+
+  if (OB_INVALID_BACKUP_DEST == ret) {
+    ret = OB_INVALID_STORAGE_DEST;
   }
   return ret;
 }

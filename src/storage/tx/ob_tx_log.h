@@ -95,6 +95,8 @@ enum class ObTxLogType : int64_t
   TX_START_WORKING_LOG = 0x100000,
   // BigSegment log
   TX_BIG_SEGMENT_LOG = 0x200000,
+  // direct load inc major
+  TX_DIRECT_LOAD_INC_MAJOR_LOG = 0x400000,
   TX_LOG_TYPE_LIMIT
 };
 

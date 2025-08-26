@@ -35,7 +35,6 @@ public:
   TO_STRING_KV(K_(valid),
                K_(is_empty_shell),
                K_(has_transfer_table),
-               K_(has_next_tablet),
                K_(has_nested_table),
                K_(initial_state));
 
@@ -47,10 +46,9 @@ public:
       uint64_t valid_              : 1; // valid_ = true means attr is filled
       uint64_t is_empty_shell_     : 1;
       uint64_t has_transfer_table_ : 1;
-      uint64_t has_next_tablet_    : 1;
       uint64_t has_nested_table_   : 1;
       uint64_t initial_state_      : 1;
-      uint64_t reserved_           : 58;
+      uint64_t reserved_           : 59;
     };
   };
 };
@@ -72,12 +70,12 @@ public:
     auto_part_size_ = OB_INVALID_SIZE;
     tablet_max_checkpoint_scn_ = share::SCN::invalid_scn();
     ss_change_version_ = share::SCN::min_scn();
+    last_match_tablet_meta_version_ = 0;
     notify_ss_change_version_ = share::SCN::min_scn();
   }
   bool is_valid() const { return iter_attr_.valid_; }
   bool is_empty_shell() const { return iter_attr_.is_empty_shell_; }
   bool has_transfer_table() const { return iter_attr_.has_transfer_table_; }
-  bool has_next_tablet() const { return iter_attr_.has_next_tablet_; }
   bool has_nested_table() const { return iter_attr_.has_nested_table_; }
   bool initial_state() const { return iter_attr_.initial_state_; }
   void refresh_cache(
@@ -96,11 +94,12 @@ public:
                K_(ss_public_sstable_occupy_size),
                K_(backup_bytes),
                K_(ss_change_version),
+               K_(last_match_tablet_meta_version),
                K_(auto_part_size),
                K_(notify_ss_change_version),
                K_(tablet_max_checkpoint_scn));
 
-  OB_UNIS_VERSION_V(1);
+  OB_UNIS_VERSION(1);
 public:
   ObTabletFastIterAttr iter_attr_;
   int64_t ha_status_;
@@ -117,6 +116,7 @@ public:
   int64_t ss_public_sstable_occupy_size_;
   int64_t backup_bytes_;
   share::SCN ss_change_version_; // 8B
+  int64_t last_match_tablet_meta_version_; // 8B
 
   // =================== ATTENTION !!! ======================
   // The following fields do not need to be persisted
@@ -150,7 +150,6 @@ public:
   bool is_valid() const { return attr_.is_valid() && key_.is_valid() && addr_.is_valid(); }
   bool has_transfer_table() const { return attr_.has_transfer_table(); }
   bool is_empty_shell() const { return attr_.is_empty_shell(); }
-  bool has_next_tablet() const { return attr_.has_next_tablet(); }
   bool has_nested_table() const { return attr_.has_nested_table(); }
   int64_t get_required_size() const { return attr_.all_sstable_data_required_size_; }
   int64_t get_occupy_size() const { return attr_.all_sstable_data_occupy_size_; }

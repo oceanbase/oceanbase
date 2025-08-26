@@ -224,7 +224,7 @@ int ObPxSubCoord::setup_gi_op_input(ObExecContext &ctx,
         } else {
           ObGIOpInput *gi_input = static_cast<ObGIOpInput*>(kit->input_);
           if (OB_FAIL(sqc_ctx.gi_pump_.init_pump_args(&ctx, scan_ops, tablets_array,
-              sqc_ctx.partitions_info_, sqc.get_access_external_table_files(),
+              sqc_ctx.px_tablets_info_, sqc.get_access_external_table_files(),
               dml_op, sqc.get_task_count(),
               gi_op->get_tablet_size(), gi_op->get_gi_flags(), sqc.get_locations_order(),
               gi_op->id_))) {

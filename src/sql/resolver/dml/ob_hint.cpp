@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SQL_RESV
 #include "ob_hint.h"
 #include "sql/optimizer/ob_log_plan.h"
+#include "sql/resolver/expr/ob_raw_expr.h"
 
 namespace oceanbase
 {
@@ -873,6 +874,8 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
     case ENABLE_PX_ORDERED_COORD:
     case ENABLE_TOPN_RUNTIME_FILTER:
     case DISABLE_GTT_SESSION_ISOLATION:
+    case ENABLE_RUNTIME_FILTER_ADAPTIVE_APPLY:
+    case EXTENDED_SQL_PLAN_MONITOR_METRICS:
     case PRESERVE_ORDER_FOR_GROUPBY: {
       is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
                                       || 0 == val.get_varchar().case_compare("false"));
@@ -1030,7 +1033,18 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
       is_valid = val.is_int() && val.get_int() >= 0 && val.get_int() <= 4;
       break;
     }
+    case ENABLE_INDEX_MERGE: {
+      is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
+                                      || 0 == val.get_varchar().case_compare("false"));
+      break;
+    }
 
+    case APPROX_COUNT_DISTINCT_PRECISION: {
+      is_valid = val.is_int()
+                 && val.get_int() >= 4
+                 && val.get_int() <= 16;
+      break;
+    }
     default:
       LOG_TRACE("invalid opt param val", K(param_type), K(val));
       break;
@@ -2473,6 +2487,8 @@ int ObJoinHint::assign(const ObJoinHint &other)
     LOG_WARN("fail to assign table", K(ret));
   } else if (OB_FAIL(ObOptHint::assign(other))) {
     LOG_WARN("fail to assign hint", K(ret));
+  } else {
+    parallel_ = other.parallel_;
   }
   return ret;
 }
@@ -2496,6 +2512,9 @@ int ObJoinHint::print_hint_desc(PlanText &plan_text) const
   } else if (T_PQ_DISTRIBUTE == hint_type_ && NULL != algo_str
              && OB_FAIL(BUF_PRINTF(" %s", algo_str))) {
     LOG_WARN("failed to print dist algo", K(ret));
+  } else if (ObGlobalHint::UNSET_PARALLEL < parallel_ &&
+             OB_FAIL(BUF_PRINTF(" %ld", parallel_))) {
+    LOG_WARN("fail to print parallel", K(ret));
   }
   return ret;
 }
@@ -2533,6 +2552,7 @@ const char *ObJoinHint::get_dist_algo_str(DistAlgo dist_algo)
     case DistAlgo::DIST_NONE_ALL:           return  "NONE ALL";
     case DistAlgo::DIST_ALL_NONE:           return  "ALL NONE";
     case DistAlgo::DIST_RANDOM_ALL:         return  "RANDOM ALL";
+    case DistAlgo::DIST_RANDOM_BROADCAST:     return  "RANDOM BROADCAST";
     case DistAlgo::DIST_HASH_ALL:           return  "HASH ALL";
     case DistAlgo::DIST_HASH_HASH_LOCAL:    return "HASH_LOCAL HASH_LOCAL";
     case DistAlgo::DIST_PARTITION_HASH_LOCAL:    return "PARTITION HASH_LOCAL";

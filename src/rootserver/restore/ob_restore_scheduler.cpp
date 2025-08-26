@@ -397,6 +397,10 @@ int ObRestoreScheduler::check_tenant_can_restore_(const uint64_t tenant_id)
 //restore pre :modify parameters
 int ObRestoreScheduler::restore_pre(const ObPhysicalRestoreJob &job_info)
 {
+#ifdef ERRSIM
+  ROOTSERVICE_EVENT_ADD("physical_restore", "restore_pre", "tenant_id", job_info.get_tenant_id());
+  DEBUG_SYNC(BEFORE_RESTORE_PRE);
+#endif
   int ret = OB_SUCCESS;
   bool is_sys_ready = true;
   if (!inited_) {

@@ -19,6 +19,7 @@
 #include "sql/das/ob_das_dml_vec_iter.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "observer/omt/ob_tenant_srs.h"
+#include "storage/tx/ob_trans_service.h"
 
 using namespace oceanbase::common;
 
@@ -322,15 +323,15 @@ int ObDASDomainUtils::build_ft_doc_word_infos(
     ret = OB_ITER_END;
   } else if (OB_FAIL(ft_word_map.create(ft_word_bkt_cnt, common::ObMemAttr(MTL_ID(), "FTWordMap")))) {
     LOG_WARN("fail to create ft word map", K(ret), K(ft_word_bkt_cnt));
-  } else if (OB_FAIL(segment_and_calc_word_count(allocator, helper, ft_obj_meta.get_collation_type(),
-          fulltext, doc_length, ft_word_map))) {
+  } else if (OB_FAIL(segment_and_calc_word_count(allocator, helper, ft_obj_meta, fulltext, doc_length, ft_word_map))) {
     LOG_WARN("fail to segment and calculate word count", K(ret), KPC(helper),
         K(ft_obj_meta.get_collation_type()), K(fulltext));
   } else if (0 == ft_word_map.size()) {
     ret = OB_ITER_END;
-  } else if (OB_ISNULL(rows_buf = reinterpret_cast<char *>(allocator.alloc(ft_word_map.size() * sizeof(blocksstable::ObDatumRow))))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to alloc memory for full text index rows buffer", K(ret));
+  } else if (OB_ISNULL(rows_buf = reinterpret_cast<char *>
+                           (allocator.alloc(ft_word_map.size() * sizeof(blocksstable::ObDatumRow))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc memory for full text index rows buffer", K(ret));
   } else {
     int64_t i = 0;
     rows = new (rows_buf) blocksstable::ObDatumRow[ft_word_map.size()];
@@ -349,7 +350,7 @@ int ObDASDomainUtils::build_ft_doc_word_infos(
         const int64_t doc_id_idx = is_fts_index_aux ? 1 : 0;
         const int64_t word_cnt_idx = 2;
         const int64_t doc_len_idx = 3;
-        rows[i].storage_datums_[word_idx].set_string(ft_word.get_word());
+        rows[i].storage_datums_[word_idx].set_datum(ft_word.get_word());
         rows[i].storage_datums_[doc_id_idx].set_string(doc_id);
         rows[i].storage_datums_[word_cnt_idx].set_uint(word_cnt);
         rows[i].storage_datums_[doc_len_idx].set_uint(doc_length);
@@ -372,19 +373,20 @@ int ObDASDomainUtils::build_ft_doc_word_infos(
 /*static*/ int ObDASDomainUtils::segment_and_calc_word_count(
     common::ObIAllocator &allocator,
     storage::ObFTParseHelper *helper,
-    const common::ObCollationType &type,
+    const common::ObObjMeta &meta,
     const ObString &fulltext,
     int64_t &doc_length,
     ObFTWordMap &words_count)
 {
   int ret = OB_SUCCESS;
+  ObCollationType type = meta.get_collation_type();
   if (OB_ISNULL(helper)
       || OB_UNLIKELY(ObCollationType::CS_TYPE_INVALID == type
                   || ObCollationType::CS_TYPE_PINYIN_BEGIN_MARK <= type)
       || OB_UNLIKELY(!words_count.created())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KPC(helper), K(type), K(words_count.created()));
-  } else if (OB_FAIL(helper->segment(type, fulltext.ptr(), fulltext.length(), doc_length, words_count))) {
+  } else if (OB_FAIL(helper->segment(meta, fulltext.ptr(), fulltext.length(), doc_length, words_count))) {
     LOG_WARN("fail to segment", K(ret), KPC(helper), K(type), K(fulltext));
   }
 
@@ -1194,12 +1196,29 @@ int ObFTDMLIterator::scan_ft_word_rows(const ObChunkDatumStore::StoredRow *store
     if (OB_ITER_END == ret || OB_SUCC(ret)) {
       ret = OB_SUCCESS;
       if (OB_UNLIKELY(rows_.count() != rows.count())) {
-        ret = OB_ERR_DEFENSIVE_CHECK;
-        common::ObDocId docid;
-        docid.from_string(doc_id);
-        LOG_ERROR("row count isn't equal between scan ft words and generate ft words", K(ret), K(rows_), K(rows),
-            K(is_fts_index_aux), K(doc_id), K(docid), K(ft_meta), K(ft), K(ft_parse_helper), KPC(store_row),
-            KPC(main_ctdef_));
+        bool need_check_tx_active = true;
+        if (OB_NOT_NULL(doc_word_info_) && doc_word_info_->snapshot_.tx_id().is_valid()) {
+          const transaction::ObTransID &tx_id = doc_word_info_->snapshot_.tx_id();
+          transaction::ObTransService *txs = MTL(transaction::ObTransService *);
+          bool is_tx_active = true;
+          if (OB_NOT_NULL(txs)) {
+            if (OB_FAIL(txs->is_tx_active(tx_id, is_tx_active))) {
+              LOG_WARN("fail to check if tx is active", K(ret), K(tx_id));
+            } else if (!is_tx_active) {
+              need_check_tx_active = false;
+              LOG_WARN("tx is aborted, skip this check.", K(tx_id));
+            }
+          }
+        }
+
+        if (OB_SUCC(ret) && need_check_tx_active) {
+          ret = OB_ERR_DEFENSIVE_CHECK;
+          common::ObDocId docid;
+          docid.from_string(doc_id);
+          LOG_ERROR("row count isn't equal between scan ft words and generate ft words", K(ret), K(rows_), K(rows),
+              K(is_fts_index_aux), K(doc_id), K(docid), K(ft_meta), K(ft), K(ft_parse_helper), KPC(store_row),
+              KPC(main_ctdef_));
+        }
       }
     }
   }

@@ -30,6 +30,11 @@
 #include "mittest/shared_storage/clean_residual_data.h"
 #include "storage/init_basic_struct.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "close_modules/shared_storage/storage/incremental/sslog/notify/ob_sslog_notify_adapter.h"
+#include "unittest/storage/sslog/test_mock_palf_kv.h"
+#include "close_modules/shared_storage/storage/incremental/sslog/ob_i_sslog_proxy.h"
+#include "close_modules/shared_storage/storage/incremental/sslog/ob_sslog_kv_proxy.h"
+
 
 static const char *TEST_FILE_NAME = "test_sslog_atomic_protocol";
 static const char *BORN_CASE_NAME = "ObTestSSLogAtomicProtocol";
@@ -37,6 +42,63 @@ static const char *RESTART_CASE_NAME = "ObSSLogAfterRestartTest";
 
 namespace oceanbase
 {
+namespace sslog
+{
+
+oceanbase::unittest::ObMockPalfKV PALF_KV;
+
+int get_sslog_table_guard(const ObSSLogTableType type,
+                          const int64_t tenant_id,
+                          ObSSLogProxyGuard &guard)
+{
+  int ret = OB_SUCCESS;
+
+  switch (type)
+  {
+    case ObSSLogTableType::SSLOG_TABLE: {
+      void *proxy = share::mtl_malloc(sizeof(ObSSLogTableProxy), "ObSSLogTable");
+      if (nullptr == proxy) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+      } else {
+        ObSSLogTableProxy *sslog_table_proxy = new (proxy) ObSSLogTableProxy(tenant_id);
+        if (OB_FAIL(sslog_table_proxy->init())) {
+          SSLOG_LOG(WARN, "fail to inint", K(ret));
+        } else {
+          guard.set_sslog_proxy((ObISSLogProxy *)proxy);
+        }
+      }
+      break;
+    }
+    case ObSSLogTableType::SSLOG_PALF_KV: {
+      void *proxy = share::mtl_malloc(sizeof(ObSSLogKVProxy), "ObSSLogTable");
+      if (nullptr == proxy) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+      } else {
+        ObSSLogKVProxy *sslog_kv_proxy = new (proxy) ObSSLogKVProxy(&PALF_KV);
+        // if (OB_FAIL(sslog_kv_proxy->init(GCONF.cluster_id, tenant_id))) {
+        //   SSLOG_LOG(WARN, "init palf kv failed", K(ret));
+        // } else {
+          guard.set_sslog_proxy((ObISSLogProxy *)proxy);
+        // }
+      }
+      break;
+    }
+    default: {
+      ret = OB_INVALID_ARGUMENT;
+      SSLOG_LOG(WARN, "invalid sslog type", K(type));
+      break;
+    }
+  }
+
+  return ret;
+}
+
+int ObSSLogNotifyAdapter::generate_notify_task_on_trans_ctx(NotifyPath ,
+                                                            memtable::ObMvccTransNode *,
+                                                            memtable::ObMemtableCtx *) {
+  return OB_SUCCESS;
+}
+}
 
 ObSSTableInfoList write_ss_list;
 
@@ -119,13 +181,49 @@ public:
   // 指定case运行目录前缀 test_ob_simple_cluster_
   ObTestSSLogAtomicProtocol() : ObSimpleClusterTestBase("test_shared_storage_sslog_proto", "50G", "50G", "50G")
   {}
+
+  void wait_sys_to_leader()
+  {
+    share::ObTenantSwitchGuard tenant_guard;
+    int ret = OB_ERR_UNEXPECTED;
+    ASSERT_EQ(OB_SUCCESS, tenant_guard.switch_to(1));
+    ObLS *ls = nullptr;
+    ObLSID ls_id(ObLSID::SYS_LS_ID);
+    ObLSHandle handle;
+    ObLSService *ls_svr = MTL(ObLSService *);
+    EXPECT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD));
+    ls = handle.get_ls();
+    ASSERT_NE(nullptr, ls);
+    ASSERT_EQ(ls_id, ls->get_ls_id());
+    for (int i=0; i<100; i++) {
+      ObRole role;
+      int64_t proposal_id = 0;
+      ASSERT_EQ(OB_SUCCESS, ls->get_log_handler()->get_role(role, proposal_id));
+      if (role == ObRole::LEADER) {
+        ret = OB_SUCCESS;
+        break;
+      }
+      ob_usleep(10 * 1000);
+    }
+    ASSERT_EQ(OB_SUCCESS, ret);
+  }
+
   void create_test_tenant(uint64_t &tenant_id)
   {
     TRANS_LOG(INFO, "create_tenant start");
-    ASSERT_EQ(OB_SUCCESS, create_tenant("tt1"));
+    wait_sys_to_leader();
+    int ret = OB_SUCCESS;
+    int retry_cnt = 0;
+    do {
+      if (OB_FAIL(create_tenant("tt1"))) {
+        TRANS_LOG(WARN, "create_tenant fail, need retry", K(ret));
+        ob_usleep(15 * 1000 * 1000); // 15s
+      }
+      retry_cnt++;
+    } while (OB_FAIL(ret) && retry_cnt < 10);
+    ASSERT_EQ(OB_SUCCESS, ret);
     ASSERT_EQ(OB_SUCCESS, get_tenant_id(tenant_id));
     ASSERT_EQ(OB_SUCCESS, get_curr_simple_server().init_sql_proxy2());
-    TRANS_LOG(INFO, "create_tenant end", K(tenant_id));
   }
 };
 
@@ -147,26 +245,38 @@ TEST_F(ObTestSSLogAtomicProtocol, test_read_write_interface)
   SCN transfer_scn;
   transfer_scn.set_min();
   ObSSMetaReadParam param;
-  param.set_tablet_level_param(meta_type1, ObLSID(1088), ObTabletID(200001), transfer_scn);
+  param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY,
+                               ObSSMetaReadResultType::READ_WHOLE_ROW,
+                               meta_type1, ObLSID(1088), ObTabletID(200001), transfer_scn);
 
   ObSSMetaReadParam param2;
   SCN transfer_scn2;
   transfer_scn2.set_max();
-  param2.set_tablet_level_param(meta_type1, ObLSID(1088), ObTabletID(200002), transfer_scn2);
+  param2.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY,
+                                ObSSMetaReadResultType::READ_WHOLE_ROW,
+                                meta_type1, ObLSID(1088), ObTabletID(200002), transfer_scn2);
 
   ObSSMetaReadParam param3;
   SCN transfer_scn3;
   transfer_scn3.set_max();
-  param3.set_tablet_level_param(meta_type1, ObLSID(1077), ObTabletID(200003), transfer_scn3);
+  param3.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY,
+                                ObSSMetaReadResultType::READ_WHOLE_ROW,
+                                meta_type1, ObLSID(1077), ObTabletID(200003), transfer_scn3);
 
   ObSSMetaReadParam param4;
-  param4.set_ls_level_param(meta_type2, ObLSID(1078));
+  param4.set_ls_level_param(ObSSMetaReadParamType::LS_KEY,
+                            ObSSMetaReadResultType::READ_WHOLE_ROW,
+                            meta_type2, ObLSID(1078));
 
   ObSSMetaReadParam param5;
-  param5.set_ls_level_param(meta_type2, ObLSID(1079));
+  param5.set_ls_level_param(ObSSMetaReadParamType::LS_KEY,
+                            ObSSMetaReadResultType::READ_WHOLE_ROW,
+                            meta_type2, ObLSID(1079));
 
   ObSSMetaReadParam param6;
-  param6.set_ls_level_param(meta_type2, ObLSID(1080));
+  param6.set_ls_level_param(ObSSMetaReadParamType::LS_KEY,
+                            ObSSMetaReadResultType::READ_WHOLE_ROW,
+                            meta_type2, ObLSID(1080));
 
   // key format example: tenant_id;ls_id;tablet_id
   const common::ObString meta_value1 = "jianyue_example1";
@@ -320,8 +430,9 @@ TEST_F(ObTestSSLogAtomicProtocol, test_read_write_interface)
 
   {
     ObSSLogIteratorGuard iter(false, true);
-    param3.set_read_result_type(ObSSMetaReadResultType::READ_ONLY_KEY);
-    param3.set_read_param_type(ObSSMetaReadParamType::TABLET_KEY);
+    param3.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY,
+                                  ObSSMetaReadResultType::READ_ONLY_KEY,
+                                  meta_type1, ObLSID(1077), ObTabletID(200003), transfer_scn3);
     ASSERT_EQ(OB_SUCCESS, ObAtomicFile::read_meta_row(param3,
                                                       share::SCN::invalid_scn(),
                                                       iter));
@@ -339,8 +450,9 @@ TEST_F(ObTestSSLogAtomicProtocol, test_read_write_interface)
 
   {
     ObSSLogIteratorGuard iter(false, true);
-    param4.set_read_result_type(ObSSMetaReadResultType::READ_ONLY_KEY);
-    param4.set_read_param_type(ObSSMetaReadParamType::LS_KEY);
+    param4.set_ls_level_param(ObSSMetaReadParamType::LS_KEY,
+                              ObSSMetaReadResultType::READ_ONLY_KEY,
+                              meta_type2, ObLSID(1078));
     ASSERT_EQ(OB_SUCCESS, ObAtomicFile::read_meta_row(param4,
                                                       share::SCN::invalid_scn(),
                                                       iter));
@@ -358,8 +470,9 @@ TEST_F(ObTestSSLogAtomicProtocol, test_read_write_interface)
 
   {
     ObSSLogIteratorGuard iter(false, true);
-    param4.set_read_result_type(ObSSMetaReadResultType::READ_ONLY_KEY);
-    param4.set_read_param_type(ObSSMetaReadParamType::LS_KEY);
+    param4.set_ls_level_param(ObSSMetaReadParamType::LS_KEY,
+                              ObSSMetaReadResultType::READ_ONLY_KEY,
+                              meta_type2, ObLSID(1078));
     ASSERT_EQ(OB_SUCCESS, ObAtomicFile::read_meta_row(param5,
                                                       share::SCN::invalid_scn(),
                                                       iter));
@@ -376,8 +489,9 @@ TEST_F(ObTestSSLogAtomicProtocol, test_read_write_interface)
 
   {
     ObSSLogIteratorGuard iter(false, true);
-    param4.set_read_result_type(ObSSMetaReadResultType::READ_ONLY_KEY);
-    param4.set_read_param_type(ObSSMetaReadParamType::LS_KEY);
+    param4.set_ls_level_param(ObSSMetaReadParamType::LS_KEY,
+                              ObSSMetaReadResultType::READ_ONLY_KEY,
+                              meta_type2, ObLSID(1078));
     ASSERT_EQ(OB_SUCCESS, ObAtomicFile::read_meta_row(param6,
                                                       share::SCN::invalid_scn(),
                                                       iter));
@@ -391,10 +505,13 @@ TEST_F(ObTestSSLogAtomicProtocol, test_read_write_interface)
 
   // ========== Test 3: update and read the row =========
   {
+    char buf[100];
+    int64_t pos = 0;
+    ASSERT_EQ(OB_SUCCESS, extra_info1.serialize(buf, sizeof(buf), pos));
     ASSERT_EQ(OB_SUCCESS, ObAtomicFile::update_sslog_row(param.meta_type_,
                                                        meta_key1.get_string_key(),
                                                        meta_value2,
-                                                       extra_info1,
+                                                       ObString(pos, buf),
                                                        extra_info1,
                                                        false,
                                                        affected_rows));
@@ -508,8 +625,9 @@ TEST_F(ObTestSSLogAtomicProtocol, test_read_write_interface)
   // ========== Test 5: read meta key =========
   {
     ObSSLogIteratorGuard iter(false, true);
-    param.set_read_result_type(ObSSMetaReadResultType::READ_ONLY_KEY);
-    param.set_read_param_type(ObSSMetaReadParamType::LS_PREFIX);
+    param.set_tablet_level_param(ObSSMetaReadParamType::LS_PREFIX,
+                                 ObSSMetaReadResultType::READ_ONLY_KEY,
+                                 meta_type1, ObLSID(1088), ObTabletID(200001), transfer_scn);
     ASSERT_EQ(OB_SUCCESS, ObAtomicFile::read_meta_row(param,
                                                       share::SCN::invalid_scn(),
                                                       iter));
@@ -542,8 +660,9 @@ TEST_F(ObTestSSLogAtomicProtocol, test_read_write_interface)
 
   {
     ObSSLogIteratorGuard iter(false, true);
-    param.set_read_result_type(ObSSMetaReadResultType::READ_ONLY_KEY);
-    param.set_read_param_type(ObSSMetaReadParamType::LS_PREFIX);
+    param.set_tablet_level_param(ObSSMetaReadParamType::LS_PREFIX,
+                                 ObSSMetaReadResultType::READ_ONLY_KEY,
+                                 meta_type1, ObLSID(1088), ObTabletID(200001), transfer_scn);
     ASSERT_EQ(OB_SUCCESS, ObAtomicFile::read_meta_row(param,
                                                       snapshot_version1,
                                                       iter));
@@ -565,8 +684,9 @@ TEST_F(ObTestSSLogAtomicProtocol, test_read_write_interface)
   // ========== Test 6: read meta row =========
   {
     ObSSLogIteratorGuard iter(false, true);
-    param.set_read_result_type(ObSSMetaReadResultType::READ_WHOLE_ROW);
-    param.set_read_param_type(ObSSMetaReadParamType::LS_PREFIX);
+    param.set_tablet_level_param(ObSSMetaReadParamType::LS_PREFIX,
+                                 ObSSMetaReadResultType::READ_WHOLE_ROW,
+                                 meta_type1, ObLSID(1088), ObTabletID(200001), transfer_scn);
     ASSERT_EQ(OB_SUCCESS, ObAtomicFile::read_meta_row(param,
                                                       share::SCN::invalid_scn(),
                                                       iter));
@@ -608,8 +728,9 @@ TEST_F(ObTestSSLogAtomicProtocol, test_read_write_interface)
 
   {
     ObSSLogIteratorGuard iter(false, true);
-    param4.set_read_result_type(ObSSMetaReadResultType::READ_WHOLE_ROW);
-    param4.set_read_param_type(ObSSMetaReadParamType::TENANT_PREFIX);
+    param4.set_ls_level_param(ObSSMetaReadParamType::TENANT_PREFIX,
+                              ObSSMetaReadResultType::READ_WHOLE_ROW,
+                              meta_type2, ObLSID(1078));
     TRANS_LOG(INFO, "jianyue debug read meta", K(param4));
     ASSERT_EQ(OB_SUCCESS, ObAtomicFile::read_meta_row(param4,
                                                       share::SCN::invalid_scn(),
@@ -662,8 +783,9 @@ TEST_F(ObTestSSLogAtomicProtocol, test_read_write_interface)
       ASSERT_EQ(OB_SUCCESS, ObAtomicFile::delete_meta_row(delete_param3, affected_rows));
       ASSERT_EQ(1, affected_rows);
       ObSSLogIteratorGuard iter(true, true);
-      param3.set_read_result_type(ObSSMetaReadResultType::READ_ONLY_KEY);
-      param3.set_read_param_type(ObSSMetaReadParamType::TABLET_KEY);
+      param3.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY,
+                                    ObSSMetaReadResultType::READ_ONLY_KEY,
+                                    meta_type1, ObLSID(1077), ObTabletID(200003), transfer_scn3);
       ASSERT_EQ(OB_SUCCESS, ObAtomicFile::read_meta_row(param3,
                                                         share::SCN::invalid_scn(),
                                                         iter));
@@ -689,8 +811,9 @@ TEST_F(ObTestSSLogAtomicProtocol, test_read_write_interface)
       ASSERT_EQ(OB_SUCCESS, ObAtomicFile::delete_meta_row(delete_param3, affected_rows));
       ASSERT_EQ(1, affected_rows);
       ObSSLogIteratorGuard iter(true, true);
-      param3.set_read_result_type(ObSSMetaReadResultType::READ_ONLY_KEY);
-      param3.set_read_param_type(ObSSMetaReadParamType::TABLET_KEY);
+      param3.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY,
+                                    ObSSMetaReadResultType::READ_ONLY_KEY,
+                                    meta_type1, ObLSID(1077), ObTabletID(200003), transfer_scn3);
       ASSERT_EQ(OB_SUCCESS, ObAtomicFile::read_meta_row(param3,
                                                         share::SCN::invalid_scn(),
                                                         iter));
@@ -714,8 +837,9 @@ TEST_F(ObTestSSLogAtomicProtocol, test_read_write_interface)
       ASSERT_EQ(OB_SUCCESS, ObAtomicFile::delete_meta_row(delete_param5, affected_rows));
       ASSERT_EQ(1, affected_rows);
       ObSSLogIteratorGuard iter(true, true);
-      param5.set_read_result_type(ObSSMetaReadResultType::READ_ONLY_KEY);
-      param5.set_read_param_type(ObSSMetaReadParamType::LS_KEY);
+      param5.set_ls_level_param(ObSSMetaReadParamType::LS_KEY,
+                                ObSSMetaReadResultType::READ_ONLY_KEY,
+                                meta_type2, ObLSID(1079));
       ASSERT_EQ(OB_SUCCESS, ObAtomicFile::read_meta_row(param5,
                                                         share::SCN::invalid_scn(),
                                                         iter));
@@ -739,8 +863,9 @@ TEST_F(ObTestSSLogAtomicProtocol, test_read_write_interface)
       ASSERT_EQ(OB_SUCCESS, ObAtomicFile::delete_meta_row(delete_param5, affected_rows));
       ASSERT_EQ(1, affected_rows);
       ObSSLogIteratorGuard iter(true, true);
-      param5.set_read_result_type(ObSSMetaReadResultType::READ_ONLY_KEY);
-      param5.set_read_param_type(ObSSMetaReadParamType::LS_KEY);
+      param5.set_ls_level_param(ObSSMetaReadParamType::LS_KEY,
+                                ObSSMetaReadResultType::READ_ONLY_KEY,
+                                meta_type2, ObLSID(1079));
       ASSERT_EQ(OB_SUCCESS, ObAtomicFile::read_meta_row(param5,
                                                         share::SCN::invalid_scn(),
                                                         iter));
@@ -888,15 +1013,17 @@ TEST_F(ObTestSSLogAtomicProtocol, test_tablet_meta_write_op)
     uint64_t op_id = 0;
     ASSERT_EQ(OB_SUCCESS, op_handle.get_op_id(op_id));
     ASSERT_EQ(tablet_cur_op_id, op_id);
+    const uint64_t data_version = DATA_CURRENT_VERSION;
     // write tablet_meta and sub_tablet_meta
-    MTL(ObSSMetaService*)->persist_tablet_(tablet, ObMetaUpdateReason::CREATE_TABLET, op_handle, tablet_meta_file);
+    MTL(ObSSMetaService*)->persist_tablet_(data_version, tablet, ObMetaUpdateReason::CREATE_TABLET, -1, op_handle, tablet_meta_file);
 
     // read tablet meta
     tablet = nullptr;
     ObTabletHandle tablet_handle;
     common::ObArenaAllocator allocator("TestTabletMeta",
                                        OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID(), ObCtxIds::DEFAULT_CTX_ID);
-    ASSERT_EQ(OB_SUCCESS, tablet_meta_file->get_tablet(allocator, tablet_handle));
+    share::SCN row_scn;
+    ASSERT_EQ(OB_SUCCESS, tablet_meta_file->get_tablet(allocator, tablet_handle, row_scn));
     ASSERT_EQ(tablet_id, tablet_handle.get_obj()->get_tablet_id());
     ObSSTabletSSLogValue tablet_v;
     ObSSMetaUpdateMetaInfo read_meta_info;
@@ -925,7 +1052,9 @@ TEST_F(ObTestSSLogAtomicProtocol, test_sstable_list_write_op)
   ObLSID ls_id(LS_ID);
   ObSSMetaReadParam param;
   const sslog::ObSSLogMetaType meta_type1 = sslog::ObSSLogMetaType::SSLOG_MINI_SSTABLE;
-  param.set_tablet_level_param(meta_type1, ls_id, tablet_id, create_scn);
+  param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY,
+                               ObSSMetaReadResultType::READ_WHOLE_ROW,
+                               meta_type1, ls_id, tablet_id, create_scn);
 
   GET_MINI_SSTABLE_LIST_HANDLE_V2(file_handle, LS_ID, TABLET_ID, create_scn, 1);
   int64_t tablet_cur_op_id = 0;
@@ -943,8 +1072,9 @@ TEST_F(ObTestSSLogAtomicProtocol, test_sstable_list_write_op)
     ASSERT_EQ(tablet_cur_op_id, sstablelist_file1->finish_op_id_);
 
     ObSSLogIteratorGuard iter(false, true);
-    param.set_read_result_type(ObSSMetaReadResultType::READ_WHOLE_ROW);
-    param.set_read_param_type(ObSSMetaReadParamType::TABLET_KEY);
+    param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY,
+                                 ObSSMetaReadResultType::READ_WHOLE_ROW,
+                                 meta_type1, ls_id, tablet_id, create_scn);
     ASSERT_EQ(OB_SUCCESS, ObAtomicFile::read_meta_row(param,
                                                       share::SCN::invalid_scn(),
                                                       iter));
@@ -985,8 +1115,9 @@ TEST_F(ObTestSSLogAtomicProtocol, test_sstable_list_write_op)
                                   1)
 
     ObSSLogIteratorGuard iter(true, true);
-    param.set_read_result_type(ObSSMetaReadResultType::READ_WHOLE_ROW);
-    param.set_read_param_type(ObSSMetaReadParamType::TABLET_KEY);
+    param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY,
+                                 ObSSMetaReadResultType::READ_WHOLE_ROW,
+                                 meta_type1, ls_id, tablet_id, create_scn);
     ASSERT_EQ(OB_SUCCESS, ObAtomicFile::read_meta_row(param,
                                                       share::SCN::invalid_scn(),
                                                       iter));
@@ -1015,6 +1146,7 @@ TEST_F(ObTestSSLogAtomicProtocol, test_sstable_list_write_op)
     ASSERT_EQ(true, row_scn_ret > last_row_scn);
   }
 
+
   {
     {
       char buf1[20] = "schema buf";
@@ -1032,15 +1164,17 @@ TEST_F(ObTestSSLogAtomicProtocol, test_sstable_list_write_op)
       task_info1.storage_schema_buf_.assign(ObString(strlen(buf1), buf1));
       task_info1.sstable_meta_buf_.assign(ObString(strlen(buf2), buf2));
       ASSERT_EQ(OB_SUCCESS, op_handle.get_atomic_op()->write_add_task_info(task_info1));
-      task_info1.max_data_seq_ = 10;
-      task_info1.max_meta_seq_ = 15;
+      task_info1.seq_step_ = 10;
+      task_info1.start_data_seq_ = 15;
+      task_info1.parallel_ = 20;
       ASSERT_EQ(OB_SUCCESS, op_handle.get_atomic_op()->write_add_task_info(task_info1));
       // finish op and flush buffer to share storage, generate sstable list obj
       ASSERT_EQ(OB_SUCCESS, sstablelist_file1->finish_op(op_handle));
     }
 
-    param.set_read_result_type(ObSSMetaReadResultType::READ_WHOLE_ROW);
-    param.set_read_param_type(ObSSMetaReadParamType::TABLET_KEY);
+    param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY,
+                                 ObSSMetaReadResultType::READ_WHOLE_ROW,
+                                 meta_type1, ls_id, tablet_id, create_scn);
     int64_t current_time2 = ObTimeUtility::current_time();
     share::SCN snapshot_version2;
     ASSERT_EQ(OB_SUCCESS, snapshot_version2.convert_from_ts(current_time2));
@@ -1051,7 +1185,7 @@ TEST_F(ObTestSSLogAtomicProtocol, test_sstable_list_write_op)
     ASSERT_EQ(OB_SUCCESS, ObAtomicFile::get_range_meta_value(param,
                                                       version_range,
                                                       iter));
-    ObSSMiniGCInfo gc_info_ret;
+    ObSSMinorGCInfo gc_info_ret;
     SCN row_scn_ret;
     ObString value1;
     ObString info1;
@@ -1060,7 +1194,7 @@ TEST_F(ObTestSSLogAtomicProtocol, test_sstable_list_write_op)
     SCN last_row_scn = row_scn_ret;
 
     {
-      // meta seq 15, data seq 10
+      // check gc info, last version
       ASSERT_EQ(OB_SUCCESS, iter.get_next_meta(row_scn_ret, value1, info1));
       pos = 0;
       ASSERT_EQ(OB_SUCCESS, extra_info_ret.deserialize(info1.ptr(), info1.length(), pos));
@@ -1072,12 +1206,13 @@ TEST_F(ObTestSSLogAtomicProtocol, test_sstable_list_write_op)
       pos = 0;
       ASSERT_EQ(OB_SUCCESS, gc_info_ret.deserialize(extra_info_ret.gc_info_.get_ob_string().ptr(), extra_info_ret.gc_info_.get_ob_string().length(), pos));
 
-      ASSERT_EQ(10, gc_info_ret.max_data_seq_);
-      ASSERT_EQ(15, gc_info_ret.max_meta_seq_);
+      ASSERT_EQ(10, gc_info_ret.seq_step_);
+      ASSERT_EQ(15, gc_info_ret.start_seq_);
+      ASSERT_EQ(20, gc_info_ret.parallel_cnt_);
     }
 
     {
-      // meta seq 1, data seq 1
+      // check gc info, prev version
       TRANS_LOG(INFO, "jianyue debug888");
       ASSERT_EQ(OB_SUCCESS, iter.get_next_meta(row_scn_ret, value1, info1));
       ASSERT_EQ(OB_SUCCESS, iter.get_next_meta(row_scn_ret, value1, info1));
@@ -1091,11 +1226,163 @@ TEST_F(ObTestSSLogAtomicProtocol, test_sstable_list_write_op)
       pos = 0;
       ASSERT_EQ(OB_SUCCESS, gc_info_ret.deserialize(extra_info_ret.gc_info_.get_ob_string().ptr(), extra_info_ret.gc_info_.get_ob_string().length(), pos));
 
-      ASSERT_EQ(1, gc_info_ret.max_data_seq_);
-      ASSERT_EQ(1, gc_info_ret.max_meta_seq_);
+      ASSERT_EQ(1, gc_info_ret.start_seq_);
+      ASSERT_EQ(1, gc_info_ret.seq_step_);
+      ASSERT_EQ(1, gc_info_ret.parallel_cnt_);
     }
 
   }
+
+  {
+    // do one fail op
+    char gc_info_char[] = "gc_info3";
+    ObString gc_info(sizeof(gc_info_char), gc_info_char);
+    TRANS_LOG(INFO, "fail op start");
+
+    DO_ONE_SSTABLE_LIST_FAIL_OP(sstablelist_file1,
+                                gc_info,
+                                1)
+
+    ObSSLogIteratorGuard iter(true, true);
+    param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY,
+                                 ObSSMetaReadResultType::READ_WHOLE_ROW,
+                                 meta_type1, ls_id, tablet_id, create_scn);
+    ASSERT_EQ(OB_SUCCESS, ObAtomicFile::read_meta_row(param,
+                                                      share::SCN::invalid_scn(),
+                                                      iter));
+    ObSSLogMetaType meta_type_ret1;
+    ObAtomicMetaKey meta_key_ret1;
+    SCN row_scn_ret;
+    ObString key1;
+    ObString value1;
+    ObString info1;
+    ObAtomicExtraInfo extra_info_ret;
+    int64_t pos = 0;
+    SCN last_row_scn = row_scn_ret;
+    ASSERT_EQ(OB_SUCCESS, iter.get_next_row(row_scn_ret, meta_type_ret1, key1, value1, info1));
+    ObSSLogMetaKey sslog_meta_key_ret1;
+    ASSERT_EQ(OB_SUCCESS, sslog_meta_key_ret1.deserialize(key1.ptr(), key1.length(), pos));
+    ASSERT_EQ(param.tablet_level_param_.ls_id_, sslog_meta_key_ret1.tablet_meta_key_.ls_id_);
+    ASSERT_EQ(param.tablet_level_param_.tablet_id_, sslog_meta_key_ret1.tablet_meta_key_.tablet_id_);
+    ASSERT_EQ(param.tablet_level_param_.reorganization_scn_, sslog_meta_key_ret1.tablet_meta_key_.reorganization_scn_);
+    pos = 0;
+    ASSERT_EQ(OB_SUCCESS, extra_info_ret.deserialize(info1.ptr(), info1.length(), pos));
+    ASSERT_EQ(4, extra_info_ret.meta_info_.op_id_);
+    ASSERT_EQ(true, 0 < extra_info_ret.meta_info_.epoch_id_);
+    ASSERT_EQ(ObAtomicMetaInfo::State::ABORTED, extra_info_ret.meta_info_.state_);
+    ASSERT_EQ(false, extra_info_ret.meta_info_.not_exist_);
+    ASSERT_EQ(gc_info, extra_info_ret.gc_info_.get_ob_string());
+    ASSERT_EQ(true, row_scn_ret > last_row_scn);
+  }
+}
+
+TEST_F(ObTestSSLogAtomicProtocol, test_sslog_meta_key)
+{
+  int ret = OB_SUCCESS;
+  share::ObTenantSwitchGuard tenant_guard;
+  ASSERT_EQ(OB_SUCCESS, tenant_guard.switch_to(test_tenant_id));
+
+  TRANS_LOG(INFO, "test_sslog_meta_key");
+  char str_partial_meta_key1[] = "id_1:1;";
+  char str_partial_meta_key2[] = "id_1:1002;id_2:1002;";
+  char str_partial_meta_key3[] = "id_1:1003;id_2:1003;id_3:0;";
+  char str_partial_meta_key4[] = "id_1:1004;id_2:1002;id_3:200050;id_4:100;";
+  ObSSLogMetaKey key1;
+  ObSSLogMetaKey key2;
+  ObSSLogMetaKey key3;
+  ObSSLogMetaKey key4;
+  int64_t pos = 0;
+  ASSERT_EQ(OB_SUCCESS, key1.deserialize(str_partial_meta_key1, strlen(str_partial_meta_key1), pos));
+  ASSERT_EQ(1, key1.first_id_);
+  pos = 0;
+  ASSERT_EQ(OB_SUCCESS, key2.deserialize(str_partial_meta_key2, strlen(str_partial_meta_key2), pos));
+  ASSERT_EQ(1002, key2.first_id_);
+  ASSERT_EQ(1002, key2.second_id_);
+  pos = 0;
+  ASSERT_EQ(OB_SUCCESS, key3.deserialize(str_partial_meta_key3, strlen(str_partial_meta_key3), pos));
+  ASSERT_EQ(1003, key3.first_id_);
+  ASSERT_EQ(1003, key3.second_id_);
+  ASSERT_EQ(0, key3.third_id_);
+  pos = 0;
+  ASSERT_EQ(OB_SUCCESS, key4.deserialize(str_partial_meta_key4, strlen(str_partial_meta_key4), pos));
+  ASSERT_EQ(1004, key4.first_id_);
+  ASSERT_EQ(1002, key4.second_id_);
+  ASSERT_EQ(200050, key4.third_id_);
+  ASSERT_EQ(100, key4.fourth_id_);
+}
+
+TEST_F(ObTestSSLogAtomicProtocol, test_meta_value_write)
+{
+  int ret = OB_SUCCESS;
+  share::ObTenantSwitchGuard tenant_guard;
+  ASSERT_EQ(OB_SUCCESS, tenant_guard.switch_to(test_tenant_id));
+  TRANS_LOG(INFO, "test_meta_value_write");
+  // ========== Example 1 ==========
+  int64_t affected_rows = 0;
+  const sslog::ObSSLogMetaType meta_type1 = sslog::ObSSLogMetaType::SSLOG_TABLET_META;
+  SCN transfer_scn;
+  transfer_scn.set_min();
+  ObSSMetaReadParam param;
+  param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY,
+                               ObSSMetaReadResultType::READ_WHOLE_ROW,
+                               meta_type1, ObLSID(1088), ObTabletID(200081), transfer_scn);
+
+  const int STR_LEN = 819200;
+  char *value1_str = (char *)mtl_malloc(STR_LEN, "MITTEST");
+  MEMSET(value1_str, 'E', STR_LEN);
+  value1_str[STR_LEN - 100] = '\0';
+  value1_str[STR_LEN - 2] = 't';
+  value1_str[STR_LEN - 1] = '\0';
+
+  TRANS_LOG(INFO, "test meta value storage");
+
+  const common::ObString meta_value1(STR_LEN, value1_str);
+  ObAtomicExtraInfo extra_info1;
+  extra_info1.meta_info_.op_id_ = 0;
+  extra_info1.meta_info_.epoch_id_ = 1;
+  extra_info1.meta_info_.state_ = ObAtomicMetaInfo::State::COMMITTED;
+  extra_info1.meta_info_.not_exist_ = false;
+  char extra_info_buf1[100];
+  int64_t ser_pos = 0;
+  ASSERT_EQ(OB_SUCCESS, extra_info1.serialize(extra_info_buf1, sizeof(extra_info_buf1), ser_pos));
+  ObString extra_info_string_1(ser_pos, extra_info_buf1);
+
+  // ========== Universal ==========
+  common::ObString meta_value_ret;
+  common::ObString extra_info_ret;
+  ObAtomicExtraInfo extra_info_deserialize_ret;
+  SCN row_scn_ret;
+
+  // ========== Test 1: insert one row =========
+  ObAtomicMetaKey meta_key1;
+  ASSERT_EQ(OB_SUCCESS, ObAtomicFile::get_meta_key(param, meta_key1));
+  ASSERT_EQ(OB_SUCCESS, ObAtomicFile::insert_sslog_row(param.meta_type_,
+                                                       meta_key1.get_string_key(),
+                                                       meta_value1,
+                                                       extra_info1,
+                                                       affected_rows));
+
+  ASSERT_EQ(1, affected_rows);
+
+  // ========== Test 2: read the row =========
+  {
+    char *buf = (char *)mtl_malloc(STR_LEN, "MITTEST");
+    ObAtomicFileBuffer meta_value_buffer;
+    meta_value_buffer.assign(buf, STR_LEN);
+    sslog::ObSSLogIteratorGuard iter(false, true);
+    TRANS_LOG(INFO, "read begin");
+    ASSERT_EQ(OB_SUCCESS, ObAtomicFile::read_file_content(param,
+                                                          share::SCN::invalid_scn(),
+                                                          row_scn_ret,
+                                                          meta_value_buffer));
+    TRANS_LOG(INFO, "read end", K(meta_value_buffer), K(meta_value1), K(meta_value1.length()));
+    ASSERT_EQ(true, meta_value_buffer.data_len_ == STR_LEN);
+    ASSERT_EQ(true, ObString(meta_value_buffer.data_len_, meta_value_buffer.buf_) == meta_value1);
+    ASSERT_EQ(true, row_scn_ret > SCN::min_scn());
+    mtl_free(buf);
+  }
+  mtl_free(value1_str);
+
 }
 
 } // unittest
@@ -1109,7 +1396,7 @@ int main(int argc, char **argv)
   char buf[1000];
   const int64_t cur_time_ns = ObTimeUtility::current_time_ns();
   memset(buf, 1000, sizeof(buf));
-  databuff_printf(buf, sizeof(buf), "%s/%lu?host=%s&access_id=%s&access_key=%s&s3_region=%s&max_iops=2000&max_bandwidth=200000000B&scope=region",
+  databuff_printf(buf, sizeof(buf), "%s/%lu_atomic_proto?host=%s&access_id=%s&access_key=%s&s3_region=%s&max_iops=2000&max_bandwidth=200000000B&scope=region",
       oceanbase::unittest::S3_BUCKET, cur_time_ns, oceanbase::unittest::S3_ENDPOINT, oceanbase::unittest::S3_AK, oceanbase::unittest::S3_SK, oceanbase::unittest::S3_REGION);
   oceanbase::shared_storage_info = buf;
   while(EOF != (c = getopt(argc,argv,"t:l:"))) {
@@ -1132,7 +1419,7 @@ int main(int argc, char **argv)
   GCONF.memory_limit.set_value("20G");
   GCONF.system_memory.set_value("5G");
 
-  LOG_INFO("main>>>");
+  LOG_INFO("main>>>", K(cur_time_ns));
   oceanbase::unittest::RunCtx.time_sec_ = time_sec;
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

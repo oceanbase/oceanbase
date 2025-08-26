@@ -90,13 +90,16 @@ protected:
 class ObCrossLSMdsMiniMergeOperator : public ObMdsMiniMergeOperator
 {
 public:
-  explicit ObCrossLSMdsMiniMergeOperator(const share::SCN &scan_end_scn);
+  explicit ObCrossLSMdsMiniMergeOperator(
+      const share::SCN &scan_end_scn,
+      const bool keep_original_tablet_status);
   virtual ~ObCrossLSMdsMiniMergeOperator() = default;
 protected:
   virtual bool for_flush() override { return false; }
   virtual int operator()(const mds::MdsDumpKV &kv) override;
 private:
   share::SCN scan_end_scn_;
+  bool keep_original_tablet_status_;
 };
 
 // to query all medium mds info, and dump them to minor sstable.
@@ -118,11 +121,15 @@ public:
   ~ObMdsTableMiniMerger() { reset(); }
   void reset();
 
-  int init(compaction::ObTabletMergeCtx &ctx, ObMdsMiniMergeOperator &op);
+  int init(const ObMacroSeqParam &macro_seq_param, compaction::ObTabletMergeCtx &ctx, ObMdsMiniMergeOperator &op);
   int generate_mds_mini_sstable(common::ObArenaAllocator &allocator, ObTableHandleV2 &table_handle);
+  int generate_ss_mds_mini_sstable(common::ObArenaAllocator &allocator, ObTableHandleV2 &table_handle, int64_t &tree_start_seq);
+  static int prepare_macro_seq_param(const compaction::ObTabletMergeCtx &ctx, ObMacroSeqParam &macro_seq_param);
 
   TO_STRING_KV(K_(is_inited), KPC_(ctx), K_(data_desc), K_(macro_writer), K_(sstable_builder));
-
+private:
+  int close_index_builder(int64_t &index_tree_start_seq, ObSSTableMergeRes &res);
+  int generate_mds_mini_sstable(common::ObArenaAllocator &allocator, ObTableHandleV2 &table_handle, int64_t &index_tree_start_seq);
 private:
   ObArenaAllocator allocator_;
   ObWholeDataStoreDesc data_desc_;

@@ -310,7 +310,6 @@ int ObRFBloomFilterMsg::reuse()
   int ret = OB_SUCCESS;
   is_empty_ = true;
   bloom_filter_.reset_filter();
-  need_send_msg_ = true;
   is_active_ = true;
   return ret;
 }
@@ -1065,15 +1064,13 @@ int ObRFBloomFilterMsg::broadcast(ObIArray<ObAddr> &target_addrs,
   ObPxP2PDatahubArg arg;
 
   arg.msg_ = &msg;
-  while (!create_finish_ && need_send_msg_ && OB_SUCC(ret)) {
+  while (!create_finish_ && OB_SUCC(ret)) {
     if (OB_FAIL(THIS_WORKER.check_status())) {
       LOG_WARN("fail to check status", K(ret));
     }
     ob_usleep(10);
   }
   if (OB_FAIL(ret)) {
-  } else if (!need_send_msg_) {
-    // when drain_exch, not need to send msg
   } else if (OB_FAIL(msg.shadow_copy(*this))) {
     LOG_WARN("fail to shadow copy second phase msg", K(ret));
   } else {

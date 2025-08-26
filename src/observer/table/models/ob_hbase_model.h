@@ -179,6 +179,9 @@ private:
   int check_mode_defense(ObTableExecCtx &ctx);
   int check_ls_op_defense(ObTableExecCtx &ctx, const ObTableLSOpRequest &req);
   int check_mode_defense(ObTableExecCtx &ctx, const ObTableQueryRequest &req);
+  bool compare_part_key(ObITableEntity &first_entity, ObITableEntity &second_entity, bool is_secondary_part);
+  int check_is_same_part_key(ObTableExecCtx &ctx, const ObTableLSOpRequest &req, bool &is_same);
+  int init_put_request_result(ObTableExecCtx &ctx, ObTableLSOpRequest &req, ObTableLSOpResult &res);
 private:
   static const uint64_t INVALID_SESSION_ID = 0;
   uint64_t query_session_id_;

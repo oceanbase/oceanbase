@@ -13,6 +13,9 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/tablet/ob_tablet_block_header.h"
+#include "share/rc/ob_tenant_base.h"
+#include "share/ob_cluster_version.h"
+#include "share/ob_server_struct.h"
 
 namespace oceanbase
 {
@@ -29,7 +32,7 @@ int ObTabletBlockHeader::init(const int32_t inline_meta_count)
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("inline meta count is too large", K(ret), K(inline_meta_count));
   } else {
-    version_ = TABLET_VERSION_V3;
+    version_ = TABLET_VERSION_V4;
     inline_meta_count_ = inline_meta_count;
     is_inited_ = true;
   }
@@ -39,14 +42,33 @@ int ObTabletBlockHeader::init(const int32_t inline_meta_count)
 int ObTabletBlockHeader::deserialize(const char* buf, const int64_t data_len, int64_t& pos)
 {
   int ret = OB_SUCCESS;
+  int64_t tmp_pos = pos;
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("ObTabletBlockHeader has inited", K(ret), K(ret));
+  } else if (OB_FAIL(serialization::decode_i32(buf, data_len, tmp_pos, &version_))) {
+    LOG_WARN("failed to deserialize tablet version", K(ret), K(data_len), K(pos));
+  } else if (OB_UNLIKELY(TABLET_VERSION_V3 != version_ && TABLET_VERSION_V4 != version_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("only tablet v3 or v4 has header", K(ret), K(version_));
+  } else if (TABLET_VERSION_V3 == version_ && OB_FAIL(deserialize_v3(buf, data_len, pos))) {
+    LOG_WARN("failed to deserialize v3", K(ret), K(data_len), K(pos));
+  } else if (TABLET_VERSION_V4 == version_ && OB_FAIL(deserialize_v4(buf, data_len, pos))) {
+    LOG_WARN("failed to deserialize v4", K(ret), K(data_len), K(pos));
+  } else {
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObTabletBlockHeader::deserialize_v3(const char* buf, const int64_t data_len, int64_t& pos)
+{
+  int ret = OB_SUCCESS;
   if (OB_FAIL(serialization::decode_i32(buf, data_len, pos, &version_))) {
     LOG_WARN("failed to deserialize tablet version", K(ret), K(data_len), K(pos));
-  } else if (OB_FAIL(serialization::decode_i32(buf, data_len, pos, &length_))) {
+  } else if (OB_FAIL(serialization::decode_i32(buf, data_len, pos, &first_level_size_))) {
     LOG_WARN("failed to deserialize tablet length", K(ret), K(data_len), K(pos));
-  } else if (TABLET_VERSION_V3 != version_) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("only tablet v3 has header", K(ret), K(version_), K(length_));
-  } else if (OB_FAIL(serialization::decode_i32(buf, data_len, pos, &checksum_))) {
+  } else if (OB_FAIL(serialization::decode_i32(buf, data_len, pos, &first_level_checksum_))) {
     LOG_WARN("failed to deserialize checksum", K(ret), K(data_len), K(pos));
   } else if (OB_FAIL(serialization::decode_i32(buf, data_len, pos, &inline_meta_count_))) {
     LOG_WARN("failed to deserialize tablet secondary_meta_count", K(ret), K(data_len), K(pos));
@@ -59,14 +81,70 @@ int ObTabletBlockHeader::deserialize(const char* buf, const int64_t data_len, in
       MEMCPY(desc_array_, buf + pos, desc_array_len);
       pos += desc_array_len;
     }
-    if (OB_UNLIKELY(data_len - pos < length_)) {
+    if (OB_UNLIKELY(data_len - pos < first_level_size_)) {
       ret = OB_DESERIALIZE_ERROR;
-      LOG_WARN("buffer's length is not enough", K(ret), K(data_len), K(pos), K(length_), K(desc_array_len));
+      LOG_WARN("buffer's length is not enough", K(ret), K(data_len), K(pos), K(first_level_size_), K(desc_array_len));
     }
   }
+  return ret;
+}
 
-  if (OB_SUCC(ret)) {
-    is_inited_ = true;
+int ObTabletBlockHeader::deserialize_v4(const char* buf, const int64_t data_len, int64_t& pos)
+{
+  int ret = OB_SUCCESS;
+  int64_t new_pos = pos;
+  int64_t length = 0;
+  if (OB_FAIL(serialization::decode_i32(buf, data_len, new_pos, &version_))) {
+    LOG_WARN("failed to deserialize tablet version", K(ret), K(data_len), K(new_pos));
+  } else if (OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &length))) {
+    LOG_WARN("failed to deserialize length", K(ret), K(data_len), K(new_pos));
+  } else if (new_pos - pos < length && OB_FAIL(serialization::decode_i32(buf, data_len, new_pos, &first_level_size_))) {
+    LOG_WARN("failed to deserialize tablet length", K(ret), K(data_len), K(new_pos));
+  } else if (new_pos - pos < length && OB_FAIL(serialization::decode_i32(buf, data_len, new_pos, &first_level_checksum_))) {
+    LOG_WARN("failed to deserialize checksum", K(ret), K(data_len), K(new_pos));
+  } else if (new_pos - pos < length && OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, reinterpret_cast<int64_t *>(&data_version_)))) {
+    LOG_WARN("failed to deserialize tablet data version", K(ret), K(data_len), K(new_pos));
+  } else if (new_pos - pos < length && OB_FAIL(serialization::decode_i32(buf, data_len, new_pos, &inline_meta_count_))) {
+    LOG_WARN("failed to deserialize tablet secondary_meta_count", K(ret), K(data_len), K(new_pos));
+  } else if (OB_UNLIKELY(inline_meta_count_ > MAX_INLINE_META_COUNT)) {
+    ret = OB_DESERIALIZE_ERROR;
+    LOG_WARN("inline_meta_count is too large", K(ret), K(inline_meta_count_));
+  } else {
+    const int64_t desc_array_len = inline_meta_count_ * sizeof(ObInlineSecondaryMetaDesc);
+    if (desc_array_len > 0) {
+      MEMCPY(desc_array_, buf + new_pos, desc_array_len);
+      new_pos += desc_array_len;
+    }
+    if (OB_UNLIKELY(data_len - new_pos < first_level_size_)) {
+      ret = OB_DESERIALIZE_ERROR;
+      LOG_WARN("buffer's length is not enough", K(ret), K(data_len), K(pos), K(first_level_size_), K(desc_array_len));
+    } else {
+      pos = new_pos;
+    }
+  }
+  return ret;
+}
+
+int ObTabletBlockHeader::check_data_version_for_compat() const
+{
+  int ret = OB_SUCCESS;
+  uint64_t min_data_version = 0;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTabletBlockHeader not inited", K(ret));
+  } else if (!GCTX.is_shared_storage_mode()) {
+    // do nothing for non-shared storage mode
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), min_data_version))) {
+    LOG_WARN("failed to get min data version", K(ret), K(data_version_), K(min_data_version));
+  } else if (OB_UNLIKELY(data_version_ > min_data_version)) {
+#ifndef OB_BUILD_PACKAGE
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("Data version is too large, new data has been written in some places. Please contact R&D", K(ret),
+            K(data_version_), K(min_data_version));
+#else
+    LOG_WARN("Data version is too large, new data has been written in some places.", K(ret), K(data_version_),
+            K(min_data_version));
+#endif
   }
   return ret;
 }
@@ -75,8 +153,10 @@ int64_t ObTabletBlockHeader::get_serialize_size(void) const
 {
   int64_t len = 0;
   len += serialization::encoded_length_i32(version_);
-  len += serialization::encoded_length_i32(length_);
-  len += serialization::encoded_length_i32(checksum_);
+  len += serialization::encoded_length_i64(len);
+  len += serialization::encoded_length_i32(first_level_size_);
+  len += serialization::encoded_length_i32(first_level_checksum_);
+  len += serialization::encoded_length_i64(static_cast<int64_t>(data_version_));
   len += serialization::encoded_length_i32(inline_meta_count_);
   len += inline_meta_count_ * sizeof(ObInlineSecondaryMetaDesc);
   return len;
@@ -97,10 +177,14 @@ int ObTabletBlockHeader::serialize(char* buf, const int64_t buf_len, int64_t &po
     LOG_WARN("serilize overflow", K(ret), K(buf_len), K(pos), K(size));
   } else if (OB_FAIL(serialization::encode_i32(buf, buf_len, pos, version_))) {
     LOG_WARN("fail to serialize verison", K(ret));
-  } else if (OB_FAIL(serialization::encode_i32(buf, buf_len, pos, length_))) {
+  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, size))) {
     LOG_WARN("fail to serialize length", K(ret));
-  } else if (OB_FAIL(serialization::encode_i32(buf, buf_len, pos, checksum_))) {
-    LOG_WARN("fail to serialize checksum", K(ret));
+  } else if (OB_FAIL(serialization::encode_i32(buf, buf_len, pos, first_level_size_))) {
+    LOG_WARN("fail to serialize tablet first level length", K(ret));
+  } else if (OB_FAIL(serialization::encode_i32(buf, buf_len, pos, first_level_checksum_))) {
+    LOG_WARN("fail to serialize tablet first level checksum", K(ret));
+  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, static_cast<int64_t>(data_version_)))) {
+    LOG_WARN("fail to serialize data version", K(ret));
   } else if (OB_FAIL(serialization::encode_i32(buf, buf_len, pos, inline_meta_count_))) {
     LOG_WARN("fail to serialize inline_meta_count", K(ret));
   } else {
@@ -154,9 +238,12 @@ int ObSecondaryMetaHeader::deserialize(const char* buf, const int64_t data_len, 
     LOG_WARN("fail to deserialize checksum", K(ret), K(data_len), K(new_pos));
   } else if (new_pos - pos < size_ && OB_FAIL(serialization::decode_i32(buf, data_len, new_pos, &payload_size_))) {
     LOG_WARN("fail to deserialize length", K(ret), K(data_len), K(new_pos));
-  } else if (OB_UNLIKELY(new_pos - pos != size_)) {
+  } else if (OB_UNLIKELY(new_pos - pos > size_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("header size doesn't match", K(ret), K(new_pos), K(pos), K(size_));
+  } else if (new_pos - pos < size_) {
+    LOG_WARN("old server may deserialize value written by new server", K(ret), K(size_), K(version_), K(pos), K(new_pos - pos));
+    pos += size_;
   } else {
     pos = new_pos;
   }

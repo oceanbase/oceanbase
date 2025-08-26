@@ -896,13 +896,18 @@ int ObLogCommitter::handle_ddl_task_(PartTransTask *ddl_task)
     const uint64_t tenant_id = ddl_task->get_tenant_id();
     const ObTransID &trans_id = ddl_task->get_trans_id();
     int64_t local_schema_version = OB_INVALID_TIMESTAMP;
+    bool can_recycle_trans_ctx = false; // used to mark begin/commit br released, ddl_task/ls_op_trans don't have begin/commit br
 
     // Advance the transaction context state to COMMITTED
     if (OB_FAIL(trans_ctx_mgr_->get_trans_ctx(tenant_id, trans_id, trans_ctx, false))) {
       LOG_ERROR("get_trans_ctx fail", KR(ret), K(tenant_id), K(trans_id), KPC(trans_ctx), KPC(ddl_task));
     } else if (OB_FAIL(trans_ctx->commit())) {
       LOG_ERROR("TransCtx::commit fail", KR(ret), K(trans_id), KPC(trans_ctx), KPC(ddl_task));
-    } else {}
+    } else if (OB_FAIL(trans_ctx->mark_dont_have_begin_commit_br(can_recycle_trans_ctx, stop_flag_))) {
+      LOG_ERROR("TransCtx::mark_dont_have_begin_commit_br fail", KR(ret), K(trans_id), KPC(trans_ctx), KPC(ddl_task));
+    } else if (can_recycle_trans_ctx) {
+      LOG_WARN_RET(OB_STATE_NOT_MATCH, "trans not expected to be recycled here, may result in memory leak", KR(ret), K(trans_ctx));
+    }
 
     if (OB_SUCC(ret) && ddl_task->is_ddl_trans()) {
       // Set the reference count to: number of statements + 1
@@ -1138,9 +1143,9 @@ int ObLogCommitter::update_tenant_trans_commit_version_(const PartTransTask &par
   if (OB_UNLIKELY(! tls_id.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid tenant_ls_id for checkpoint_task", KR(ret), K(participants));
-//  } else if (OB_UNLIKELY(OB_INVALID_VERSION == commit_version)) {
-//    ret = OB_ERR_UNEXPECTED;
-//    LOG_ERROR("invalid commit_version", KR(ret), K(participants));
+  } else if (OB_UNLIKELY(OB_INVALID_VERSION == trans_commit_version)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid commit_version", KR(ret), K(participants));
   } else {
     ObLogTenantGuard guard;
     ObLogTenant *tenant = NULL;
@@ -1261,6 +1266,12 @@ int ObLogCommitter::commit_binlog_record_list_(TransCtx &trans_ctx,
       } else {
         LOG_DEBUG("trans has no valid br to output, skip this trans", KR(ret), K(trans_ctx));
         ret = OB_SUCCESS;
+        bool tmp_can_recycle_trans_ctx = false;
+        if (OB_FAIL(trans_ctx.mark_dont_have_begin_commit_br(tmp_can_recycle_trans_ctx, stop_flag_))) {
+          LOG_ERROR("mark_dont_have_begin_commit_br fail", KR(ret), K(trans_ctx));
+        } else if (tmp_can_recycle_trans_ctx) {
+          LOG_WARN_RET(OB_STATE_NOT_MATCH, "trans not expected to be recycled here, may result in memory leak", KR(ret), K(trans_ctx));
+        }
       }
     } else {
       LOG_ERROR("failed to wait for valid br", KR(ret), K(trans_ctx));
@@ -1295,6 +1306,12 @@ int ObLogCommitter::commit_binlog_record_list_(TransCtx &trans_ctx,
           K(ddl_schema_version), K(part_trans_task_count));
     } else {
       LOG_DEBUG("commit trans begin", K(trans_ctx));
+
+      // Set host for BEGIN/COMMIT BR to enable TransCtx reference count management
+      // Directly point to TransCtx for easier access
+      begin_br->set_host(&trans_ctx);
+      commit_br->set_host(&trans_ctx);
+
       // push begin br to queue
       if (OB_FAIL(push_br_queue_(begin_br))) {
         if (OB_IN_STOP_STATE != ret) {
@@ -1303,7 +1320,7 @@ int ObLogCommitter::commit_binlog_record_list_(TransCtx &trans_ctx,
       }
 
       // push data
-      while (! stop_flag_ && OB_SUCC(ret) && ! trans_ctx.is_all_br_committed()) {
+      while (! stop_flag_ && OB_SUCC(ret) && ! trans_ctx.is_trans_commit_finish()) {
         ObLogBR *br_task = NULL;
         uint64_t retry_count = 0;
 
@@ -1330,15 +1347,22 @@ int ObLogCommitter::commit_binlog_record_list_(TransCtx &trans_ctx,
         }
       } // while
 
+      if (OB_SUCC(ret) && OB_UNLIKELY(stop_flag_)) {
+        ret = OB_IN_STOP_STATE;
+        LOG_INFO("stop_flag_ is true, stop commit", KR(ret), K(trans_ctx), K_(stop_flag));
+      }
+
       // push commit br to commit
       if (OB_SUCC(ret)) {
         if (OB_FAIL(push_br_queue_(commit_br))) {
           if (OB_IN_STOP_STATE != ret) {
             LOG_ERROR("push_br_queue_ fail", KR(ret), K(commit_br));
           }
-        } else if (trans_ctx.get_total_br_count() != trans_ctx.get_committed_br_count()) {
+        } else if (OB_UNLIKELY(! trans_ctx.is_all_br_committed())) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_ERROR("expected all br commit but not", KR(ret), K(trans_ctx));
+          const int64_t total_br_count = trans_ctx.get_total_br_count();
+          const int64_t committed_br_count = trans_ctx.get_committed_br_count();
+          LOG_ERROR("expected all br commit but not", KR(ret), K_(stop_flag), K(total_br_count), K(committed_br_count), K(trans_ctx));
         }
       }
     }

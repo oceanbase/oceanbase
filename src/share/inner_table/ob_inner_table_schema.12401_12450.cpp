@@ -1924,6 +1924,44 @@ int ObInnerTableSchema::all_virtual_mview_schema(ObTableSchema &table_schema)
       data_sync_scn_default,
       data_sync_scn_default); //default_value
   }
+
+  if (OB_SUCC(ret)) {
+    ObObj is_synced_default;
+    is_synced_default.set_tinyint(0);
+    ADD_COLUMN_SCHEMA_T("is_synced", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObTinyIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      1, //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false, //is_autoincrement
+      is_synced_default,
+      is_synced_default); //default_value
+  }
+
+  if (OB_SUCC(ret)) {
+    ObObj nested_refresh_mode_default;
+    nested_refresh_mode_default.set_int(0);
+    ADD_COLUMN_SCHEMA_T("nested_refresh_mode", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false, //is_autoincrement
+      nested_refresh_mode_default,
+      nested_refresh_mode_default); //default_value
+  }
   table_schema.set_index_using_type(USING_BTREE);
   table_schema.set_row_store_type(ENCODING_ROW_STORE);
   table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);

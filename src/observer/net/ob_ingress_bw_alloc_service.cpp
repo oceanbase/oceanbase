@@ -448,6 +448,34 @@ void ObIngressBWAllocService::runTimerTask()
   if (is_leader()) {
     leader_task();
   }
+
+#ifdef ENABLE_DEBUG_LOG
+  // increase the frequency of update_thread_count to expose potential issues
+  const int64_t START_UPDATE_US = 1200L * 1000000; // start update thread count 20 minutes after start
+  const int64_t UPDATE_INTERVAL_US = 120 * 1000000; // update theread count every 2 minutes
+  static volatile int64_t start_time = ObClockGenerator::getClock();
+  static volatile int64_t last_time = ObClockGenerator::getClock();
+  int64_t cur_time = ObClockGenerator::getClock();
+  int64_t old_time = last_time;
+  if (OB_UNLIKELY(start_time + START_UPDATE_US < cur_time
+      && last_time + UPDATE_INTERVAL_US < cur_time
+      && old_time == ATOMIC_CAS(&last_time, old_time, cur_time))) {
+    int cur_thread_count = GCONF.net_thread_count;
+    if (cur_thread_count == 0) {
+      cur_thread_count = observer::get_default_net_thread_count();
+    }
+    int new_thread_count = cur_time % 10 - 5 + cur_thread_count;
+    new_thread_count = max(static_cast<int>(cur_thread_count * 0.8), new_thread_count);
+    new_thread_count = min(static_cast<int>(cur_thread_count * 1.2), new_thread_count);
+    new_thread_count = min(128, new_thread_count);
+    if (new_thread_count < 1) {
+      new_thread_count = 1;
+    }
+    RPC_LOG(INFO, "trigger to set update_thread_count", K(cur_thread_count), K(new_thread_count));
+    obrpc::global_poc_server.update_thread_count(new_thread_count);
+  }
+#endif
+
 }
 
 void ObIngressBWAllocService::switch_to_follower_forcedly()

@@ -93,52 +93,7 @@ public:
                       share::ObTabletAutoincSeq &data,
                       const int64_t timeout = ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US) const;
 
-  // if trans_stat < BEFORE_PREPARE, trans_version is explained as prepare_version(which is MAX).
-  // else if trans_stat < ON_PREAPRE, trans_version is explained as prepare_version(which is MIN).
-  // else if trans_stat < ON_COMMIT, trans_version is explained as prepare_version(which is a valid data).
-  // else if trans_stat == ON_COMMIT, trans_version is explained as commit_version(which is a valid data).
-  template <typename T, typename T2 = T, ENABLE_IF_NOT_LIKE_FUNCTION(T2, int(const T &))>
-  int get_latest(T &value,
-                 mds::MdsWriter &writer,// FIXME(xuwang.txw): should not exposed, will be removed later
-                 mds::TwoPhaseCommitState &trans_stat,// FIXME(xuwang.txw): should not exposed, will be removed later
-                 share::SCN &trans_version,// FIXME(xuwang.txw): should not exposed, will be removed later
-                 ObIAllocator *alloc = nullptr,
-                 const int64_t read_seq = 0) const {
-    MdsDefaultDeepCopyOperation<T> default_get_op(value, alloc);
-    return get_latest<T, MdsDefaultDeepCopyOperation<T> &>(default_get_op, writer, trans_stat, trans_version, read_seq);
-  }
-  template <typename T, typename T2 = T, ENABLE_IF_NOT_LIKE_FUNCTION(T2, int(const T &))>
-  int get_latest_committed(T &value, ObIAllocator *alloc = nullptr) const {
-    MdsDefaultDeepCopyOperation<T> default_get_op(value, alloc);
-    return get_latest_committed<T, MdsDefaultDeepCopyOperation<T> &>(default_get_op);
-  }
-  template <typename T, typename T2 = T, ENABLE_IF_NOT_LIKE_FUNCTION(T2, int(const T &))>
-  int get_snapshot(T &value,
-                   const share::SCN snapshot,
-                   const int64_t timeout_us,
-                   ObIAllocator *alloc = nullptr,
-                   const int64_t read_seq = 0) const {
-    MdsDefaultDeepCopyOperation<T> default_get_op(value, alloc);
-    return get_snapshot<T, MdsDefaultDeepCopyOperation<T> &>(default_get_op, snapshot, timeout_us, read_seq);
-  }
-  // belows are general get interfaces, which could be customized for complicated data structure
-  template <typename T, typename OP, ENABLE_IF_LIKE_FUNCTION(OP, int(const T &))>
-  int get_latest(OP &&read_op,
-                 mds::MdsWriter &writer,// FIXME(xuwang.txw): should not exposed, will be removed later
-                 mds::TwoPhaseCommitState &trans_stat,// FIXME(xuwang.txw): should not exposed, will be removed later
-                 share::SCN &trans_version,// FIXME(xuwang.txw): should not exposed, will be removed later
-                 const int64_t read_seq = 0) const;
-  template <typename T, typename OP, ENABLE_IF_LIKE_FUNCTION(OP, int(const T &))>
-  int get_latest_committed(OP &&read_op) const;
-  template <typename T, typename OP, ENABLE_IF_LIKE_FUNCTION(OP, int(const T &))>
-  int get_snapshot(OP &&read_op,
-                   const share::SCN snapshot,
-                   const int64_t timeout_us) const;
-  template <typename Key, typename Value, typename OP>
-  int get_snapshot(const Key &key,
-                   OP &&read_op,
-                   const share::SCN snapshot,
-                   const int64_t timeout_us) const;
+
   int get_split_data(ObTabletSplitMdsUserData &data,
                      const int64_t timeout) const;
   int split_partkey_compare(const blocksstable::ObDatumRowkey &rowkey,
@@ -162,6 +117,52 @@ public:
   template <typename T>
   int get_latest_committed_data(T &value, ObIAllocator *alloc = nullptr);
 protected:// implemented by ObTablet
+  // if trans_stat < BEFORE_PREPARE, trans_version is explained as prepare_version(which is MAX).
+  // else if trans_stat < ON_PREAPRE, trans_version is explained as prepare_version(which is MIN).
+  // else if trans_stat < ON_COMMIT, trans_version is explained as prepare_version(which is a valid data).
+  // else if trans_stat == ON_COMMIT, trans_version is explained as commit_version(which is a valid data).
+  template <typename T, typename T2 = T, ENABLE_IF_NOT_LIKE_FUNCTION(T2, int(const T &))>
+  int get_latest(T &value,
+                 mds::MdsWriter &writer,// FIXME(zk250686): should not exposed, will be removed later
+                 mds::TwoPhaseCommitState &trans_stat,// FIXME(zk250686): should not exposed, will be removed later
+                 share::SCN &trans_version,// FIXME(zk250686): should not exposed, will be removed later
+                 ObIAllocator *alloc = nullptr,
+                 const int64_t read_seq = 0) const {
+    MdsDefaultDeepCopyOperation<T> default_get_op(value, alloc);
+    return get_latest<T, MdsDefaultDeepCopyOperation<T> &>(default_get_op, writer, trans_stat, trans_version, read_seq);
+  }
+  template <typename T, typename T2 = T, ENABLE_IF_NOT_LIKE_FUNCTION(T2, int(const T &))>
+  int get_latest_committed(T &value, ObIAllocator *alloc = nullptr) const {
+    MdsDefaultDeepCopyOperation<T> default_get_op(value, alloc);
+    return get_latest_committed<T, MdsDefaultDeepCopyOperation<T> &>(default_get_op);
+  }
+  template <typename T, typename T2 = T, ENABLE_IF_NOT_LIKE_FUNCTION(T2, int(const T &))>
+  int get_snapshot(T &value,
+                   const share::SCN snapshot,
+                   const int64_t timeout_us,
+                   ObIAllocator *alloc = nullptr,
+                   const int64_t read_seq = 0) const {
+    MdsDefaultDeepCopyOperation<T> default_get_op(value, alloc);
+    return get_snapshot<T, MdsDefaultDeepCopyOperation<T> &>(default_get_op, snapshot, timeout_us, read_seq);
+  }
+  // belows are general get interfaces, which could be customized for complicated data structure
+  template <typename T, typename OP, ENABLE_IF_LIKE_FUNCTION(OP, int(const T &))>
+  int get_latest(OP &&read_op,
+                 mds::MdsWriter &writer,// FIXME(zk250686): should not exposed, will be removed later
+                 mds::TwoPhaseCommitState &trans_stat,// FIXME(zk250686): should not exposed, will be removed later
+                 share::SCN &trans_version,// FIXME(zk250686): should not exposed, will be removed later
+                 const int64_t read_seq = 0) const;
+  template <typename T, typename OP, ENABLE_IF_LIKE_FUNCTION(OP, int(const T &))>
+  int get_latest_committed(OP &&read_op) const;
+  template <typename T, typename OP, ENABLE_IF_LIKE_FUNCTION(OP, int(const T &))>
+  int get_snapshot(OP &&read_op,
+                   const share::SCN snapshot,
+                   const int64_t timeout_us) const;
+  template <typename Key, typename Value, typename OP>
+  int get_snapshot(const Key &key,
+                   OP &&read_op,
+                   const share::SCN snapshot,
+                   const int64_t timeout_us) const;
   // TODO(@gaishun.gs): remove these virtual functions later
   virtual bool check_is_inited_() const = 0;
   virtual const ObTabletMeta &get_tablet_meta_() const = 0;
@@ -217,9 +218,9 @@ protected:// implemented by ObTablet
   template <typename T, typename OP>
   int cross_ls_get_latest(const ObITabletMdsInterface *another,
                           OP &&read_op,
-                          mds::MdsWriter &writer,// FIXME(xuwang.txw): should not exposed, will be removed later
-                          mds::TwoPhaseCommitState &trans_stat,// FIXME(xuwang.txw): should not exposed, will be removed later
-                          share::SCN &trans_version,// FIXME(xuwang.txw): should not exposed, will be removed later
+                          mds::MdsWriter &writer,// FIXME(zk250686): should not exposed, will be removed later
+                          mds::TwoPhaseCommitState &trans_stat,// FIXME(zk250686): should not exposed, will be removed later
+                          share::SCN &trans_version,// FIXME(zk250686): should not exposed, will be removed later
                           const int64_t read_seq = 0) const;
   template <typename Key, typename Value>
   int replay(const Key &key,

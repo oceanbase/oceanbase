@@ -41,7 +41,7 @@ enum class ObStorageObjectType : uint8_t // FARM COMPAT WHITELIST
 bool is_read_through_storage_object_type(const ObStorageObjectType type);
 bool is_need_alloc_file_size(const ObStorageObjectType type);
 bool is_pin_storage_object_type(const ObStorageObjectType type);
-bool is_ls_replica_prewarm_filter_object_type(const ObStorageObjectType type);
+bool is_overwrite_object_type(const ObStorageObjectType type);
 bool need_check_inner_tablet_type(const ObStorageObjectType type);
 
 
@@ -111,9 +111,15 @@ public:
   bool is_id_mode_backup() const; // sn deploy mode, but backup macro id.
   bool is_id_mode_share() const; // ss deploy mode
   bool is_shared_data_or_meta() const; // shared tablet macro block in ss mode
+  bool is_shared_data_block_except_mds() const; // shared tablet data macro block in ss mode, except mds
+  bool is_shared_data_block_or_meta_block() const; // shared tablet meta or data macro block in ss mode
+  bool is_shared_data_block_or_meta_block_except_mds() const; // shared tablet meta or data macro block in ss mode, except mds
   bool is_private_data_or_meta() const; // private tablet macro block in ss mode
   bool is_data() const; // shared data or private data
   bool is_meta() const; // shared meta or private meta
+  bool is_tablet_local_cache_object() const; // shared data or private data or shared meta or private meta, which has tablet info
+  bool is_private_macro() const; // private data/meta macro block in ss mode
+  bool is_macro_write_cache_ctrl_obj_type() const; // macro write cache controlled by _ss_local_cache_control in ss mode
   void set_id_mode(const uint64_t id_mode) { id_mode_ = id_mode; }
   // Local mode
   int64_t block_index() const { return block_index_; }

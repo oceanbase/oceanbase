@@ -197,7 +197,7 @@ TEST_F(TestSSPhysicalBlockInfo, phy_blk_common_header)
   ObSSPhyBlockCommonHeader common_header;
   ASSERT_EQ(false, common_header.is_valid());
   ASSERT_LT(0, common_header.header_size_);
-  ASSERT_EQ(ObSSPhyBlockCommonHeader::get_serialize_size(), common_header.header_size_);
+  ASSERT_EQ(common_header.get_serialize_size(), common_header.header_size_);
   common_header.payload_size_ = 201;
   common_header.payload_checksum_ = 505;
   common_header.set_block_type(ObSSPhyBlockType::SS_MICRO_DATA_BLK);
@@ -230,11 +230,11 @@ TEST_F(TestSSPhysicalBlockInfo, micro_data_blk_header)
   data_blk_header.micro_index_size_ = 99;
   ASSERT_EQ(true, data_blk_header.is_valid());
 
-  const int64_t buf_len = ObSSMicroDataBlockHeader::get_serialize_size();
+  const int64_t buf_len = data_blk_header.get_serialize_size();
   char buf[buf_len];
   int64_t pos = 0;
   ASSERT_EQ(OB_SUCCESS, data_blk_header.serialize(buf, buf_len, pos));
-  ASSERT_EQ(pos, ObSSMicroDataBlockHeader::get_serialize_size());
+  ASSERT_EQ(pos, data_blk_header.get_serialize_size());
 
   ObSSMicroDataBlockHeader tmp_header;
   pos = 0;
@@ -256,11 +256,11 @@ TEST_F(TestSSPhysicalBlockInfo, ckpt_blk_header)
   ckpt_blk_header.prev_phy_blk_id_ = 11;
   ASSERT_EQ(true, ckpt_blk_header.is_valid());
 
-  const int64_t buf_len = ObSSCkptBlockHeader::get_serialize_size();
+  const int64_t buf_len = ckpt_blk_header.get_serialize_size();
   char buf[buf_len];
   int64_t pos = 0;
   ASSERT_EQ(OB_SUCCESS, ckpt_blk_header.serialize(buf, buf_len, pos));
-  ASSERT_EQ(pos, ObSSCkptBlockHeader::get_serialize_size());
+  ASSERT_EQ(pos, ckpt_blk_header.get_serialize_size());
 
   ObSSCkptBlockHeader tmp_header;
   pos = 0;

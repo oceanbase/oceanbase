@@ -105,11 +105,10 @@ int ObLobManager::init()
     LOG_WARN("ObLobManager init twice.", K(ret));
   } else if (OB_FAIL(allocator_.init(common::ObMallocAllocator::get_instance(), OB_MALLOC_MIDDLE_BLOCK_SIZE, mem_attr))) {
     LOG_WARN("init allocator failed.", K(ret));
-  } else if (OB_FAIL(ext_info_log_allocator_.init(
-      common::ObMallocAllocator::get_instance(),
-      OB_MALLOC_NORMAL_BLOCK_SIZE,
-      lib::ObMemAttr(tenant_id, "ExtInfoLog", ObCtxIds::LOB_CTX_ID)))) {
-    LOG_WARN("init ext info log allocator failed.", K(ret));
+  } else if (OB_FAIL(throttle_tool_.init(&ext_info_log_allocator_))) {
+    LOG_WARN("init throttle_tool fail", K(ret));
+  } else if (OB_FAIL(ext_info_log_allocator_.init(&throttle_tool_))) {
+    LOG_WARN("init ext info log fail", K(ret));
   } else {
     OB_ASSERT(sizeof(ObLobCommon) == sizeof(uint32));
     lob_ctx_.lob_meta_mngr_ = &meta_manager_;

@@ -26,13 +26,23 @@ template <ObExprOperatorType agg_func, VecValueTypeClass in_tc, VecValueTypeClas
 class ApproxCountDistinct final
   : public BatchAggregateWrapper<ApproxCountDistinct<agg_func, in_tc, out_tc>>
 {
-  static const constexpr int8_t LLC_BUCKET_BITS = 10;
-  static const constexpr int64_t LLC_NUM_BUCKETS = (1 << LLC_BUCKET_BITS);
 public:
   static const constexpr VecValueTypeClass IN_TC = in_tc;
   static const constexpr VecValueTypeClass OUT_TC = out_tc;
 public:
   ApproxCountDistinct() {}
+  virtual int init(RuntimeContext &agg_ctx, const int64_t agg_col_id, ObIAllocator &allocator) override
+  {
+    int ret = OB_SUCCESS;
+    ObAggrInfo &aggr_info = agg_ctx.aggr_infos_.at(agg_col_id);
+    llc_num_buckets_ = ObAggrInfo::get_approx_cnt_llc_buck_num(aggr_info.expr_->extra_);
+    if (OB_UNLIKELY(!ObExprEstimateNdv::llc_is_num_buckets_valid(llc_num_buckets_))) {
+      ret = OB_ERR_UNEXPECTED;
+      SQL_LOG(WARN, "invalid llc buckets number", K(ret), K(llc_num_buckets_), KP(aggr_info.expr_));
+    } else {
+    }
+    return ret;
+  }
   template <typename ColumnFmt>
   OB_INLINE int add_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
                      const int32_t agg_col_id, char *agg_cell, void *tmp_res, int64_t &calc_info)
@@ -43,23 +53,23 @@ public:
       const char *payload = nullptr;
       int32_t len = 0;
       columns.get_payload(row_num, payload, len);
-      if (OB_UNLIKELY(len != LLC_NUM_BUCKETS)) {
+      if (OB_UNLIKELY(len != llc_num_buckets_)) {
         ret = OB_INVALID_ARGUMENT;
         SQL_LOG(WARN, "unexpected length of input", K(ret), K(len));
       } else if (OB_ISNULL(llc_bitmap_buf)) {
         // not calculated before, copy from payload
-        llc_bitmap_buf = (char *)agg_ctx.allocator_.alloc(LLC_NUM_BUCKETS);
+        llc_bitmap_buf = (char *)agg_ctx.allocator_.alloc(llc_num_buckets_);
         if (OB_ISNULL(llc_bitmap_buf)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           SQL_LOG(WARN, "allocate memory failed", K(ret));
         } else {
-          MEMSET(llc_bitmap_buf, 0, LLC_NUM_BUCKETS);
-          MEMCPY(llc_bitmap_buf, payload, LLC_NUM_BUCKETS);
+          MEMSET(llc_bitmap_buf, 0, llc_num_buckets_);
+          MEMCPY(llc_bitmap_buf, payload, llc_num_buckets_);
           STORE_MEM_ADDR(llc_bitmap_buf, agg_cell);
-          *reinterpret_cast<int32_t *>(agg_cell + sizeof(char *)) = LLC_NUM_BUCKETS;
+          *reinterpret_cast<int32_t *>(agg_cell + sizeof(char *)) = llc_num_buckets_;
         }
       } else {
-        for (int i = 0; i < LLC_NUM_BUCKETS; i++) {
+        for (int i = 0; i < llc_num_buckets_; i++) {
           llc_bitmap_buf[i] =
             std::max(static_cast<uint8_t>(llc_bitmap_buf[i]), static_cast<uint8_t>(payload[i]));
         }
@@ -80,7 +90,7 @@ public:
         if (OB_FAIL(hash_func(tmp_datum, hash_val, hash_val))) {
           SQL_LOG(WARN, "hash func failed", K(ret));
         } else if (OB_FAIL(
-                     llc_add_value(hash_val, reinterpret_cast<char *>(tmp_res), LLC_NUM_BUCKETS))) {
+                     llc_add_value(hash_val, reinterpret_cast<char *>(tmp_res), llc_num_buckets_))) {
           SQL_LOG(WARN, "llc add value failed", K(ret));
         }
       }
@@ -106,17 +116,22 @@ public:
         (const char *)get_tmp_res(agg_ctx, agg_col_idx, const_cast<char *>(cur_agg_cell));
       rollup_llc_bitmap_buf =
         (char *)get_tmp_res(agg_ctx, agg_col_idx, const_cast<char *>(rollup_agg_cell));
+      if (OB_ISNULL(cur_llc_bitmap_buf) || OB_ISNULL(rollup_llc_bitmap_buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        SQL_LOG(WARN, "allocate llc bitmap buf failed", K(ret));
+      }
     } else {
       cur_llc_bitmap_buf =
         reinterpret_cast<const char *>(*reinterpret_cast<const int64_t *>(cur_agg_cell));
       rollup_llc_bitmap_buf =
         reinterpret_cast<char *>(*reinterpret_cast<const int64_t *>(rollup_agg_cell));
     }
-    if (OB_LIKELY(curr_not_nulls.at(agg_col_idx))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_LIKELY(curr_not_nulls.at(agg_col_idx))) {
       NotNullBitVector &rollup_not_nulls =
         agg_ctx.locate_notnulls_bitmap(agg_col_idx, rollup_agg_cell);
       if (agg_func == T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE) {
-        rollup_llc_bitmap_buf = (char *)agg_ctx.allocator_.alloc(LLC_NUM_BUCKETS);
+        rollup_llc_bitmap_buf = (char *)agg_ctx.allocator_.alloc(llc_num_buckets_);
         if (OB_ISNULL(cur_llc_bitmap_buf)) {
           ret = OB_ERR_UNEXPECTED;
           SQL_LOG(WARN, "invalid null llc bitmap", K(ret));
@@ -124,13 +139,13 @@ public:
           ret = OB_ALLOCATE_MEMORY_FAILED;
           SQL_LOG(WARN, "allocate memory failed", K(ret));
         } else {
-          MEMSET(rollup_llc_bitmap_buf, 0, LLC_NUM_BUCKETS);
-          MEMCPY(rollup_llc_bitmap_buf, cur_llc_bitmap_buf, LLC_NUM_BUCKETS);
+          MEMSET(rollup_llc_bitmap_buf, 0, llc_num_buckets_);
+          MEMCPY(rollup_llc_bitmap_buf, cur_llc_bitmap_buf, llc_num_buckets_);
           STORE_MEM_ADDR(rollup_llc_bitmap_buf, rollup_agg_cell);
-          *reinterpret_cast<int32_t *>(rollup_agg_cell + sizeof(char *)) = LLC_NUM_BUCKETS;
+          *reinterpret_cast<int32_t *>(rollup_agg_cell + sizeof(char *)) = llc_num_buckets_;
         }
       } else {
-        MEMCPY(rollup_llc_bitmap_buf, cur_llc_bitmap_buf, LLC_NUM_BUCKETS);
+        MEMCPY(rollup_llc_bitmap_buf, cur_llc_bitmap_buf, llc_num_buckets_);
       }
       rollup_not_nulls.set(agg_col_idx);
     }
@@ -166,18 +181,23 @@ public:
     ColumnFmt *res_vec = static_cast<ColumnFmt *>(agg_expr.get_vector(agg_ctx.eval_ctx_));
     if (agg_func != T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE) {
       llc_bitmap_buf = (const char *)get_tmp_res(agg_ctx, agg_col_id, const_cast<char *>(agg_cell));
+      if (OB_ISNULL(llc_bitmap_buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        SQL_LOG(WARN, "failed to allocate llc bitmap buf", K(ret));
+      }
     } else {
       llc_bitmap_buf = reinterpret_cast<const char *>(*reinterpret_cast<const int64_t *>(agg_cell));
     }
-    if (agg_func == T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE) {
+    if (OB_FAIL(ret)) {
+    } else if (agg_func == T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE) {
       if (OB_LIKELY(not_nulls.at(agg_col_id))) {
-        char *res_buf = agg_expr.get_str_res_mem(agg_ctx.eval_ctx_, LLC_NUM_BUCKETS);
+        char *res_buf = agg_expr.get_str_res_mem(agg_ctx.eval_ctx_, llc_num_buckets_);
         if (OB_ISNULL(res_buf)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           SQL_LOG(WARN, "allocate memory failed", K(ret));
         } else {
-          MEMCPY(res_buf, llc_bitmap_buf, LLC_NUM_BUCKETS);
-          res_vec->set_payload_shallow(output_idx, res_buf, LLC_NUM_BUCKETS);
+          MEMCPY(res_buf, llc_bitmap_buf, llc_num_buckets_);
+          res_vec->set_payload_shallow(output_idx, res_buf, llc_num_buckets_);
         }
       } else {
         res_vec->set_null(output_idx);
@@ -186,16 +206,16 @@ public:
       ret = OB_ERR_UNEXPECTED;
       SQL_LOG(WARN , "invalid null llc bitmap", K(ret));
     } else if (agg_func == T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS) {
-      char *res_buf = agg_expr.get_str_res_mem(agg_ctx.eval_ctx_, LLC_NUM_BUCKETS);
+      char *res_buf = agg_expr.get_str_res_mem(agg_ctx.eval_ctx_, llc_num_buckets_);
       if (OB_ISNULL(res_buf)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         SQL_LOG(WARN, "allocate memory failed", K(ret));
       } else {
-        MEMCPY(res_buf, llc_bitmap_buf, LLC_NUM_BUCKETS);
-        res_vec->set_payload_shallow(output_idx, res_buf, LLC_NUM_BUCKETS);
+        MEMCPY(res_buf, llc_bitmap_buf, llc_num_buckets_);
+        res_vec->set_payload_shallow(output_idx, res_buf, llc_num_buckets_);
       }
     } else if (OB_LIKELY(not_nulls.at(agg_col_id))) {
-      ObString llc_str(LLC_NUM_BUCKETS, llc_bitmap_buf);
+      ObString llc_str(llc_num_buckets_, llc_bitmap_buf);
       int64_t tmp_result = OB_INVALID_COUNT;
       ObExprEstimateNdv::llc_estimate_ndv(tmp_result, llc_str);
       if (tmp_result >= 0) {
@@ -233,12 +253,12 @@ public:
     ob_assert(agg_func == T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS);
     char *llc_bitmap_buf = EXTRACT_MEM_ADDR(aggr_cell);
     if (OB_ISNULL(llc_bitmap_buf)) {
-      llc_bitmap_buf = (char *)agg_ctx.allocator_.alloc(LLC_NUM_BUCKETS);
+      llc_bitmap_buf = (char *)agg_ctx.allocator_.alloc(llc_num_buckets_);
       if (OB_ISNULL(llc_bitmap_buf)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         SQL_LOG(WARN, "allocate memory failed", K(ret));
       } else {
-        MEMSET(llc_bitmap_buf, 0, LLC_NUM_BUCKETS);
+        MEMSET(llc_bitmap_buf, 0, llc_num_buckets_);
         STORE_MEM_ADDR(llc_bitmap_buf, aggr_cell);
       }
     }
@@ -255,7 +275,8 @@ public:
         if (param_vec.is_null(row_sel.index(i))) { pvt_skip.set(row_sel.index(i)); }
       }
     }
-    if (param_id == agg_ctx.aggr_infos_.at(agg_col_id).param_exprs_.count() - 1) {
+    if (OB_FAIL(ret)) {
+    } else if (param_id == agg_ctx.aggr_infos_.at(agg_col_id).param_exprs_.count() - 1) {
       // last param, calculate hash values if possible
       ObIArray<ObExpr *> &param_exprs = agg_ctx.aggr_infos_.at(agg_col_id).param_exprs_;
       const char *payload = nullptr;
@@ -278,7 +299,7 @@ public:
             }
           }
           if (OB_SUCC(ret)) {
-            if (OB_FAIL(llc_add_value(hash_val, llc_bitmap_buf, LLC_NUM_BUCKETS))) {
+            if (OB_FAIL(llc_add_value(hash_val, llc_bitmap_buf, llc_num_buckets_))) {
               SQL_LOG(WARN, "add llc value failed");
             }
           }
@@ -301,7 +322,7 @@ public:
             }
           }
           if (OB_SUCC(ret)) {
-            if (OB_FAIL(llc_add_value(hash_val, llc_bitmap_buf, LLC_NUM_BUCKETS))) {
+            if (OB_FAIL(llc_add_value(hash_val, llc_bitmap_buf, llc_num_buckets_))) {
               SQL_LOG(WARN, "add llc value failed");
             }
           }
@@ -319,29 +340,29 @@ public:
     void *llc_bitmap_buf = get_tmp_res(agg_ctx, agg_col_idx, agg_cell);
 
     if (agg_func != T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE && OB_ISNULL(llc_bitmap_buf)) {
-      ret = OB_ERR_UNEXPECTED;
-      SQL_LOG(WARN, "invalid null llc bitmap buf", K(ret), K(*this));
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      SQL_LOG(WARN, "allocate llc bitmap buf failed", K(ret), K(*this));
     } else if (OB_LIKELY(agg_ctx.aggr_infos_.at(agg_col_idx).param_exprs_.count() == 1)) {
       if (agg_func == T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE) {
-        if (OB_UNLIKELY(data_len != LLC_NUM_BUCKETS)) {
+        if (OB_UNLIKELY(data_len != llc_num_buckets_)) {
           ret = OB_ERR_UNEXPECTED;
           SQL_LOG(WARN, "unexpected input length", K(ret));
         } else if (!is_null) {
           char *llc_bitmap_buf = EXTRACT_MEM_ADDR(agg_cell);
           if (OB_ISNULL(llc_bitmap_buf)) {
             // not calculated before
-            llc_bitmap_buf = (char *)agg_ctx.allocator_.alloc(LLC_NUM_BUCKETS);
+            llc_bitmap_buf = (char *)agg_ctx.allocator_.alloc(llc_num_buckets_);
             if (OB_ISNULL(llc_bitmap_buf)) {
               ret = OB_ALLOCATE_MEMORY_FAILED;
               SQL_LOG(WARN, "allocate memory failed", K(ret));
             } else {
-              MEMSET(llc_bitmap_buf, 0, LLC_NUM_BUCKETS);
-              MEMCPY(llc_bitmap_buf, data, LLC_NUM_BUCKETS);
+              MEMSET(llc_bitmap_buf, 0, llc_num_buckets_);
+              MEMCPY(llc_bitmap_buf, data, llc_num_buckets_);
               STORE_MEM_ADDR(llc_bitmap_buf, agg_cell);
-              *reinterpret_cast<int32_t *>(agg_cell + sizeof(char *)) = LLC_NUM_BUCKETS;
+              *reinterpret_cast<int32_t *>(agg_cell + sizeof(char *)) = llc_num_buckets_;
             }
           } else {
-            for (int i = 0; i < LLC_NUM_BUCKETS; i++) {
+            for (int i = 0; i < llc_num_buckets_; i++) {
               llc_bitmap_buf[i] =
                 std::max(static_cast<uint8_t>(llc_bitmap_buf[i]), static_cast<uint8_t>(data[i]));
             }
@@ -359,7 +380,7 @@ public:
           if (OB_FAIL(hash_func(tmp_datum, hash_val, hash_val))) {
             SQL_LOG(WARN, "hash calculation failed", K(ret));
           } else if (OB_FAIL(llc_add_value(hash_val, reinterpret_cast<char *>(llc_bitmap_buf),
-                                           LLC_NUM_BUCKETS))) {
+                                           llc_num_buckets_))) {
             SQL_LOG(WARN, "llc add value failed", K(ret));
           } else {
             NotNullBitVector &not_nulls = agg_ctx.locate_notnulls_bitmap(agg_col_idx, agg_cell);
@@ -390,7 +411,7 @@ public:
           }
         }
         if (OB_SUCC(ret)) {
-          if (OB_FAIL(llc_add_value(hash_val, (char *)llc_bitmap_buf, LLC_NUM_BUCKETS))) {
+          if (OB_FAIL(llc_add_value(hash_val, (char *)llc_bitmap_buf, llc_num_buckets_))) {
             SQL_LOG(WARN, "llc add value failed", K(ret));
           } else {
             agg_ctx.locate_notnulls_bitmap(agg_col_idx, agg_cell).set(agg_col_idx);
@@ -410,12 +431,12 @@ public:
       char *llc_bitmap_buf = EXTRACT_MEM_ADDR((agg_cell + cell_len));
       if (OB_ISNULL(llc_bitmap_buf)) {
         // allocate tmp res memory
-        llc_bitmap_buf = (char *)agg_ctx.allocator_.alloc(LLC_NUM_BUCKETS);
+        llc_bitmap_buf = (char *)agg_ctx.allocator_.alloc(llc_num_buckets_);
         if (OB_ISNULL(llc_bitmap_buf)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           SQL_LOG(ERROR, "allocate memory failed", K(ret));
         } else {
-          MEMSET(llc_bitmap_buf, 0, LLC_NUM_BUCKETS);
+          MEMSET(llc_bitmap_buf, 0, llc_num_buckets_);
           STORE_MEM_ADDR(llc_bitmap_buf, (agg_cell + cell_len));
           ret_ptr = llc_bitmap_buf;
         }
@@ -425,15 +446,15 @@ public:
     } else if (agg_func == T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS) {
       char *llc_bitmap_buf = EXTRACT_MEM_ADDR(agg_cell);
       if (OB_ISNULL(llc_bitmap_buf)) {
-        llc_bitmap_buf = (char *)agg_ctx.allocator_.alloc(LLC_NUM_BUCKETS);
+        llc_bitmap_buf = (char *)agg_ctx.allocator_.alloc(llc_num_buckets_);
         if (OB_ISNULL(llc_bitmap_buf)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           SQL_LOG(ERROR, "allocate memory failed", K(ret));
         } else {
-          MEMSET(llc_bitmap_buf, 0, LLC_NUM_BUCKETS);
+          MEMSET(llc_bitmap_buf, 0, llc_num_buckets_);
           STORE_MEM_ADDR(llc_bitmap_buf, agg_cell);
           // set result length of approx_count_distinct_synopsis
-          *reinterpret_cast<int32_t *>(agg_cell + sizeof(char *)) = LLC_NUM_BUCKETS;
+          *reinterpret_cast<int32_t *>(agg_cell + sizeof(char *)) = llc_num_buckets_;
         }
       }
       if (OB_SUCC(ret)) {
@@ -460,15 +481,15 @@ private:
   {
     // copy from `ObAggregateProcessor::llv_add_value`
     int ret = OB_SUCCESS;
-    uint64_t bucket_index = value >> (64 - LLC_BUCKET_BITS);
+    uint64_t bucket_index = value >> (64 - llc_bucket_bits());
     uint64_t pmax = 0;
-    if (0 == value << LLC_BUCKET_BITS) {
+    if (0 == value << llc_bucket_bits()) {
       // do nothing
     } else {
-      pmax = ObExprEstimateNdv::llc_leading_zeros(value << LLC_BUCKET_BITS, 64 - LLC_BUCKET_BITS) + 1;
+      pmax = ObExprEstimateNdv::llc_leading_zeros(value << llc_bucket_bits(), 64 - llc_bucket_bits()) + 1;
     }
     ObString::obstr_size_t llc_num_buckets = size;
-    OB_ASSERT(size == LLC_NUM_BUCKETS);
+    OB_ASSERT(size == llc_num_buckets_);
     OB_ASSERT(ObExprEstimateNdv::llc_is_num_buckets_valid(llc_num_buckets));
     OB_ASSERT(llc_num_buckets > bucket_index);
     if (pmax > static_cast<uint8_t>(llc_bitmap_buf[bucket_index])) {
@@ -477,6 +498,12 @@ private:
     }
     return ret;
   }
+  int64_t llc_bucket_bits() const
+  {
+    return __builtin_ctz(llc_num_buckets_);
+  }
+private:
+  int64_t llc_num_buckets_;
 };
 
 } // end aggregate

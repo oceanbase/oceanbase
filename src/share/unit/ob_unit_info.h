@@ -33,6 +33,7 @@ public:
   {
     UNIT_STATUS_ACTIVE = 0,
     UNIT_STATUS_DELETING,
+    UNIT_STATUS_ADDING,   // only as placeholder
     UNIT_STATUS_MAX,
   };
 public:
@@ -66,6 +67,7 @@ public:
   bool is_manual_migrate_;
   Status status_;
   common::ObReplicaType replica_type_;
+  int64_t time_stamp_ =  OB_INVALID_TIMESTAMP;
 };
 
 inline bool ObUnit::operator <(const ObUnit &unit) const

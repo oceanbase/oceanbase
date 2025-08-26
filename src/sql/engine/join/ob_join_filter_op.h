@@ -281,6 +281,7 @@ public:
   common::ObFixedArray<bool, common::ObIAllocator> hash_join_is_ns_equal_cond_;
   int64_t rf_max_wait_time_ms_{0};
   bool use_ndv_runtime_bloom_filter_size_{false}; //whether use ndv size build bloom filter
+  bool enable_runtime_filter_adaptive_apply_{true};
 };
 
 class ObJoinFilterMaterialGroupController
@@ -377,6 +378,7 @@ private:
   int open_join_filter_use();
   int join_filter_create_get_next_batch(const int64_t max_row_cnt);
   int join_filter_create_do_material(const int64_t max_row_cnt);
+  int build_and_broadcast_runtime_filter();
   int join_filter_create_bypass_all(const int64_t max_row_cnt);
 
   int join_filter_use_get_next_batch(const int64_t max_row_cnt);
@@ -386,7 +388,6 @@ private:
   int init_local_msg_from_shared_msg(ObP2PDatahubMsgBase &msg);
   int release_local_msg();
   int release_shared_msg();
-  int mark_not_need_send_bf_msg();
   int prepare_extra_use_info_for_vec20(ObExprJoinFilter::ObExprJoinFilterContext *join_filter_ctx,
                                    ObP2PDatahubMsgBase::ObP2PDatahubMsgType dh_msg_type);
 
@@ -404,10 +405,9 @@ private:
                                                const RowMeta &row_meta,
                                                uint64_t *join_filter_hash_values);
 
-  int get_exec_row_count_and_ndv(const int64_t worker_row_count, int64_t &total_row_count, bool is_in_drain);
+  int get_exec_row_count_and_ndv(const int64_t worker_row_count, int64_t &total_row_count);
   bool can_sync_row_count_locally();
-  int send_datahub_count_row_msg(int64_t &total_row_count, ObTMArray<ObJoinFilterNdv *> &ndv_info,
-                                 bool need_wait_whole_msg);
+  int send_datahub_count_row_msg(int64_t &total_row_count, ObTMArray<ObJoinFilterNdv *> &ndv_info);
 
   int fill_range_filter(const ObBatchRows &brs);
   int fill_in_filter(const ObBatchRows &brs, uint64_t *hash_join_hash_values);
@@ -496,7 +496,7 @@ public:
 
   ObJoinFilterMaterialGroupController *group_controller_{nullptr};
   bool force_dump_{false};
-  bool has_sync_row_count_{false};
+  bool has_sent_runtime_filter_{false};
   const ExprFixedArray *build_rows_output_{nullptr};
   ExprFixedArray build_rows_output_for_compat_;
 

@@ -18,6 +18,7 @@
 #include "src/share/vector_index/ob_plugin_vector_index_service.h"
 #include "sql/engine/expr/ob_expr_vector.h"
 #include "sql/das/iter/ob_das_vec_scan_utils.h"
+#include "src/share/vector_index/ob_vector_index_util.h"
 
 namespace oceanbase
 {
@@ -34,6 +35,7 @@ enum ObVidAdaLookupStatus
   STATES_SET_RESULT,
   STATES_ERROR,
   STATES_FINISH,
+  STATES_REFRESH,
 };
 
 enum ObAdaptorIterRowIdx
@@ -67,8 +69,10 @@ public:
       data_filter_rtdef_(nullptr),
       sort_ctdef_(nullptr),
       sort_rtdef_(nullptr),
-      is_pre_filter_(false),
-      post_with_filter_(false) {}
+      vec_index_type_(ObVecIndexType::VEC_INDEX_INVALID),
+      vec_idx_try_path_(ObVecIdxAdaTryPath::VEC_PATH_UNCHOSEN),
+      can_extract_range_(false),
+      is_primary_index_(false) {}
 
   virtual bool is_valid() const override
   {
@@ -84,14 +88,21 @@ public:
            nullptr != vec_aux_rtdef_ &&
            nullptr != vid_rowkey_ctdef_ &&
            nullptr != vid_rowkey_rtdef_ &&
-           (!is_pre_filter_ ||
-           nullptr != rowkey_vid_iter_);
+           (!((is_adaptive_plan() || is_pre_plan()) &&
+           nullptr == rowkey_vid_iter_)) &&
+           (!((is_adaptive_plan() || is_iter_plan()) &&
+           nullptr == data_filter_iter_));
   }
-  TO_STRING_KV(K_(post_with_filter),
-                K_(vec_aux_ctdef),
-                K_(vid_rowkey_ctdef),
-                 K_(data_filter_ctdef),
-                 K_(is_pre_filter));
+  bool is_adaptive_plan() const { return vec_index_type_ == ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN;}
+  bool is_pre_plan() const { return vec_index_type_ == ObVecIndexType::VEC_INDEX_PRE;}
+  bool is_iter_plan() const { return vec_index_type_ == ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER;}
+  TO_STRING_KV(K_(vec_aux_ctdef),
+               K_(vid_rowkey_ctdef),
+               K_(data_filter_ctdef),
+               K_(vec_index_type),
+               K_(vec_idx_try_path),
+               K_(can_extract_range),
+               K_(is_primary_index));
 
   share::ObLSID ls_id_;
   transaction::ObTxDesc *tx_desc_;
@@ -113,8 +124,10 @@ public:
   ObDASScanRtDef *data_filter_rtdef_;
   const ObDASSortCtDef *sort_ctdef_;
   ObDASSortRtDef *sort_rtdef_;
-  bool is_pre_filter_;
-  bool post_with_filter_;
+  ObVecIndexType vec_index_type_;
+  ObVecIdxAdaTryPath vec_idx_try_path_;
+  bool can_extract_range_;
+  bool is_primary_index_;
 };
 class ObSimpleMaxHeap;
 
@@ -135,6 +148,61 @@ class ObHnswSimpleCmpInfo
   bool inited_;
   ObObj filter_arg_;
   ObExpr* filter_expr_;
+};
+
+class ObHnswAadaptiveCtx
+{
+  public:
+  ObHnswAadaptiveCtx()
+  : selectivity_(0.0),
+    row_count_(0),
+    retry_times_(0),
+    pre_total_scan_rows_(0),
+    iter_times_(0),
+    iter_filter_row_cnt_(0),
+    iter_res_row_cnt_(0),
+    pre_scan_row_cnt_(0),
+    can_extract_range_(false),
+    is_primary_index_(false),
+    with_extra_info_(false),
+    only_rowkey_filter_(false) {}
+  TO_STRING_KV(K_(selectivity),
+               K_(row_count),
+               K_(pre_total_scan_rows),
+               K_(iter_times),
+               K_(iter_filter_row_cnt),
+               K_(iter_res_row_cnt),
+               K_(pre_scan_row_cnt),
+               K_(can_extract_range),
+               K_(is_primary_index),
+               K_(with_extra_info),
+               K_(only_rowkey_filter));
+  void reset() {
+    selectivity_ = 0;
+    row_count_ = 0;
+    retry_times_ = 0;
+    pre_total_scan_rows_ = 0;
+    iter_times_ = 0;
+    iter_filter_row_cnt_ = 0;
+    iter_res_row_cnt_ = 0;
+    pre_scan_row_cnt_ = 0;
+    can_extract_range_ = false;
+    is_primary_index_ = false;
+    with_extra_info_ = false;
+    only_rowkey_filter_ = false;
+  }
+  double selectivity_;
+  int64_t row_count_;
+  int64_t retry_times_;
+  int64_t pre_total_scan_rows_;
+  int64_t iter_times_;
+  int64_t iter_filter_row_cnt_;
+  int64_t iter_res_row_cnt_;
+  int64_t pre_scan_row_cnt_;
+  bool can_extract_range_;
+  bool is_primary_index_;
+  bool with_extra_info_;
+  bool only_rowkey_filter_;
 };
 
 class ObDASHNSWScanIter : public ObDASIter
@@ -185,6 +253,7 @@ public:
       tmp_adaptor_vid_iter_(nullptr),
       limit_param_(),
       vec_index_param_(),
+      search_param_(),
       query_cond_(),
       dim_(0),
       search_vec_(nullptr),
@@ -192,10 +261,13 @@ public:
       is_primary_pre_with_rowkey_with_filter_(false),
       go_brute_force_(false),
       only_complete_data_(false),
-      is_pre_filter_(false),
-      post_with_filter_(false),
       extra_column_count_(0),
-      simple_cmp_info_() {
+      simple_cmp_info_(),
+      vec_index_type_(ObVecIndexType::VEC_INDEX_INVALID),
+      vec_idx_try_path_(ObVecIdxAdaTryPath::VEC_PATH_UNCHOSEN),
+      adaptive_ctx_(),
+      can_retry_(false),
+      idx_iter_first_scan_(true) {
         extra_in_rowkey_idxs_.set_attr(ObMemAttr(MTL_ID(), "ExtraIdx"));
       }
 
@@ -237,6 +309,7 @@ private:
     return distance_calc_ != nullptr && ! is_hnsw_bq();
   }
   int process_adaptor_state(bool is_vectorized);
+  int inner_process_adaptor_state(bool is_vectorized);
   int process_adaptor_state_brute_force(ObIAllocator &allocator, bool is_vectorized);
   int process_adaptor_state_hnsw(ObIAllocator &allocator, bool is_vectorized);
   int process_adaptor_state_pre_filter(ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor, bool is_vectorized);
@@ -247,8 +320,18 @@ private:
   int process_adaptor_state_pre_filter_brute_force(ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor,
                                                     int64_t *&brute_vids, int& brute_cnt, bool& need_complete_data,
                                                     bool check_need_complete_data = true);
+  int process_adaptor_state_pre_filter_brute_force_not_bq(ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor,
+                                                    int64_t *&brute_vids, int& brute_cnt, bool& need_complete_data,
+                                                    bool check_need_complete_data = true);
+  int process_adaptor_state_pre_filter_brute_force_bq(ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor,
+                                                    int64_t *&brute_vids, int& brute_cnt, bool& need_complete_data,
+                                                    bool check_need_complete_data = true);
   int set_rowkey_by_vid(ObNewRow *row);
-  int post_query_vid_with_filter(ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor, bool is_vectorized);
+  int post_query_vid_with_filter(ObVectorQueryAdaptorResultContext *ada_ctx,
+                                ObPluginVectorIndexAdaptor* adaptor,
+                                int64_t hnsw_max_iter_scan_nums,
+                                int64_t& iter_scan_total_num,
+                                bool is_vectorized);
   int process_adaptor_state_post_filter(ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor, bool is_vectorized);
   int process_adaptor_state_post_filter_once(ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor);
   int get_single_row_from_data_filter_iter(bool is_vectorized);
@@ -312,13 +395,34 @@ private:
   int prepare_extra_objs(ObIAllocator &allocator, ObObj *&objs);
   int build_extra_info_rowkey(const ObRowkey &rowkey, ObRowkey &extra_rowkey);
   int build_extra_info_range(const ObNewRange &range, const ObNewRange *&const_extra_range);
+  int64_t get_reorder_count(const int64_t ef_search, const int64_t topK, const ObVectorIndexParam& param);
+  int64_t get_reorder_count_for_brute_force(const int64_t ef_search, const int64_t topK, const ObVectorIndexParam& param);
+  inline bool is_pre_filter() { return vec_index_type_ == ObVecIndexType::VEC_INDEX_PRE
+                      || (vec_index_type_ == ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN && vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_PRE_FILTER);}
+  inline bool is_in_filter() { return vec_index_type_ == ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN && vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_IN_FILTER;}
+  inline bool is_post_filter() { return vec_index_type_ == ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER
+                      ||  vec_index_type_ == ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER
+                      || (vec_index_type_ == ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN && vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_ITERATIVE_FILTER);}
+  inline bool is_adaptive_filter() { return vec_index_type_ == ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN;}
+  inline bool is_iter_filter() { return vec_index_type_ == ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER
+                      || (vec_index_type_ == ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN && vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_ITERATIVE_FILTER);}
+  inline bool check_if_can_retry() { return is_adaptive_filter() && (vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_ITERATIVE_FILTER
+                                                                 || vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_PRE_FILTER);}
+  int check_iter_filter_need_retry();
+  int check_pre_filter_need_retry();
+  int reset_filter_path();
+  int updata_vec_exec_ctx(ObPlanStat* plan_stat);
+  int prepare_follower_query_cond(ObVectorQueryConditions &query_cond);
 private:
   static const uint64_t MAX_VSAG_QUERY_RES_SIZE = 16384;
+  static const uint64_t VSAG_MAX_EF_SEARCH = 1000;
+  static constexpr double FIXED_MAGNIFICATION_RATIO = 2.0;
+  static constexpr double ITER_CONSIDER_LAST_SEARCH_SELETIVITY = 0.05;
   static const uint64_t MAX_OPTIMIZE_BATCH_COUNT = 16;
   static const uint64_t MAX_HNSW_BRUTE_FORCE_SIZE = 20000;
-  static const uint64_t VSAG_MAX_EF_SEARCH = 1000;
-  static constexpr double FIXEX_MAGNIFICATION_RATIO = 2.0;
-  static constexpr double ITER_CONSIDER_LAST_SEARCH_SELETIVITY = 0.05;
+  static const int32_t CHANGE_PATH_WINDOW_SIZE = 30;
+  static constexpr double DECAY_FACTOR = 0.5;
+  static const uint64_t MIN_BQ_REORDER_SIZE_FOR_BRUTE_FORCE = 100;
 
 private:
   lib::MemoryContext mem_context_;
@@ -373,22 +477,68 @@ private:
   common::ObLimitParam limit_param_;
 
   ObString vec_index_param_;
+  ObVectorIndexParam search_param_;
   ObVectorQueryConditions query_cond_;
   int64_t dim_;
-  double selectivity_;
-
   ObExpr* search_vec_;
   ObExpr* distance_calc_;
   bool is_primary_pre_with_rowkey_with_filter_;
   bool go_brute_force_;
   bool only_complete_data_;
-  bool is_pre_filter_;
-  bool post_with_filter_;
   int64_t extra_column_count_;
   ObHnswSimpleCmpInfo simple_cmp_info_;
   // extra_info idx to rowkey idx, because of extra_info is sort by column id
   // if extra_column_count_ <= 0, extra_in_rowkey_idxs_ is empty
   ObSEArray<int64_t, 4> extra_in_rowkey_idxs_;
+  ObVecIndexType vec_index_type_;
+  ObVecIdxAdaTryPath vec_idx_try_path_;
+  ObHnswAadaptiveCtx adaptive_ctx_;
+  bool can_retry_;
+  bool idx_iter_first_scan_;
+
+private:
+
+  struct BruteForceContext {
+    ObString search_vec;
+    uint64_t limit;
+    ObExprVectorDistance::ObVecDisType dis_type;
+
+    BruteForceContext() : limit(0), dis_type(ObExprVectorDistance::ObVecDisType::MAX_TYPE) {}
+  };
+
+  struct DistanceResult {
+    const float* distances_inc;
+    const float* distances_snap;
+    int brute_cnt;
+
+    DistanceResult() : distances_inc(nullptr), distances_snap(nullptr), brute_cnt(0) {}
+  };
+
+  int init_brute_force_params(ObVectorQueryAdaptorResultContext *ada_ctx,
+                              ObPluginVectorIndexAdaptor* adaptor,
+                              BruteForceContext& ctx);
+
+  int query_brute_force_distances(ObPluginVectorIndexAdaptor* adaptor,
+                                  const ObString& search_vec,
+                                  int64_t* brute_vids,
+                                  int brute_cnt,
+                                  DistanceResult& dist_result);
+
+  int merge_and_sort_brute_force_results_bq(const DistanceResult& dist_result,
+                                            int64_t* brute_vids,
+                                            int brute_cnt,
+                                            ObSimpleMaxHeap& snap_heap,
+                                            ObSimpleMaxHeap& incr_heap,
+                                            bool& need_complete_data,
+                                            bool check_need_complete_data);
+
+  int build_brute_force_result_iterator_bq(ObPluginVectorIndexAdaptor* adaptor,
+                                           const ObSimpleMaxHeap& snap_heap,
+                                           const ObSimpleMaxHeap& incr_heap,
+                                           ObVectorQueryVidIterator*& result_iter);
+
+  void release_brute_force_distance_memory(ObPluginVectorIndexAdaptor* adaptor,
+                                          const DistanceResult& dist_result);
 };
 
 

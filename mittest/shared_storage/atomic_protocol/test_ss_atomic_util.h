@@ -117,9 +117,10 @@ typedef ObDefaultSSMetaSSLogValue<ObSSLSMeta> ObSSLSMetaSSLogValue;
 
 #define GENERATE_SSTABEL_TASK_INFO(task_info, write_info, op_type) \
   ObSSTableTaskInfo task_info;                            \
-  task_info.type_ = op_type;                                 \
-  task_info.max_meta_seq_ = 1;                               \
-  task_info.max_data_seq_ = 1;                               \
+  task_info.type_ = op_type;                                \
+  task_info.seq_step_ = 1;                                  \
+  task_info.start_data_seq_ = 1;                            \
+  task_info.parallel_ = 1;                                  \
   task_info.start_scn_ = write_info.start_scn_;              \
   task_info.end_scn_ = write_info.end_scn_;                  \
   task_info.output_ = write_info;
@@ -358,6 +359,15 @@ typedef ObDefaultSSMetaSSLogValue<ObSSLSMeta> ObSSLSMetaSSLogValue;
     ASSERT_EQ(OB_SUCCESS, sstablelist_file->abort_op(op_handle##suffix)); \
   } else if (ret == OB_SUCCESS) { \
     OZ(sstablelist_file->finish_op(op_handle##suffix)); \
+  }
+
+#define DO_ONE_SSTABLE_LIST_FAIL_OP(sstablelist_file, gc_info, suffix) \
+  bool need_abort = false; \
+  ObAtomicOpHandle<ObAtomicSSTableListAddOp> op_handle##suffix; \
+  OZ(sstablelist_file->create_op(op_handle##suffix, true, gc_info)); \
+  tablet_cur_op_id += 1; \
+  if (ret == OB_SUCCESS) { \
+    ASSERT_EQ(OB_SUCCESS, sstablelist_file->fail_op(op_handle##suffix)); \
   }
 
 const int MINI_OP_ID = 0;

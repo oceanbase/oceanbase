@@ -91,6 +91,7 @@ static const NonReservedKeyword Mysql_pl_none_reserved_keywords[] =
   {"out", OUT},
   {"package", PACKAGE},
   {"precedes", PRECEDES},
+  {"properties", PROPERTIES},
   {"table_name", TABLE_NAME},
   {"then", THEN},
   {"type", TYPE},

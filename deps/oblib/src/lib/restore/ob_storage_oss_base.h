@@ -42,6 +42,7 @@ static const int OSS_BAD_REQUEST = 400;
 static const int OSS_OBJECT_NOT_EXIST = 404;
 static const int OSS_PERMISSION_DENIED = 403;
 static const int OSS_OBJECT_PWRITE_OFFSET_NOT_MATH = 409;
+static const int OSS_TOO_MANY_REQUESTS = 429;
 static const int OSS_LIMIT_EXCEEDED = 503;
 static const int MD5_STR_LENGTH = 32;//md5 buffer length
 static const char OSS_META_MD5[] = "x-oss-meta-md5";
@@ -158,7 +159,7 @@ public:
   int get_oss_file_meta(
       const common::ObString &bucket, const common::ObString &object,
       ObStorageObjectMetaBase &meta, const char *&remote_md5);
-  void print_oss_info(aos_table_t *resp_headers, aos_status_s *aos_ret, const int ob_errcode);
+  void handle_oss_error(aos_table_t *req_headers, aos_table_t *resp_headers, aos_status_s *aos_ret, int &ob_errcode);
 
   int init_with_storage_info(common::ObObjectStorageInfo *storage_info);
   int init_oss_endpoint();

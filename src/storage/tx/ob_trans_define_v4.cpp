@@ -368,7 +368,9 @@ OB_SERIALIZE_MEMBER(ObTxParam,
                     lock_timeout_us_,
                     access_mode_,
                     isolation_,
-                    cluster_id_);
+                    cluster_id_,
+                    is_for_sslog_ // FARM COMPAT WHITELIST
+                    );
 OB_SERIALIZE_MEMBER(ObTxSavePoint,
                     type_,
                     scn_,
@@ -1256,7 +1258,8 @@ ObTxParam::ObTxParam()
     lock_timeout_us_(-1),
     access_mode_(ObTxAccessMode::RW),
     isolation_(ObTxIsolationLevel::RC),
-    cluster_id_(0)
+    cluster_id_(0),
+    is_for_sslog_(false)
 {}
 bool ObTxParam::is_valid() const
 {
@@ -1273,6 +1276,7 @@ ObTxParam::~ObTxParam()
   access_mode_ = ObTxAccessMode::INVL;
   isolation_ = ObTxIsolationLevel::INVALID;
   cluster_id_ = -1;
+  is_for_sslog_ = false;
 }
 
 ObTxSnapshot::ObTxSnapshot()
@@ -1402,6 +1406,9 @@ void ObTxReadSnapshot::wait_consistency()
   if (SRC::GLOBAL == source_) {
     const int64_t ts = MonotonicTs::current_time().mts_;
     if (ts < uncertain_bound_) {
+      if (TC_REACH_TIME_INTERVAL(1000000)) {
+        TRANS_LOG(INFO, "wait for consistency", K(uncertain_bound_), K(ts));
+      }
       ob_usleep(uncertain_bound_ - ts);
     }
   }

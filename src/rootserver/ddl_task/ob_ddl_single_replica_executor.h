@@ -67,8 +67,7 @@ public:
                      consumer_group_id_ >= 0;
     if (is_tablet_split(ddl_type_)) {
       is_valid = is_valid && compaction_scns_.count() == source_tablet_ids_.count()
-                          && can_reuse_macro_blocks_.count() == source_tablet_ids_.count()
-                          && min_split_start_scn_.is_valid_and_not_min();
+                          && can_reuse_macro_blocks_.count() == source_tablet_ids_.count();
     } else {
       is_valid = (is_valid && compaction_scns_.count() == 0);
     }
@@ -221,7 +220,6 @@ public:
                             const int64_t row_inserted,
                             const int64_t physical_row_count);
   int get_progress(int64_t &row_inserted, int64_t &physical_row_count_, double& percent);
-
   TO_STRING_KV(K(is_inited_), K(tenant_id_), K(dest_tenant_id_), K(ddl_type_),
                K(ddl_task_id_), K(snapshot_version_), K(parallelism_),
                K(execution_id_), K(data_format_version_), K(consumer_group_id_),
@@ -264,6 +262,9 @@ private:
       const ObAddr &addr,
       ObSingleReplicaBuildCtx *&replica_build_ctx,
       bool &is_found);
+#ifdef OB_BUILD_SHARED_STORAGE
+  int schedule_tablet_split_to_leader(const ObDDLReplicaBuildExecutorParam &param);
+#endif
 
 private:
   bool is_inited_;

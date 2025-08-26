@@ -98,9 +98,8 @@ public:
        usable_(true),
        last_set_sql_mode_cstr_(NULL),
        last_set_sql_mode_cstr_buf_size_(0),
-       last_set_client_charset_cstr_(NULL),
-       last_set_connection_charset_cstr_(NULL),
-       last_set_results_charset_cstr_(NULL),
+       last_set_conn_charset_type_(CHARSET_INVALID),
+       dblink_lock_(common::ObLatchIds::ISQL_CONNECTION_DBLINK_LOCK),
        next_conn_(NULL),
        check_priv_(false)
   {}
@@ -108,9 +107,6 @@ public:
     allocator_.reset();
     last_set_sql_mode_cstr_buf_size_ = 0;
     last_set_sql_mode_cstr_ = NULL;
-    last_set_client_charset_cstr_ = NULL;
-    last_set_connection_charset_cstr_ = NULL;
-    last_set_results_charset_cstr_ = NULL;
     next_conn_ = NULL;
   }
 
@@ -211,6 +207,7 @@ public:
   void set_session_init_status(bool status) { is_inited_ = status;}
   virtual void set_user_timeout(int64_t user_timeout) { UNUSED(user_timeout); }
   virtual int64_t get_user_timeout() const { return 0; }
+  virtual void set_for_sslog(bool v) { UNUSED(v); }
   int is_session_inited(const sqlclient::dblink_param_ctx &param_ctx, bool &is_inited)
   {
     int ret = OB_SUCCESS;
@@ -242,14 +239,10 @@ public:
         last_set_sql_mode_cstr_[sql_mode_len] = 0;
       }
     }
-    if (param_ctx.set_client_charset_cstr_ != last_set_client_charset_cstr_ ||
-        param_ctx.set_connection_charset_cstr_ != last_set_connection_charset_cstr_ ||
-        param_ctx.set_results_charset_cstr_ != last_set_results_charset_cstr_ ||
+    if (param_ctx.set_conn_charset_type_ != last_set_conn_charset_type_ ||
         param_ctx.set_transaction_isolation_cstr_ != last_set_transaction_isolation_cstr_) {
       is_inited = false;
-      last_set_client_charset_cstr_ = param_ctx.set_client_charset_cstr_;
-      last_set_connection_charset_cstr_ = param_ctx.set_connection_charset_cstr_;
-      last_set_results_charset_cstr_ = param_ctx.set_results_charset_cstr_;
+      last_set_conn_charset_type_ = param_ctx.set_conn_charset_type_;
       last_set_transaction_isolation_cstr_ = param_ctx.set_transaction_isolation_cstr_;
     }
     return ret;
@@ -280,12 +273,10 @@ protected:
   bool usable_;  // usable_ = false: connection is unusable, should not execute query again.
   char *last_set_sql_mode_cstr_; // for mysql dblink to set sql mode
   int64_t last_set_sql_mode_cstr_buf_size_;
-  const char *last_set_client_charset_cstr_;
-  const char *last_set_connection_charset_cstr_;
-  const char *last_set_results_charset_cstr_;
+  ObCharsetType last_set_conn_charset_type_;
   const char *last_set_transaction_isolation_cstr_;
   common::ObArenaAllocator allocator_;
-  obsys::ObRWLock dblink_lock_;
+  obsys::ObRWLock<> dblink_lock_;
   ObISQLConnection *next_conn_; // used in dblink_conn_map_
   bool check_priv_;
 };

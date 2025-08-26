@@ -180,7 +180,7 @@ public:
     ob_max_allowed_packet_ = ob_max_allowed_packet;
   }
 
-  inline const sql::ObSQLSessionInfo *get_session() {
+  inline const sql::ObSQLSessionInfo *get_session() const {
     return session_;
   }
 
@@ -205,10 +205,13 @@ public:
   inline ObDataTypeCastParams& get_dtc_params() {
     return dtc_params_;
   }
-  inline void set_dtc_params(ObDataTypeCastParams& dtc_params) {
+  inline const ObDataTypeCastParams& get_dtc_params() const {
+    return dtc_params_;
+  }
+  inline void set_dtc_params(const ObDataTypeCastParams& dtc_params) {
     dtc_params_ = dtc_params;
   }
-  inline ObSQLMode get_sql_mode() {
+  inline ObSQLMode get_sql_mode() const {
     return sql_mode_;
   }
   inline void set_sql_mode(ObSQLMode sql_mode) {
@@ -217,7 +220,7 @@ public:
   inline ObTimeZoneInfoWrap& get_local_tz_wrap() {
     return local_tz_wrap_;
   }
-  inline const ObTZInfoMap *get_tz_info_map() {
+  inline const ObTZInfoMap *get_tz_info_map() const {
     return tz_info_map_;
   }
   inline void set_tz_info_map(const ObTZInfoMap * map) {
@@ -230,6 +233,29 @@ public:
   inline uint64_t get_compat_version() const { return compat_version_; }
   inline void set_compat_version(const uint64_t compat_version) {
     compat_version_ = compat_version;
+  }
+  void assign_initial_type_ctx(const ObExprTypeCtx &other) {
+    set_coll_type(other.get_coll_type());
+    set_div_precision_increment(other.get_div_precision_increment());
+    set_max_allowed_packet(other.get_max_allowed_packet());
+    set_sql_mode(other.get_sql_mode());
+    set_dtc_params(other.get_dtc_params());
+    set_tz_info_map(other.get_tz_info_map());
+    set_enable_mysql_compatible_dates(other.enable_mysql_compatible_dates());
+    set_session(other.get_session());
+  }
+  void reset() {
+    coll_type_ = CS_TYPE_INVALID;
+    local_tz_wrap_.reset();
+    tz_info_map_ = NULL;
+    sql_mode_ = 0;
+    div_precision_increment_ = OB_INVALID_COUNT;
+    ob_max_allowed_packet_ = OB_INVALID_COUNT;
+    session_ = NULL;
+    udf_meta_ = NULL;
+    cast_mode_ = CM_NONE;
+    raw_expr_ = NULL;
+    enable_mysql_compatible_dates_ = false;
   }
   TO_STRING_KV(K_(coll_type),
                K_(div_precision_increment),
@@ -257,8 +283,6 @@ private:
    // Usually need to override get_cast_mode() of ObExprOperator which works for non_static engine
    common::ObCastMode cast_mode_;
    sql::ObRawExpr *raw_expr_;
-   //used to switch params in subquery comparison operators
-   int64_t cur_row_idx_;
    bool enable_mysql_compatible_dates_;
    uint64_t compat_version_;
 };

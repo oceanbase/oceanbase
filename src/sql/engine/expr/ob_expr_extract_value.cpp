@@ -132,7 +132,6 @@ int ObExprExtractValue::eval_extract_value(const ObExpr &expr, ObEvalCtx &ctx, O
   ObString xml_res;
   ObCollationType cs_type = CS_TYPE_INVALID;
   ObMulModeMemCtx* xml_mem_ctx = nullptr;
-  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "XMLModule"));
 
   if (OB_ISNULL(ctx.exec_ctx_.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
@@ -158,6 +157,7 @@ int ObExprExtractValue::eval_extract_value(const ObExpr &expr, ObEvalCtx &ctx, O
     }
   }
 
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "XMLModule"));
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ObXMLExprHelper::get_xml_base(xml_mem_ctx, xml_datum, cs_type, expect_type, xml_doc))) {
     LOG_WARN("fail to parse xml doc", K(ret));
@@ -183,9 +183,9 @@ int ObExprExtractValue::eval_mysql_extract_value(const ObExpr &expr, ObEvalCtx &
   ObIMulModeBase *xml_base = nullptr;
   ObPathExprIter xpath_iter(&allocator);
   ObStringBuffer xml_res(&allocator);
+  bool step_next = false;
 
   ObMulModeMemCtx* xml_mem_ctx = nullptr;
-  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "XMLModule"));
   if (OB_FAIL(ObXmlUtil::create_mulmode_tree_context(&allocator, xml_mem_ctx))) {
     LOG_WARN("fail to create tree memory context", K(ret));
   } else if (expr.arg_cnt_ != 2) {
@@ -198,9 +198,14 @@ int ObExprExtractValue::eval_mysql_extract_value(const ObExpr &expr, ObEvalCtx &
     LOG_WARN("get xml frag string failed", K(ret));
   } else if (xml_frag.empty()) {
     // do nothing
+    step_next = true;
   } else if (OB_FALSE_IT(allocator.set_baseline_size(xml_frag.length()))) {
   } else if (OB_FAIL(ObXMLExprHelper::get_str_from_expr(expr.args_[1], ctx, xpath_expr, allocator))) {
     LOG_WARN("get xpath expr failed.", K(ret));
+  }
+
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "XMLModule"));
+  if (OB_FAIL(ret) || step_next) {
   } else if (OB_FAIL(ObMulModeFactory::get_xml_base(xml_mem_ctx, xml_frag, ObNodeMemType::TREE_TYPE, ObNodeMemType::BINARY_TYPE, xml_base, M_DOCUMENT))) {
     ret = OB_SUCCESS;
     if (OB_FAIL(ObMulModeFactory::get_xml_base(xml_mem_ctx, xml_frag, ObNodeMemType::TREE_TYPE, ObNodeMemType::BINARY_TYPE, xml_base, M_CONTENT))) {

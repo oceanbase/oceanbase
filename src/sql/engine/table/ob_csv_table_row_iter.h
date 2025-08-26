@@ -87,7 +87,7 @@ public:
   static const int64_t MIN_EXTERNAL_TABLE_FILE_ID = 1;
   static const int64_t MIN_EXTERNAL_TABLE_LINE_NUMBER = 1;
   static const int max_ipv6_port_length = 100;
-  ObCSVTableRowIterator() : bit_vector_cache_(NULL) {}
+  ObCSVTableRowIterator() : bit_vector_cache_(NULL), is_bad_file_enabled_(false) {}
   virtual ~ObCSVTableRowIterator();
   virtual int init(const storage::ObTableScanParam *scan_param) override;
   int get_next_row() override;
@@ -99,14 +99,9 @@ public:
   }
 
   virtual void reset() override;
-
-  virtual int get_diagnosis_info(ObDiagnosisManager* diagnosis_manager) override
-  {
-    int ret = OB_SUCCESS;
-    diagnosis_manager->set_cur_file_url(state_.cur_file_name_);
-    diagnosis_manager->set_cur_line_number(state_.batch_first_row_line_num_);
-    return ret;
-  }
+  virtual bool is_diagnosis_supported() const override { return true; }
+  virtual int64_t get_cur_line_num() const override { return state_.batch_first_row_line_num_; }
+  virtual ObString get_cur_file_url() const override { return state_.cur_file_name_; }
 
 private:
   int expand_buf();
@@ -121,8 +116,10 @@ private:
   int skip_lines();
   void release_buf();
   void dump_error_log(common::ObIArray<ObCSVGeneralParser::LineErrRec> &error_msgs);
-  int record_err_for_select_data(int err_ret, const char *message, int64_t limit_num);
   int handle_error_msgs(common::ObIArray<ObCSVGeneralParser::LineErrRec> &error_msgs);
+  static int handle_bad_file_line(ObCSVTableRowIterator *csv_iter,
+                                  ObEvalCtx &eval_ctx,
+                                  ObCSVGeneralParser::HandleOneLineParam &param);
 private:
   ObCSVIteratorState state_;
   ObBitVector *bit_vector_cache_;
@@ -132,6 +129,8 @@ private:
   ObExternalStreamFileReader file_reader_;
   ObSqlString url_;
   ObExpr *file_name_expr_;
+  bool is_bad_file_enabled_;
+  bool use_handle_batch_lines_ = false;
 };
 
 

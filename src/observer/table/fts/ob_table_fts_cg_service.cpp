@@ -316,7 +316,7 @@ int ObTableFtsExprCgService::generate_match_against_exprs(ObTableCtx &ctx,
     ObRawExpr *bool_expr = nullptr;
     if (OB_FAIL(ObRawExprUtils::try_create_bool_expr(match_against, bool_expr, expr_factory))) {
       LOG_WARN("try create bool expr failed", K(ret));
-    } else if (OB_FAIL(bool_expr->formalize(&ctx.get_session_info()))) {
+    } else if (match_against != bool_expr && OB_FAIL(bool_expr->formalize(&ctx.get_session_info()))) {
       LOG_WARN("fail to formalize match against", K(ret));
     } else {
       pushdown_match_filter = bool_expr;
@@ -505,10 +505,11 @@ int ObTableFtsDmlCgService::check_is_main_table_in_fts_ddl(ObTableCtx &ctx,
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table schema is null", K(ret), K(table_schema));
-  } else if (!table_schema->is_user_table()) {
+  } else if (!table_schema->is_user_table() || table_schema->is_fts_index()) {
     das_dml_ctdef.is_main_table_in_fts_ddl_ = false;
-    LOG_TRACE("not user table, nothing to do", K(ret), K(table_id));
+    LOG_TRACE("neither user table nor fts index, nothing to do", K(ret), K(table_id));
   } else {
+    bool has_fts_index = false;
     bool is_main_table_in_fts_ddl = false;
     int64_t fts_index_aux_count = 0;
     int64_t fts_doc_word_aux_count = 0;
@@ -520,6 +521,7 @@ int ObTableFtsDmlCgService::check_is_main_table_in_fts_ddl(ObTableCtx &ctx,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected error, index schema is nullptr", K(ret), K(i), K(index_info.related_index_ids_));
       } else if (index_schema->is_fts_index()) {
+        has_fts_index = true;
         if (index_schema->is_fts_index_aux()) {
           ++fts_index_aux_count;
         } else if (index_schema->is_fts_doc_word_aux()) {
@@ -531,14 +533,16 @@ int ObTableFtsDmlCgService::check_is_main_table_in_fts_ddl(ObTableCtx &ctx,
       }
     }
     if (OB_SUCC(ret)) {
-      if (is_main_table_in_fts_ddl || fts_index_aux_count != fts_doc_word_aux_count) {
+      if ((has_fts_index && (0 == fts_index_aux_count || 0 == fts_doc_word_aux_count)) // fts aux index count is 0
+          || is_main_table_in_fts_ddl // some fts index is building
+          || fts_index_aux_count != fts_doc_word_aux_count) { // fts aux index count not match
         das_dml_ctdef.is_main_table_in_fts_ddl_ = true;
       } else {
         das_dml_ctdef.is_main_table_in_fts_ddl_ = false;
       }
     }
-    LOG_TRACE("check is main table in fts ddl", K(ret), K(is_main_table_in_fts_ddl), K(fts_index_aux_count),
-        K(fts_doc_word_aux_count), K(das_dml_ctdef));
+    LOG_TRACE("check is main table in fts ddl", K(ret), K(has_fts_index), K(is_main_table_in_fts_ddl), K(fts_index_aux_count),
+        K(fts_doc_word_aux_count), K(table_id), K(das_dml_ctdef.is_main_table_in_fts_ddl_), K(index_info.related_index_ids_));
   }
   return ret;
 }

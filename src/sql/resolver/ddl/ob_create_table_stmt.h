@@ -82,6 +82,7 @@ public:
   uint64_t get_insert_mode() const { return insert_mode_; }
 
   ObTableType get_table_type() const { return create_table_arg_.schema_.get_table_type(); }
+  uint64_t get_external_location_id() const { return create_table_arg_.schema_.get_external_location_id(); }
   INHERIT_TO_STRING_KV("ObTableStmt", ObTableStmt, K_(stmt_type), K_(create_table_arg), K_(index_arg_list));
 private:
   int set_table_id(ObStmtResolver &ctx, const uint64_t table_id);

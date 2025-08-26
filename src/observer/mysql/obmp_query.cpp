@@ -215,6 +215,9 @@ int ObMPQuery::process()
           // 进入本分支，说明push_back出错，OOM，委托外层代码返回错误码
           // 且进入此分支之后，要断连接
           need_response_error = true;
+          if (OB_ERR_PARSE_SQL == ret) {
+            need_disconnect = false;
+          }
         } else if (OB_UNLIKELY(queries.count() <= 0)) {
           ret = OB_ERR_UNEXPECTED;
           need_response_error = true;//进入此分支之后，要断连接，极其严重错误
@@ -459,6 +462,7 @@ int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(mpquery_single_stmt);
+  ObReqTimeGuard req_timeinfo_guard;
   ctx_.spm_ctx_.reset();
   bool need_response_error = true;
   session.get_raw_audit_record().request_memory_used_ = 0;
@@ -563,7 +567,7 @@ int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
   //对于tracelog的处理，不影响正常逻辑，错误码无须赋值给ret
   int tmp_ret = OB_SUCCESS;
   //清空WARNING BUFFER
-  tmp_ret = do_after_process(session, ctx_, async_resp_used);
+  tmp_ret = do_after_process(session, async_resp_used);
 
   // 设置上一条语句的结束时间，由于这里只用于实现事务内部的语句之间的执行超时，
   // 因此，首先，需要判断是否处于事务执行的过程中。然后对于事务提交的时候的异步回包,
@@ -581,6 +585,7 @@ int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
         !ctx_.multi_stmt_item_.is_batched_multi_stmt()) {
     send_error_packet(ret, NULL);
   }
+  ctx_.spm_ctx_.reset();
   ctx_.reset();
   return ret;
 }
@@ -876,7 +881,9 @@ OB_INLINE int ObMPQuery::do_process_trans_ctrl(ObSQLSessionInfo &session,
     if (OB_FAIL(ret) && audit_record.trans_id_ == 0) {
       // normally trans_id is set in the `start-stmt` phase,
       // if `start-stmt` hasn't run, set trans_id from session if an active txn exist
-      audit_record.trans_id_ = session.get_tx_id();
+      if (session.is_in_transaction()) {
+        audit_record.trans_id_ = session.get_tx_id();
+      }
     }
     // for begin/commit/rollback, the following values are 0
     audit_record.affected_rows_ = 0;
@@ -951,13 +958,7 @@ int ObMPQuery::process_trans_ctrl_cmd(ObSQLSessionInfo &session,
       need_end_trans_callback = true;
     }
 
-#ifndef OB_BUILD_SPM
     bool need_trans_cb  = need_end_trans_callback && (!force_sync_resp);
-#else
-    bool need_trans_cb  = need_end_trans_callback &&
-                          (!force_sync_resp) &&
-                          (!ctx_.spm_ctx_.check_execute_status_);
-#endif
     if (need_trans_cb) {
       is_async_end_trans = true;
       ObSqlEndTransCb &sql_end_cb = session.get_mysql_end_trans_cb();
@@ -1112,13 +1113,16 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
       } else {
         //监控项统计开始
         exec_start_timestamp_ = ObTimeUtility::current_time();
+        plan = result.get_physical_plan();
+        if (OB_NOT_NULL(plan)) {
+          plan->stat_.set_executing_record(exec_start_timestamp_);
+        }
         result.get_exec_context().set_plan_start_time(exec_start_timestamp_);
         // 本分支内如果出错，全部会在response_result内部处理妥当
         // 无需再额外处理回复错误包
         need_response_error = false;
         is_diagnostics_stmt = ObStmt::is_diagnostic_stmt(result.get_literal_stmt_type());
         ctx_.is_show_trace_stmt_ = ObStmt::is_show_trace_stmt(result.get_literal_stmt_type());
-        plan = result.get_physical_plan();
 
         if (get_is_com_filed_list()) {
           result.set_is_com_filed_list();
@@ -1166,6 +1170,9 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
 
       //监控项统计结束
       exec_end_timestamp_ = ObTimeUtility::current_time();
+      if (OB_NOT_NULL(plan)) {
+        plan->stat_.erase_executing_record(exec_start_timestamp_);
+      }
 
       // some statistics must be recorded for plan stat, even though sql audit disabled
       bool first_record = (1 == audit_record.try_cnt_);
@@ -1261,6 +1268,8 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
       MEMCPY(audit_record.sql_id_, ctx_.sql_id_, (int32_t)sizeof(audit_record.sql_id_));
       MEMCPY(audit_record.format_sql_id_, ctx_.format_sql_id_, (int32_t)sizeof(audit_record.format_sql_id_));
       audit_record.format_sql_id_[common::OB_MAX_SQL_ID_LENGTH] = '\0';
+      audit_record.ccl_rule_id_ = ctx_.ccl_rule_id_;
+      audit_record.ccl_match_time_ = ctx_.ccl_match_time_;
 
       if (NULL != plan) {
         audit_record.plan_type_ = plan->get_plan_type();
@@ -1276,7 +1285,9 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
       if (OB_FAIL(ret) && audit_record.trans_id_ == 0) {
         // normally trans_id is set in the `start-stmt` phase,
         // if `start-stmt` hasn't run, set trans_id from session if an active txn exist
-        audit_record.trans_id_ = session.get_tx_id();
+        if (session.is_in_transaction()) {
+          audit_record.trans_id_ = session.get_tx_id();
+        }
       }
       audit_record.affected_rows_ = result.get_affected_rows();
       audit_record.return_rows_ = result.get_return_rows();
@@ -1368,11 +1379,6 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
     }
     bool is_need_retry = THIS_THWORKER.need_retry() ||
         RETRY_TYPE_NONE != retry_ctrl_.get_retry_type();
-#ifdef OB_BUILD_SPM
-    if (!is_need_retry) {
-      (void)ObSQLUtils::handle_plan_baseline(audit_record, plan, ret, ctx_);
-    }
-#endif
     (void)ObSQLUtils::handle_audit_record(is_need_retry, EXECUTE_LOCAL, session,
         ctx_.is_sensitive_);
 #ifdef OB_BUILD_AUDIT_SECURITY
@@ -1596,7 +1602,10 @@ int ObMPQuery::is_readonly_stmt(ObMySQLResultSet &result, bool &is_readonly)
     case stmt::T_SHOW_CREATE_USER:
     case stmt::T_SET_CATALOG:
     case stmt::T_SHOW_CATALOGS:
-    case stmt::T_SHOW_CREATE_CATALOG: {
+    case stmt::T_SHOW_CREATE_CATALOG:
+    case stmt::T_SHOW_LOCATIONS:
+    case stmt::T_SHOW_CREATE_LOCATION:
+    case stmt::T_LOCATION_UTILS_LIST: {
       is_readonly = true;
       break;
     }
@@ -1639,13 +1648,7 @@ OB_INLINE int ObMPQuery::response_result(ObMySQLResultSet &result,
   ObSQLSessionInfo &session = result.get_session();
   CHECK_COMPATIBILITY_MODE(&session);
 
-#ifndef OB_BUILD_SPM
   bool need_trans_cb  = result.need_end_trans_callback() && (!force_sync_resp);
-#else
-  bool need_trans_cb  = result.need_end_trans_callback() &&
-                        (!force_sync_resp) &&
-                        (!ctx_.spm_ctx_.check_execute_status_);
-#endif
 
   // 通过判断 plan 是否为 null 来确定是 plan 还是 cmd
   // 针对 plan 和 cmd 分开处理，逻辑会较为清晰。

@@ -78,7 +78,7 @@ public:
       tenant_id_(tenant_id),
       expected_epoch_(OB_INVALID_ID),
       table_id_(OB_INVALID_ID),
-      compaction_scn_(),
+      freeze_info_(),
       major_merge_start_us_(0),
       statistics_(statistics),
       sql_proxy_(nullptr),
@@ -103,7 +103,7 @@ public:
     ObMySQLProxy &sql_proxy);
 
   int set_basic_info(
-    const share::SCN &frozen_scn,
+    const share::ObFreezeInfo &freeze_info,
     const int64_t expected_epoch);
   const compaction::ObTableCompactionInfo &get_table_compaction_info() const
   {
@@ -131,8 +131,10 @@ public:
     share::schema::ObSchemaGetterGuard &schema_guard,
     const ObFTSGroupArray &fts_group_array);
   static const int64_t SPECIAL_TABLE_ID = 1;
-  TO_STRING_KV(K_(tenant_id), K_(is_primary_service), K_(table_id), K_(compaction_scn));
+  TO_STRING_KV(K_(tenant_id), K_(is_primary_service), K_(table_id), "compaction_scn", get_compaction_scn());
 private:
+  share::SCN get_compaction_scn() const { return freeze_info_.frozen_scn_; }
+  int64_t get_compaction_scn_val() const { return get_compaction_scn().get_val_for_tx(); }
   int check_inner_status();
   int get_table_compaction_info(const uint64_t table_id, compaction::ObTableCompactionInfo &table_compaction_info);
   int set_need_validate();
@@ -180,7 +182,7 @@ private:
   uint64_t tenant_id_;
   int64_t expected_epoch_;
   uint64_t table_id_;
-  share::SCN compaction_scn_;
+  share::ObFreezeInfo freeze_info_;
   int64_t major_merge_start_us_;
   compaction::ObCkmValidatorStatistics &statistics_;
   common::ObMySQLProxy *sql_proxy_;

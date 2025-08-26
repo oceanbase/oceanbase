@@ -329,6 +329,18 @@ int ObSMUtils::cell_str(
               } else if (FALSE_IT(element_type.reset())) {
               } else if (FALSE_IT(element_type.set_data_type(coll->get_element_type()))) {
               } else {
+                if (OB_NOT_NULL(element_type.get_data_type())) {
+                  ObObjType obj_type = element_type.get_data_type()->get_obj_type();
+                  if (ob_is_string_tc(obj_type) || ob_is_text_tc(obj_type)
+                      || element_type.get_data_type()->get_meta_type().is_clob_locator()) {
+                    ObCollationType cs_conn = CS_TYPE_INVALID;
+                    if (OB_FAIL(session.get_collation_connection(cs_conn))) {
+                      OB_LOG(WARN, "failed to get collation connection", K(ret));
+                    } else {
+                      element_type.get_data_type()->set_collation_type(cs_conn);
+                    }
+                  }
+                }
                 OX (nested_type->set_element_type(element_type));
               }
               if (OB_FAIL(ret)){
@@ -661,11 +673,13 @@ int ObSMUtils::extend_cell_str(char *buf, const int64_t len,
                                uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
+  UNUSED(tenant_id);
   common::ObArenaAllocator allocator;
   const pl::ObUserDefinedType *user_type = NULL;
   const ObUDTTypeInfo *udt_info = NULL;
   const int64_t type_id = field->accuracy_.get_accuracy();
-  if (OB_FAIL(schema_guard->get_udt_info(tenant_id, type_id, udt_info))) {
+  const uint64_t type_tenant_id = pl::get_tenant_id_by_object_id(type_id);
+  if (OB_FAIL(schema_guard->get_udt_info(type_tenant_id, type_id, udt_info))) {
     OB_LOG(WARN, "get user type fail.", K(type_id), K(ret));
   } else if (NULL == udt_info) {
     ret = OB_ERR_UNEXPECTED;
@@ -682,7 +696,7 @@ int ObSMUtils::extend_cell_str(char *buf, const int64_t len,
     OB_LOG(WARN, "size over flow.", K(ret), K(len), K(user_type->get_name()));
   } else {
     ObArenaAllocator alloc;
-    char* tmp_buf = static_cast<char*>(alloc.alloc(len - pos - 12));
+    char* tmp_buf = static_cast<char*>(alloc.alloc(len - pos));
     int64_t tmp_pos = 0;
     MEMCPY(tmp_buf + tmp_pos, user_type->get_name().ptr(), user_type->get_name().length());
     tmp_pos += user_type->get_name().length();

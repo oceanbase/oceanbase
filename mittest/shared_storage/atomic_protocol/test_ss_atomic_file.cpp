@@ -41,7 +41,12 @@ using namespace oceanbase::storage;
 
 ObSSTableInfoList write_ss_list;
 
-bool is_meta_use_sslog(const sslog::ObSSLogMetaType type)
+bool is_file_use_sslog(const ObAtomicFileType type, const ObLSID &ls_id)
+{
+  return false;
+}
+
+bool is_meta_use_sslog(const sslog::ObSSLogMetaType type, const ObLSID &ls_id)
 {
   return false;
 }

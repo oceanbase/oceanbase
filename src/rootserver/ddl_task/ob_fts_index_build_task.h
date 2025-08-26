@@ -79,9 +79,13 @@ public:
 
 public:
   void set_rowkey_doc_aux_table_id(const uint64_t id) { rowkey_doc_aux_table_id_ = id; }
+  OB_INLINE uint64_t get_rowkey_doc_aux_table_id() const { return rowkey_doc_aux_table_id_; }
   void set_doc_rowkey_aux_table_id(const uint64_t id) { doc_rowkey_aux_table_id_ = id; }
+  OB_INLINE uint64_t get_doc_rowkey_aux_table_id() const { return doc_rowkey_aux_table_id_; }
   void set_fts_index_aux_table_id(const uint64_t id) { domain_index_aux_table_id_ = id; }
+  OB_INLINE uint64_t get_domain_index_aux_table_id() const { return domain_index_aux_table_id_; }
   void set_fts_doc_word_aux_table_id(const uint64_t id) { fts_doc_word_aux_table_id_ = id; }
+  OB_INLINE uint64_t get_fts_doc_word_aux_table_id() const { return fts_doc_word_aux_table_id_; }
   void set_drop_index_task_id(const uint64_t id) { drop_index_task_id_ = id; }
   void set_rowkey_doc_task_submitted(const bool status) { rowkey_doc_task_submitted_ = status; }
   void set_doc_rowkey_task_submitted(const bool status) { doc_rowkey_task_submitted_ = status; }
@@ -147,6 +151,9 @@ private:
       const uint64_t index_tid,
       share::schema::ObSchemaGetterGuard &schema_guard,
       bool &is_trans_end);
+  virtual int refresh_task_context(const share::ObDDLTaskStatus status) override;
+  int refresh_task_depend_map_context(const ObFtsIndexBuildTask &task);
+
 private:
   typedef share::ObDomainDependTaskStatus DependTaskStatus;
 
@@ -165,6 +172,7 @@ private:
 private:
   int verify_children_checksum() const;
   int check_column_checksum(const ColumnChecksumInfo &a, const ColumnChecksumInfo &b) const;
+
 private:
   static const int64_t OB_FTS_INDEX_BUILD_TASK_VERSION = 1;
   using ObDDLTask::tenant_id_;

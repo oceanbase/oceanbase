@@ -25,18 +25,15 @@ struct VirtualSSLSMetaRow {
   share::SCN ss_checkpoint_scn_;
   palf::LSN ss_checkpoint_lsn_;
   int64_t clog_checksum_;
-  share::SCN sslog_checkpoint_scn_;
 
   VirtualSSLSMetaRow()
     : version_(),
       ss_checkpoint_scn_(),
       ss_checkpoint_lsn_(),
-      clog_checksum_(0),
-      sslog_checkpoint_scn_() {}
+      clog_checksum_(0) {}
 
   TO_STRING_KV(K(version_), K(ss_checkpoint_scn_),
-               K(ss_checkpoint_lsn_), K(clog_checksum_),
-               K(sslog_checkpoint_scn_));
+               K(ss_checkpoint_lsn_), K(clog_checksum_));
 };
 
 class ObAllVirtualSSLSMeta : public common::ObVirtualTableScannerIterator
@@ -55,7 +52,6 @@ public:
     META_VERSION,
     SS_CHECKPOINT_SCN,
     SS_CHECKPOINT_LSN,
-    SSLOG_CHECKPOINT_SCN,
     SS_CLOG_ACCUM_CHECKSUM,
   };
 private:
@@ -64,6 +60,12 @@ private:
   int handle_key_range_(ObNewRange &key_range);
   int generate_virtual_row_(VirtualSSLSMetaRow &row);
   int fill_in_row_(const VirtualSSLSMetaRow &row_data, common::ObNewRow *&row);
+  int extract_result_(common::sqlclient::ObMySQLResult &res, VirtualSSLSMetaRow &row);
+  int get_virtual_row_remote_(common::sqlclient::ObMySQLResult &res, VirtualSSLSMetaRow &row);
+  int get_virtual_row_remote_(
+    const uint64_t tenant_id,
+    const share::ObLSID ls_id,
+    VirtualSSLSMetaRow &row);
 #endif
 private:
   uint64_t tenant_id_;

@@ -99,7 +99,7 @@ public:
     } else if (callback->get_scn().is_min()) {
       TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "callback scn is min_scn", KPC(callback));
 #ifdef ENABLE_DEBUG_LOG
-      usleep(5000);
+      ob_usleep(5000);
       ob_abort();
 #endif
       is_iter_end = true;

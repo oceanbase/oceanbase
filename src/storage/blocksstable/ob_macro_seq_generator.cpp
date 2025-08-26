@@ -23,6 +23,14 @@ using namespace oceanbase::common;
 using namespace oceanbase::storage;
 using namespace oceanbase::blocksstable;
 
+void ObMacroSeqParam::reset()
+{
+  seq_type_ = SEQ_TYPE_MAX;
+  start_ = 0;
+  interval_ = 0;
+  step_ = 0;
+}
+
 bool ObMacroSeqParam::is_valid() const
 {
   bool bret = seq_type_ < SEQ_TYPE_MAX && start_ >= 0;

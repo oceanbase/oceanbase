@@ -629,6 +629,12 @@ int64_t ObSimpleTableSchemaV2::get_convert_size() const
   convert_size += transition_point_.get_deep_copy_size();
   convert_size += interval_range_.get_deep_copy_size();
   convert_size += sizeof(storage_cache_policy_type_);
+  if (OB_NOT_NULL(list_idx_hash_array_)) {
+    int64_t cnt = list_idx_hash_array_->item_count();
+    convert_size += ObPointerHashArray<ObNewRowKey, const ObNewRowValue*,
+                                       ObGetNewRowKey>::get_hash_array_mem_size(cnt);
+    convert_size += cnt * sizeof(ObNewRowValue);
+  }
   return convert_size;
 }
 
@@ -1203,6 +1209,97 @@ int ObSimpleTableSchemaV2::get_part_idx_by_tablet(const ObTabletID &tablet_id, i
   return ret;
 }
 
+int ObSimpleTableSchemaV2::get_part_idx_by_tablets(const ObIArray<uint64_t> &tablet_ids,
+                                                   ObIArray<int64_t> &part_idx,
+                                                   ObIArray<int64_t> &subpart_idx) const
+{
+  int ret = OB_SUCCESS;
+  ObHashMap<int64_t, std::pair<int64_t, int64_t>> id_hashmap;
+
+  ObPartition **part_array = NULL;
+  int64_t part_num = get_partition_num();
+  std::pair<int64_t, int64_t> part_info(OB_INVALID_INDEX, OB_INVALID_INDEX);
+  part_idx.reuse();
+  subpart_idx.reuse();
+  if (OB_ISNULL(part_array = get_part_array()) ||
+      OB_UNLIKELY(PARTITION_LEVEL_ZERO == part_level_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid part", KR(ret), KPC(this));
+  } else if (OB_FAIL(id_hashmap.create(get_all_part_num(), ObModIds::OB_SCHEMA))) {
+    LOG_WARN("create hashmap failed", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); i ++) {
+    if (OB_FAIL(id_hashmap.set_refactored(tablet_ids.at(i), part_info))) {
+      LOG_WARN("failed to set refactored", K(ret));
+    }
+  }
+  for (int64_t i = 0; i < part_num && OB_SUCC(ret); ++i) {
+    if (OB_ISNULL(part_array[i])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("NULL ptr", K(i), KPC(this), KR(ret));
+    } else if (PARTITION_LEVEL_ONE == part_level_) {
+      if (OB_FAIL(id_hashmap.get_refactored(part_array[i]->get_tablet_id().id(), part_info))) {
+        if (OB_HASH_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("fail to check tablet id exist", K(ret));
+        }
+      } else if (OB_FAIL(id_hashmap.set_refactored(part_array[i]->get_tablet_id().id(),
+                                                   std::make_pair(i, OB_INVALID_INDEX),
+                                                   1/*overwrite*/))) {
+        LOG_WARN("failed to set refactored", K(ret));
+      }
+    } else if (PARTITION_LEVEL_TWO == part_level_) {
+      ObSubPartition **subpart_array = part_array[i]->get_subpart_array();
+      int64_t subpart_num = part_array[i]->get_subpartition_num();
+      if (OB_ISNULL(subpart_array)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("subpart array is null", KPC(this), KR(ret));
+      }
+      for (int64_t j = 0; j < subpart_num && OB_SUCC(ret); ++j) {
+        if (OB_ISNULL(subpart_array[j])) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("NULL ptr", KPC(this), KR(ret));
+        } else {
+          if (OB_FAIL(id_hashmap.get_refactored(subpart_array[j]->get_tablet_id().id(), part_info))) {
+            if (OB_HASH_NOT_EXIST == ret) {
+              ret = OB_SUCCESS;
+            } else {
+              LOG_WARN("fail to check tablet id exist", K(ret));
+            }
+          } else if (OB_FAIL(id_hashmap.set_refactored(subpart_array[j]->get_tablet_id().id(),
+                                                       std::make_pair(i, j), 1/*overwrite*/))) {
+            LOG_WARN("failed to set refactored", K(ret));
+          }
+        }
+      }
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("4.0 not support part type", KR(ret), KPC(this));
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); i ++) {
+    if (OB_FAIL(id_hashmap.get_refactored(tablet_ids.at(i), part_info))) {
+      LOG_WARN("failed to set refactored", K(ret));
+    } else if (OB_UNLIKELY(OB_INVALID_INDEX == part_info.first ||
+                           OB_INVALID_INDEX == part_info.second && PARTITION_LEVEL_TWO == part_level_)) {
+      ret = OB_TABLET_NOT_EXIST;
+      LOG_WARN("tablet is not exist", K(tablet_ids.at(i)), KPC(this), KR(ret));
+    } else if (OB_FAIL(part_idx.push_back(part_info.first))) {
+      LOG_WARN("failed to push back part idx", K(ret));
+    } else if (PARTITION_LEVEL_TWO == part_level_ && OB_FAIL(subpart_idx.push_back(part_info.second))) {
+      LOG_WARN("failed to push back subpart idx", K(ret));
+    }
+  }
+  if (id_hashmap.created()) {
+    int tmp_ret = id_hashmap.destroy();
+    if (OB_SUCC(ret) && OB_FAIL(tmp_ret)) {
+      LOG_WARN("failed to destory hashmap", K(ret));
+    }
+  }
+  return ret;
+}
+
 // only used for the first level parition;
 // not support get subpart_id by tablet_id;
 int ObSimpleTableSchemaV2::get_hidden_part_id_by_tablet_id(const ObTabletID &tablet_id, int64_t &part_id /*OUT*/) const
@@ -1686,7 +1783,8 @@ ObTableSchema::ObTableSchema(ObIAllocator *allocator)
     exec_env_(),
     storage_cache_policy_(),
     semistruct_encoding_type_(),
-    dynamic_partition_policy_()
+    dynamic_partition_policy_(),
+    semistruct_properties_()
 {
   reset();
 }
@@ -1766,6 +1864,7 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
       max_used_column_group_id_ = src_schema.max_used_column_group_id_;
       micro_index_clustered_ = src_schema.micro_index_clustered_;
       enable_macro_block_bloom_filter_ = src_schema.enable_macro_block_bloom_filter_;
+      micro_block_format_version_ = src_schema.micro_block_format_version_;
       mlog_tid_ = src_schema.mlog_tid_;
       catalog_id_ = src_schema.catalog_id_;
       merge_engine_type_ = src_schema.merge_engine_type_;
@@ -1961,6 +2060,10 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
 
   if (OB_SUCC(ret) && OB_FAIL(deep_copy_str(src_schema.dynamic_partition_policy_, dynamic_partition_policy_))) {
     LOG_WARN("fail to deep copy dynamic partition policy string", KR(ret));
+  }
+
+  if (OB_SUCC(ret) && OB_FAIL(deep_copy_str(src_schema.semistruct_properties_, semistruct_properties_))) {
+    LOG_WARN("fail to deep copy semistruct properties string", KR(ret));
   }
 
   if (OB_FAIL(ret)) {
@@ -3802,6 +3905,7 @@ int64_t ObTableSchema::get_convert_size() const
   convert_size += semistruct_encoding_type_.get_deep_copy_size();
   convert_size += dynamic_partition_policy_.length() + 1;
   convert_size += external_sub_path_.length() + 1;
+  convert_size += semistruct_properties_.length() + 1;
   return convert_size;
 }
 
@@ -3914,6 +4018,7 @@ void ObTableSchema::reset()
   dynamic_partition_policy_.reset();
   external_location_id_ = OB_INVALID_ID;
   external_sub_path_.reset();
+  semistruct_properties_.reset();
   ObSimpleTableSchemaV2::reset();
 }
 
@@ -5390,9 +5495,43 @@ int ObTableSchema::check_alter_column_in_index(const ObColumnSchemaV2 &src_colum
   const uint64_t column_id = src_column.get_column_id();
   const uint64_t tenant_id = get_tenant_id();
   ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
-  if (OB_FAIL(get_simple_index_infos(simple_index_infos))) {
+
+  // Vector index dependency validation: （start）
+  // The logical rule is that if a vector index exists on a column, no modifications to the column are allowed.
+  // To accommodate potential user operations where the data type remains consistent before and after the change,
+  // an additional conditional check has been implemented.
+  bool is_column_has_vector_index = false;
+  ObIndexType index_type = INDEX_TYPE_IS_NOT;
+  if (OB_FAIL(ObVectorIndexUtil::check_column_has_vector_index(
+        *this, schema_guard, column_id, is_column_has_vector_index, index_type))) {
+    LOG_WARN("check_column_has_vector_index failed", K(ret));
+  } else if (is_column_has_vector_index) {
+    // For vector-indexed columns, enforce strict data type consistency checks.
+    bool is_same_type = false;
+    if (src_column.is_collection() && dst_column.is_collection()) {
+      // Collection types (including vector types) require specialized comparison logic.
+      if (OB_FAIL(src_column.is_same_collection_column(dst_column, is_same_type))) {
+        LOG_WARN("failed to check collection column type", K(ret));
+      }
+    } else {
+      // For non-collection types, compare basic types and meta types.
+      is_same_type = (src_column.get_data_type() == dst_column.get_data_type() &&
+                     src_column.get_meta_type().get_type() == dst_column.get_meta_type().get_type());
+    }
+    if (OB_SUCC(ret) && !is_same_type) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "For columns with vector indexes, altering the column type is");
+      LOG_WARN("column type modification is not supported because it is depended by vector index",
+               K(column_id), K(ret), K(src_column.get_data_type()), K(dst_column.get_data_type()));
+    }
+  }
+  // Vector index dependency validation (end)
+
+  if(OB_FAIL(ret)){
+  } else if (OB_FAIL(get_simple_index_infos(simple_index_infos))) {
     LOG_WARN("get simple_index_infos failed", K(ret));
   }
+
   for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
     const ObTableSchema *index_table_schema = NULL;
     if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
@@ -6008,6 +6147,7 @@ void ObTableSchema::reset_column_info()
   rowkey_info_.reset();
   shadow_rowkey_info_.reset();
   index_info_.reset();
+  generated_columns_.reset();
   column_array_ = NULL;
   id_hash_array_ = NULL;
   name_hash_array_ = NULL;
@@ -6860,7 +7000,7 @@ int ObTableSchema::get_logic_pk_column_ids(ObSchemaGetterGuard *schema_guard, Ob
     LOG_WARN("invalid argument", K(ret), K(schema_guard));
   } else if (is_heap_organized_table() && OB_FAIL(get_heap_table_pk(schema_guard, pk_ids))) {
     LOG_WARN("fail to get heap table pks", K(ret), KPC(this));
-  } else if (is_index_organized_table() && OB_FAIL(get_rowkey_column_ids(pk_ids))) {
+  } else if (is_index_organized_table() && is_table_with_pk() && OB_FAIL(get_rowkey_column_ids(pk_ids))) {
     LOG_WARN("fail to get IOT table pks", K(ret), KPC(this));
   }
   return ret;
@@ -7291,7 +7431,9 @@ int64_t ObTableSchema::to_string(char *buf, const int64_t buf_len) const
     K_(storage_cache_policy),
     K_(merge_engine_type),
     K_(semistruct_encoding_type),
-    K_(dynamic_partition_policy));
+    K_(dynamic_partition_policy),
+    K_(semistruct_properties),
+    K_(micro_block_format_version));
   J_OBJ_END();
 
   return pos;
@@ -7496,6 +7638,7 @@ OB_DEF_SERIALIZE(ObTableSchema)
   OB_UNIS_ENCODE(external_sub_path_);
   OB_UNIS_ENCODE(micro_block_format_version_);
   OB_UNIS_ENCODE(tmp_mlog_tid_);
+  OB_UNIS_ENCODE(semistruct_properties_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员
@@ -7746,6 +7889,7 @@ OB_DEF_DESERIALIZE(ObTableSchema)
   OB_UNIS_DECODE_AND_FUNC(external_sub_path_, deep_copy_str);
   OB_UNIS_DECODE(micro_block_format_version_);
   OB_UNIS_DECODE(tmp_mlog_tid_);
+  OB_UNIS_DECODE_AND_FUNC(semistruct_properties_, deep_copy_str);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员
@@ -7896,6 +8040,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchema)
   OB_UNIS_ADD_LEN(external_sub_path_);
   OB_UNIS_ADD_LEN(micro_block_format_version_);
   OB_UNIS_ADD_LEN(tmp_mlog_tid_);
+  OB_UNIS_ADD_LEN(semistruct_properties_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员
@@ -7940,27 +8085,34 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchema)
 // PARTITION_LEVEL_MAX is invalid partition level which means the function run failed or
 // the table can not auto split partition (such as no-primary-key table).
 // caller should check whether can continue if get target_part_level of PARTITION_LEVEL_MAX.
-ObPartitionLevel ObTableSchema::get_target_part_level_for_auto_partitioned_table() const
+int ObTableSchema::get_target_part_level_for_auto_partitioned_table(ObPartitionLevel &target_part_level) const
 {
   int ret = OB_SUCCESS;
-  ObPartitionLevel target_part_level = PARTITION_LEVEL_MAX;
+  target_part_level = PARTITION_LEVEL_MAX;
   if (is_auto_partitioned_table()) {
     bool match_rowkey_prefix = false;
     if (is_table_without_pk()) {
       // not allow to auto partitioning no primary key table
       // target_part_level = PARTITION_LEVEL_MAX
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_NOT_SUPPORTED;
       LOG_WARN("get target part level from a no primary key table", KR(ret), KPC(this));
     } else if (part_level_ == PARTITION_LEVEL_ZERO) {
       if (OB_FAIL(is_presetting_partition_key_match_rowkey_prefix(match_rowkey_prefix))) {
         // target_part_level = PARTITION_LEVEL_MAX;
-        LOG_WARN("fail to check whether presetting partition key matches rowkey prefix", KR(ret), KPC(this));
+        if (OB_ERR_BAD_FIELD_ERROR == ret) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("not support to split partition of non-partitioned table with mismatching between presetting partition key and rowkey prefix", KR(ret), KPC(this));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "mismatching between presetting partition key and rowkey prefix is");
+        } else {
+          LOG_WARN("fail to check whether presetting partition key matches rowkey prefix", KR(ret), KPC(this));
+        }
       } else if (match_rowkey_prefix) {
         // when trigger auto partitioning, the non-partitioned table will be set as partitioned table
         target_part_level = PARTITION_LEVEL_ONE;
       } else {
-        // when trigger auto partitioning, the non-partitioned table will be set as sub-partitioned table
-        target_part_level = PARTITION_LEVEL_TWO;
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not support to split partition of non-partitioned table with mismatching between presetting partition key and rowkey prefix", KR(ret), KPC(this));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "mismatching between presetting partition key and rowkey prefix is");
       }
     } else if (OB_FAIL(is_partition_key_match_rowkey_prefix(match_rowkey_prefix))) {
       // target_part_level = PARTITION_LEVEL_MAX;
@@ -7970,8 +8122,9 @@ ObPartitionLevel ObTableSchema::get_target_part_level_for_auto_partitioned_table
         // when trigger auto partitioning, the partition will be split into two partitions
         target_part_level = PARTITION_LEVEL_ONE;
       } else {
-        // when trigger auto partitioning, the partitioned table will be set as sub-partitioned table,
-        target_part_level = PARTITION_LEVEL_TWO;
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not support to split partition of non-partitioned table with mismatching between presetting partition key and rowkey prefix", KR(ret), KPC(this));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "mismatching between presetting partition key and rowkey prefix is");
       }
     } else if (part_level_ == PARTITION_LEVEL_TWO) {
       if (match_rowkey_prefix) {
@@ -7980,7 +8133,7 @@ ObPartitionLevel ObTableSchema::get_target_part_level_for_auto_partitioned_table
       } else {
         // not allow to split
         // target_part_level = PARTITION_LEVEL_MAX;
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_NOT_SUPPORTED;
         LOG_WARN("get target part level from a subpartitioned table"
                  "with mismatching between partition key, subpartition key and primary key prefix",
                  KR(ret), KPC(this));
@@ -7991,11 +8144,10 @@ ObPartitionLevel ObTableSchema::get_target_part_level_for_auto_partitioned_table
     }
   } else {
     // target_part_level = PARTITION_LEVEL_MAX
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_NOT_SUPPORTED;
     LOG_WARN("get target part level from a non-auto-partitioned table", KR(ret), KPC(this));
   }
-
-  return target_part_level;
+  return ret;
 }
 
 int ObTableSchema::check_validity_for_auto_partition() const
@@ -8131,9 +8283,14 @@ int ObTableSchema::check_enable_split_partition(bool is_auto_partitioning) const
     }
   }
 
-  ObPartitionLevel target_part_level = is_auto_partitioning ?
-                                       get_target_part_level_for_auto_partitioned_table() :
-                                       get_part_level();
+  ObPartitionLevel target_part_level = PARTITION_LEVEL_MAX;
+  if (OB_FAIL(ret)) {
+  } else if (is_auto_partitioning && OB_FAIL(get_target_part_level_for_auto_partitioned_table(target_part_level))) {
+    LOG_WARN("fail to get target part level for auto partitioned table", KR(ret), KPC(this));
+  } else if (!is_auto_partitioning) {
+    target_part_level = get_part_level();
+  }
+
   if (OB_FAIL(ret)) {
   } else if (!is_valid_split_part_type()) {
     ret = OB_NOT_SUPPORTED;
@@ -8297,13 +8454,17 @@ int ObTableSchema::get_presetting_partition_keys(common::ObIArray<uint64_t> &par
   return ret;
 }
 
-int ObTableSchema::get_partition_keys_by_part_func_expr(common::ObString &part_func_expr_str, common::ObIArray<uint64_t> &partition_key_ids) const
+int ObTableSchema::get_partition_keys_by_part_func_expr(const common::ObString &part_func_expr_str, common::ObIArray<uint64_t> &partition_key_ids) const
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator;
   ObArray<ObString> partkey_strs;
   bool is_oracle_mode = false;
-  if (OB_FAIL(check_if_oracle_compat_mode(is_oracle_mode))) {
+  const int64_t table_id = get_table_id();
+  const uint64_t tenant_id = get_tenant_id();
+  if (OB_INVALID_ID != table_id && OB_FAIL(check_if_oracle_compat_mode(is_oracle_mode))) {
+    LOG_WARN("fail to check oracle mode", KR(ret));
+  } else if (OB_INVALID_ID == table_id && OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_oracle_mode))) {
     LOG_WARN("fail to check oracle mode", KR(ret));
   } else if (OB_FAIL(ObDDLResolver::get_partition_keys_by_part_func_expr(part_func_expr_str, is_oracle_mode, allocator, partkey_strs))) {
     LOG_WARN("failed to get part keys", K(ret), K(part_func_expr_str), K(is_oracle_mode));
@@ -9161,8 +9322,11 @@ int ObTableSchema::is_hbase_table(bool &is_h_table) const
   int ret = OB_SUCCESS;
   const int64_t HBASE_TABLE_COLUMN_COUNT = 4;
   is_h_table = false;
-  if (get_column_count() != HBASE_TABLE_COLUMN_COUNT) {
-      //do nothing
+  ObKVAttr kv_attr;
+  if (OB_FAIL(ObTTLUtil::parse_kv_attributes(get_kv_attributes(), kv_attr))) {
+    LOG_WARN("fail to parse kv attributes", KR(ret), K(get_kv_attributes()));
+  } else if (kv_attr.type_ == common::ObKVAttr::ObTTLTableType::HBASE) {
+    is_h_table = true;
   } else {
     const char* K_COLULMN = "K";
     const char* Q_COLULMN = "Q";
@@ -9276,7 +9440,8 @@ int ObTableSchema::has_before_insert_row_trigger(ObSchemaGetterGuard &schema_gua
   for (int i = 0; OB_SUCC(ret) && !trigger_exist && i < trigger_list_.count(); i++) {
     OZ (schema_guard.get_trigger_info(tenant_id, trigger_list_.at(i), trigger_info), trigger_list_.at(i));
     OV (OB_NOT_NULL(trigger_info), OB_ERR_UNEXPECTED, trigger_list_.at(i));
-    OX (trigger_exist = trigger_info->has_insert_event() &&
+    OX (trigger_exist = trigger_info->is_enable() &&
+                        trigger_info->has_insert_event() &&
                         trigger_info->has_before_row_point());
   }
   return ret;
@@ -9292,7 +9457,8 @@ int ObTableSchema::has_before_update_row_trigger(ObSchemaGetterGuard &schema_gua
   for (int i = 0; OB_SUCC(ret) && !trigger_exist && i < trigger_list_.count(); i++) {
     OZ (schema_guard.get_trigger_info(tenant_id, trigger_list_.at(i), trigger_info), trigger_list_.at(i));
     OV (OB_NOT_NULL(trigger_info), OB_ERR_UNEXPECTED, trigger_list_.at(i));
-    OX (trigger_exist = trigger_info->has_update_event() &&
+    OX (trigger_exist = trigger_info->is_enable() &&
+                        trigger_info->has_update_event() &&
                         trigger_info->has_before_row_point());
   }
   return ret;
@@ -9481,12 +9647,26 @@ int ObTableSchema::is_partition_key_match_rowkey_prefix(bool &is_prefix) const
     int64_t j = 0;
     uint64_t rowkey_column_id = OB_INVALID_ID;
     uint64_t partkey_column_id = OB_INVALID_ID;
+    ObArenaAllocator alloc;
+    ObArray<uint64_t> partition_key_ids;
+    const ObString &ori_part_func_str = part_option_.get_part_func_expr_str();
+    if (ori_part_func_str.empty()) {
+      is_prefix = false;
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("part_func_str is empty", KR(ret), KPC(this));
+    }else if (OB_FAIL(get_partition_keys_by_part_func_expr(ori_part_func_str, partition_key_ids))) {
+      is_prefix = false;
+      if (OB_ERR_BAD_FIELD_ERROR == ret || OB_ERR_PARSE_SQL == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to get part keys", K(ret), K(ori_part_func_str));
+      }
+    }
     while (OB_SUCC(ret) && is_prefix &&
-           i < rowkey_info_.get_size() && j < partition_key_info_.get_size()) {
+           i < rowkey_info_.get_size() && j < partition_key_ids.size()) {
       if (OB_FAIL(rowkey_info_.get_column_id(i, rowkey_column_id))) {
         LOG_WARN("failed to get rowkey column id", K(ret), K(i));
-      } else if (OB_FAIL(partition_key_info_.get_column_id(j, partkey_column_id))) {
-        LOG_WARN("failed to get partition key column id", K(ret));
+      } else if (FALSE_IT(partkey_column_id = partition_key_ids.at(j))) {
       } else if (rowkey_column_id == partkey_column_id) {
         ++i;
         ++j;
@@ -9497,13 +9677,27 @@ int ObTableSchema::is_partition_key_match_rowkey_prefix(bool &is_prefix) const
     if (OB_SUCC(ret)) {
       if (PARTITION_LEVEL_TWO == get_part_level()) {
         j = 0;
+        uint64_t sub_partkey_column_id = OB_INVALID_ID;
+        ObArray<uint64_t> sub_partition_key_ids;
+        const ObString &ori_sub_part_func_str = sub_part_option_.get_part_func_expr_str();
+        if (ori_sub_part_func_str.empty()) {
+          is_prefix = false;
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("sub_part_func_str is empty", KR(ret), KPC(this));
+        } else if (OB_FAIL(get_partition_keys_by_part_func_expr(ori_sub_part_func_str, sub_partition_key_ids))) {
+          is_prefix = false;
+          if (OB_ERR_BAD_FIELD_ERROR == ret || OB_ERR_PARSE_SQL == ret) {
+            ret = OB_SUCCESS;
+          } else {
+            LOG_WARN("failed to get part keys", K(ret), K(ori_sub_part_func_str));
+          }
+        }
         while (OB_SUCC(ret) && is_prefix &&
-               i < rowkey_info_.get_size() && j < subpartition_key_info_.get_size()) {
+               i < rowkey_info_.get_size() && j < sub_partition_key_ids.size()) {
           if (OB_FAIL(rowkey_info_.get_column_id(i, rowkey_column_id))) {
             LOG_WARN("failed to get rowkey column id", K(ret), K(i));
-          } else if (OB_FAIL(subpartition_key_info_.get_column_id(j, partkey_column_id))) {
-            LOG_WARN("failed to get partition key column id", K(ret));
-          } else if (rowkey_column_id == partkey_column_id) {
+          } else if (FALSE_IT(sub_partkey_column_id = sub_partition_key_ids.at(j))) {
+          } else if (rowkey_column_id == sub_partkey_column_id) {
             ++i;
             ++j;
           } else {
@@ -9736,104 +9930,38 @@ int ObTableSchema::get_rowkey_vid_tid(uint64_t &index_table_id) const
   return ret;
 }
 
-int ObTableSchema::check_has_local_index(ObSchemaGetterGuard &schema_guard, bool &has_local_index) const
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
-  const ObSimpleTableSchemaV2 *index_schema = NULL;
-  const uint64_t tenant_id = get_tenant_id();
-  has_local_index = false;
-  if (OB_FAIL(get_simple_index_infos(simple_index_infos))) {
-    LOG_WARN("get simple_index_infos failed", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
-    if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id,
-        simple_index_infos.at(i).table_id_, index_schema))) {
-      LOG_WARN("failed to get table schema",
-               K(ret), K(tenant_id), K(simple_index_infos.at(i).table_id_));
-    } else if (OB_ISNULL(index_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("cannot get index table schema for table ", K(simple_index_infos.at(i).table_id_));
-    } else if (index_schema->is_index_local_storage()) {
-      has_local_index = true;
-      break;
-    }
-  }
-  return ret;
+
+#define DEFINE_CHECK_HAS_INDEX_FUNC(index_type)                                                                        \
+int ObTableSchema::check_has_##index_type(ObSchemaGetterGuard &schema_guard, bool &found) const                       \
+{                                                                                                                     \
+  int ret = OB_SUCCESS;                                                                                               \
+  ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;                                                               \
+  const ObSimpleTableSchemaV2 *index_schema = NULL;                                                                   \
+  const uint64_t tenant_id = get_tenant_id();                                                                         \
+  found = false;                                                                                                      \
+  if (OB_FAIL(get_simple_index_infos(simple_index_infos))) {                                                          \
+    LOG_WARN("get simple_index_infos failed", K(ret));                                                                \
+  }                                                                                                                   \
+  for (int64_t i = 0; !found && OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {                                \
+    if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id, simple_index_infos.at(i).table_id_, index_schema))) { \
+      LOG_WARN("failed to get table schema", K(ret), K(tenant_id), K(simple_index_infos.at(i).table_id_));            \
+    } else if (OB_ISNULL(index_schema)) {                                                                             \
+      ret = OB_ERR_UNEXPECTED;                                                                                        \
+      LOG_WARN("cannot get index table schema for table ", K(simple_index_infos.at(i).table_id_));                    \
+    } else if (index_schema->is_##index_type()) {                                                                     \
+      found = true;                                                                                                   \
+    }                                                                                                                 \
+  }                                                                                                                   \
+  return ret;                                                                                                         \
 }
 
-int ObTableSchema::check_has_fts_index(ObSchemaGetterGuard &schema_guard, bool &has_fts_index) const
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
-  const ObSimpleTableSchemaV2 *index_schema = NULL;
-  const uint64_t tenant_id = get_tenant_id();
-  has_fts_index = false;
-  if (OB_FAIL(get_simple_index_infos(simple_index_infos))) {
-    LOG_WARN("get simple_index_infos failed", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
-    if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id, simple_index_infos.at(i).table_id_, index_schema))) {
-      LOG_WARN("failed to get table schema", K(ret), K(tenant_id), K(simple_index_infos.at(i).table_id_));
-    } else if (OB_ISNULL(index_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("cannot get index table schema for table ", K(simple_index_infos.at(i).table_id_));
-    } else if (index_schema->is_fts_index_aux() || index_schema->is_fts_doc_word_aux()) {
-      has_fts_index = true;
-      break;
-    }
-  }
-  return ret;
-}
+DEFINE_CHECK_HAS_INDEX_FUNC(index_local_storage);
+DEFINE_CHECK_HAS_INDEX_FUNC(fts_index_aux);
+DEFINE_CHECK_HAS_INDEX_FUNC(vec_domain_index);
+DEFINE_CHECK_HAS_INDEX_FUNC(spatial_index);
+DEFINE_CHECK_HAS_INDEX_FUNC(multivalue_index_aux);
 
-int ObTableSchema::check_has_multivalue_index(ObSchemaGetterGuard &schema_guard, bool &has_multivalue_index) const
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
-  const ObSimpleTableSchemaV2 *index_schema = NULL;
-  const uint64_t tenant_id = get_tenant_id();
-  has_multivalue_index = false;
-  if (OB_FAIL(get_simple_index_infos(simple_index_infos))) {
-    LOG_WARN("get simple_index_infos failed", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
-    if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id, simple_index_infos.at(i).table_id_, index_schema))) {
-      LOG_WARN("failed to get table schema", K(ret), K(tenant_id), K(simple_index_infos.at(i).table_id_));
-    } else if (OB_ISNULL(index_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("cannot get index table schema for table ", K(simple_index_infos.at(i).table_id_));
-    } else if (index_schema->is_multivalue_index_aux()) {
-      has_multivalue_index = true;
-      break;
-    }
-  }
-  return ret;
-}
-
-// it will be useless after the commit of domain_merge_iter
-int ObTableSchema::check_has_hnsw_vector_index(ObSchemaGetterGuard &schema_guard, bool &has_vector_index) const
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
-  const ObSimpleTableSchemaV2 *index_schema = NULL;
-  const uint64_t tenant_id = get_tenant_id();
-  has_vector_index = false;
-  if (OB_FAIL(get_simple_index_infos(simple_index_infos))) {
-    LOG_WARN("get simple_index_infos failed", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
-    if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id, simple_index_infos.at(i).table_id_, index_schema))) {
-      LOG_WARN("failed to get table schema", K(ret), K(tenant_id), K(simple_index_infos.at(i).table_id_));
-    } else if (OB_ISNULL(index_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("cannot get index table schema for table ", K(simple_index_infos.at(i).table_id_));
-    } else if (index_schema->is_vec_hnsw_index()) {
-      has_vector_index = true;
-      break;
-    }
-  }
-  return ret;
-}
+#undef DEFINE_CHECK_HAS_INDEX_FUNC
 
 int ObTableSchema::get_part_key_column_type(const int64_t index, ObObjType &type) const
 {
@@ -10746,6 +10874,8 @@ int64_t ObPrintableTableSchema::to_string(char *buf, const int64_t buf_len) cons
       K_(session_id),
       "index_type", static_cast<int32_t>(index_type_),
       "table_type", static_cast<int32_t>(table_type_),
+      K_(external_location_id),
+      K_(external_sub_path),
       K_(table_mode),
       K_(tablespace_id));
   J_COMMA();

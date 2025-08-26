@@ -11,6 +11,9 @@
 #include "storage/compaction/ob_basic_schedule_tablet_func.h"
 #include "storage/compaction/ob_medium_compaction_func.h"
 #include "storage/compaction/ob_schedule_dag_func.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/compaction_v2/ob_ss_compact_helper.h"
+#endif
 namespace oceanbase
 {
 using namespace storage;
@@ -19,27 +22,27 @@ namespace compaction
 /********************************************ObBasicScheduleTabletFunc impl******************************************/
 
 ObBasicScheduleTabletFunc::ObBasicScheduleTabletFunc(
-  const int64_t merge_version)
+  const int64_t merge_version,
+  const int64_t loop_cnt)
   : merge_version_(merge_version),
     ls_status_(),
     tablet_cnt_(),
     freeze_param_(),
     ls_could_schedule_new_round_(false),
     ls_could_schedule_merge_(false),
-    is_skip_merge_tenant_(false)
+    is_skip_merge_tenant_(false),
+    loop_cnt_(loop_cnt)
 {
 }
 
 void ObBasicScheduleTabletFunc::destroy()
 {
-  schedule_freeze_dag(true/*force*/); // schedule dag before destroy
 }
 
 int ObBasicScheduleTabletFunc::switch_ls(ObLSHandle &ls_handle)
 {
   int ret = OB_SUCCESS;
   const ObLSID &ls_id = ls_handle.get_ls()->get_ls_id();
-  schedule_freeze_dag(true/*force*/); // schedule dag before switch to next ls
 
   if (OB_FAIL(ls_status_.init_for_major(merge_version_, ls_handle))) {
     if (OB_LS_NOT_EXIST != ret) {
@@ -57,6 +60,12 @@ int ObBasicScheduleTabletFunc::switch_ls(ObLSHandle &ls_handle)
     update_tenant_cached_status();
   }
   return ret;
+}
+
+int ObBasicScheduleTabletFunc::post_process_ls()
+{
+  schedule_freeze_dag(true/*force*/);
+  return OB_SUCCESS;
 }
 
 void ObBasicScheduleTabletFunc::update_tenant_cached_status()
@@ -85,6 +94,7 @@ void ObBasicScheduleTabletFunc::schedule_freeze_dag(const bool force)
   if (freeze_param_.tablet_info_array_.empty()) {
   } else if (!force && freeze_param_.tablet_info_array_.count() < SCHEDULE_DAG_THREHOLD) {
   } else {
+    freeze_param_.loop_cnt_ = get_loop_cnt();
     if (OB_TMP_FAIL(ObScheduleDagFunc::schedule_batch_freeze_dag(freeze_param_))) {
       LOG_WARN_RET(tmp_ret, "failed to schedule batch force freeze tablets dag", K(freeze_param_));
       // most tablets will clear failed since the capacity of ObTenantTabletStatMgr is limited

@@ -179,6 +179,10 @@ TEST_F(TestParser, general_parser)
         UNUSED(param);
         return OB_SUCCESS;
       }
+      int operator()(ObCSVGeneralParser::HandleBatchLinesParam param) {
+        UNUSED(param);
+        return OB_SUCCESS;
+      }
     };
     struct Functor counting_lines;
     ObSEArray<ObCSVGeneralParser::LineErrRec, 256> error_msgs;
@@ -262,6 +266,10 @@ TEST_F(TestParser, general_parser_escape)
   int64_t start_time = ObTimeUtility::current_time();
   struct Functor {
     int operator()(ObCSVGeneralParser::HandleOneLineParam param) {
+      UNUSED(param);
+      return OB_SUCCESS;
+    }
+    int operator()(ObCSVGeneralParser::HandleBatchLinesParam param) {
       UNUSED(param);
       return OB_SUCCESS;
     }

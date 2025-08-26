@@ -25,6 +25,7 @@ const char *ObStoreFormat::row_store_name[MAX_ROW_STORE] =
   "encoding_row_store",
   "selective_encoding_row_store",
   "cs_encoding_row_store",
+  "flat_opt_row_store"
 };
 
 const ObStoreFormatItem ObStoreFormat::store_format_items[OB_STORE_FORMAT_MAX] =

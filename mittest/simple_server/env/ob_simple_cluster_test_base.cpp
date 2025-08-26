@@ -186,11 +186,32 @@ int ObSimpleClusterTestBase::close()
   return ret;
 }
 
+int ObSimpleClusterTestBase::create_tenant_with_retry(const char *tenant_name,
+                                                      const char *memory_size,
+                                                      const char *log_disk_size,
+                                                      const bool oracle_mode,
+                                                      int64_t tenant_cpu)
+{
+  int ret = OB_SUCCESS;
+  int retry_cnt = 0;
+  do {
+    if (OB_FAIL(create_tenant(tenant_name, memory_size, log_disk_size, oracle_mode, tenant_cpu))) {
+      TRANS_LOG(WARN, "create_tenant fail, need retry", K(ret));
+      ob_usleep(15 * 1000 * 1000); // 15s
+    } else {
+      break;
+    }
+    retry_cnt++;
+  } while (OB_FAIL(ret) && retry_cnt < 10);
+  return ret;
+}
+
 int ObSimpleClusterTestBase::create_tenant(const char *tenant_name,
                                            const char *memory_size,
                                            const char *log_disk_size,
                                            const bool oracle_mode,
-                                           int64_t tenant_cpu)
+                                           int64_t tenant_cpu,
+                                           const char *data_disk_size)
 {
   SERVER_LOG(INFO, "create tenant start");
   int32_t log_level;
@@ -226,7 +247,12 @@ int ObSimpleClusterTestBase::create_tenant(const char *tenant_name,
   {
     ObSqlString sql;
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(sql.assign_fmt("create resource unit %s%s max_cpu %ld, memory_size '%s', log_disk_size='%s';",
+    } else if (OB_NOT_NULL(data_disk_size) &&
+               OB_FAIL(sql.assign_fmt("create resource unit %s%s max_cpu %ld, memory_size '%s', log_disk_size='%s', data_disk_size='%s';",
+                                      UNIT_BASE, tenant_name, tenant_cpu, memory_size, log_disk_size, data_disk_size))) {
+      SERVER_LOG(WARN, "create_tenant", K(ret));
+    } else if (OB_ISNULL(data_disk_size) &&
+               OB_FAIL(sql.assign_fmt("create resource unit %s%s max_cpu %ld, memory_size '%s', log_disk_size='%s';",
                                       UNIT_BASE, tenant_name, tenant_cpu, memory_size, log_disk_size))) {
       SERVER_LOG(WARN, "create_tenant", K(ret));
     } else if (OB_FAIL(sql_proxy.write(sql.ptr(), affected_rows))) {
@@ -251,6 +277,57 @@ int ObSimpleClusterTestBase::create_tenant(const char *tenant_name,
       SERVER_LOG(WARN, "create_tenant", K(ret));
     }
   }
+  if (OB_FAIL(ret)) {
+    int tmp_ret = OB_SUCCESS;
+    ObSqlString drop_sql1;
+    ObSqlString drop_sql2;
+    ObSqlString drop_sql3;
+    if (OB_TMP_FAIL(drop_sql1.assign_fmt("drop tenant if exists %s force;", tenant_name))) {
+      SERVER_LOG(WARN, "drop tenant fail", K(tmp_ret), K(ret));
+    } else {
+      int retry_cnt = 0;
+      do {
+        if (OB_TMP_FAIL(sql_proxy.write(drop_sql1.ptr(), affected_rows))) {
+          SERVER_LOG(WARN, "drop tenant fail", K(tmp_ret), K(ret), K(retry_cnt));
+          ob_usleep(15 * 1000 * 1000); // 15s
+          retry_cnt++;
+        } else {
+          SERVER_LOG(INFO, "drop tenant end", K(tmp_ret), K(ret));
+        }
+      } while (OB_TMP_FAIL(tmp_ret) && retry_cnt < 1000);
+    }
+    if (OB_TMP_FAIL(tmp_ret)) {
+    } else if (OB_TMP_FAIL(drop_sql2.assign_fmt("drop resource pool if exists %s%s", POOL_BASE, tenant_name))) {
+      SERVER_LOG(WARN, "drop resource pool fail", K(tmp_ret), K(ret));
+    } else {
+      int retry_cnt = 0;
+      do {
+        if (OB_TMP_FAIL(sql_proxy.write(drop_sql2.ptr(), affected_rows))) {
+          SERVER_LOG(WARN, "drop resource pool fail", K(tmp_ret), K(ret), K(retry_cnt));
+          ob_usleep(15 * 1000 * 1000); // 15s
+          retry_cnt++;
+        } else {
+          SERVER_LOG(INFO, "drop resource pool end", K(tmp_ret), K(ret));
+        }
+      } while (OB_TMP_FAIL(tmp_ret) && retry_cnt < 1000);
+    }
+    if (OB_TMP_FAIL(tmp_ret)) {
+    } else if (OB_TMP_FAIL(drop_sql3.assign_fmt("drop resource unit if exists %s%s;", UNIT_BASE, tenant_name))) {
+      SERVER_LOG(WARN, "drop resource pool fail", K(tmp_ret), K(ret));
+    } else {
+      int retry_cnt = 0;
+      do {
+        if (OB_TMP_FAIL(sql_proxy.write(drop_sql3.ptr(), affected_rows))) {
+          SERVER_LOG(WARN, "drop resource pool fail", K(tmp_ret), K(ret), K(retry_cnt));
+          ob_usleep(15 * 1000 * 1000); // 15s
+          retry_cnt++;
+        } else {
+          SERVER_LOG(INFO, "drop resource unit end", K(tmp_ret), K(ret));
+        }
+      } while (OB_TMP_FAIL(tmp_ret) && retry_cnt < 1000);
+    }
+  }
+
   if (change_log_level) {
     OB_LOGGER.set_log_level(log_level);
   }

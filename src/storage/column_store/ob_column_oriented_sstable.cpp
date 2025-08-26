@@ -20,6 +20,9 @@
 #include "ob_cg_aggregated_scanner.h"
 #include "ob_cg_group_by_scanner.h"
 #include "ob_virtual_cg_scanner.h"
+#include "lib/ob_define.h"
+#include "lib/thread/ob_thread_name.h"
+#include "observer/ob_server_event_history_table_operator.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::storage;
@@ -381,17 +384,17 @@ int ObCOSSTableV2::build_cs_meta()
   return ret;
 }
 
-int64_t ObCOSSTableV2::get_serialize_size() const
+int64_t ObCOSSTableV2::get_serialize_size(const uint64_t data_version) const
 {
   int64_t len = 0;
-  len += ObSSTable::get_serialize_size();
+  len += ObSSTable::get_serialize_size(data_version);
   len += serialization::encoded_length_i32(base_type_);
   len += serialization::encoded_length_bool(is_cgs_empty_co_);
   len += cs_meta_.get_serialize_size();
   return len;
 }
 
-int ObCOSSTableV2::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
+int ObCOSSTableV2::serialize(const uint64_t data_version, char *buf, const int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
   const int64_t old_pos = pos;
@@ -402,7 +405,7 @@ int ObCOSSTableV2::serialize(char *buf, const int64_t buf_len, int64_t &pos) con
   } else if (OB_UNLIKELY(NULL == buf || buf_len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("argument is invalid", K(ret), KP(buf), K(buf_len));
-  } else if (OB_FAIL(ObSSTable::serialize(buf, buf_len, pos))) {
+  } else if (OB_FAIL(ObSSTable::serialize(data_version, buf, buf_len, pos))) {
     LOG_WARN("failed to serialize basic ObSSTable", K(ret), KP(buf), K(buf_len), K(pos));
   } else if (OB_FAIL(serialization::encode_i32(buf, buf_len, pos, base_type_))) {
     LOG_WARN("failed to serialize base type", K(ret), KP(buf), K(buf_len), K(pos));
@@ -446,7 +449,7 @@ int ObCOSSTableV2::deserialize(
   return ret;
 }
 
-int ObCOSSTableV2::serialize_full_table(char *buf, const int64_t buf_len, int64_t &pos) const
+int ObCOSSTableV2::serialize_full_table(const uint64_t data_version, char *buf, const int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
   const int64_t old_pos = pos;
@@ -457,7 +460,7 @@ int ObCOSSTableV2::serialize_full_table(char *buf, const int64_t buf_len, int64_
   } else if (OB_UNLIKELY(NULL == buf || buf_len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("argument is invalid", K(ret), KP(buf), K(buf_len));
-  } else if (OB_FAIL(ObSSTable::serialize_full_table(buf, buf_len, pos))) {
+  } else if (OB_FAIL(ObSSTable::serialize_full_table(data_version, buf, buf_len, pos))) {
     LOG_WARN("failed to serialize full sstable", K(ret));
   } else if (OB_FAIL(serialization::encode_i32(buf, buf_len, pos, base_type_))) {
     LOG_WARN("failed to serialize base type", K(ret), KP(buf), K(buf_len), K(pos));
@@ -466,15 +469,25 @@ int ObCOSSTableV2::serialize_full_table(char *buf, const int64_t buf_len, int64_
   } else if (OB_FAIL(cs_meta_.serialize(buf, buf_len, pos))) {
     LOG_WARN("failed to deserialize cs meta", K(ret), KP(buf), K(buf_len), K(pos));
   } else {
+#ifdef ERRSIM
+    char *origin_thread_name = ob_get_tname_v2();
+    int64_t base_snapshot_version = key_.get_end_scn().get_val_for_logservice();
+    SERVER_EVENT_SYNC_ADD("co_sstable_errsim", "serialize_full_table",
+                          "origin_thread_name", origin_thread_name,
+                          "tablet_id", key_.tablet_id_.id(),
+                          "column_group_idx", key_.column_group_idx_,
+                          "base_snapshot_version", base_snapshot_version,
+                          "co_base_snapshot_version", meta_->get_co_base_snapshot_version());
+#endif
     LOG_INFO("succeed to serialize co sstable", K(ret), KPC(this), K(buf_len), K(old_pos), K(pos));
   }
   return ret;
 }
 
-int64_t ObCOSSTableV2::get_full_serialize_size() const
+int64_t ObCOSSTableV2::get_full_serialize_size(const uint64_t data_version) const
 {
   int64_t len = 0;
-  len += ObSSTable::get_full_serialize_size();
+  len += ObSSTable::get_full_serialize_size(data_version);
   if (len > 0) {
     len += serialization::encoded_length_i32(base_type_);
     len += serialization::encoded_length_bool(is_cgs_empty_co_);

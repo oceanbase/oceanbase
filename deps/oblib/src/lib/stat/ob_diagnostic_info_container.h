@@ -53,6 +53,14 @@ public:
   {
     return di_infos_.get_alloc_handle().get_alloc_count();
   }
+  int64_t get_rpc_size() const
+  {
+    return rpc_size_;
+  }
+  bool is_rpc_request(int64_t session_id) const
+  {
+    return session_id & (uint64_t)1 << 60;
+  }
   void reset()
   {
     di_infos_.destroy();
@@ -63,6 +71,7 @@ private:
   friend class ObRunningDiagnosticInfoContainer;
   int get_session_diag_info(int64_t session_id, ObDISessionCollect &diag_info);
   ObDiInfos di_infos_;
+  int64_t rpc_size_;
 };
 
 class ObRunningDiagnosticInfoContainer
@@ -80,6 +89,7 @@ public:
   int dec_ref(ObDiagnosticInfo *di_info);
   int for_each(const std::function<bool(const SessionID &, ObDiagnosticInfo *)> &fn);
   int64_t size() const;
+  int64_t get_rpc_size() const;
   TO_STRING_KV(K_(tenant_id), K_(slot_count), K_(slot_mask), K_(is_inited));
   int get_session_diag_info(int64_t session_id, ObDISessionCollect &diag_info);
   void reset();
@@ -167,6 +177,10 @@ public:
   {
     return runnings_.size();
   };
+  int64_t get_rpc_size() const
+  {
+    return runnings_.get_rpc_size();
+  }
   void stop()
   {
     stop_ = true;

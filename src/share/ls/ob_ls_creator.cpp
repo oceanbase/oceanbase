@@ -283,7 +283,7 @@ int ObLSCreator::create_tenant_sys_ls(
     } else if (is_meta_tenant(tenant_id_)) {
       share::ObLSLifeAgentManager ls_life_agent(*proxy_);
       if (OB_FAIL(ls_life_agent.create_new_ls(status_info, create_scn, zone_priority,
-              share::NORMAL_SWITCHOVER_STATUS))) {
+          ObAllTenantInfo::INITIAL_SWITCHOVER_EPOCH))) {
         LOG_WARN("failed to create new ls", KR(ret), K(status_info), K(create_scn), K(zone_priority));
       }
     }
@@ -362,6 +362,7 @@ int ObLSCreator::construct_clone_tenant_ls_addrs_(const uint64_t source_tenant_i
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_CREATE_LS_SKIP_PERSIST_MEMBER_LIST)
 int ObLSCreator::do_create_ls_(const ObLSAddr &addr,
                               ObMember &arbitration_service,
                               const share::ObLSStatusInfo &info,
@@ -390,13 +391,17 @@ int ObLSCreator::do_create_ls_(const ObLSAddr &addr,
                                compat_mode, create_with_palf, palf_base_info, member_list, arbitration_service, learner_list))) {
    LOG_WARN("failed to create log stream", KR(ret), K_(id), K_(tenant_id), K(create_with_palf),
             K(addr), K(paxos_replica_num), K(tenant_info), K(create_scn), K(compat_mode), K(palf_base_info), K(learner_list));
- } else if (OB_FAIL(persist_ls_member_list_(member_list, arbitration_service, learner_list))) {
+ } else if (OB_UNLIKELY(ERRSIM_CREATE_LS_SKIP_PERSIST_MEMBER_LIST)) {
+    LOG_INFO("errsim create ls skip persist member list");
+  } else if (OB_FAIL(persist_ls_member_list_(member_list, arbitration_service, learner_list))) {
    LOG_WARN("failed to persist log stream member list", KR(ret),
             K(member_list), K(arbitration_service), K(learner_list));
  }
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_CREATE_LS_SKIP_UPDATE_LS_STATUS)
+ERRSIM_POINT_DEF(ERRSIM_CREATE_LS_SKIP_SET_MEMBER_LIST)
 int ObLSCreator::process_after_has_member_list_(
     const common::ObMemberList &member_list,
     const common::ObMember &arbitration_service,
@@ -407,12 +412,16 @@ int ObLSCreator::process_after_has_member_list_(
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret));
+  } else if (OB_UNLIKELY(ERRSIM_CREATE_LS_SKIP_SET_MEMBER_LIST)) {
+    LOG_INFO("errsim create ls skip set member list");
   } else if (OB_FAIL(set_member_list_(member_list, arbitration_service, paxos_replica_num, learner_list))) {
     LOG_WARN("failed to set member list", KR(ret), K_(id), K_(tenant_id),
         K(member_list), K(arbitration_service), K(paxos_replica_num), K(learner_list));
   } else if (OB_ISNULL(proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql proxy is null", KR(ret));
+  } else if (OB_UNLIKELY(ERRSIM_CREATE_LS_SKIP_UPDATE_LS_STATUS)) {
+    LOG_INFO("errsim create ls skip update ls status", KR(ret), K(tenant_id_), K(id_));
   } else {
     //create end
     DEBUG_SYNC(BEFORE_PROCESS_AFTER_HAS_MEMBER_LIST);
@@ -698,9 +707,10 @@ int ObLSCreator::check_create_ls_result_(
   return ret;
 }
 
-int ObLSCreator::persist_ls_member_list_(const common::ObMemberList &member_list,
-                                         const ObMember &arb_member,
-                                         const common::GlobalLearnerList &learner_list)
+int ObLSCreator::persist_ls_member_list_(
+    const common::ObMemberList &member_list,
+    const ObMember &arb_member,
+    const common::GlobalLearnerList &learner_list)
 {
   int ret = OB_SUCCESS;
   DEBUG_SYNC(BEFORE_SET_LS_MEMBER_LIST);
@@ -715,14 +725,16 @@ int ObLSCreator::persist_ls_member_list_(const common::ObMemberList &member_list
     LOG_WARN("sql proxy is null", KR(ret));
   } else {
     share::ObLSStatusOperator ls_operator;
-    if (OB_FAIL(ls_operator.update_init_member_list(tenant_id_, id_, member_list, *proxy_, arb_member, learner_list))) {
+    const uint64_t exec_tenant_id = ObLSLifeIAgent::get_exec_tenant_id(tenant_id_);
+    START_TRANSACTION(proxy_, exec_tenant_id);
+    if (FAILEDx(ls_operator.update_init_member_list(tenant_id_, id_, member_list, trans, arb_member, learner_list))) {
       LOG_WARN("failed to insert ls", KR(ret), K(member_list), K(arb_member), K(learner_list));
     }
+    END_TRANSACTION(trans);
   }
   return ret;
 
 }
-
 ERRSIM_POINT_DEF(ERRSIM_CHECK_MEMBER_LIST_SAME_ERROR);
 int ObLSCreator::inner_check_member_list_and_learner_list_(
     const common::ObMemberList &member_list,

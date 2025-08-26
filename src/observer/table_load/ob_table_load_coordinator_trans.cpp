@@ -113,7 +113,7 @@ int ObTableLoadCoordinatorTrans::get_bucket_writer_for_write(
   } else if (OB_FAIL(check_trans_status(ObTableLoadTransStatusType::RUNNING))) {
     LOG_WARN("fail to check trans status", KR(ret));
   } else {
-    obsys::ObRLockGuard guard(trans_ctx_->rwlock_);
+    obsys::ObRLockGuard<> guard(trans_ctx_->rwlock_);
     if (OB_ISNULL(trans_bucket_writer_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null bucket writer", KR(ret));
@@ -137,7 +137,7 @@ int ObTableLoadCoordinatorTrans::get_bucket_writer_for_flush(
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadCoordinatorTrans not init", KR(ret), KP(this));
   } else {
-    obsys::ObRLockGuard guard(trans_ctx_->rwlock_);
+    obsys::ObRLockGuard<> guard(trans_ctx_->rwlock_);
     if (OB_ISNULL(trans_bucket_writer_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null bucket writer", KR(ret));
@@ -163,7 +163,7 @@ void ObTableLoadCoordinatorTrans::put_bucket_writer(ObTableLoadTransBucketWriter
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid null bucket writer", KR(ret));
   } else {
-    obsys::ObRLockGuard guard(trans_ctx_->rwlock_);
+    obsys::ObRLockGuard<> guard(trans_ctx_->rwlock_);
     OB_ASSERT(trans_bucket_writer_ == bucket_writer);
   }
   if (OB_SUCC(ret)) {

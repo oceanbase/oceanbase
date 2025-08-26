@@ -210,6 +210,7 @@ protected:
                                JoinedTable *&joined_table);
   int assign_simple_sel_stmt(ObSelectStmt &target_stmt, ObSelectStmt &source_stmt);
   int append_old_new_col_filter(const TableItem &table, ObIArray<ObRawExpr*>& conds);
+  int get_table_logic_pk_ids(const ObTableSchema *table_schema, ObIArray<uint64_t> &logic_pk_ids);
   template <typename StmtType>
   inline int create_simple_stmt(StmtType *&stmt)
   {

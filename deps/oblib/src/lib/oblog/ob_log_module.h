@@ -247,6 +247,7 @@ DEFINE_LOG_SUB_MOD(DEBUG)              // debug
 DEFINE_LOG_SUB_MOD(CACHE)              // cache
 DEFINE_LOG_SUB_MOD(STORAGEROUTINE)     // storage routine
 DEFINE_LOG_SUB_MOD(DEPENDENCY)     // collect dependency info
+DEFINE_LOG_SUB_MOD(UDFRESULTCACHE) // udf result cache
 LOG_MOD_END(PL)
 
 } //namespace common
@@ -654,6 +655,10 @@ LOG_MOD_END(PL)
 #define PL_DEPENDENCY_LOG(level, info_string, args...) OB_SUB_MOD_LOG(PL, DEPENDENCY, level,                 \
                                                                     info_string, ##args)
 #define _PL_DEPENDENCY_LOG(level, _fmt_, args...) _OB_SUB_MOD_LOG(PL, DEPENDENCY, level,                     \
+                                                                _fmt_, ##args)
+#define PL_UDF_RESULT_CACHE_LOG(level, info_string, args...) OB_SUB_MOD_LOG(PL, UDFRESULTCACHE, level,                 \
+                                                                    info_string, ##args)
+#define _PL_UDF_RESULT_CACHE_LOG(level, _fmt_, args...) _OB_SUB_MOD_LOG(PL, UDFRESULTCACHE, level,                     \
                                                                 _fmt_, ##args)
 #define RPC_FRAME_LOG(level, _fmt_, args...)    \
   OB_SUB_MOD_LOG(RPC, FRAME, level, _fmt_, ##args)

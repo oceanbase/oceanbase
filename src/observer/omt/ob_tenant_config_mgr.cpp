@@ -536,18 +536,18 @@ void ObTenantConfigMgr::get_lease_request(share::ObLeaseRequest &lease_request)
 }
 
 // for __all_virtual_tenant_parameter_info
-int ObTenantConfigMgr::get_all_tenant_config_info(
-    common::ObArray<TenantConfigInfo> &all_config,
-    common::ObIAllocator *allocator)
+int ObTenantConfigMgr::get_tenant_config_info(
+    common::ObArray<TenantConfigInfo> &tenant_config_info,
+    common::ObIAllocator *allocator, uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   DRWLock::RDLockGuard guard(rwlock_);
-  TenantConfigMap::const_iterator it = config_map_.begin();
-  for (; OB_SUCC(ret) && it != config_map_.end(); ++it) {
-    const uint64_t tenant_id = it->first.tenant_id_;
-    ObTenantConfig *tenant_config = it->second;
+  ObTenantConfig *tenant_config = nullptr;
+  if (OB_FAIL(config_map_.get_refactored(ObTenantID(tenant_id), tenant_config))) {
+    LOG_WARN("failed to get tenant config", K(tenant_id));
+  } else {
     for (ObConfigContainer::const_iterator iter = tenant_config->get_container().begin();
-         iter != tenant_config->get_container().end(); iter++) {
+          iter != tenant_config->get_container().end(); iter++) {
       TenantConfigInfo config_info(tenant_id);
       if (0 == ObString("compatible").case_compare(iter->first.str())) {
         uint64_t data_version = 0;
@@ -588,14 +588,28 @@ int ObTenantConfigMgr::get_all_tenant_config_info(
         LOG_WARN("set source fail", K(iter->second->source()), K(ret));
       } else if (OB_FAIL(config_info.set_edit_level(iter->second->edit_level()))) {
         LOG_WARN("set edit_level fail", K(iter->second->edit_level()), K(ret));
-      } else if (OB_FAIL(all_config.push_back(config_info))) {
+      } else if (OB_FAIL(tenant_config_info.push_back(config_info))) {
         LOG_WARN("push to array fail", K(config_info), K(ret));
       }
     } // for
-  } // for
+  }
   return ret;
 }
 
+// for __all_virtual_tenant_parameter_info
+int ObTenantConfigMgr::get_all_tenant_id(common::ObArray<ObTenantID> &tenant_ids)
+{
+  int ret = OB_SUCCESS;
+  DRWLock::RDLockGuard guard(rwlock_);
+  TenantConfigMap::const_iterator it = config_map_.begin();
+  for (; OB_SUCC(ret) && it != config_map_.end(); ++it) {
+    ObTenantID tenant_id(it->first.tenant_id_);
+    if (OB_FAIL(tenant_ids.push_back(tenant_id))) {
+        LOG_WARN("push to array fail", K(tenant_id), K(ret));
+    }
+  }
+  return ret;
+}
 int ObTenantConfigMgr::got_versions(const common::ObIArray<std::pair<uint64_t, int64_t>> &versions)
 {
   int ret = OB_SUCCESS;
@@ -643,13 +657,30 @@ int ObTenantConfigMgr::update_local(uint64_t tenant_id, int64_t expected_version
         LOG_WARN("read config from __tenant_parameter failed",
                  KR(ret), K(tenant_id), K(exec_tenant_id), K(sql));
       } else {
-        DRWLock::WRLockGuard guard(rwlock_);
+        DRWLock::RDLockGuard guard(rwlock_);
         ret = config_map_.get_refactored(ObTenantID(tenant_id), config);
         if (OB_FAIL(ret)) {
           LOG_ERROR("failed to get tenant config", K(tenant_id), K(ret));
         } else {
-          ret = config->update_local(expected_version, result);
+          // not to save to file and publish special config until rwlock_ is wrlocked
+          ret = config->update_local(expected_version, result,
+                                      false /* save2file */, false /* publish_special_config */);
         }
+      }
+      if (OB_SUCC(ret)) {
+        DRWLock::WRLockGuard guard(rwlock_);
+        if (OB_FAIL(config_map_.get_refactored(ObTenantID(tenant_id), config))) {
+          LOG_ERROR("failed to get tenant config", K(tenant_id), K(ret));
+        } else if (OB_FAIL(config->config_mgr_->dump2file_unsafe())) {
+          LOG_WARN("Dump to file failed", K(ret));
+        } else if (OB_FAIL(config->publish_special_config_after_dump())) {
+          LOG_WARN("publish special config after dump failed", K(tenant_id), K(ret));
+        }
+#ifdef ERRSIM
+        else if (OB_FAIL(config->build_errsim_module_())) {
+          LOG_WARN("failed to build errsim module", K(ret), K(tenant_id));
+        }
+#endif
       }
     }
   }

@@ -45,7 +45,8 @@ public:
   static const int64_t BALANCE_JOB_STATUS_CANCELING = 1;
   static const int64_t BALANCE_JOB_STATUS_COMPLETED = 2;
   static const int64_t BALANCE_JOB_STATUS_CANCELED = 3;
-  static const int64_t BALANCE_JOB_STATUS_MAX = 4;
+  static const int64_t BALANCE_JOB_STATUS_SUSPEND = 4;
+  static const int64_t BALANCE_JOB_STATUS_MAX = 5;
   ObBalanceJobStatus(const int64_t value = BALANCE_JOB_STATUS_INVALID) : val_(value) {}
   ObBalanceJobStatus(const ObString &str);
   ~ObBalanceJobStatus() {reset(); }
@@ -67,6 +68,7 @@ public:
   bool is_canceling() const { return BALANCE_JOB_STATUS_CANCELING == val_; }
   bool is_success() const { return BALANCE_JOB_STATUS_COMPLETED == val_; }
   bool is_canceled() const { return BALANCE_JOB_STATUS_CANCELED == val_; }
+  bool is_suspend() const { return BALANCE_JOB_STATUS_SUSPEND == val_; }
 
   TO_STRING_KV(K_(val), "job_status", to_str());
 private:
@@ -105,11 +107,6 @@ private:
   int64_t val_;
 };
 
-const static char * const LS_BALANCE_BY_MIGRATE = "LS balance by migrate";
-const static char * const LS_BALANCE_BY_ALTER = "LS balance by alter";
-const static char * const LS_BALANCE_BY_EXPAND = "LS balance by expand";
-const static char * const LS_BALANCE_BY_SHRINK = "LS balance by shrink";
-
 struct ObBalanceJob
 {
 public:
@@ -123,10 +120,12 @@ public:
            const int64_t primary_zone_num,
            const int64_t unit_group_num,
            const ObString &comment,
-           const ObString &balance_strategy);
+           const ObBalanceStrategy &balance_strategy,
+           const int64_t max_end_time = OB_INVALID_TIMESTAMP);
   bool is_valid() const;
+  bool is_timeout() const;
   TO_STRING_KV(K_(tenant_id), K_(job_id), K_(job_type), K_(job_status),
-               K_(primary_zone_num), K_(unit_group_num), K_(comment), K_(balance_strategy));
+               K_(primary_zone_num), K_(unit_group_num), K_(comment), K_(balance_strategy), K_(max_end_time));
 #define Property_declare_var(variable_type, variable_name) \
  private:                                                  \
   variable_type variable_name##_;                          \
@@ -140,19 +139,20 @@ public:
   Property_declare_var(int64_t, unit_group_num)
   Property_declare_var(ObBalanceJobType, job_type)
   Property_declare_var(ObBalanceJobStatus, job_status)
+  Property_declare_var(int64_t, max_end_time)
 #undef Property_declare_var
 public:
   const ObSqlString& get_comment() const
   {
     return comment_;
   }
-  const ObSqlString& get_balance_strategy() const
+  const ObBalanceStrategy& get_balance_strategy() const
   {
     return balance_strategy_;
   }
 private:
   ObSqlString comment_;
-  ObSqlString balance_strategy_;
+  ObBalanceStrategy balance_strategy_;
 };
 
 class ObBalanceJobTableOperator
@@ -219,6 +219,31 @@ public:
                        ObMySQLProxy &client);
   static int fill_dml_spliter(share::ObDMLSqlSplicer &dml,
                               const ObBalanceJob &job);
+
+  /**
+   * @description: update balance_strategy of __all_balance_job
+   * @param[in] tenant_id : user_tenant_id
+   * @param[in] job_status : current job status
+   * @param[in] old_strategy : current job balance strategy
+   * @param[in] new_strategy : new job balance strategy
+   * @param[in] client: sql client or trans
+   * @return :
+   * OB_SUCCESS: update job balance strategy successfully
+   * OB_STATE_NOT_MATCH: current job balance strategy not match
+   * Other: failed
+   */
+  static int update_job_balance_strategy(
+      const uint64_t tenant_id,
+      const ObBalanceJobID job_id,
+      const ObBalanceJobStatus job_status,
+      const ObBalanceStrategy &old_strategy,
+      const ObBalanceStrategy &new_strategy,
+      ObISQLClient &client);
+private:
+  static int construct_get_balance_job_sql_(
+      const uint64_t tenant_id,
+      const bool for_update,
+      ObSqlString &sql);
 };
 }
 }

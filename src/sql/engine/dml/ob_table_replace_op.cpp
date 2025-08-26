@@ -45,6 +45,7 @@ OB_DEF_SERIALIZE(ObTableReplaceSpec)
   OB_UNIS_ENCODE(has_global_unique_index_);
   OB_UNIS_ENCODE(all_saved_exprs_);
   OB_UNIS_ENCODE(doc_id_col_id_);
+  OB_UNIS_ENCODE(hidden_ck_col_id_);
   return ret;
 }
 
@@ -70,6 +71,7 @@ OB_DEF_DESERIALIZE(ObTableReplaceSpec)
   OB_UNIS_DECODE(has_global_unique_index_);
   OB_UNIS_DECODE(all_saved_exprs_);
   OB_UNIS_DECODE(doc_id_col_id_);
+  OB_UNIS_DECODE(hidden_ck_col_id_);
   return ret;
 }
 
@@ -92,6 +94,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableReplaceSpec)
   OB_UNIS_ADD_LEN(has_global_unique_index_);
   OB_UNIS_ADD_LEN(all_saved_exprs_);
   OB_UNIS_ADD_LEN(doc_id_col_id_);
+  OB_UNIS_ADD_LEN(hidden_ck_col_id_);
   return len;
 }
 
@@ -484,7 +487,20 @@ int ObTableReplaceOp::fetch_conflict_rowkey(int64_t replace_row_cnt)
     }
   }
 
-  if (gts_state_ == USE_PARTITION_SNAPSHOT_STATE) {
+  while (OB_SUCC(ret) && !task_iter.is_end()) {
+    // 不需要clear rowkey表达式的eval_flag，因为主键使用的是column_ref表达式，不存在eval_fun
+    if (OB_FAIL(get_next_conflict_rowkey(task_iter))) {
+      if (OB_ITER_END != ret) {
+        LOG_WARN("fail to get next conflict rowkey from das_result", K(ret));
+      }
+    } else if (OB_FAIL(conflict_checker_.build_primary_table_lookup_das_task())) {
+      LOG_WARN("fail to build lookup_das_task", K(ret));
+    }
+  }
+  ret = (ret == OB_ITER_END ? OB_SUCCESS : ret);
+
+  if (OB_FAIL(ret)) {
+  } else if (gts_state_ == USE_PARTITION_SNAPSHOT_STATE) {
     DASTaskIter task_iter = dml_rtctx_.das_ref_.begin_task_iter();
     while (OB_SUCC(ret) && !task_iter.is_end()) {
       ObDASInsertOp *ins_op = static_cast<ObDASInsertOp*>(*task_iter);
@@ -501,18 +517,32 @@ int ObTableReplaceOp::fetch_conflict_rowkey(int64_t replace_row_cnt)
         }
       ++task_iter;
     }
-  }
-  while (OB_SUCC(ret) && !task_iter.is_end()) {
-    // 不需要clear rowkey表达式的eval_flag，因为主键使用的是column_ref表达式，不存在eval_fun
-    if (OB_FAIL(get_next_conflict_rowkey(task_iter))) {
-      if (OB_ITER_END != ret) {
-        LOG_WARN("fail to get next conflict rowkey from das_result", K(ret));
+  } else if (gts_state_ == WITH_UNIQUE_GLOBAL_INDEX_STATE) {
+    bool refresh_snapshot = false;
+    share::ObLSID try_exec_ls_id;
+    share::ObLSID lookup_ls_id;
+    if (!dml_rtctx_.das_ref_.check_tasks_same_ls_and_is_local(try_exec_ls_id)) {
+      LOG_TRACE("tablets in different ls_id when try insert", K(ctx_.get_das_ctx().get_snapshot()));
+    } else if (!conflict_checker_.das_ref_.check_tasks_same_ls_and_is_local(lookup_ls_id)) {
+      refresh_snapshot = true;
+      LOG_TRACE("tablets in different ls_id when lookup get conflicted row", K(ctx_.get_das_ctx().get_snapshot()));
+    } else if ((OB_UNLIKELY(try_exec_ls_id != lookup_ls_id))) {
+      refresh_snapshot = true;
+      LOG_TRACE("tablets in ls_id of try execution are different with lookup", K(ctx_.get_das_ctx().get_snapshot()));
+    }
+    if (refresh_snapshot) {
+      ObSQLSessionInfo *my_session = GET_MY_SESSION(ctx_);
+      ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
+      if (OB_FAIL(ObSqlTransControl::get_read_snapshot(my_session,
+                                                       plan_ctx,
+                                                       ctx_.get_das_ctx().get_snapshot()))) {
+        LOG_WARN("fail to get global read snapshot", K(ret));
+      } else {
+        gts_state_ = GTE_GTS_STATE;
+        LOG_TRACE("get new snapshot", K(ctx_.get_das_ctx().get_snapshot()));
       }
-    } else if (OB_FAIL(conflict_checker_.build_primary_table_lookup_das_task())) {
-      LOG_WARN("fail to build lookup_das_task", K(ret));
     }
   }
-  ret = (ret == OB_ITER_END ? OB_SUCCESS : ret);
   return ret;
 }
 
@@ -1035,6 +1065,7 @@ int ObTableReplaceOp::check_values(bool &is_equal,
           LOG_WARN("compare failed", K(ret));
         } else if (0 != cmp_ret) {
           is_equal = false;
+          break;
         }
       }
     }

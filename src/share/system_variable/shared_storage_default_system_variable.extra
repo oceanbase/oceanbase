@@ -4,6 +4,11 @@
     "comment": "for workloads like trade, payment core system, internet high throughput application, etc. no restrictions like foreign key, no stored procedure, no long transaction, no large transaction, no complex join, no complex subquery",
     "variables": {
       "tenant": [
+        {
+          "name": "ob_sql_work_area_percentage",
+          "value": 15,
+          "comment":"larger sql work area can save spill cost"
+        }
       ]
     }
   },
@@ -12,6 +17,11 @@
     "comment": "for workloads like bank, insurance system. they often have complex join, complex correlated subquery, batch jobs written in PL, have both long and large transactions. Sometimes use parallel execution for short running queries",
     "variables": {
       "tenant": [
+        {
+          "name": "ob_sql_work_area_percentage",
+          "value": 15,
+          "comment":"larger sql work area can save spill cost"
+        }
       ]
     }
   },
@@ -20,6 +30,11 @@
     "comment": "for real-time data warehouse analytics scenarios.",
     "variables": {
       "tenant": [
+        {
+          "name": "ob_sql_work_area_percentage",
+          "value": 50,
+          "comment":"larger sql work area can save spill cost"
+        }
       ]
     }
   },
@@ -36,6 +51,11 @@
     "comment": "for mixed OLAP and OLTP workload. Typically utilized for obtaining instant insights from active operational data, fraud detection, and personalized recommendations",
     "variables": {
       "tenant": [
+        {
+          "name": "ob_sql_work_area_percentage",
+          "value": 30,
+          "comment":"larger sql work area can save spill cost"
+        }
       ]
     }
   }

@@ -25,6 +25,7 @@ UNIT_NUM	bigint(20)	NO
 COMPATIBLE	varchar(65536)	NO			
 MAX_LS_ID	bigint(20)	NO			
 RESTORE_DATA_MODE	varchar(128)	NO			
+FLASHBACK_LOG_SCN	bigint(20) unsigned	NO			
 SELECT count(distinct(tenant_id)) >= 1  FROM DBA_OB_TENANTS;
 count(distinct(tenant_id)) >= 1
 1
@@ -77,6 +78,7 @@ UNIT_NUM	bigint(20)	NO
 COMPATIBLE	varchar(65536)	NO			
 MAX_LS_ID	bigint(20)	NO			
 RESTORE_DATA_MODE	varchar(128)	NO			
+FLASHBACK_LOG_SCN	bigint(20) unsigned	NO			
 SELECT TENANT_NAME, count(*) = 1  FROM oceanbase.DBA_OB_TENANTS group by TENANT_ID;
 TENANT_NAME	count(*) = 1
 mysql	1

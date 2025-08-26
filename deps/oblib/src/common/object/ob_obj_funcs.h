@@ -963,9 +963,13 @@ DEF_NUMBER_FUNCS(ObNumberFloatType, number_float);
                                             obj.get_scale(), buffer, length, pos); \
     }                                                                   \
     if (OB_SUCC(ret)) {                                            \
-      if (params.print_const_expr_type_ && !lib::is_oracle_mode() && ob_is_datetime_or_mysql_datetime(obj.get_type())) {                        \
-        ret = databuff_printf(buffer, length, pos, "' AS %s)", CAST_PREFIX_MYSQL_DATETIME);     \
-      } else {                                                                                  \
+      if (params.print_const_expr_type_ && !lib::is_oracle_mode() && ob_is_datetime_or_mysql_datetime(obj.get_type())) {                    \
+        if (obj.get_scale() > 0 && obj.get_scale() <= 6) {                                                                         \
+          ret = databuff_printf(buffer, length, pos, "' AS %s (%d))", CAST_PREFIX_MYSQL_DATETIME, obj.get_scale());                \
+        } else {                                                                                                                   \
+          ret = databuff_printf(buffer, length, pos, "' AS %s)", CAST_PREFIX_MYSQL_DATETIME);                                      \
+        }                                                                                                                          \
+      } else {                                                                                                                     \
         const char *fmt_suffix = params.need_cast_expr_ && lib::is_oracle_mode() ?              \
                                   CAST_SUFFIX_ORACLE : NORMAL_SUFFIX;                           \
         ret = databuff_printf(buffer, length, pos, "%s", fmt_suffix);     \
@@ -1552,8 +1556,13 @@ DEF_ENUMSET_INNER_FUNCS(ObSetInnerType, set_inner, ObString);
   {                                                                     \
     UNUSED(params);                                                    \
     int ret = OB_SUCCESS;                                        \
-    ObString str = obj.get_text_print_string(length - pos);             \
-    if (CS_TYPE_BINARY == obj.get_collation_type()) {                   \
+    ObString str;                                                \
+    ObString data;                                               \
+    ObArenaAllocator tmp_allocator(ObModIds::OB_LOB_ACCESS_BUFFER, OB_MALLOC_NORMAL_BLOCK_SIZE);  \
+    if (OB_FAIL(obj.read_lob_data(tmp_allocator, data))) {                                        \
+      COMMON_LOG(WARN, "read_lob_data fail", K(ret), K(obj));                                     \
+    } else if (OB_FALSE_IT(str.assign_ptr(data.ptr(), MIN(data.length(), length - pos)))) {       \
+    } else if (CS_TYPE_BINARY == obj.get_collation_type()) {                   \
       if (!lib::is_oracle_mode() && OB_SUCCESS != (ret = databuff_printf(buffer, \
                                                                         length, pos, "X'"))) { \
       } else if (lib::is_oracle_mode() && OB_SUCCESS != (ret = databuff_printf(buffer, \

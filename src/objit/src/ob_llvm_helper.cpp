@@ -142,20 +142,6 @@ int ObLLVMType::get_pointer_to(ObLLVMType &result)
 int ObLLVMType::get_pointee_type(ObLLVMType &result)
 {
   int ret = common::OB_SUCCESS;
-#ifndef CPP_STANDARD_20
-  if (OB_ISNULL(get_v())) {
-    ret = common::OB_NOT_INIT;
-  } else if (OB_UNLIKELY(llvm::Type::PointerTyID != get_id())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("not a pointer", K(ret), K(get_id()), K(lbt()));
-  } else {
-#ifndef CPP_STANDARD_20
-    result.set_v(get_v()->getPointerElementType());
-#else
-    result.set_v(get_v()->getNonOpaquePointerElementType());
-#endif
-  }
-#endif // CPP_STANDARD_20
   return ret;
 }
 
@@ -256,7 +242,6 @@ int ObLLVMValue::get_pointee_type(ObLLVMType &result)
 {
   int ret = common::OB_SUCCESS;
 
-#ifdef CPP_STANDARD_20
   if (OB_ISNULL(get_v())) {
     ret = common::OB_NOT_INIT;
   } else if (ObLLVMHelper::get_pointer_type_id() != get_v()->getType()->getTypeID()) {
@@ -268,7 +253,6 @@ int ObLLVMValue::get_pointee_type(ObLLVMType &result)
   } else {
     result.set_v(get_t());
   }
-#endif // CPP_STANDARD_20
 
   return ret;
 }
@@ -619,19 +603,36 @@ int ObLLVMHelper::init_llvm() {
   OZ (di_helper.init(helper.get_jc()));
 
   ObSEArray<ObLLVMType, 8> arg_types;
+  ObSEArray<ObLLVMType, 64> avx521_elem_types;
   ObLLVMType int64_type;
+  ObLLVMType avx512_type;
+  ObLLVMType avx512_ptr_type;
   ObLLVMFunction init_func;
   ObLLVMFunctionType ft;
   ObLLVMBasicBlock block;
+  ObLLVMValue avx512_value;
+  ObLLVMValue init_avx512_value;
   ObLLVMValue magic;
   uint64_t addr;
 
   OZ (helper.get_llvm_type(ObIntType, int64_type));
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < 512 / sizeof(int64_t); ++i) {
+    OZ (avx521_elem_types.push_back(int64_type));
+  }
+
+  OZ (helper.create_struct_type("init_avx512", avx521_elem_types, avx512_type));
+  OZ (avx512_type.get_pointer_to(avx512_ptr_type));
   OZ (arg_types.push_back(int64_type));
+  OZ (arg_types.push_back(avx512_ptr_type));
   OZ (ObLLVMFunctionType::get(int64_type, arg_types, ft));
   OZ (helper.create_function(init_func_name, ft, init_func));
   OZ (helper.create_block("entry", init_func, block));
   OZ (helper.set_insert_point(block));
+  OZ (helper.get_null_const(avx512_type, init_avx512_value));
+  OZ (init_func.get_argument(1, avx512_value));
+  OX (avx512_value.set_t(avx512_type));
+  OZ (helper.create_store(init_avx512_value, avx512_value));
   OZ (helper.get_int64(OB_SUCCESS, magic));
   OZ (helper.create_ret(magic));
 
@@ -1051,15 +1052,8 @@ int ObLLVMHelper::create_store(const ObLLVMValue &src, ObLLVMValue &dest)
     bool same = false;
     if (OB_FAIL(src.get_type(type1))) {
       LOG_WARN("failed to get type", K(ret));
-#ifndef CPP_STANDARD_20
-    } else if (OB_FAIL(dest.get_type(type2))) {
-      LOG_WARN("failed to get type", K(ret));
-    } else if (OB_FAIL(type1.get_pointer_to(type1))) {
-      LOG_WARN("failed to get pointer to", K(ret));
-#else
     } else if (OB_FAIL(dest.get_pointee_type(type2))) {
       LOG_WARN("failed to get pointee type", K(ret));
-#endif // CPP_STANDARD_20
     } else if (OB_FAIL(type1.same_as(type2, same))) {
       LOG_WARN("failed to checkout same", K(type1.get_id()), K(type2.get_id()), K(ret));
     } else if (!same) {
@@ -1091,15 +1085,11 @@ int ObLLVMHelper::create_load(const ObString &name, ObLLVMValue &ptr, ObLLVMValu
   } else {
     llvm::Value *value = nullptr;
 
-#ifdef CPP_STANDARD_20
     if (OB_FAIL(ptr.get_pointee_type(type))) {
       LOG_WARN("failed to get pointee type", K(ret), K(ptr));
     } else {
       value = jc_->get_builder().CreateLoad(type.get_v(), ptr.get_v(), make_string_ref(name));
     }
-#else
-    value = jc_->get_builder().CreateLoad(ptr.get_v(), make_string_ref(name));
-#endif // CPP_STANDARD_20
 
     if (OB_ISNULL(value)) {
       ret = OB_ERR_UNEXPECTED;
@@ -1139,7 +1129,6 @@ int ObLLVMHelper::create_istore(int64_t i, ObLLVMValue &dest)
   } else if (OB_ISNULL(dest.get_v())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("value is NULL", K(i), K(dest), K(ret));
-#ifdef CPP_STANDARD_20
   } else if (OB_FAIL(dest.get_pointee_type(type))) {
     LOG_WARN("failed to get pointee type", K(ret), K(dest));
   } else if (llvm::Type::PointerTyID != dest.get_type_id()) {
@@ -1151,20 +1140,6 @@ int ObLLVMHelper::create_istore(int64_t i, ObLLVMValue &dest)
              K(type),
              K(type.get_id()),
              K(ret));
-#else
-  } else if (llvm::Type::PointerTyID != dest.get_type_id()
-      || 1 != dest.get_type().get_num_child()
-      || llvm::Type::IntegerTyID != dest.get_type().get_child(0).get_id()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("dest type is not integer pointer ",
-             K(i),
-             K(dest.get_type_id()),
-             K(dest.get_type().get_num_child()),
-             K(dest.get_type().get_child(0).get_id()),
-             K(ret));
-  } else if (FALSE_IT(type = dest.get_type().get_child(0))) {
-    // unreachable
-#endif // CPP_STANDARD_20
   } else {
     ObLLVMValue value;
     if (OB_FAIL(get_int_value(type, i, value))) {
@@ -1428,18 +1403,20 @@ int ObLLVMHelper::create_sub(ObLLVMValue &value1, ObLLVMValue &value2, ObLLVMVal
   return ret;
 }
 
-#define DEFINE_CREATE_ARITH_INT(name) \
-int ObLLVMHelper::create_##name(ObLLVMValue &value1, int64_t &value2, ObLLVMValue &result) \
-{ \
-  int ret = OB_SUCCESS; \
-  jit::ObLLVMValue arith_value; \
-  if (OB_FAIL(get_int_value(value1.get_type(), value2, arith_value))) { \
-    LOG_WARN("failed to get int value", K(ret)); \
-  } else if (OB_FAIL(create_##name(value1, arith_value, result))) { \
-    LOG_WARN("failed to create add", K(ret)); \
-  } else { /*do nothing*/ } \
-  return ret; \
-}
+#define DEFINE_CREATE_ARITH_INT(name)                                                              \
+  int ObLLVMHelper::create_##name(ObLLVMValue &value1, const int64_t &value2, ObLLVMValue &result) \
+  {                                                                                                \
+    int ret = OB_SUCCESS;                                                                          \
+    jit::ObLLVMValue arith_value;                                                                  \
+    if (OB_FAIL(get_int_value(value1.get_type(), value2, arith_value))) {                          \
+      LOG_WARN("failed to get int value", K(ret));                                                 \
+    } else if (OB_FAIL(create_##name(value1, arith_value, result))) {                              \
+      LOG_WARN("failed to create add", K(ret));                                                    \
+    } else {                                                                                       \
+      /* do nothing */                                                                             \
+    }                                                                                              \
+    return ret;                                                                                    \
+  }
 
 DEFINE_CREATE_ARITH_INT(add)
 DEFINE_CREATE_ARITH_INT(sub)
@@ -1504,7 +1481,6 @@ int ObLLVMHelper::create_gep(const ObString &name, ObLLVMValue &value, ObIArray<
       } else { /*do nothing*/ }
     }
 
-#ifdef CPP_STANDARD_20
     if (OB_FAIL(ret)) {
       // do nothing
     } else if (get_pointer_type_id() == value.get_v()->getType()->getTypeID()) {
@@ -1514,22 +1490,15 @@ int ObLLVMHelper::create_gep(const ObString &name, ObLLVMValue &value, ObIArray<
     } else {  // for Array / Struct ...
       type = value.get_type();
     }
-#endif // CPP_STANDARD_20
 
     if (OB_SUCC(ret)) {
-#ifdef CPP_STANDARD_20
       llvm::Value *elem = jc_->get_builder().CreateGEP(type.get_v(), value.get_v(), make_array_ref(array), make_string_ref(name));
-#else
-      llvm::Value *elem = jc_->get_builder().CreateGEP(value.get_v(), make_array_ref(array), make_string_ref(name));
-#endif // CPP_STANDARD_20
       if (OB_ISNULL(elem)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to create gep", K(ret));
       } else {
         result.set_v(elem);
-#ifdef CPP_STANDARD_20
         result.set_t(GetElementPtrInst::getIndexedType(type.get_v(), make_array_ref(array)));
-#endif // CPP_STANDARD_20
       }
     }
   }
@@ -1560,7 +1529,6 @@ int ObLLVMHelper::create_gep(const ObString &name, ObLLVMValue &value, ObLLVMVal
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("value is NULL", K(name), K(value), K(idx), K(ret));
   } else {
-#ifdef CPP_STANDARD_20
     if (get_pointer_type_id() == value.get_v()->getType()->getTypeID()) {
       if (OB_FAIL(value.get_pointee_type(type))) {
         LOG_WARN("failed to get pointee type", K(ret), K(value));
@@ -1568,7 +1536,6 @@ int ObLLVMHelper::create_gep(const ObString &name, ObLLVMValue &value, ObLLVMVal
     } else {  // for Array / Struct ...
       type = value.get_type();
     }
-#endif // CPP_STANDARD_20
   }
 
   if (OB_SUCC(ret)) {
@@ -1581,19 +1548,13 @@ int ObLLVMHelper::create_gep(const ObString &name, ObLLVMValue &value, ObLLVMVal
     } else if (OB_FAIL(array.push_back(idx.get_v()))) {
       LOG_WARN("push_back error", K(ret));
     } else {
-#ifdef CPP_STANDARD_20
       llvm::Value *elem = jc_->get_builder().CreateGEP(type.get_v(), value.get_v(), make_array_ref(array), make_string_ref(name));
-#else
-      llvm::Value *elem = jc_->get_builder().CreateGEP(value.get_v(), make_array_ref(array), make_string_ref(name));
-#endif // CPP_STANDARD_20
       if (OB_ISNULL(elem)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to create gep", K(ret));
       } else {
         result.set_v(elem);
-#ifdef CPP_STANDARD_20
         result.set_t(GetElementPtrInst::getIndexedType(type.get_v(), make_array_ref(array)));
-#endif // CPP_STANDARD_20
       }
     }
   }
@@ -1611,24 +1572,16 @@ int ObLLVMHelper::create_const_gep1_64(const ObString &name, ObLLVMValue &value,
   } else if (OB_ISNULL(value.get_v())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("value is NULL", K(name), K(value), K(idx), K(ret));
-#ifdef CPP_STANDARD_20
   } else if (OB_FAIL(value.get_pointee_type(type))) {
     LOG_WARN("failed to get pointee type", K(ret), K(value), K(type));
-#endif // CPP_STANDARD_20
   } else {
-#ifdef CPP_STANDARD_20
     llvm::Value *elem = jc_->get_builder().CreateConstGEP1_64(type.get_v(), value.get_v(), idx, make_string_ref(name));
-#else
-    llvm::Value *elem = jc_->get_builder().CreateConstGEP1_64(value.get_v(), idx, make_string_ref(name));
-#endif // CPP_STANDARD_20
     if (OB_ISNULL(elem)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to create const gep164", K(ret));
     } else {
       result.set_v(elem);
-#ifdef CPP_STANDARD_20
       result.set_t(type.get_v());
-#endif // CPP_STANDARD_20
     }
   }
   return ret;
@@ -1860,11 +1813,7 @@ int ObLLVMHelper::set_debug_location(uint32_t line, uint32_t col, ObLLVMDIScope 
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("scope is NULL", K(ret));
   } else {
-#ifdef CPP_STANDARD_20
     jc_->get_builder().SetCurrentDebugLocation(ObDILocation::get(scope->get_v()->getContext(), line, col, scope->get_v()));
-#else
-    jc_->get_builder().SetCurrentDebugLocation(ObDebugLoc::get(line, col, scope->get_v()));
-#endif
   }
   return ret;
 }

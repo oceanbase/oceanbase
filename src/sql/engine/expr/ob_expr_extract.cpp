@@ -172,7 +172,7 @@ int ObExprExtract::calc(
   if (date.is_null()) {
     is_null = true;
   } else {
-    class ObTime ob_time;
+    ObTime ob_time;
     memset(&ob_time, 0, sizeof(ob_time));
     int warning = OB_SUCCESS;
     int &cast_ret = CM_IS_ERROR_ON_FAIL(cast_mode) ? ret : warning;

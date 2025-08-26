@@ -110,6 +110,7 @@ public:
   INHERIT_TO_STRING_KV("ObTableStmt", ObTableStmt, K_(stmt_type), K_(alter_table_arg), K_(index_arg_list));
   const common::ObSArray<obrpc::ObIndexArg*> &get_alter_index_arg_list() const 
     { return alter_table_arg_.index_arg_list_; }
+  common::ObSArray<obrpc::ObIndexArg*> &get_alter_index_arg_list() { return alter_table_arg_.index_arg_list_; }
 
   obrpc::ObAlterTriggerArg &get_tg_arg() { return tg_arg_; }
   const ObTableSchema &get_alter_table_schema() const { return alter_table_arg_.alter_table_schema_; }

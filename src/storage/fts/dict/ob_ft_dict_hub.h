@@ -58,6 +58,13 @@ public:
         tenant_id_(tenant_id)
   {
   }
+  int hash(uint64_t &hash_value) const
+  {
+    int ret = OB_SUCCESS;
+    hash_value = hash();
+    return ret;
+  }
+
   uint64_t hash() const
   {
     uint64_t hash = 0;
@@ -111,7 +118,7 @@ private:
 private:
   bool is_inited_;
   // holds info of dict
-  common::ObConcurrentHashMap<ObFTDictInfoKey, ObFTDictInfo> dict_map_;
+  hash::ObHashMap<ObFTDictInfoKey, ObFTDictInfo> dict_map_;
   ObBucketLock rw_dict_lock_;
 };
 

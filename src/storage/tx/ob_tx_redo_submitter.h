@@ -300,7 +300,7 @@ int ObTxRedoSubmitter::_submit_redo_pipeline_(const bool display_blocked_info)
           ret = OB_ERR_UNEXPECTED;
           TRANS_LOG(ERROR, "oops! fatal panic", K(ret), K(ctx), KPC(this));
 #ifdef ENABLE_DEBUG_LOG
-          usleep(1000);
+          ob_usleep(1000);
           ob_abort();
 #endif
           break;
@@ -375,7 +375,7 @@ int ObTxRedoSubmitter::after_submit_redo_out_()
   if (OB_FAIL(mt_ctx_.log_submitted(*helper_))) {
     TRANS_LOG(WARN, "callback memctx fail", K(ret));
 #ifdef ENABLE_DEBUG_LOG
-    usleep(1000);
+    ob_usleep(1000);
     ob_abort();
 #endif
   }

@@ -153,7 +153,7 @@ void ObSimpleThreadPoolBase<T>::run1()
       }
     } else if (thread_idx >= old_thread_num) {
       ObBKGDSessInActiveGuard inactive_guard;
-      usleep(static_cast<__useconds_t>((10 + thread_idx - old_thread_num) * 1000));
+      ob_usleep(static_cast<__useconds_t>((10 + thread_idx - old_thread_num) * 1000));
     } else {
       void *task = NULL;
       const int64_t least_thread_num = adaptive_strategy_.get_least_thread_num();

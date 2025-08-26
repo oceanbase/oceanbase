@@ -78,7 +78,7 @@ int ObDistPlans::get_plan(ObPlanCacheCtx &pc_ctx,
       } else if (candi_table_locs.empty()) {
         // do nothing.
       } else if (!pc_ctx.try_get_plan_
-                 && OB_FAIL(ObPhyLocationGetter::build_candi_table_locs(
+                 && OB_FAIL(ObPhyLocationGetter::build_table_locs(
                       pc_ctx.exec_ctx_.get_das_ctx(), plan->get_table_locations(),
                       candi_table_locs))) {
         LOG_WARN("fail to init table locs", K(ret));

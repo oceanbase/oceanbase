@@ -52,7 +52,9 @@ public:
   }
   OB_INLINE ObIArray<ObTruncateInfo *> &get_array() { return truncate_info_array_; }
   OB_INLINE const ObIArray<ObTruncateInfo *> &get_array() const { return truncate_info_array_; }
-  int append(const ObTruncateInfo &truncate_info);
+  OB_INLINE ObTruncateInfoSrc get_src() const { return src_; }
+  int append_with_deep_copy(const ObTruncateInfo &truncate_info); // will deep copy with allocator
+  int append_ptr(ObTruncateInfo &truncate_info); // will append ptr only
   int append(
       const mds::MdsDumpKey &key,
       const mds::MdsDumpNode &node);
@@ -67,12 +69,12 @@ public:
       int64_t &pos);
   int64_t get_serialize_size() const;
   void gene_info(char* buf, const int64_t buf_len, int64_t &pos) const;
+  static bool compare(const ObTruncateInfo *lhs, const ObTruncateInfo *rhs);
   TO_STRING_KV(K_(is_inited), "array_cnt", count(), K_(src), K_(truncate_info_array));
 private:
   bool inner_is_valid() const { return 0 == count() || (count() >= 0 && allocator_ != nullptr); }
   void reset_list();
-  static bool compare(const ObTruncateInfo *lhs, const ObTruncateInfo *rhs);
-public:
+  int inner_append_and_sort(ObTruncateInfo &info);
   ObSEArray<ObTruncateInfo *, 1> truncate_info_array_;
   common::ObIAllocator *allocator_;
   ObTruncateInfoSrc src_;

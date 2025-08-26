@@ -12,6 +12,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/direct_load/ob_direct_load_tmp_file.h"
+#include "share/io/ob_io_manager.h"
 
 namespace oceanbase
 {
@@ -207,10 +208,9 @@ int ObDirectLoadTmpFileIOHandle::open(const ObDirectLoadTmpFileHandle &file_hand
       LOG_WARN("fail to assign file handle", KR(ret));
     } else {
       tmp_file_ = tmp_file;
-      io_info_.dir_id_ = tmp_file_->get_file_id().dir_id_;
       io_info_.fd_ = tmp_file_->get_file_id().fd_;
       io_info_.io_desc_.set_sys_module_id(ObIOModule::DIRECT_LOAD_IO);
-      io_info_.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
+      io_info_.io_timeout_ms_ = OB_IO_MANAGER.get_object_storage_io_timeout_ms(MTL_ID());
     }
   }
   return ret;
@@ -247,9 +247,9 @@ int ObDirectLoadTmpFileIOHandle::pread(char *buf, int64_t size, int64_t offset)
     io_info_.buf_ = buf;
     io_info_.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
     if (GCTX.is_shared_storage_mode()) {
-      io_info_.prefetch_ = true;
+      io_info_.io_desc_.set_preread();
     } else {
-      io_info_.disable_page_cache_ = true;
+      io_info_.disable_page_cache_ = false;
     }
     while (OB_SUCC(ret)) {
       if (OB_FAIL(check_status())) {
@@ -288,12 +288,13 @@ int ObDirectLoadTmpFileIOHandle::write(char *buf, int64_t size)
     io_info_.size_ = size;
     io_info_.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_INDEX_BUILD_WRITE);
     io_info_.disable_page_cache_ = false;
+    io_info_.io_timeout_ms_ = OB_IO_MANAGER.get_object_storage_io_timeout_ms(MTL_ID());
     while (OB_SUCC(ret)) {
       if (OB_FAIL(check_status())) {
         LOG_WARN("fail to check status", KR(ret));
       }
       // TODO(suzhi.yt): 先保留原来的调用, aio_write提交成功就相当于写成功了
-      else if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.aio_write(MTL_ID(), io_info_, file_io_handle_))) {
+      else if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.write(MTL_ID(), io_info_))) {
         LOG_WARN("fail to do aio write to tmp file", KR(ret), K_(io_info));
         if (OB_LIKELY(is_retry_err(ret))) {
           if (++retry_cnt <= MAX_RETRY_CNT) {
@@ -342,9 +343,9 @@ int ObDirectLoadTmpFileIOHandle::aio_pread(char *buf, int64_t size, int64_t offs
     io_info_.buf_ = buf;
     io_info_.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
     if (GCTX.is_shared_storage_mode()) {
-      io_info_.prefetch_ = true;
+      io_info_.io_desc_.set_preread();
     } else {
-      io_info_.disable_page_cache_ = true;
+      io_info_.disable_page_cache_ = false;
     }
     while (OB_SUCC(ret)) {
       if (OB_FAIL(check_status())) {
@@ -383,12 +384,12 @@ int ObDirectLoadTmpFileIOHandle::aio_write(char *buf, int64_t size)
     io_info_.buf_ = buf;
     io_info_.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_INDEX_BUILD_WRITE);
     io_info_.disable_page_cache_ = false;
+    io_info_.io_timeout_ms_ = OB_IO_MANAGER.get_object_storage_io_timeout_ms(MTL_ID());
     while (OB_SUCC(ret)) {
       if (OB_FAIL(check_status())) {
         LOG_WARN("fail to check status", KR(ret));
       }
-      // aio_write提交成功就相当于写成功了
-      else if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.aio_write(MTL_ID(), io_info_, file_io_handle_))) {
+      else if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.write(MTL_ID(), io_info_))) {
         LOG_WARN("fail to do aio write to tmp file", KR(ret), K_(io_info));
         if (OB_LIKELY(is_retry_err(ret))) {
           if (++retry_cnt <= MAX_RETRY_CNT) {

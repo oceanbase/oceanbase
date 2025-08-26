@@ -30,7 +30,8 @@ using namespace oceanbase::rootserver;
 int ObRestoreUtil::fill_physical_restore_job(
     const int64_t job_id,
     const obrpc::ObPhysicalRestoreTenantArg &arg,
-    ObPhysicalRestoreJob &job)
+    ObPhysicalRestoreJob &job,
+    bool is_recover_table)
 {
   int ret = OB_SUCCESS;
 
@@ -44,7 +45,10 @@ int ObRestoreUtil::fill_physical_restore_job(
     job.set_tenant_name(arg.tenant_name_);
     job.set_initiator_job_id(arg.initiator_job_id_);
     job.set_initiator_tenant_id(arg.initiator_tenant_id_);
-    job.set_restore_type(FULL_RESTORE_TYPE);
+    /* set default restore type
+     * 1.physical restore: full.
+     * 2.recover table restore aux teannt: quick */
+    job.set_restore_type(is_recover_table ? QUICK_RESTORE_TYPE : FULL_RESTORE_TYPE);
     if (OB_FAIL(job.set_description(arg.description_))) {
       LOG_WARN("fail to set description", K(ret));
     }
@@ -380,7 +384,14 @@ int ObRestoreUtil::fill_restore_scn(
   } else if (with_restore_scn) {
     // restore scn which is specified by user
     restore_scn = src_scn;
-  } else if (!with_restore_scn) {
+  } else if (!timestamp.empty()) {
+    common::ObTimeZoneInfoWrap time_zone_wrap;
+    if (OB_FAIL(get_backup_sys_time_zone_(tenant_path_array, time_zone_wrap))) {
+      LOG_WARN("failed to get backup sys time zone", K(ret));
+    } else if (OB_FAIL(convert_restore_timestamp_to_scn_(timestamp, time_zone_wrap, restore_scn))) {
+      LOG_WARN("failed to convert restore timestamp to scn", K(ret));
+    }
+  } else {
     if (restore_using_compl_log) {
       SCN min_restore_scn = SCN::min_scn();
       ARRAY_FOREACH_X(tenant_path_array, i, cnt, OB_SUCC(ret)) {
@@ -410,13 +421,6 @@ int ObRestoreUtil::fill_restore_scn(
         } else {
           restore_scn = min_restore_scn;
         }
-      }
-    } else if (!timestamp.empty()) {
-      common::ObTimeZoneInfoWrap time_zone_wrap;
-      if (OB_FAIL(get_backup_sys_time_zone_(tenant_path_array, time_zone_wrap))) {
-        LOG_WARN("failed to get backup sys time zone", K(ret));
-      } else if (OB_FAIL(convert_restore_timestamp_to_scn_(timestamp, time_zone_wrap, restore_scn))) {
-        LOG_WARN("failed to convert restore timestamp to scn", K(ret));
       }
     } else {
       int64_t round_id = 0;

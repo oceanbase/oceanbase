@@ -140,36 +140,32 @@ int ObPwjComparer::extract_all_partition_indexes(const ObCandiTableLoc &phy_tabl
       // 对于一级分区表part_id(一级逻辑分区id) = partition_id(物理分区id)
       ObTabletID tablet_id = phy_partitions.at(i).get_partition_location().get_tablet_id();
       int64_t part_index = -1;
-      int64_t subpart_index = -1;
       if (table_schema.is_external_table()) {
         if (OB_FAIL(all_tablet_ids.push_back(tablet_id.id()))) { //mock
         LOG_WARN("failed to push back partition id", K(ret));
         } else if (OB_FAIL(all_partition_indexes.push_back(part_index))) {
           LOG_WARN("failed to push back partition index", K(ret));
         }
-      } else if (OB_FAIL(table_schema.get_part_idx_by_tablet(tablet_id, part_index, subpart_index))) {
-        LOG_WARN("failed to get part idx by tablet", K(ret));
       } else if (OB_FAIL(all_tablet_ids.push_back(tablet_id.id()))) {
         LOG_WARN("failed to push back partition id", K(ret));
-      } else if (OB_FAIL(all_partition_indexes.push_back(part_index))) {
-        LOG_WARN("failed to push back partition index", K(ret));
       }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (table_schema.is_external_table()) {
+      // do nothing
+    } else if (OB_FAIL(table_schema.get_part_idx_by_tablets(all_tablet_ids, all_partition_indexes, all_subpartition_indexes))) {
+      LOG_WARN("failed to get part idx by tablets", K(ret));
     }
   } else if (share::schema::PARTITION_LEVEL_TWO == part_level) {
     for (int64_t i = 0; OB_SUCC(ret) && i < phy_partitions.count(); ++i) {
-      int64_t partition_id = phy_partitions.at(i).get_partition_location().get_partition_id();
       ObTabletID tablet_id = phy_partitions.at(i).get_partition_location().get_tablet_id();
-      int64_t part_index = -1;
-      int64_t subpart_index = -1;
-      if (OB_FAIL(table_schema.get_part_idx_by_tablet(tablet_id, part_index, subpart_index))) {
-        LOG_WARN("failed to get part idx by tablet", K(ret));
-      } else if (OB_FAIL(all_tablet_ids.push_back(tablet_id.id()))) {
+      if (OB_FAIL(all_tablet_ids.push_back(tablet_id.id()))) {
         LOG_WARN("failed to push back partition id", K(ret));
-      } else if (OB_FAIL(all_partition_indexes.push_back(part_index))) {
-        LOG_WARN("failed to push back part index", K(ret));
-      } else if (OB_FAIL(all_subpartition_indexes.push_back(subpart_index))) {
-        LOG_WARN("failed to push back subpart index");
       }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(table_schema.get_part_idx_by_tablets(all_tablet_ids, all_partition_indexes, all_subpartition_indexes))) {
+      LOG_WARN("failed to get part idx by tablets", K(ret));
     }
   }
   if (OB_SUCC(ret) && share::schema::PARTITION_LEVEL_TWO == part_level) {

@@ -277,13 +277,40 @@ public:
   // 指定case运行目录前缀 test_ob_simple_cluster_
   ObTestSSLogAtomicProtocol() : ObSimpleClusterTestBase("test_shared_storage_sslog_proto", "50G", "50G", "50G")
   {}
+
+  void wait_sys_to_leader()
+  {
+    share::ObTenantSwitchGuard tenant_guard;
+    int ret = OB_ERR_UNEXPECTED;
+    ASSERT_EQ(OB_SUCCESS, tenant_guard.switch_to(1));
+    ObLS *ls = nullptr;
+    ObLSID ls_id(ObLSID::SYS_LS_ID);
+    ObLSHandle handle;
+    ObLSService *ls_svr = MTL(ObLSService *);
+    EXPECT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD));
+    ls = handle.get_ls();
+    ASSERT_NE(nullptr, ls);
+    ASSERT_EQ(ls_id, ls->get_ls_id());
+    for (int i=0; i<100; i++) {
+      ObRole role;
+      int64_t proposal_id = 0;
+      ASSERT_EQ(OB_SUCCESS, ls->get_log_handler()->get_role(role, proposal_id));
+      if (role == ObRole::LEADER) {
+        ret = OB_SUCCESS;
+        break;
+      }
+      ob_usleep(10 * 1000);
+    }
+    ASSERT_EQ(OB_SUCCESS, ret);
+  }
+
   void create_test_tenant(uint64_t &tenant_id)
   {
     TRANS_LOG(INFO, "create_tenant start");
+    wait_sys_to_leader();
     ASSERT_EQ(OB_SUCCESS, create_tenant("tt1"));
     ASSERT_EQ(OB_SUCCESS, get_tenant_id(tenant_id));
     ASSERT_EQ(OB_SUCCESS, get_curr_simple_server().init_sql_proxy2());
-    TRANS_LOG(INFO, "create_tenant end", K(tenant_id));
   }
 };
 
@@ -546,10 +573,13 @@ TEST_F(ObTestSSLogAtomicProtocol, test_read_write_interface)
 
   // ========== Test 3: update and read the row =========
   {
+    char buf[100];
+    int64_t pos = 0;
+    ASSERT_EQ(OB_SUCCESS, extra_info1.serialize(buf, sizeof(buf), pos));
     ASSERT_EQ(OB_SUCCESS, ObAtomicFile::update_sslog_row(param.meta_type_,
                                                        meta_key1.get_string_key(),
                                                        meta_value2,
-                                                       extra_info1,
+                                                       ObString(pos, buf),
                                                        extra_info1,
                                                        false,
                                                        affected_rows));

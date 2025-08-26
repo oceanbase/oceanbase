@@ -64,7 +64,8 @@ public:
   ObPreWarmerParam(const ObPreWarmerType type)
     : type_(type)
   {}
-  virtual ~ObPreWarmerParam() { type_ = PRE_WARM_TYPE_MAX; }
+  virtual ~ObPreWarmerParam() { reset(); }
+  void reset() { type_ = PRE_WARM_TYPE_MAX; }
   virtual bool is_valid() const { return type_ >= PRE_WARM_TYPE_NONE && type_ < PRE_WARM_TYPE_MAX; }
   virtual int init(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id, const bool use_fixed_percentage = false);
   VIRTUAL_TO_STRING_KV(K_(type), K_(fixed_percentage));

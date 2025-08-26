@@ -129,6 +129,14 @@ public:
       K_(tablet_task_id), K_(dest_schema_version), K_(snapshot_version), K_(task_id),
       K_(execution_id), K_(compat_mode), K_(data_format_version), K_(orig_schema_tablet_size),K_(user_parallelism),
       K_(concurrent_cnt), K_(ranges), K_(need_rescan_fill_cg), K_(is_no_logging));
+private:
+  int get_complement_parallel_mode(
+      const uint64_t tenant_id,
+      const uint64_t table_id,
+      const int64_t schema_version,
+      const lib::Worker::CompatMode compat_mode,
+      const bool is_recover_table,
+      bool &is_allow_parallel);
 public:
   bool is_inited_;
   uint64_t orig_tenant_id_;
@@ -213,7 +221,7 @@ public:
   ~ObComplementDataDag();
   int init(const obrpc::ObDDLBuildSingleReplicaRequestArg &arg);
   int prepare_context();
-  int64_t hash() const;
+  virtual uint64_t hash() const override;
   bool operator ==(const share::ObIDag &other) const;
   bool is_inited() const { return is_inited_; }
   void handle_init_failed_ret_code(int ret) { context_.complement_data_ret_ = ret; }

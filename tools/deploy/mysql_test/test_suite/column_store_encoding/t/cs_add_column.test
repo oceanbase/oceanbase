@@ -17,7 +17,7 @@ sleep 10;
 --let $count=1
 while ($count < 300)
 {
-  eval INSERT INTO t1 VALUES($count, repeat($count * 10, 512), $count * 10);
+  eval INSERT INTO t1 VALUES($count, repeat($count * 10, 50), $count * 10);
   inc $count;
   inc $count;
 }
@@ -35,7 +35,7 @@ alter table t1 add column c1 int default 0, add column c2 varchar(100);
 --let $count=300
 while ($count < 500)
 {
-  eval INSERT INTO t1 VALUES($count, repeat($count * 10, 512), $count * 10, $count, repeat($count, 5));
+  eval INSERT INTO t1 VALUES($count, repeat($count * 10, 50), $count * 10, $count, repeat($count, 5));
   inc $count;
   inc $count;
 }

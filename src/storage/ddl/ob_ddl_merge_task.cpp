@@ -35,6 +35,7 @@ namespace oceanbase
 namespace storage
 {
 ERRSIM_POINT_DEF(EN_DIRECT_LOAD_TASK_PROCESS);
+ERRSIM_POINT_DEF(EN_DDL_MERGE_TASK_FAILED);
 /******************             ObDDLTableMergeDag             *****************/
 ObDDLTableMergeDag::ObDDLTableMergeDag()
   : ObIDag(ObDagType::DAG_TYPE_DDL_KV_MERGE),
@@ -199,7 +200,7 @@ bool ObDDLTableMergeDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObDDLTableMergeDag::hash() const
+uint64_t ObDDLTableMergeDag::hash() const
 {
   return ddl_param_.tablet_id_.hash();
 }
@@ -274,6 +275,7 @@ int wait_lob_tablet_major_exist(ObLSHandle &ls_handle, ObTablet &tablet)
   ObTabletBindingMdsUserData ddl_data;
   const ObTabletMeta &tablet_meta = tablet.get_tablet_meta();
   ObTenantDirectLoadMgr *tenant_direct_load_mgr = MTL(ObTenantDirectLoadMgr *);
+  ObTabletDirectLoadMgrHandle direct_load_mgr_handle;
   ObDDLTableMergeDagParam param;
   bool is_major_sstable_exist = false;
   if (OB_FAIL(tablet.ObITabletMdsInterface::get_ddl_data(share::SCN::max_scn(), ddl_data))) {
@@ -365,6 +367,8 @@ int ObDDLTableMergeTask::process()
   } else if (is_data_direct_load(merge_param_.direct_load_type_) && EN_DIRECT_LOAD_TASK_PROCESS) {
     ret = OB_EAGAIN;
     FLOG_INFO("ERRSIM EN_DIRECT_LOAD_TASK_PROCESS", KR(ret));
+  } else if (OB_FAIL(EN_DDL_MERGE_TASK_FAILED)) {
+    FLOG_INFO("ERRSIM EN_DDL_MERGE_TASK_FAILED", K(ret));
 #endif
   } else if (OB_FAIL(merge_ddl_kvs(ls_handle, tablet_handle))) {
     LOG_WARN("fail to merge ddl kvs", K(ret));
@@ -463,7 +467,7 @@ int ObDDLTableMergeTask::merge_full_direct_load_ddl_kvs(ObLSHandle &ls_handle, O
     } else if (OB_FAIL(tenant_direct_load_mgr->get_tablet_mgr(
         ObTabletDirectLoadMgrKey(merge_param_.tablet_id_, ObDirectLoadType::DIRECT_LOAD_DDL), tablet_mgr_hdl))) {
       LOG_WARN("get tablet direct load mgr failed", K(ret), K(merge_param_));
-    } else if (OB_FAIL(tablet_mgr_hdl.get_full_obj()->prepare_major_merge_param(tablet, ddl_param))) {
+    } else if (OB_FAIL(tablet_mgr_hdl.get_full_obj()->prepare_major_merge_param(ddl_param))) {
       LOG_WARN("preare full direct load sstable param failed", K(ret));
     } else if (merge_param_.is_commit_ && OB_FAIL(wait_lob_tablet_major_exist(ls_handle, tablet))) {
       if (OB_EAGAIN != ret) {
@@ -782,6 +786,7 @@ int ObTabletDDLUtil::prepare_index_data_desc(ObTablet &tablet,
                                              const uint64_t data_format_version,
                                              const ObSSTable *first_ddl_sstable,
                                              const ObStorageSchema *storage_schema,
+                                             const share::SCN &reorganization_scn,
                                              ObWholeDataStoreDesc &data_desc)
 {
   int ret = OB_SUCCESS;
@@ -792,9 +797,11 @@ int ObTabletDDLUtil::prepare_index_data_desc(ObTablet &tablet,
   const int64_t cg_idx = table_key.is_column_store_sstable() ? table_key.get_column_group_id() : -1/*negative value means row store*/;
   const SCN end_scn = table_key.get_end_scn();
   const bool micro_index_clustered = tablet.get_tablet_meta().micro_index_clustered_;
-  if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid() || snapshot_version <= 0 || data_format_version <= 0 || OB_ISNULL(storage_schema))) {
+  if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid() || snapshot_version <= 0 || data_format_version <= 0
+      || OB_ISNULL(storage_schema) || !reorganization_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(ls_id), K(tablet_id), K(snapshot_version), K(data_format_version), KP(storage_schema));
+    LOG_WARN("invalid argument", K(ret), K(ls_id), K(tablet_id), K(snapshot_version), K(data_format_version),
+        KP(storage_schema), K(reorganization_scn));
   } else if (cg_idx >= 0) {
     const ObIArray<ObStorageColumnGroupSchema > &cg_schemas = storage_schema->get_column_groups();
     if (cg_idx >= cg_schemas.count()) {
@@ -809,7 +816,7 @@ int ObTabletDDLUtil::prepare_index_data_desc(ObTablet &tablet,
                                  compaction::ObMergeType::MAJOR_MERGE,
                                  snapshot_version, data_format_version,
                                  tablet.get_tablet_meta().micro_index_clustered_,
-                                 tablet.get_transfer_seq(), tablet.get_reorganization_scn(),
+                                 tablet.get_transfer_seq(), reorganization_scn,
                                  end_scn, &cur_cg_schema, cg_idx))) {
         LOG_WARN("init data desc for cg failed", K(ret));
       } else {
@@ -828,7 +835,7 @@ int ObTabletDDLUtil::prepare_index_data_desc(ObTablet &tablet,
                                     data_format_version,
                                     tablet.get_tablet_meta().micro_index_clustered_,
                                     tablet.get_transfer_seq(),
-                                    tablet.get_reorganization_scn(),
+                                    reorganization_scn,
                                     end_scn))) {
     // use storage schema to init ObDataStoreDesc
     // all cols' default checksum will assigned to 0
@@ -880,6 +887,7 @@ int ObTabletDDLUtil::create_ddl_sstable(ObTablet &tablet,
             ddl_param.data_format_version_,
             first_ddl_sstable,
             storage_schema,
+            tablet.get_reorganization_scn(),
             data_desc))) {
       LOG_WARN("prepare data store desc failed", K(ret), K(ddl_param));
     } else if (FALSE_IT(macro_block_column_count = meta_array.empty() ? 0 : meta_array.at(0).block_meta_->get_meta_val().column_count_)) {
@@ -943,6 +951,12 @@ int ObTabletDDLUtil::create_ddl_sstable(
       if (OB_FAIL(ObTabletCreateDeleteHelper::create_sstable<ObCOSSTableV2>(param, allocator, sstable_handle))) {
         LOG_WARN("create sstable failed", K(ret), K(param));
       }
+#ifdef ERRSIM
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(EN_DDL_MERGE_TASK_FAILED)) {
+        LOG_WARN("ERRSIM EN_DDL_MERGE_TASK_FAILED: do not create ddl co sstable", K(ret), K(tablet));
+      }
+#endif
     } else {
       if (OB_FAIL(ObTabletCreateDeleteHelper::create_sstable<ObSSTable>(param, allocator, sstable_handle))) {
         LOG_WARN("create sstable failed", K(ret), K(param));
@@ -2250,8 +2264,14 @@ int ObTabletDDLUtil::freeze_ddl_kv(const ObDDLTableMergeDagParam &param)
   ObArray<ObDDLKVHandle> ddl_kvs_handle;
   ObDDLTableMergeTask *merge_task = nullptr;
   ObTenantDirectLoadMgr *tenant_direct_load_mgr = MTL(ObTenantDirectLoadMgr *);
+  ObTabletDirectLoadMgrHandle tablet_mgr_hdl;
   if (OB_FAIL(ls_service->get_ls(param.ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
     LOG_WARN("get ls failed", K(ret), K(param));
+  } else if (ls_handle.get_ls()->flush_is_disabled()) {
+    ret = OB_EAGAIN;
+    if (REACH_TIME_INTERVAL(10LL * 1000LL * 1000LL/*10 seconds*/)) {
+      FLOG_INFO("DDLKV flush is disabled", K(ls_handle.get_ls()->get_ls_id()));
+    }
   } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle,
                                                param.tablet_id_,
                                                tablet_handle,

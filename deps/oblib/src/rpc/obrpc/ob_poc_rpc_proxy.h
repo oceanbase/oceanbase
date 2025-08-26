@@ -144,7 +144,8 @@ public:
         RPC_LOG_RET(WARN, OB_INVALID_ARGUMENT, "rpc timeout is too large", K(relative_timeout), K(pcode));
         relative_timeout = INT64_MAX/2;
       }
-      if (OB_FAIL(rpc_encode_req(proxy, pool, pcode, args, opts, req, req_sz, false))) {
+      const uint64_t gtid = (pnio_group_id<<32) + thread_id;
+      if (OB_FAIL(rpc_encode_req(proxy, gtid, pcode, args, opts, req, req_sz, false))) {
         RPC_LOG(WARN, "rpc encode req fail", K(ret));
       } else if(OB_FAIL(check_blacklist(addr))) {
         RPC_LOG(WARN, "check_blacklist failed", K(ret));
@@ -157,8 +158,8 @@ public:
           ObSyncRespCallback::client_cb,
           &cb
         };
-        cb.gtid_ = (pnio_group_id<<32) + thread_id;
-        if (0 != (sys_err = pn_send((pnio_group_id<<32) + thread_id, addr.to_sockaddr(&sock_addr), &pkt, &cb.pkt_id_))) {
+        cb.gtid_ = gtid;
+        if (0 != (sys_err = pn_send(gtid, addr.to_sockaddr(&sock_addr), &pkt, &cb.pkt_id_))) {
           ret = translate_io_error(sys_err);
           RPC_LOG(WARN, "pn_send fail", K(sys_err), K(addr), K(pcode));
         }
@@ -175,6 +176,8 @@ public:
         } else if (OB_FAIL(rpc_decode_resp(resp, resp_sz, out, resp_pkt, rcode))) {
           RPC_LOG(WARN, "execute rpc fail", K(addr), K(pcode), K(ret), K(timeout));
         }
+      } else if (NULL != req) {
+        pn_send_free(req); // if pn_send is not executed or executed failed, release memory allocated in rpc_encode_req
       }
     }
     if (rcode.rcode_ != OB_DESERIALIZE_ERROR) {
@@ -222,14 +225,15 @@ public:
     auto &set = obrpc::ObRpcPacketSet::instance();
     const char* pcode_label = set.name_of_idx(set.idx_of_pcode(pcode));
     ObAsyncRespCallback* cb = NULL;
-    if (NULL == (pool = ObRpcMemPool::create(src_tenant_id, pcode_label, init_alloc_sz))) {
+    if (NULL == (pool = ObRpcMemPool::create(src_tenant_id, pcode_label, init_alloc_sz, ObRpcMemPool::RPC_CACHE_SIZE))) {
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
     } else {
       char* req = NULL;
       int64_t req_sz = 0;
       uint32_t* pkt_id_ptr = NULL;
       timeguard.click();
-      if (OB_FAIL(rpc_encode_req(proxy, *pool, pcode, args, opts, req, req_sz, NULL == ucb))) {
+      const uint64_t gtid = (pnio_group_id<<32) + thread_id;
+      if (OB_FAIL(rpc_encode_req(proxy, gtid, pcode, args, opts, req, req_sz, NULL == ucb))) {
         RPC_LOG(WARN, "rpc encode req fail", K(ret));
       } else if(OB_FAIL(check_blacklist(addr))) {
         RPC_LOG(WARN, "check_blacklist failed", K(addr));
@@ -242,7 +246,7 @@ public:
           set_ucb_args(newcb, args);
           init_ucb(proxy, cb->get_ucb(), addr, start_ts, req_sz);
         }
-        ucb->gtid_ = (pnio_group_id<<32) + thread_id;
+        ucb->gtid_ = gtid;
         pkt_id_ptr = &ucb->pkt_id_;
       }
       IGNORE_RETURN snprintf(rpc_timeguard_str, sizeof(rpc_timeguard_str), "sz=%ld,pcode=%x,id=%ld", req_sz, pcode, src_tenant_id);
@@ -258,7 +262,7 @@ public:
           cb
         };
         if (0 != (sys_err = pn_send(
-            (pnio_group_id<<32) + thread_id,
+            gtid,
             addr.to_sockaddr(&sock_addr),
             &pkt,
             pkt_id_ptr))) {
@@ -268,6 +272,9 @@ public:
           EVENT_INC(RPC_PACKET_OUT);
           EVENT_ADD(RPC_PACKET_OUT_BYTES, req_sz);
         }
+      }
+      if (OB_FAIL(ret) && NULL != req) {
+        pn_send_free(req); // if pn_send is not executed or executed failed, release memory allocated in rpc_encode_req
       }
     }
     if (NULL != pool) {

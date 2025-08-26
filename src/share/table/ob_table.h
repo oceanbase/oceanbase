@@ -73,6 +73,22 @@ enum class ObTableEntityType
 };
 class ObHTableCellEntity;
 
+enum class ObTableRpcMetaType : uint8_t
+{
+  INVALID = 0,
+  TABLE_PARTITION_INFO = 1,     // route refresh
+  HTABLE_REGION_LOCATOR = 2,    // table region locator
+  HTABLE_REGION_METRICS = 3,    // table region metrics
+  HTABLE_CREATE_TABLE = 4,	    // create table
+  HTABLE_DELETE_TABLE = 5,	    // delete table
+  HTABLE_TRUNCATE_TABLE = 6,	  // truncate table
+  HTABLE_EXISTS = 7,		        // check table existence
+  HTABLE_GET_DESC = 8,	        // table descriptor
+  HTABLE_ENABLE_TABLE = 9,      // enable table
+  HTABLE_DISABLE_TABLE = 10,    // disable table
+  HTABLE_META_MAX = 255
+};
+
 class ObTableObject
 {
 public:
@@ -549,6 +565,7 @@ enum ObTableResultType
   RESULT_TYPE_INVALID,
   TABLE_OPERATION_RESULT,
   REDIS_RESULT,
+  HBASE_RESULT,
   RESULT_TYPE_MAX,
 };
 
@@ -2127,7 +2144,8 @@ private:
       bool is_same_properties_names_ : 1;
       bool return_one_result_ : 1;
       bool need_all_prop_bitmap_ : 1;
-      uint64_t reserved : 60;
+      bool server_can_retry_ : 1;
+      uint64_t reserved : 59;
     };
   };
 
@@ -2178,6 +2196,44 @@ private:
   common::ObIAllocator *allocator_;
   ObString msg_;
 };
+
+class ObTableMetaRequest final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTableMetaRequest()
+      : credential_(),
+        meta_type_(ObTableRpcMetaType::INVALID),
+        data_() {}
+  ~ObTableMetaRequest() = default;
+  TO_STRING_KV("credential", common::ObHexStringWrap(credential_),
+               K_(meta_type),
+               K_(data));
+
+public:
+  ObString credential_;
+  ObTableRpcMetaType meta_type_;
+  ObString data_;
+};
+
+class ObTableMetaResponse final : public ObTableResult
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTableMetaResponse(): data_() {}
+  ~ObTableMetaResponse() = default;
+  TO_STRING_KV(K_(data));
+
+  virtual void generate_failed_result(int ret_code,
+                                      ObTableEntity &result_entity,
+                                      ObTableOperationType::Type op_type) override
+  {
+    UNUSEDx(ret_code, result_entity, op_type);
+  }
+public:
+  ObString data_;
+};
+
 
 } // end namespace table
 } // end namespace oceanbase

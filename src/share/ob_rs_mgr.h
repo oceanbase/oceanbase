@@ -126,12 +126,14 @@ public:
 
   // build a server_list to ask informations
   // @param [in] check_ls_service: if is true, try get rs_list from ls service.
+  // @param [in] ls_id: SSLOG LS or SYS LS
   // @param [out] server_list, build from:
   //              (1) get master_rs from ObRsMgr
   //              (2) get rs_list from local configure
-  //              (3) get member_list from ObLSService
+  //              (3) for SYS LS, get member_list from ObLSService. for SSLOG LS, get member_list and learner_list
   int construct_initial_server_list(
       const bool check_ls_service,
+      const ObLSID &ls_id,
       common::ObIArray<common::ObAddr> &server_list);
 
 private:

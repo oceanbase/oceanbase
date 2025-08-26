@@ -14,6 +14,7 @@
 #include "sql/resolver/ddl/ob_create_index_resolver.h"
 #include "share/ob_fts_index_builder_util.h"
 #include "share/ob_vec_index_builder_util.h"
+#include "share/table/ob_ttl_util.h"
 
 namespace oceanbase
 {
@@ -177,11 +178,15 @@ int ObCreateIndexResolver::resolve_index_column_node(
         sort_item.column_name_.assign_ptr(const_cast<char *>(col_node->children_[0]->str_value_),
                                           static_cast<int32_t>(col_node->children_[0]->str_len_));
         bool is_multi_value_index = false;
-        if (OB_FAIL(ObMulValueIndexBuilderUtil::adjust_index_type(sort_item.column_name_,
-                                                                  is_multi_value_index,
-                                                                  reinterpret_cast<int*>(&index_keyname_)))) {
-          LOG_WARN("failed to adjust index type", K(ret));
-        } else if (is_multi_value_index) {
+        if (col_node->children_[0]->type_ != T_IDENT) {
+          ParseNode *expr_node = col_node->children_[0];
+          if (OB_FAIL(ObMulValueIndexBuilderUtil::adjust_index_type(expr_node,
+                                                                    is_multi_value_index,
+                                                                    reinterpret_cast<int*>(&index_keyname_)))) {
+            LOG_WARN("failed to adjust index type by parse node", K(ret));
+          }
+        }
+        if (OB_SUCC(ret) && is_multi_value_index) {
           ObCreateIndexArg &index_arg =crt_idx_stmt->get_create_index_arg();
           if (index_keyname_ == MULTI_KEY) {
             index_arg.index_type_ = INDEX_TYPE_NORMAL_MULTIVALUE_LOCAL;
@@ -394,6 +399,40 @@ int ObCreateIndexResolver::resolve_index_column_node(
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "use functional index on materialized view");
       }
     }
+
+    if (OB_SUCC(ret) && index_arg.index_columns_.count() > 1) {
+      bool has_multivalue_index = false;
+      bool has_functional_index = false;
+      for (int64_t i = 0; OB_SUCC(ret) && i < index_column_node->num_child_; ++i) {
+        if (i >= index_arg.index_columns_.count()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("index_columns count mismatch with parse node", K(ret), K(i), K(index_arg.index_columns_.count()), K(index_column_node->num_child_));
+        } else {
+          const ObColumnSortItem &sort_item = index_arg.index_columns_.at(i);
+          if (sort_item.is_func_index_) {
+            bool is_multi_value = false;
+            if (OB_ISNULL(index_column_node->children_[i]) ||
+                OB_ISNULL(index_column_node->children_[i]->children_[0])) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("invalid parse node structure", K(ret), K(i), K(index_column_node->num_child_));
+            } else {
+              ParseNode *expr_node = index_column_node->children_[i]->children_[0];
+              if (OB_FAIL(ObMulValueIndexBuilderUtil::is_multivalue_index_type(expr_node, is_multi_value))) {
+                LOG_WARN("check multivalue type by parse node failed", K(ret), K(i));
+              } else if (is_multi_value) {
+                has_multivalue_index = true;
+              } else {
+                has_functional_index = true;
+              }
+            }
+          }
+        }
+      }
+      if (OB_SUCC(ret) && has_multivalue_index && has_functional_index) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "multivalue index combined with functional index in composite index is");
+      }
+  }
 
     // In oracle mode, we need to check if the new index is on the same cols with old indexes.
     CHECK_COMPATIBILITY_MODE(session_info_);
@@ -842,6 +881,16 @@ if (OB_SUCC(ret) &&
       SQL_RESV_LOG(WARN, "failed to add based_schema_object_info to arg", KR(ret));
     }
   }
+
+  if (OB_SUCC(ret)) {
+    if (OB_ISNULL(data_tbl_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null data table schema", K(ret));
+    } else if (OB_FAIL(ObTTLUtil::check_htable_ddl_supported(*data_tbl_schema, false/*by_admin*/))) {
+      LOG_WARN("failed to check htable ddl supported", K(ret));
+    }
+  }
+
   DEBUG_SYNC(HANG_BEFORE_RESOLVER_FINISH);
 
   return ret;
@@ -865,7 +914,7 @@ int ObCreateIndexResolver::add_sort_column(const ObColumnSortItem &sort_column)
     ret = OB_ERR_COLUMN_DUPLICATE;
     LOG_USER_ERROR(OB_ERR_COLUMN_DUPLICATE, sort_column.column_name_.length(), sort_column.column_name_.ptr());
     LOG_WARN("Duplicate sort column name", K(sort_column), K(ret));
-   } else if (OB_FAIL(sort_column_array_.push_back(column_key))) {
+  } else if (OB_FAIL(sort_column_array_.push_back(column_key))) {
     LOG_WARN("failed to push back column key", K(sort_column), K(ret));
   } else if (OB_FAIL(create_index_stmt->add_sort_column(sort_column))) {
     LOG_WARN("add sort column to create index stmt failed", K(sort_column), K(ret));

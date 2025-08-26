@@ -110,6 +110,7 @@ public:
   static bool is_label_se_column(uint64_t flag);
   static int add_column_to_table_schema(ObColumnSchemaV2 &column, ObTableSchema &table_schema);
   static int convert_sys_param_to_sysvar_schema(const ObSysParam &sysparam, ObSysVarSchema &sysvar_schema);
+  static bool is_support_parallel_drop(const ObTableType table_type);
   static int get_tenant_int_variable(
       uint64_t tenant_id,
       share::ObSysVarClassType var_id,
@@ -142,9 +143,11 @@ public:
              const uint64_t tenant_id,
              share::schema::ObTableSchema &table);
   static int construct_inner_table_schemas(
-             const uint64_t tenant_id,
-             common::ObSArray<share::schema::ObTableSchema> &tables,
-             common::ObIAllocator &allocator);
+      const uint64_t tenant_id,
+      ObSArray<ObTableSchema> &tables,
+      ObIAllocator &allocator,
+      bool construct_all = false);
+  static int generate_hard_code_schema_version(ObIArray<ObTableSchema> &tables);
   static int add_sys_table_lob_aux_table(
              uint64_t tenant_id,
              uint64_t data_table_id,
@@ -192,6 +195,24 @@ public:
       common::ObISQLClient &sql_client,
       common::ObIAllocator &allocator,
       const uint64_t tenant_id,
+      const common::ObIArray<ObObjectID> &table_ids,
+      common::ObIArray<ObSimpleTableSchemaV2 *> &table_schemas);
+
+  // batch get table schemas by specified schema_version from cache or inner_table automatically
+  //
+  // @param[in] sql_client: ObISQLClient
+  // @param[in] allocator:  allocator to manage memory of table schemas
+  // @param[in] tenant_id:  target tenant_id
+  // @param[in] schema_version:  specified schema_version
+  // @param[in] table_ids:   target table_id array
+  // @param[out] table_schemas: array of ObSimpleTableSchemaV2 pointers
+  //                           (it's count may be smaller than table_ids when some tables not exist or been deleted)
+  // @return: OB_SUCCESS if success
+  static int batch_get_table_schemas_by_version(
+      common::ObISQLClient &sql_client,
+      common::ObIAllocator &allocator,
+      const uint64_t tenant_id,
+      const int64_t schema_version,
       const common::ObIArray<ObObjectID> &table_ids,
       common::ObIArray<ObSimpleTableSchemaV2 *> &table_schemas);
 
@@ -259,6 +280,7 @@ private:
   static int batch_get_table_schemas_from_cache_(
       common::ObIAllocator &allocator,
       const uint64_t tenant_id,
+      const int64_t specified_schema_version,
       const ObIArray<ObTableLatestSchemaVersion> &table_schema_versions,
       common::ObIArray<SchemaKey> &need_refresh_table_schema_keys,
       common::ObIArray<ObSimpleTableSchemaV2 *> &table_schemas);
@@ -266,6 +288,7 @@ private:
       common::ObISQLClient &sql_client,
       common::ObIAllocator &allocator,
       const uint64_t tenant_id,
+      const int64_t schema_version,
       common::ObArray<SchemaKey> &need_refresh_table_schema_keys,
       common::ObIArray<ObSimpleTableSchemaV2 *> &table_schemas);
 
@@ -419,6 +442,17 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObParallelDDLControlMode);
 };
 
+class ObTenantDDLCountGuard
+{
+public:
+  ObTenantDDLCountGuard (const uint64_t tenant_id) : tenant_id_(tenant_id), had_inc_ddl_(false) {}
+  int try_inc_ddl_count(const int64_t cpu_quota_concurrency);
+  ~ObTenantDDLCountGuard();
+private:
+  const int64_t tenant_id_;
+  bool had_inc_ddl_;
+  DISALLOW_COPY_AND_ASSIGN(ObTenantDDLCountGuard);
+};
 
 } // end schema
 } // end share

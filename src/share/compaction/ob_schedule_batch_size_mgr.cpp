@@ -53,8 +53,8 @@ bool ObScheduleBatchSizeMgr::need_rebuild_map(
   int64_t map_cnt = std::max(item_cnt / 3, default_map_bucket_cnt);
   recommend_map_bucked_cnt = std::min(map_cnt, default_map_bucket_cnt * 30);
   if ((cur_bucket_cnt == 0)
-    || (recommend_map_bucked_cnt < map_cnt / 2)
-    || (recommend_map_bucked_cnt > map_cnt * 3)) {
+    || (cur_bucket_cnt < recommend_map_bucked_cnt / 2)
+    || (cur_bucket_cnt > recommend_map_bucked_cnt * 3)) {
     rebuild_map_flag = true;
   }
   return rebuild_map_flag;

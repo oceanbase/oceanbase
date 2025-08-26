@@ -289,7 +289,7 @@ int ObArchivePathUtil::get_piece_inner_placeholder_file_path(const ObBackupDest 
 }
 
 // oss://archive/piece_d[dest_id]r[round_id]p[piece_id]/logstream_[ls_id]/
-int ObArchivePathUtil::get_piece_ls_dir_path_(const ObBackupDest &dest, const int64_t dest_id,
+int ObArchivePathUtil::get_piece_ls_dir_path(const ObBackupDest &dest, const int64_t dest_id,
     const int64_t round_id, const int64_t piece_id, const ObLSID &ls_id, ObBackupPath &path)
 {
   int ret = OB_SUCCESS;
@@ -309,7 +309,7 @@ int ObArchivePathUtil::get_piece_ls_log_dir_path(const ObBackupDest &dest, const
     const int64_t round_id, const int64_t piece_id, const ObLSID &ls_id, ObBackupPath &path)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(get_piece_ls_dir_path_(dest, dest_id, round_id, piece_id, ls_id, path))) {
+  if (OB_FAIL(get_piece_ls_dir_path(dest, dest_id, round_id, piece_id, ls_id, path))) {
     LOG_WARN("failed to get piece dir path", K(ret), K(dest), K(round_id), K(dest_id), K(piece_id), K(ls_id));
   } else if (OB_FAIL(path.join("log", ObBackupFileSuffix::NONE))) {
     LOG_WARN("failed to join log ", K(ret), K(path));
@@ -322,7 +322,7 @@ int ObArchivePathUtil::get_ls_file_info_path(const ObBackupDest &dest, const int
     const int64_t round_id, const int64_t piece_id, const ObLSID &ls_id, ObBackupPath &path)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(get_piece_ls_dir_path_(dest, dest_id, round_id, piece_id, ls_id, path))) {
+  if (OB_FAIL(get_piece_ls_dir_path(dest, dest_id, round_id, piece_id, ls_id, path))) {
     LOG_WARN("failed to get piece dir path", K(ret), K(dest), K(round_id), K(dest_id), K(piece_id), K(ls_id));
   } else if (OB_FAIL(path.join("file_info", ObBackupFileSuffix::ARCHIVE))) {
     LOG_WARN("failed to join ls file info ", K(ret), K(path));
@@ -404,7 +404,7 @@ int ObArchivePathUtil::get_ls_meta_record_prefix(const ObBackupDest &dest, const
     const ObArchiveLSMetaType &meta_type, ObBackupPath &prefix)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(get_piece_ls_dir_path_(dest, dest_id, round_id, piece_id, ls_id, prefix))) {
+  if (OB_FAIL(get_piece_ls_dir_path(dest, dest_id, round_id, piece_id, ls_id, prefix))) {
     LOG_WARN("failed to get piece dir path", K(ret), K(dest), K(round_id), K(dest_id), K(piece_id), K(ls_id));
   } else if (OB_FAIL(prefix.join(meta_type.get_type_str(), ObBackupFileSuffix::NONE))) {
     LOG_WARN("failed to join meta_type", K(ret), K(prefix));

@@ -123,6 +123,9 @@ public:
       const ObUpdateCSReplicaSchemaParam &param,
       const ObStorageSchema &simplified_schema,
       ObStorageSchema *&full_storage_schema);
+  static void diagnose_trim_default_value_checksum_error(
+      const ObSSTable &row_sstable,
+      const ObStorageSchema &storage_schema);
 public:
   static const int64_t DEFAULT_CHECK_LS_REPLICA_LOCATION_TIMEOUT = 10 * 1000 * 1000L; // 10s
 };

@@ -23,27 +23,30 @@ ObAggGroupVec::ObAggGroupVec()
   : agg_cells_(),
     col_param_(nullptr),
     project_expr_(nullptr),
-    agg_row_id_(-1),
+    agg_row_id_(OB_INVALID_CS_ROW_ID),
     col_offset_(-1),
     col_index_(-1),
     agg_type_flag_(),
     need_access_data_(false),
-    need_get_row_ids_(false)
+    need_get_row_ids_(false),
+    has_aggr_with_expr_(false)
 {
   agg_cells_.set_attr(ObMemAttr(MTL_ID(), "PDAggStore"));
 }
 
-ObAggGroupVec::ObAggGroupVec(ObColumnParam* col_param, sql::ObExpr* project_expr,
-                             const int32_t col_offset, const int32_t col_index)
+ObAggGroupVec::ObAggGroupVec(ObColumnParam* col_param,
+                             const int32_t col_offset,
+                             const int32_t col_index)
   : agg_cells_(),
     col_param_(col_param),
-    project_expr_(project_expr),
+    project_expr_(nullptr),
     agg_row_id_(OB_INVALID_CS_ROW_ID),
     col_offset_(col_offset),
     col_index_(col_index),
     agg_type_flag_(),
     need_access_data_(false),
-    need_get_row_ids_(false)
+    need_get_row_ids_(false),
+    has_aggr_with_expr_(false)
 {
   agg_cells_.set_attr(ObMemAttr(MTL_ID(), "PDAggStore"));
 }
@@ -70,7 +73,9 @@ int ObAggGroupVec::eval(blocksstable::ObStorageDatum &datum, const int64_t row_c
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected null agg cell", K(ret), K(i), KP(agg_cell));
     } else if (OB_FAIL(agg_cell->eval(datum, row_count))) {
-      LOG_WARN("Failed to aggregate one datum", K(ret), K(datum), K(row_count));
+      LOG_WARN("Failed to aggregate one datum", K(ret), K(i), K(datum), K(row_count));
+    } else if (OB_FAIL(agg_cell->aggregate_batch_single_rows(0/*agg_row_idx*/))) {
+      LOG_WARN("Failed to aggregate batch single rows", K(ret), K(i), KPC(agg_cell));
     }
   }
   return ret;
@@ -91,6 +96,10 @@ int ObAggGroupVec::eval_batch(
     LOG_WARN("Invalid arguments", K(ret), K(col_offset), K(pd_row_id_ctx));
   } else if (nullptr != reader && reserve_memory) {
     reader->reserve_reader_memory(true); // hold memory before aggregation finished
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(clear_evaluated_infos())) {
+    LOG_WARN("Failed to clear evaluated infos", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < agg_cells_.count(); ++i) {
     ObAggCellVec *agg_cell = agg_cells_.at(i);
@@ -156,8 +165,42 @@ int ObAggGroupVec::collect_result()
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < agg_cells_.count(); ++i) {
     ObAggCellVec *agg_cell = agg_cells_.at(i);
-    if (OB_FAIL(agg_cell->collect_result(true/*fill_output*/))) {
-      LOG_WARN("Failed to collect results in aggr cell", K(ret));
+    if (OB_ISNULL(agg_cell)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected null agg cell", K(ret), K(i), KP(agg_cell));
+    } else if (OB_FAIL(agg_cell->collect_result(true/*fill_output*/))) {
+      LOG_WARN("Failed to collect results in agg cell", K(ret), K(i), KPC(agg_cell));
+    }
+  }
+  return ret;
+}
+
+int ObAggGroupVec::reset_agg_row_id()
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < agg_cells_.count(); ++i) {
+    ObAggCellVec *agg_cell = agg_cells_.at(i);
+    if (OB_ISNULL(agg_cell)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected null agg cell", K(ret), KP(agg_cell));
+    } else {
+      agg_cell->reset_agg_row_id();
+    }
+  }
+  agg_row_id_ = OB_INVALID_CS_ROW_ID;
+  return ret;
+}
+
+int ObAggGroupVec::clear_evaluated_infos()
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < agg_cells_.count(); ++i) {
+    ObAggCellVec *agg_cell = agg_cells_.at(i);
+    if (OB_ISNULL(agg_cell)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected null agg cell", K(ret), KP(agg_cell));
+    } else {
+      agg_cell->clear_evaluated_infos();
     }
   }
   return ret;
@@ -176,35 +219,26 @@ int ObAggGroupVec::can_use_index_info(const blocksstable::ObMicroIndexInfo &inde
   return ret;
 }
 
+#define SET_AGG_FLAG(op_type, flag_type)         \
+  case (op_type) : {                             \
+    agg_type_flag_.set_##flag_type##_flag(true); \
+    break;                                       \
+  }
+
 OB_INLINE int ObAggGroupVec::set_agg_type_flag(const ObPDAggType agg_type)
 {
   int ret = OB_SUCCESS;
   switch (agg_type) {
-    case PD_COUNT : {
-      agg_type_flag_.set_count_flag(true);
-      break;
-    }
-    case PD_MIN:
-    case PD_MAX : {
-      agg_type_flag_.set_minmax_flag(true);
-      break;
-    }
-    case PD_SUM : {
-      agg_type_flag_.set_sum_flag(true);
-      break;
-    }
-    case PD_HLL : {
-      agg_type_flag_.set_hll_flag(true);
-      break;
-    }
-    case PD_SUM_OP_SIZE : {
-      agg_type_flag_.set_sum_op_nsize_flag(true);
-      break;
-    }
-    case PD_RB_BUILD: {
-      agg_type_flag_.set_has_rb_build_agg(true);
-      break;
-    }
+    SET_AGG_FLAG(PD_COUNT, count)
+    SET_AGG_FLAG(PD_MIN, minmax)
+    SET_AGG_FLAG(PD_MAX, minmax)
+    SET_AGG_FLAG(PD_SUM, sum)
+    SET_AGG_FLAG(PD_HLL, hll)
+    SET_AGG_FLAG(PD_SUM_OP_SIZE, sum_op_nsize)
+    SET_AGG_FLAG(PD_RB_AND, rb_build)
+    SET_AGG_FLAG(PD_RB_OR, rb_build)
+    SET_AGG_FLAG(PD_RB_BUILD, rb_build)
+    SET_AGG_FLAG(PD_COUNT_SUM, count_sum)
     default : {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected aggregate type", K(ret), K(agg_type));
@@ -212,6 +246,7 @@ OB_INLINE int ObAggGroupVec::set_agg_type_flag(const ObPDAggType agg_type)
   }
   return ret;
 }
+#undef SET_AGG_FLAG
 
 ObAggregatedStoreVec::ObAggregatedStoreVec(
     const int64_t batch_size,
@@ -224,7 +259,8 @@ ObAggregatedStoreVec::ObAggregatedStoreVec(
         pd_agg_factory_(*context.stmt_allocator_),
         allocator_(*context.stmt_allocator_),
         need_access_data_(false),
-        need_get_row_ids_(false)
+        need_get_row_ids_(false),
+        has_aggr_with_expr_(false)
 {
   agg_groups_.set_attr(ObMemAttr(MTL_ID(), "PDAggStore"));
 }
@@ -244,6 +280,7 @@ void ObAggregatedStoreVec::reset()
   }
   need_access_data_ = false;
   need_get_row_ids_ = false;
+  has_aggr_with_expr_ = false;
 }
 
 void ObAggregatedStoreVec::release_agg_group()
@@ -324,15 +361,15 @@ int ObAggregatedStoreVec::init_agg_groups(const ObTableAccessParam &param)
   int32_t pre_offset = -1;
   const ObIArray<ObColOffsetMap> &cols_offset_map = pd_agg_ctx_.cols_offset_map_;
   const ObIArray<ObAggrInfo> &agg_infos = pd_agg_ctx_.agg_infos_;
+  sql::ObExpr *project_expr = nullptr;
   for (int64_t i = 0; OB_SUCC(ret) && i < cols_offset_map.count(); ++i) {
     const int32_t col_offset = cols_offset_map.at(i).col_offset_;
     const int64_t agg_idx = cols_offset_map.at(i).agg_idx_;
     const int32_t col_index = OB_COUNT_AGG_PD_COLUMN_ID == col_offset ? -1 : param.iter_param_.read_info_->get_columns_index().at(col_offset);
     share::schema::ObColumnParam *col_param = OB_COUNT_AGG_PD_COLUMN_ID == col_offset ? nullptr : param.iter_param_.get_col_params()->at(col_offset);
     if (i == 0 || (col_offset != pre_offset && OB_COUNT_AGG_PD_COLUMN_ID != col_offset)) {
-      sql::ObExpr *project_expr = OB_COUNT_AGG_PD_COLUMN_ID == col_offset ? nullptr : agg_infos.at(agg_idx).param_exprs_[0];
       if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObAggGroupVec))) ||
-          OB_ISNULL(agg_group = new (buf) ObAggGroupVec(col_param, project_expr, col_offset, col_index))) {
+          OB_ISNULL(agg_group = new (buf) ObAggGroupVec(col_param, col_offset, col_index))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("Faile to alloc memory for ObAggrGroupVec", K(ret));
       } else if (OB_FAIL(agg_groups_.push_back(agg_group))) {
@@ -353,7 +390,7 @@ int ObAggregatedStoreVec::init_agg_groups(const ObTableAccessParam &param)
       ObAggCellVecBasicInfo basic_info(pd_agg_ctx_.agg_ctx_, pd_agg_ctx_.rows_, pd_agg_ctx_.row_meta_, pd_agg_ctx_.batch_rows_,
                                        col_offset, col_param, is_pad_char_to_full_length(context_.sql_mode_));
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(pd_agg_factory_.alloc_cell(basic_info, agg_cell, agg_idx, exclude_null))) {
+      } else if (OB_FAIL(pd_agg_factory_.alloc_cell(basic_info, agg_idx, param, exclude_null, agg_cell))) {
         LOG_WARN("Failed to alloc aggregate cell", K(ret));
       } else if (OB_COUNT_AGG_PD_COLUMN_ID == col_offset) { // COUNT(*) is added to the first agg_group
         ObAggGroupVec *first_agg_group = nullptr;
@@ -384,11 +421,21 @@ int ObAggregatedStoreVec::check_agg_store_valid()
     ObAggGroupVec *agg_group = agg_groups_.at(i);
     for (int j = 0; OB_SUCC(ret) && j < agg_group->agg_cells_.count(); ++j) {
       const ObAggCellVec *agg_cell = agg_group->agg_cells_.at(j);
-      const ObPDAggType agg_type = agg_cell->get_type();
-      agg_group->need_access_data_ |= agg_cell->need_access_data();
-      agg_group->need_get_row_ids_ |= agg_cell->need_get_row_ids();
-      if (OB_FAIL(agg_group->set_agg_type_flag(agg_type))) {
-        LOG_WARN("Failed to set agg_type_flag", K(ret), K(agg_type));
+      if (OB_ISNULL(agg_cell)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null agg cell", K(ret), KP(agg_cell));
+      } else if (OB_FAIL(agg_group->set_agg_type_flag(agg_cell->get_type()))) {
+        LOG_WARN("Failed to set agg_type_flag", K(ret), K(agg_cell->get_type()));
+      } else if (j == 0) { // COUNT(*) is the last aggregate in on agg group
+        agg_group->project_expr_ = agg_cell->get_project_expr();
+      } else if (OB_UNLIKELY(nullptr != agg_cell->get_project_expr() && agg_group->project_expr_ != agg_cell->get_project_expr())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect different project expr in one agg group", K(ret), KPC(agg_group), KPC(agg_cell));
+      }
+      if (OB_SUCC(ret)) {
+        agg_group->need_access_data_ |= agg_cell->need_access_data();
+        agg_group->need_get_row_ids_ |= agg_cell->need_get_row_ids();
+        agg_group->has_aggr_with_expr_ |= agg_cell->is_aggr_with_expr();
       }
     }
     if (OB_FAIL(ret)) {
@@ -401,6 +448,7 @@ int ObAggregatedStoreVec::check_agg_store_valid()
     } else {
       need_access_data_ |= agg_group->need_access_data_;
       need_get_row_ids_ |= agg_group->need_get_row_ids_;
+      has_aggr_with_expr_ |= agg_group->has_aggr_with_expr_;
     }
   }
   if (OB_SUCC(ret) && OB_UNLIKELY(need_access_data_ && !need_get_row_ids_)) {
@@ -454,7 +502,6 @@ int ObAggregatedStoreVec::fill_index_info(const blocksstable::ObMicroIndexInfo &
   return ret;
 }
 
-// TODO @wenye: scan the whole micro block in aggregate pushdown decoder.
 int ObAggregatedStoreVec::fill_rows(
     const int64_t group_idx,
     blocksstable::ObIMicroBlockRowScanner &scanner,
@@ -464,45 +511,118 @@ int ObAggregatedStoreVec::fill_rows(
 {
   UNUSED(group_idx);
   int ret = OB_SUCCESS;
+  blocksstable::ObIMicroBlockReader *reader = scanner.get_reader();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObAggregateStoreVec is not inited", K(ret));
+  } else if (OB_ISNULL(reader)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected null reader", K(ret), KP(reader));
   } else {
-    const bool is_reverse = begin_index > end_index;
-    int64_t covered_row_count = is_reverse ? begin_index - end_index : end_index - begin_index;
-    // if should check null or not whole block is covered
-    // must get valid rows
-    bool need_get_row_ids = false;
-    int64_t micro_row_count = 0;
-    blocksstable::ObIMicroBlockReader *reader = scanner.get_reader();
-    if (OB_ISNULL(reader)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("Unexpected null reader", K(ret), K(reader));
-    } else if (FALSE_IT(reader->reserve_reader_memory(false))) {
-    } else if (OB_FAIL(reader->get_row_count(micro_row_count))) {
-      LOG_WARN("Failed to get micro row count", K(ret));
-    } else if (!need_access_data_) {
-      if (need_get_row_ids_ || micro_row_count != covered_row_count) {
-        if (OB_FAIL(get_row_ids(reader, begin_index, end_index, count_, false, res))) {
-          if (OB_UNLIKELY(OB_ITER_END != ret)) {
-            LOG_WARN("Failed to get row ids", K(ret), K(begin_index), K(end_index));
-          }
-        }
-      } else {
-        count_ = nullptr == res.bitmap_ ? covered_row_count : res.bitmap_->popcnt();
-        begin_index = end_index;
-      }
-    } else if (OB_FAIL(ObVectorStore::fill_output_rows(0/*no use*/,
-                                                       scanner,
-                                                       begin_index,
-                                                       end_index,
-                                                       res,
-                                                       false/*not set_end()*/,
-                                                       !filter_is_null()))) {
+    bool all_agg_pd_decoder = false;
+    reader->reserve_reader_memory(false);
+    if (OB_FAIL(agg_pushdown_decoder(reader, begin_index, end_index, res, all_agg_pd_decoder))) {
+      LOG_WARN("Failed to push aggregate to decoder", K(ret), KP(reader));
+    } else if (all_agg_pd_decoder) {
+      reset_after_aggregate();
+      LOG_DEBUG("all aggregate in one micro block has been pushdown to decoder",
+        K(ret), K(begin_index), K(end_index), KP(reader), KPC(res.bitmap_));
+    // TODO @wenye: only fill column whose aggregate is not pushdown to decoder.
+    } else if (OB_FAIL(fill_output_rows(scanner, begin_index, end_index, res))) {
       LOG_WARN("Failed to project rows in aggregate pushdown", K(ret), K(begin_index), K(end_index), K(res));
+    } else {
+      const bool is_reverse = begin_index > end_index;
+      const int64_t bound_row_id = is_reverse ? begin_index + 1 : begin_index - 1;
+      if (OB_FAIL(do_aggregate(reader, need_access_data_, bound_row_id))) {
+        LOG_WARN("Failed to aggregate rows", K(ret), KP(reader));
+      }
     }
-    if (OB_SUCC(ret) && OB_FAIL(do_aggregate(reader, need_access_data_))) {
-      LOG_WARN("Failed to aggregate rows", K(ret), KP(reader));
+  }
+  return ret;
+}
+
+int ObAggregatedStoreVec::agg_pushdown_decoder(
+    blocksstable::ObIMicroBlockReader *reader,
+    int64_t &begin_index,
+    const int64_t end_index,
+    const ObFilterResult &res,
+    bool &all_agg_pd_decoder)
+{
+  int ret = OB_SUCCESS;
+  ObPushdownRowIdCtx pd_row_id_ctx;
+  const bool is_reverse = begin_index > end_index;
+  const int64_t covered_row_count = is_reverse ? begin_index - end_index : end_index - begin_index;
+  all_agg_pd_decoder = false;
+  if (OB_UNLIKELY(0 != count_)) {
+    // defense code: data cross fuse and micro block is banned
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected aggregate store count", K(ret), K(count_),
+      K(begin_index), K(end_index), K(res), KPC(this), KP(reader));
+  } else if (!need_get_row_ids_) {
+    int64_t micro_row_count = 0;
+    if (OB_FAIL(reader->get_row_count(micro_row_count))) {
+      LOG_WARN("Failed to get micro row count", K(ret));
+    } else if (covered_row_count == micro_row_count) {
+      pd_row_id_ctx.begin_ = 0;
+      pd_row_id_ctx.end_ = nullptr == res.bitmap_ ? covered_row_count - 1 : res.bitmap_->popcnt() - 1;
+      pd_row_id_ctx.bound_row_id_ = pd_row_id_ctx.end_;
+      if (pd_row_id_ctx.get_row_count() == 0) {
+      } else if (OB_FAIL(agg_groups_pushdown_decoder(reader, pd_row_id_ctx, all_agg_pd_decoder))) {
+        LOG_WARN("fail to pushdown aggregate to decoder", K(ret), K(pd_row_id_ctx), KP(reader));
+      }
+    }
+  } else if (nullptr == res.bitmap_ || res.bitmap_->is_all_true()) {
+    pd_row_id_ctx.begin_ = is_reverse ? end_index + 1 : begin_index;
+    pd_row_id_ctx.end_ = is_reverse ? begin_index : end_index - 1;
+    pd_row_id_ctx.bound_row_id_ = is_reverse ? end_index + 1 : end_index - 1;
+    pd_row_id_ctx.is_reverse_ = is_reverse;
+    if (OB_FAIL(agg_groups_pushdown_decoder(reader, pd_row_id_ctx, all_agg_pd_decoder))) {
+      LOG_WARN("fail to pushdown aggregate to decoder", K(ret), K(pd_row_id_ctx), KP(reader));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (all_agg_pd_decoder) {
+    count_ = nullptr == res.bitmap_ ? covered_row_count : res.bitmap_->popcnt();
+    begin_index = end_index;
+    LOG_TRACE("all aggregate has been pushdown to decoder", K(ret), K(pd_row_id_ctx), KPC(res.bitmap_), K_(count));
+  } else if (OB_FAIL(get_row_ids(reader, begin_index, end_index, count_, true, res))) {
+    if (OB_UNLIKELY(OB_ITER_END != ret)) {
+      LOG_WARN("fail to get row ids", K(ret), K(begin_index), K(end_index));
+    }
+  } else if (0 == count_) {
+    // skip if no rows selected
+  } else {
+    pd_row_id_ctx.row_ids_ = row_ids_;
+    pd_row_id_ctx.row_cap_ = count_;
+    pd_row_id_ctx.bound_row_id_ = is_reverse ? begin_index + 1 : begin_index - 1;
+    pd_row_id_ctx.is_reverse_ = is_reverse;
+    if (OB_FAIL(agg_groups_pushdown_decoder(reader, pd_row_id_ctx, all_agg_pd_decoder))) {
+      LOG_WARN("fail to pushdown aggregate to decoder", K(ret), K(pd_row_id_ctx), KP(reader));
+    }
+  }
+  return ret;
+}
+
+int ObAggregatedStoreVec::agg_groups_pushdown_decoder(
+    blocksstable::ObIMicroBlockReader *reader,
+    const ObPushdownRowIdCtx &pd_row_id_ctx,
+    bool &all_agg_pd_decoder)
+{
+  int ret = OB_SUCCESS;
+  all_agg_pd_decoder = true;
+  for (int64_t i = 0; OB_SUCC(ret) && i < agg_groups_.count(); ++i) {
+    ObAggGroupVec *agg_group = agg_groups_.at(i);
+    if (OB_ISNULL(agg_group)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected null aggregate group", K(ret), KP(agg_group));
+    } else if (agg_group->is_agg_finish(pd_row_id_ctx)) {
+      LOG_DEBUG("all aggregate in one agg group has been pushdown to decoder", K(ret), K(i), K(pd_row_id_ctx), KPC(agg_group));
+    } else if (OB_FAIL(agg_group->agg_pushdown_decoder(reader, agg_group->col_offset_, pd_row_id_ctx))) {
+      LOG_WARN("fail pushdown aggregate to decoder", K(ret), K(i), KPC(agg_group), K(pd_row_id_ctx));
+    } else if (agg_group->is_agg_finish(pd_row_id_ctx)) {
+      LOG_DEBUG("all aggregate in one agg group has been pushdown to decoder", K(ret), K(i), K(pd_row_id_ctx), KPC(agg_group));
+    } else {
+      all_agg_pd_decoder = false;
     }
   }
   return ret;
@@ -528,24 +648,78 @@ int ObAggregatedStoreVec::fill_row(blocksstable::ObDatumRow &row)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObAggregateStoreVec is not inited", K(ret));
-  } else if (OB_UNLIKELY(count_ > 0)) {
+  } else if (OB_UNLIKELY(count_ >= row_capacity_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpected full aggregated store", K(ret), K_(count));
+    LOG_WARN("Unexpected full aggregated store", K(ret), K_(count), K_(row_capacity));
   } else {
     count_++;
     eval_ctx_.set_batch_idx(count_);
-    if (OB_FAIL(do_aggregate(nullptr/*reader*/, false/*reserve_memory*/))) {
-      LOG_WARN("Failed to aggregate rows", K(ret));
+    if (count_ >= row_capacity_) {
+       if (OB_FAIL(do_aggregate(nullptr/*reader*/, false/*reserve_memory*/))) {
+        LOG_WARN("Failed to aggregate rows", K(ret));
+      }
     }
   }
   return ret;
 }
 
-int ObAggregatedStoreVec::do_aggregate(blocksstable::ObIMicroBlockReader *reader, const bool reserve_memory)
+int ObAggregatedStoreVec::fill_output_rows(
+    blocksstable::ObIMicroBlockRowScanner &scanner,
+    int64_t &begin_index,
+    const int64_t end_index,
+    const ObFilterResult &res)
+{
+  int ret = OB_SUCCESS;
+  if (0 == count_) {
+  } else if (iter_param_->use_new_format()) {
+    if (OB_FAIL(scanner.get_rows_for_rich_format(cols_projector_,
+                                                  col_params_,
+                                                  row_ids_,
+                                                  count_,
+                                                  0,
+                                                  cell_data_ptrs_,
+                                                  len_array_,
+                                                  exprs_,
+                                                  &default_datums_,
+                                                  is_pad_char_to_full_length(context_.sql_mode_),
+                                                  !filter_is_null() || has_aggr_with_expr_))) {
+      LOG_WARN("Failed to get rows for rich format", K(ret));
+    }
+  } else if (OB_FAIL(scanner.get_rows_for_old_format(cols_projector_,
+                                                      col_params_,
+                                                      row_ids_,
+                                                      count_,
+                                                      0,
+                                                      cell_data_ptrs_,
+                                                      exprs_,
+                                                      datum_infos_,
+                                                      &default_datums_,
+                                                      is_pad_char_to_full_length(context_.sql_mode_)))) {
+    LOG_WARN("Failed to get rows for old format", K(ret));
+  }
+  if (OB_SUCC(ret)) {
+    eval_ctx_.set_batch_idx(count_);
+    if (OB_UNLIKELY(IterEndState::LIMIT_ITER_END == iter_end_flag_)) {
+      ret = OB_ITER_END;
+    }
+    EVENT_ADD(ObStatEventIds::SSSTORE_READ_ROW_COUNT, count_);
+  }
+  LOG_TRACE("[Vectorized] aggregate store copy rows", K(ret),
+            K(begin_index), K(end_index), K_(count), K(res),
+            "row_ids", common::ObArrayWrap<const int32_t>(row_ids_, count_),
+            KPC(this));
+  return ret;
+}
+
+int ObAggregatedStoreVec::do_aggregate(
+    blocksstable::ObIMicroBlockReader *reader,
+    const bool reserve_memory,
+    const int64_t bound_row_id/*OB_INVALID_CS_ROW_ID*/)
 {
   int ret = OB_SUCCESS;
   if (count_ > 0) {
-    ObPushdownRowIdCtx pd_row_id_ctx(row_ids_, count_, need_get_row_ids_);
+    ObPushdownRowIdCtx pd_row_id_ctx(row_ids_, count_);
+    pd_row_id_ctx.bound_row_id_ = bound_row_id;
     for (int64_t i = 0; OB_SUCC(ret) && i < agg_groups_.count(); ++i) {
       ObAggGroupVec *agg_group = agg_groups_.at(i);
       if (OB_ISNULL(agg_group)) {
@@ -570,12 +744,13 @@ int ObAggregatedStoreVec::do_aggregate(blocksstable::ObIMicroBlockReader *reader
 int ObAggregatedStoreVec::collect_aggregated_result()
 {
   int ret = OB_SUCCESS;
+  const int64_t batch_size = MAX(eval_ctx_.max_batch_size_, 1);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObAggregateStoreVec is not inited", K(ret));
   } else if (OB_FAIL(storage::init_exprs_vector_header(iter_param_->aggregate_exprs_,
                                                        eval_ctx_,
-                                                       eval_ctx_.max_batch_size_))) {
+                                                       batch_size))) {
     LOG_WARN("Failed to init vector", K(ret), K_(eval_ctx_.max_batch_size));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < agg_groups_.count(); ++i) {
@@ -618,6 +793,21 @@ int ObAggregatedStoreVec::get_agg_group(const sql::ObExpr *expr, ObAggGroupVec *
   if (OB_SUCC(ret) && OB_ISNULL(agg_group)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected null agg group", K(ret), KP(expr));
+  }
+  return ret;
+}
+
+int ObAggregatedStoreVec::reset_agg_row_id()
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < agg_groups_.count(); ++i) {
+    ObAggGroupVec *agg_group = agg_groups_.at(i);
+    if (OB_ISNULL(agg_group)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected null aggregate group", K(ret), KP(agg_group));
+    } else if (OB_FAIL(agg_group->reset_agg_row_id())){
+      LOG_WARN("Failed to reset agg_row_id in agg group", K(ret));
+    }
   }
   return ret;
 }

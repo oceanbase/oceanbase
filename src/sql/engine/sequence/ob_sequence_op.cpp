@@ -146,7 +146,7 @@ int ObLocalSequenceExecutor::get_nextval(ObExecContext &ctx)
           LOG_WARN("fail get nextval from rpc for seq", K(tenant_id), K(seq_id), K(ret));
         }
       } else {
-        if (OB_FAIL(sequence_cache_->nextval(seq_schemas_.at(idx), allocator, seq_value))) {
+        if (OB_FAIL(sequence_cache_->nextval(seq_schemas_.at(idx), allocator, seq_value, my_session))) {
           LOG_WARN("fail get nextval for seq", K(tenant_id), K(seq_id), K(ret));
         }
       }
@@ -280,7 +280,13 @@ int ObRemoteSequenceExecutor::init_sequence_sql(ObExecContext &ctx)
   }
   for (uint64_t i = 0; OB_SUCC(ret) && i < seq_schemas_.count(); ++i) {
     //const ObSequenceSchema *seq_schema = nullptr;
-    if (OB_FAIL(sql.append_fmt(" %.*s.NEXTVAL ",
+    const ObString &remote_db_name = seq_schemas_.at(i).get_remote_database_name();
+    if (OB_FAIL(remote_db_name.empty() && sql.append_fmt(" %.*s.NEXTVAL ",
+                                          seq_schemas_.at(i).get_sequence_name().length(),
+                                          seq_schemas_.at(i).get_sequence_name().ptr()))) {
+      LOG_WARN("failed to append string", K(ret));
+    } else if (!remote_db_name.empty() && OB_FAIL(sql.append_fmt(" %.*s.%.*s.NEXTVAL ",
+                            remote_db_name.length(), remote_db_name.ptr(),
                             seq_schemas_.at(i).get_sequence_name().length(),
                             seq_schemas_.at(i).get_sequence_name().ptr()))) {
       LOG_WARN("failed to append string", K(ret));

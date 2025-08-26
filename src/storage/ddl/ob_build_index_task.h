@@ -176,7 +176,7 @@ public:
     const uint64_t data_table_id, const int64_t schema_version,
     const int64_t task_id,
     ObGlobalUniqueIndexCallback *&callback);
-  virtual int64_t hash() const;
+  virtual uint64_t hash() const override;
   virtual bool operator ==(const share::ObIDag &other) const;
   common::ObTabletID get_tablet_id() const { return tablet_id_; }
   uint64_t get_tenant_id() const { return tenant_id_; }

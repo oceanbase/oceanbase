@@ -30,8 +30,9 @@ public:
   virtual int deep_copy(common::ObIAllocator &allocator,
                         const ObExprOperatorType type,
                         ObIExprExtraInfo *&copied_info) const override;
-  TO_STRING_KV(K(type_), K(data_access_path_));
+  TO_STRING_KV(K(type_), K(data_access_path_), K(mapped_column_id_));
   ObString data_access_path_;
+  int64_t mapped_column_id_;
 };
 
 

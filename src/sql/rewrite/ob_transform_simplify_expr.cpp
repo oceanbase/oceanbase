@@ -2653,7 +2653,7 @@ int ObTransformSimplifyExpr::do_push_not(ObRawExpr *&expr,
       } else if (OB_ISNULL(temp)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null expr", K(ret));
-      } else if (OB_FAIL(temp->formalize(ctx_->session_info_))) {
+      } else if (cur != temp && OB_FAIL(temp->formalize(ctx_->session_info_))) {
         LOG_WARN("fail to formalize", K(ret));
       } else {
         expr = temp;
@@ -2978,7 +2978,7 @@ int ObTransformSimplifyExpr::recursive_remove_duplicate_exprs(ObQueryCtx &query_
         }  else if (OB_ISNULL(temp)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected null expr", K(ret));
-        } else if (OB_FAIL(temp->formalize(ctx_->session_info_))) {
+        } else if (param_conds.at(0) != temp && OB_FAIL(temp->formalize(ctx_->session_info_))) {
           LOG_WARN("fail to formalize", K(ret));
         } else {
           expr = temp;
@@ -3176,7 +3176,7 @@ int ObTransformSimplifyExpr::do_pull_similar(ObDMLStmt *stmt,
       } else if (OB_ISNULL(temp)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null expr", K(ret));
-      } else if (OB_FAIL(temp->formalize(ctx_->session_info_))) {
+      } else if (intersection.at(0) != temp && OB_FAIL(temp->formalize(ctx_->session_info_))) {
         LOG_WARN("fail to formalize", K(ret));
       } else {
         new_expr = static_cast<ObOpRawExpr*>(temp);
@@ -3202,12 +3202,8 @@ int ObTransformSimplifyExpr::do_pull_similar(ObDMLStmt *stmt,
     LOG_WARN("failed to add param expr", K(ret));
   }
   if (OB_SUCC(ret) && is_valid) {
-    if (OB_FAIL(new_expr->formalize(ctx_->session_info_))) {
-      LOG_WARN("failed to formalize expr", K(ret));
-    } else {
-      expr = new_expr;
-      trans_happened = true;
-    }
+    expr = new_expr;
+    trans_happened = true;
   }
   return ret;
 }
@@ -3332,8 +3328,6 @@ int ObTransformSimplifyExpr::gen_not_intersect_param(ObRawExpr* &expr,
       LOG_WARN("unexpect null pointer error", K(new_expr), K(ret));
     } else if (OB_FAIL(new_expr->set_param_exprs(item))) {
       LOG_WARN("fail to assign array", K(ret));
-    } else if (OB_FAIL(new_expr->formalize(ctx_->session_info_))) {
-      LOG_WARN("failed to formalize expr", K(ret));
     } else if (OB_FAIL(params.push_back(new_expr))) {
       LOG_WARN("fail to push back expr", K(ret));
     }
@@ -3349,7 +3343,7 @@ int ObTransformSimplifyExpr::gen_not_intersect_param(ObRawExpr* &expr,
     } else if (OB_ISNULL(new_expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null expr", K(ret));
-    } else if (OB_FAIL(new_expr->formalize(ctx_->session_info_))) {
+    } else if (params.at(0) != new_expr && OB_FAIL(new_expr->formalize(ctx_->session_info_))) {
       LOG_WARN("fail to formalize", K(ret));
     } else {
       expr = new_expr;
@@ -3361,8 +3355,6 @@ int ObTransformSimplifyExpr::gen_not_intersect_param(ObRawExpr* &expr,
     LOG_WARN("unexpect null pointer error", K(op_expr), K(ret));
   } else if (OB_FAIL(op_expr->set_param_exprs(params))) {
     LOG_WARN("fail to assign array", K(ret));
-  } else if (OB_FAIL(op_expr->formalize(ctx_->session_info_))) {
-    LOG_WARN("failed to formalize expr", K(ret));
   } else {
     expr = op_expr;
   }

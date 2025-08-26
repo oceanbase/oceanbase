@@ -2,10 +2,6 @@ add_library(oblib_base INTERFACE)
 add_library(oblib_base_without_pass INTERFACE)
 add_library(oblib_pass INTERFACE)
 
-if(NOT CPP_STANDARD_20)
-  target_compile_options(oblib_base_without_pass INTERFACE -D_GLIBCXX_USE_CXX11_ABI=0)
-endif()
-
 get_property(EASY_INCLUDE_DIRS GLOBAL PROPERTY "EASY_INCLUDE_DIRS" )
 
 target_include_directories(
@@ -107,6 +103,13 @@ if(OB_BUILD_AUDIT_SECURITY)
   )
 endif()
 
+if(OB_BUILD_STANDALONE)
+  target_include_directories(
+    oblib_base_without_pass INTERFACE
+    ${CMAKE_SOURCE_DIR}/close_modules/license
+  )
+endif()
+
 if(OB_USE_BABASSL)
   target_include_directories(
     oblib_base_without_pass INTERFACE
@@ -137,23 +140,20 @@ if (OB_USE_CLANG)
     -Wno-self-assign -Wno-inconsistent-missing-override -Wno-mismatched-tags -Wno-unused-variable
     -Wno-invalid-offsetof -Wno-unevaluated-expression -Wno-constant-logical-operand>
     $<$<COMPILE_LANGUAGE:C>:-Wno-unused-parameter>
-    -Wno-register -Wno-invalid-partial-specialization)
-  if (CPP_STANDARD_20)
-    set(OBLIB_COMPILE_DEFINITIONS ${OBLIB_COMPILE_DEFINITIONS}
-        -Wno-unused-but-set-variable -Wno-null-pointer-subtraction -Wno-compound-token-split-by-macro
-        -Wno-packed-non-pod -Wno-format -Wno-shorten-64-to-32 -Wno-unused-but-set-parameter -Wno-single-bit-bitfield-constant-conversion
-        -Wno-enum-constexpr-conversion -Wno-covered-switch-default
-        -Wno-bitwise-instead-of-logical -Wno-suggest-override -Wno-non-virtual-dtor -Wno-cast-qual
-        -Wno-unused-value -Wno-macro-redefined -Wno-reinterpret-base-class
-        -Wno-implicit-fallthrough -Wno-deprecated-non-prototype
-        -Wno-ambiguous-reversed-operator
-        -Wno-string-concatenation)
-  endif()
+    -Wno-register -Wno-invalid-partial-specialization
+    -Wno-unused-but-set-variable -Wno-null-pointer-subtraction -Wno-compound-token-split-by-macro
+    -Wno-packed-non-pod -Wno-format -Wno-shorten-64-to-32 -Wno-unused-but-set-parameter -Wno-single-bit-bitfield-constant-conversion
+    -Wno-enum-constexpr-conversion -Wno-covered-switch-default
+    -Wno-bitwise-instead-of-logical -Wno-suggest-override -Wno-non-virtual-dtor -Wno-cast-qual
+    -Wno-unused-value -Wno-macro-redefined -Wno-reinterpret-base-class
+    -Wno-implicit-fallthrough -Wno-deprecated-non-prototype
+    -Wno-ambiguous-reversed-operator
+    -Wno-string-concatenation)
   target_compile_options(oblib_base_without_pass INTERFACE ${OBLIB_COMPILE_DEFINITIONS})
   if (ENABLE_SANITY)
     target_compile_options(oblib_pass
       INTERFACE
-      "$<$<COMPILE_LANGUAGE:CXX>:SHELL:-Xclang -load -Xclang ${DEVTOOLS_DIR}/lib64/libsanitypass.so>"
+      "$<$<COMPILE_LANGUAGE:CXX>:SHELL:-fpass-plugin=${DEVTOOLS_DIR}/lib64/libsanitypass.so>"
       -fno-builtin-memset
       -fno-builtin-bzero
       -fno-builtin-memcpy

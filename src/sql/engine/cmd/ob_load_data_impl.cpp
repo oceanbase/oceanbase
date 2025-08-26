@@ -445,6 +445,10 @@ int ObLoadDataBase::pre_parse_lines(ObLoadFileBuffer &buffer,
         UNUSED(param);
         return OB_SUCCESS;
       }
+      int operator()(ObCSVGeneralParser::HandleBatchLinesParam param) {
+        UNUSED(param);
+        return OB_SUCCESS;
+      }
     };
     struct Functor unused_handler;
     if (OB_FAIL(parser.scan(ptr, end, line_count, NULL, NULL, unused_handler, err_records, is_last_buf))) {
@@ -1013,6 +1017,10 @@ int ObLoadDataSPImpl::exec_shuffle(int64_t task_id, ObShuffleTaskHandle *handle)
 
     struct Functor {
       int operator()(ObCSVGeneralParser::HandleOneLineParam param) {
+        UNUSED(param);
+        return OB_SUCCESS;
+      }
+      int operator()(ObCSVGeneralParser::HandleBatchLinesParam param) {
         UNUSED(param);
         return OB_SUCCESS;
       }
@@ -3349,12 +3357,23 @@ int ObLoadDataURLImpl::execute(ObExecContext &ctx, ObLoadDataStmt &load_stmt)
       LOG_WARN("session is null", K(ret));
     } else {
       if (load_stmt.get_load_arguments().is_diagnosis_enabled_) {
-        session->set_diagnosis_enabled(true);
-        session->set_diagnosis_limit_num(load_stmt.get_load_arguments().diagnosis_limit_num_);
+        ObDiagnosisInfo& diagnosis_info = session->get_diagnosis_info();
+        diagnosis_info.is_enabled_ = true;
+        diagnosis_info.limit_num_ = load_stmt.get_load_arguments().diagnosis_limit_num_;
+
+        common::ObString log_file = load_stmt.get_load_arguments().diagnosis_log_file_;
+        common::ObString bad_file = load_stmt.get_load_arguments().diagnosis_bad_file_;
+        if (!log_file.empty() && OB_FAIL(session->set_diagnosis_log_file(log_file))) {
+          LOG_WARN("failed to set diagnosis log file", K(ret), K(log_file));
+        } else if (!bad_file.empty() && OB_FAIL(session->set_diagnosis_bad_file(bad_file))) {
+          LOG_WARN("failed to set diagnosis bad file", K(ret), K(bad_file));
+        }
       }
-      if (session->is_in_external_catalog()
-          && OB_FAIL(session->set_internal_catalog_db(&switch_catalog_helper))) {
-        LOG_WARN("failed to set catalog", K(ret));
+      if (OB_SUCC(ret)) {
+        if (session->is_in_external_catalog()
+            && OB_FAIL(session->set_internal_catalog_db(&switch_catalog_helper))) {
+          LOG_WARN("failed to set catalog", K(ret));
+        }
       }
     }
   }
@@ -3382,8 +3401,7 @@ int ObLoadDataURLImpl::execute(ObExecContext &ctx, ObLoadDataStmt &load_stmt)
   }
 
   if (OB_NOT_NULL(session) && session->is_diagnosis_enabled()) {
-    session->set_diagnosis_enabled(false);
-    session->set_diagnosis_limit_num(0);
+    session->reset_diagnosis_info();
   }
 
   if (OB_NOT_NULL(session) && switch_catalog_helper.is_set()) {

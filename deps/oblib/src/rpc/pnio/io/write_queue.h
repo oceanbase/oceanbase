@@ -23,3 +23,4 @@ extern void wq_init(write_queue_t* wq);
 extern void wq_push(write_queue_t* wq, dlink_t* l);
 extern int wq_flush(sock_t* s, write_queue_t* wq, dlink_t** old_head);
 extern int wq_delete(write_queue_t* wq, dlink_t* l);
+extern void wq_move(write_queue_t* dest, write_queue_t* src);

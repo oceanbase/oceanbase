@@ -21,7 +21,7 @@ namespace tools
 class ObAdminLogExecutor : public ObAdminExecutor
 {
 public:
-  ObAdminLogExecutor() : mutator_str_buf_(nullptr), mutator_buf_size_(0){}
+  ObAdminLogExecutor(bool flag) : mutator_str_buf_(nullptr), mutator_buf_size_(0), is_ob_log_service_(flag){}
   virtual ~ObAdminLogExecutor();
   virtual int execute(int argc, char *argv[]);
 
@@ -53,6 +53,7 @@ private:
   char *decompress_buf_;
   int64_t decompress_buf_size_;
   share::ObAdminLogDumpFilter filter_;
+  bool is_ob_log_service_;
 };
 }
 }

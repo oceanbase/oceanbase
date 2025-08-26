@@ -67,7 +67,7 @@ int ObMicroBlockRowLockChecker::inner_get_next_row(
 int ObMicroBlockRowLockChecker::check_row(
     const transaction::ObTransID &trans_id,
     const ObRowHeader *row_header,
-    const ObStoreRowLockState &lock_state,
+    ObStoreRowLockState &lock_state,
     bool &need_stop)
 {
   int ret = OB_SUCCESS;
@@ -86,7 +86,9 @@ int ObMicroBlockRowLockChecker::check_row(
     // Case2: We encounter the ghost row which means the version node is
     // faked, and the row has already ended. So, we believe that the next
     // iteration will find OB_ITER_END.
+    LOG_INFO("encounter a ghost row", K(ret), K(trans_id), K(lock_state));
     need_stop = false;
+    lock_state.lock_dml_flag_ = ObDmlFlag::DF_NOT_EXIST;
   } else {
     // Case3: Row is decided, so the lock and existence state is decided
     need_stop = true;
@@ -299,7 +301,7 @@ int ObMicroBlockRowLockMultiChecker::inner_get_next_row(
 int ObMicroBlockRowLockMultiChecker::check_row(
     const transaction::ObTransID &trans_id,
     const ObRowHeader *row_header,
-    const ObStoreRowLockState &lock_state,
+    ObStoreRowLockState &lock_state,
     bool &need_stop)
 {
   int ret = OB_SUCCESS;
@@ -319,7 +321,9 @@ int ObMicroBlockRowLockMultiChecker::check_row(
     // Case2: We encounter the ghost row which means the version node is
     // faked, and the row has already ended. So, we believe that the next
     // iteration will find OB_ITER_END.
+    LOG_INFO("encounter a ghost row", K(ret), K(trans_id), K(lock_state));
     need_stop = false;
+    lock_state.lock_dml_flag_ = ObDmlFlag::DF_NOT_EXIST;
   } else {
     if (lock_state.is_locked_not_by(trans_id)) {
       rows_info_->set_row_conflict_error(rowkey_idx, OB_TRY_LOCK_ROW_CONFLICT);
@@ -373,14 +377,10 @@ void ObMicroBlockRowLockMultiChecker::check_row_in_major_sstable(bool &need_stop
 int ObMicroBlockRowLockMultiChecker::seek_forward()
 {
   int ret = OB_SUCCESS;
-  ObIMicroBlockReader *micro_block_reader = nullptr;
+  ObIMicroBlockReader *micro_block_reader = reader_;
   bool need_search_duplicate_row = false;
-  if (ObIMicroBlockReader::Decoder == reader_->get_type() ||
-      ObIMicroBlockReader::CSDecoder == reader_->get_type()) {
-    micro_block_reader = decoder_;
-  } else {
-    micro_block_reader = flat_reader_;
-    need_search_duplicate_row = !sstable_->is_major_sstable() && !flat_reader_->single_version_rows();
+  if (ObIMicroBlockReader::Reader == reader_->get_type() || ObIMicroBlockReader::NewFlatReader == reader_->get_type()) {
+    need_search_duplicate_row = !sstable_->is_major_sstable() && !static_cast<ObIMicroBlockFlatReaderBase *>(reader_)->single_version_rows();
   }
   const int64_t row_count = micro_block_reader->row_count();
   while (OB_SUCC(ret)) {

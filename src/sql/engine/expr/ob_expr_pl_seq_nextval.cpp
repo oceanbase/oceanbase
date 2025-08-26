@@ -110,7 +110,7 @@ int ObExprPLSeqNextval::eval_pl_seq_next_val(
           LOG_WARN("fail get nextval from rpc for seq", K(tenant_id), K(seq_id), K(ret));
         }
       } else {
-        if (OB_FAIL(seq_cache.nextval(*seq_schema, alloc_guard.get_allocator(), seq_value))) {
+        if (OB_FAIL(seq_cache.nextval(*seq_schema, alloc_guard.get_allocator(), seq_value, session))) {
           LOG_WARN("fail get nextval for seq", K(tenant_id), K(seq_id), K(ret));
         }
       }

@@ -141,9 +141,9 @@ public:
   virtual int get_latest(int64_t unit_id,
                          void *key,
                          ObFunction<int(void *)> &op,
-                         MdsWriter &writer,// FIXME(xuwang.txw): should not exposed, will be removed later
-                         TwoPhaseCommitState &trans_stat,// FIXME(xuwang.txw): should not exposed, will be removed later
-                         share::SCN &trans_version,// FIXME(xuwang.txw): should not exposed, will be removed later
+                         MdsWriter &writer,// FIXME(zk250686): should not exposed, will be removed later
+                         TwoPhaseCommitState &trans_stat,// FIXME(zk250686): should not exposed, will be removed later
+                         share::SCN &trans_version,// FIXME(zk250686): should not exposed, will be removed later
                          const int64_t read_seq) const = 0;
   virtual int get_latest_committed(int64_t unit_id,
                                    void *key,

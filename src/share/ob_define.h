@@ -274,6 +274,7 @@ inline bool is_schema_error(int err)
     case OB_SCHEMA_NOT_UPTODATE:
     case OB_ERR_PARALLEL_DDL_CONFLICT:
     case OB_NO_PARTITION_FOR_GIVEN_VALUE_SCHEMA_ERROR:
+    case OB_ERR_DDL_RESOURCE_NOT_ENOUGH:
       ret = true;
       break;
     default:
@@ -492,6 +493,9 @@ OB_NOINLINE bool is_shared_storage_sslog_table(const uint64_t tid);
 OB_NOINLINE bool is_sslog_table(const uint64_t tid);
 OB_NOINLINE bool is_shared_storage_sslog_exist();
 OB_NOINLINE bool is_hardcode_schema_table(const uint64_t tid);
+
+bool is_tenant_sslog_ls(const uint64_t tenant_id, const share::ObLSID &ls_id);
+bool is_tenant_has_sslog(const uint64_t tenant_id);
 
 //@TODO shanyan.g Temporary settings for elr
 static const bool CAN_ELR = false;

@@ -25,10 +25,18 @@ namespace common
 class ObDalAccessor
 {
 public:
-  static int init_env(void *malloc, void *free, void *log_handler, const int32_t log_level, const int64_t thread_cnt, const int64_t pool_max_idle_per_host, const int64_t pool_max_idle_time_s);
+  static int init_env(void *malloc,
+                      void *free,
+                      void *log_handler,
+                      const int32_t log_level,
+                      const int64_t thread_cnt,
+                      const int64_t pool_max_idle_per_host,
+                      const int64_t pool_max_idle_time_s,
+                      const int64_t connect_timeout_s);
   static void fin_env();
 
 public:
+  static int64_t obdal_get_tenant_id();
   // operator
   static int obdal_operator_options_new(opendal_operator_options *&options);
   static int obdal_operator_options_set(opendal_operator_options *options, const char *key, const char *value);
@@ -37,6 +45,7 @@ public:
   static int obdal_operator_new(const char *scheme, const opendal_operator_options *options, opendal_operator *&op);
   static int obdal_operator_free(opendal_operator *&op);
   static int obdal_operator_write(const opendal_operator *op, const char *path, const char *buf, const int64_t buf_size);
+  static int obdal_operator_write_with_if_not_exists(const opendal_operator *op, const char *path, const char *buf, const int64_t buf_size);
   static int obdal_operator_reader(const opendal_operator *op, const char *path, opendal_reader *&reader);
   static int obdal_operator_writer(const opendal_operator *op, const char *path, opendal_writer *&writer);
   static int obdal_operator_append_writer(const opendal_operator *op, const char *path, opendal_writer *&writer);

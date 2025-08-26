@@ -38,6 +38,7 @@ namespace archive
 {
 class ObArchiveAllocator;
 class ObArchiveLSMgr;
+class ObArchiveFetcher;
 class ObArchivePersistMgr;
 class ObArchiveRoundMgr;
 class ObArchiveSendTask;
@@ -64,6 +65,7 @@ public:
   int init(const uint64_t tenant_id,
       ObArchiveAllocator *allocator,
       ObArchiveLSMgr *ls_mgr,
+      ObArchiveFetcher *fetcher,
       ObArchivePersistMgr *persist_mgr,
       ObArchiveRoundMgr *round_mgr);
   void destroy();
@@ -188,10 +190,12 @@ private:
 
   int try_free_send_task_();
   int do_free_send_task_();
+  int release_ref_file_id_(ObArchiveSendTask *task);
 private:
   bool                  inited_;
   uint64_t              tenant_id_;
   ObArchiveAllocator    *allocator_;
+  ObArchiveFetcher      *archive_fetcher_;
   ObArchiveLSMgr        *ls_mgr_;
   ObArchivePersistMgr   *persist_mgr_;
   ObArchiveRoundMgr     *round_mgr_;

@@ -56,15 +56,8 @@ public:
   static int kill_local_connections(
     const uint64_t tenant_id,
     const share::ObServiceName &service_name);
+  static int clear_service_name(const uint64_t tenant_id);
 private:
-  static int check_and_get_tenants_servers_(
-      const uint64_t tenant_id,
-      const bool include_temp_offline,
-      common::ObIArray<common::ObAddr> &target_servers);
-  static int server_check_and_push_back_(
-      const common::ObAddr &server,
-      const bool include_temp_offline,
-      common::ObIArray<common::ObAddr> &target_servers);
   static int broadcast_refresh_(
       const uint64_t tenant_id,
       const share::ObServiceNameID &target_service_name_id,

@@ -80,7 +80,7 @@ int ObBackupTabletFuseDagNet::start_running()
   } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
-  } else if (OB_FAIL(scheduler->alloc_dag(initial_dag))) {
+  } else if (OB_FAIL(scheduler->alloc_dag(initial_dag, true/*is_ha_dag*/))) {
     LOG_WARN("failed to alloc inital fuse dag ", K(ret));
   } else if (OB_FAIL(initial_dag->init(this))) {
     LOG_WARN("failed to init initial fuse dag", K(ret));
@@ -115,9 +115,9 @@ bool ObBackupTabletFuseDagNet::operator == (const ObIDagNet &other) const
   return is_same;
 }
 
-int64_t ObBackupTabletFuseDagNet::hash() const
+uint64_t ObBackupTabletFuseDagNet::hash() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   if (OB_ISNULL(ctx_)) {
     LOG_ERROR_RET(OB_INVALID_ARGUMENT, "fuse ctx is NULL", KPC(ctx_));
   } else {
@@ -251,9 +251,9 @@ bool ObBackupTabletGroupFuseDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObBackupTabletGroupFuseDag::hash() const
+uint64_t ObBackupTabletGroupFuseDag::hash() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   ObBackupTabletGroupFuseCtx *ctx = get_ctx();
 
   if (OB_ISNULL(ctx)) {
@@ -561,9 +561,9 @@ bool ObBackupTabletFuseDag::operator==(const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObBackupTabletFuseDag::hash() const
+uint64_t ObBackupTabletFuseDag::hash() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   const ObDagType::ObDagTypeEnum type = get_type();
   hash_value = common::murmurhash(&type, sizeof(type), hash_value);
   hash_value = common::murmurhash(&fuse_ctx_.param_.ls_id_, sizeof(fuse_ctx_.param_.ls_id_), hash_value);
@@ -647,7 +647,7 @@ int ObBackupTabletFuseDag::generate_next_dag(share::ObIDag *&dag)
     } else {
       LOG_WARN("failed to get next tablet id", K(ret), KPC(this));
     }
-  } else if (OB_FAIL(scheduler->alloc_dag(tablet_fuse_dag))) {
+  } else if (OB_FAIL(scheduler->alloc_dag(tablet_fuse_dag, true/*is_ha_dag*/))) {
     LOG_WARN("failed to alloc tablet fuse dag", K(ret));
   } else if (OB_FAIL(tablet_fuse_dag->init(group_ctx_->param_, fuse_item, *group_ctx_))) {
     LOG_WARN("failed to init tablet fuse dag", K(ret), "param", group_ctx_->param_, K(fuse_item));

@@ -48,6 +48,52 @@ int ObOptStatService::get_table_stat(const uint64_t tenant_id,
   return ret;
 }
 
+int ObOptStatService::batch_get_table_stats(const uint64_t tenant_id,
+                                            ObIArray<const ObOptTableStat::Key *> &keys,
+                                            ObIArray<ObOptTableStatHandle> &handles)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<const ObOptTableStat::Key*, 4> regather_keys;
+  ObSEArray<int64_t, 4> regather_handles_indices;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("statistics service is not initialized. ", K(ret));
+  } else {
+    LOG_TRACE("begin get table stat", K(keys));
+    for (int64_t i = 0; OB_SUCC(ret) && i < keys.count(); ++i) {
+    ObOptTableStatHandle handle;
+      if (OB_ISNULL(keys.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret), K(keys.at(i)));
+      } else if (OB_FAIL(table_stat_cache_.get_value(*keys.at(i), handle))) {
+        // we need to fetch statistics from inner table if it is not yet available from cache
+        if (OB_ENTRY_NOT_EXIST != ret) {
+          LOG_WARN("get table stat from cache failed", K(ret), KPC(keys.at(i)));
+        } else if (OB_FAIL(regather_keys.push_back(keys.at(i)))) {
+          LOG_WARN("failed to push back", K(ret));
+        } else if (OB_FAIL(handles.push_back(handle))) {
+          LOG_WARN("failed to push back", K(ret));
+        } else if (OB_FAIL(regather_handles_indices.push_back(i))) {
+          LOG_WARN("failed to push back", K(ret));
+        }
+      } else if (NULL == handle.stat_) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("cache hit but value is NULL. BUG here.", K(ret), KPC(keys.at(i)));
+      } else if (OB_FAIL(handles.push_back(handle))) {
+        LOG_WARN("failed to push back", K(ret));
+      } else {/*do nothing*/}
+    }
+
+    if (OB_SUCC(ret) && !regather_keys.empty()) {
+      if (OB_FAIL(batch_load_table_stats_and_put_cache(tenant_id, regather_keys, handles, regather_handles_indices))) {
+        LOG_WARN("failed to load column stat and put cache", K(ret), K(regather_keys));
+      } else {/*do nothing*/}
+    }
+  }
+
+  return ret;
+}
+
 int ObOptStatService::get_table_stat(const uint64_t tenant_id,
                                      const ObOptTableStat::Key &key,
                                      ObOptTableStatHandle &handle)
@@ -179,6 +225,52 @@ int ObOptStatService::load_table_stat_and_put_cache(const uint64_t tenant_id,
   return ret;
 }
 
+int ObOptStatService::batch_load_table_stats_and_put_cache(const uint64_t tenant_id,
+                                                           ObIArray<const ObOptTableStat::Key *> &keys,
+                                                           ObIArray<ObOptTableStatHandle> &handles,
+                                                           ObIArray<int64_t> &regather_handles_indices)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObOptTableStat*, 4> all_part_stats;
+  ObArenaAllocator arena("ObOptTblStatGet", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id);
+
+  bool added = false;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("table statistics service is not initialized. ", K(ret));
+  } else if (keys.empty()) {
+    //do nothing
+  } else if (OB_FAIL(init_table_stats(arena, keys, all_part_stats))) {
+    LOG_WARN("failed to init table stats", K(ret));
+  } else if (OB_FAIL(sql_service_.fetch_table_stat(tenant_id, keys, all_part_stats))) {
+    if (OB_ENTRY_NOT_EXIST != ret &&
+        !is_sys_table(keys.at(0)->table_id_) &&
+        !is_virtual_table(keys.at(0)->table_id_)) {//sys table and virtual table failed, use default
+      LOG_WARN("fetch table stat failed. ", K(ret));
+    } else {
+      // it's not guaranteed that table stat exists.
+      LOG_WARN("table statistics not existed, use default stats instead. ", K(ret));
+      ret = OB_SUCCESS;
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < all_part_stats.count(); ++i) {
+    int64_t handle_index = regather_handles_indices.at(i);
+    if (OB_ISNULL(keys.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (OB_ISNULL(all_part_stats.at(i)) ||
+               OB_UNLIKELY(all_part_stats.at(i)->get_table_id() != keys.at(i)->table_id_ ||
+                           all_part_stats.at(i)->get_partition_id() != keys.at(i)->partition_id_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected error", K(all_part_stats), K(i), K(ret));
+    } else if (OB_FAIL(table_stat_cache_.put_and_fetch_value(*keys.at(i), *all_part_stats.at(i), handles.at(handle_index)))) {
+      LOG_WARN("failed to put and fetch table stat", K(ret));
+    }
+  }
+
+  return ret;
+}
+
 int ObOptStatService::load_column_stat_and_put_cache(const uint64_t tenant_id,
                                                      ObIArray<const ObOptColumnStat::Key*> &keys,
                                                      ObIArray<ObOptColumnStatHandle> &handles)
@@ -282,6 +374,32 @@ int ObOptStatService::init_key_column_stats(ObIAllocator &allocator,
       if (OB_FAIL(key_column_stats.push_back(tmp_key_col_stat))) {
         LOG_WARN("failed to push back", K(ret));
       } else {/*do nothing*/}
+    }
+  }
+  return ret;
+}
+
+int ObOptStatService::init_table_stats(ObIAllocator &allocator,
+                                       const ObIArray<const ObOptTableStat::Key *> &keys,
+                                       ObIArray<ObOptTableStat *> &table_stats)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < keys.count(); ++i) {
+    void *ptr = NULL;
+    if (OB_ISNULL(keys.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexepected null", K(ret), K(keys), K(i));
+    } else if (OB_ISNULL(ptr = allocator.alloc(sizeof(ObOptTableStat)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("memory is not enough", K(ret), K(ptr));
+    } else {
+      ObOptTableStat *tmp_table_stat = new (ptr) ObOptTableStat();
+      tmp_table_stat->set_table_id(keys.at(i)->table_id_);
+      tmp_table_stat->set_partition_id(keys.at(i)->partition_id_);
+      if (OB_FAIL(table_stats.push_back(tmp_table_stat))) {
+        LOG_WARN("failed to push back", K(ret));
+      } else { /*do nothing*/
+      }
     }
   }
   return ret;

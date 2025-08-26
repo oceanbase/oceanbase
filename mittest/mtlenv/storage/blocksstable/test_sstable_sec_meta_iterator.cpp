@@ -513,71 +513,75 @@ TEST_F(TestSSTableSecMetaIterator, test_basic_range_spliter)
 {
   const int64_t target_parallel_cnt = 3;
   const ObITableReadInfo &index_read_info = tablet_handle_.get_obj()->get_rowkey_read_info();
-  ObPartitionRangeSpliter range_spliter;
-  ObRangeSplitInfo range_info;
+
+  ObPartitionMultiRangeSpliter spliter;
   ObArray<ObITable *> tables;
-  ObArray<ObStoreRange> range_array_1;
-  ASSERT_EQ(OB_SUCCESS, tables.push_back(&sstable_));
+  ObArray<ObStoreRange> ranges;
+  ObArrayArray<ObStoreRange> split_ranges_1;
+
   ObStoreRange store_range;
   store_range.get_start_key().set_min();
   store_range.get_end_key().set_max();
-  ASSERT_EQ(OB_SUCCESS, range_spliter.get_range_split_info(
-      tables, index_read_info, store_range, range_info));
-  ASSERT_EQ(range_info.max_macro_block_count_, sstable_.get_data_macro_block_count());
-  // ASSERT_EQ(range_info.total_size_, sstable_.get_meta().basic_meta_.occupy_size_);
-  range_info.set_parallel_target(target_parallel_cnt);
-  ASSERT_EQ(OB_SUCCESS, range_spliter.split_ranges(range_info, allocator_, true, range_array_1));
-  ASSERT_EQ(range_array_1.count(), target_parallel_cnt);
 
+  ASSERT_EQ(OB_SUCCESS, tables.push_back(&sstable_));
+  ASSERT_EQ(OB_SUCCESS, ranges.push_back(store_range));
 
-  range_info.reset();
-  ObArray<ObStoreRange> range_array_2;
+  ASSERT_EQ(
+      OB_SUCCESS,
+      spliter.get_split_multi_ranges(
+          ranges, target_parallel_cnt, index_read_info, tables, allocator_, split_ranges_1));
+  ASSERT_EQ(split_ranges_1.count(), target_parallel_cnt);
+  ASSERT_EQ(split_ranges_1.at(0).count(), 1);
+  ASSERT_EQ(split_ranges_1.at(1).count(), 1);
+  ASSERT_EQ(split_ranges_1.at(2).count(), 1);
+
+  ObArrayArray<ObStoreRange> split_ranges_2;
   ObStoreRow row;
   ObObj row_cells[MAX_TEST_COLUMN_CNT];
   row.row_val_.assign(row_cells, TEST_COLUMN_CNT);
   ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(max_row_seed_ + 1, row));
   store_range.get_end_key().assign(row_cells, TEST_ROWKEY_COLUMN_CNT);
-  ASSERT_EQ(OB_SUCCESS, range_spliter.get_range_split_info(
-      tables, index_read_info, store_range, range_info));
-  ASSERT_EQ(range_info.max_macro_block_count_, sstable_.get_data_macro_block_count());
-  // ASSERT_EQ(range_info.total_size_, sstable_.get_meta().basic_meta_.occupy_size_);
-  range_info.set_parallel_target(target_parallel_cnt);
-  ASSERT_EQ(OB_SUCCESS, range_spliter.split_ranges(range_info, allocator_, false, range_array_2));
-  ASSERT_EQ(range_array_2.count(), target_parallel_cnt);
+  ranges.reset();
+  ASSERT_EQ(OB_SUCCESS, ranges.push_back(store_range));
+  ASSERT_EQ(
+      OB_SUCCESS,
+      spliter.get_split_multi_ranges(
+          ranges, target_parallel_cnt, index_read_info, tables, allocator_, split_ranges_2));
+  ASSERT_EQ(split_ranges_2.count(), target_parallel_cnt);
+  ASSERT_EQ(split_ranges_2.at(0).count(), 1);
+  ASSERT_EQ(split_ranges_2.at(1).count(), 1);
+  ASSERT_EQ(split_ranges_2.at(2).count(), 1);
 
   for (int64_t i = 0; i < target_parallel_cnt; ++i) {
     ObStoreRowkey start_schema_key;
     ObStoreRowkey end_schema_key;
 
-    int64_t start_key_cnt = range_array_1.at(i).get_start_key().get_obj_cnt();
-    if (!range_array_1.at(i).get_start_key().is_min()) {
-      start_key_cnt -= ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
-    }
-    ASSERT_EQ(OB_SUCCESS, start_schema_key.assign(range_array_1.at(i).get_start_key().get_obj_ptr(), start_key_cnt));
+    int64_t start_key_cnt = split_ranges_1.at(i).at(0).get_start_key().get_obj_cnt();
+    ASSERT_EQ(OB_SUCCESS, start_schema_key.assign(split_ranges_1.at(i).at(0).get_start_key().get_obj_ptr(), start_key_cnt));
 
-    int64_t end_key_cnt = range_array_1.at(i).get_end_key().get_obj_cnt();
-    if (!range_array_1.at(i).get_end_key().is_max()) {
-      end_key_cnt -= ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
-    }
-    ASSERT_EQ(OB_SUCCESS, end_schema_key.assign(range_array_1.at(i).get_end_key().get_obj_ptr(), end_key_cnt));
+    int64_t end_key_cnt = split_ranges_1.at(i).at(0).get_end_key().get_obj_cnt();
+    ASSERT_EQ(OB_SUCCESS, end_schema_key.assign(split_ranges_1.at(i).at(0).get_end_key().get_obj_ptr(), end_key_cnt));
 
-    ASSERT_EQ(start_schema_key, range_array_2.at(i).get_start_key());
+    ASSERT_EQ(start_schema_key, split_ranges_2.at(i).at(0).get_start_key());
     if (i != target_parallel_cnt - 1) {
-      ASSERT_EQ(end_schema_key, range_array_2.at(i).get_end_key());
+      ASSERT_EQ(end_schema_key, split_ranges_2.at(i).at(0).get_end_key());
     }
   }
 
   // Try split range larger than sstable endkey
-  range_info.reset();
-  ObArray<ObStoreRange> range_array;
+  ObArrayArray<ObStoreRange> split_ranges_3;
   store_range.get_start_key().assign(row_cells, TEST_ROWKEY_COLUMN_CNT);
   store_range.get_end_key().set_max();
   store_range.set_left_open();
   store_range.set_right_open();
-  ASSERT_EQ(OB_SUCCESS, range_spliter.get_range_split_info(tables, index_read_info, store_range, range_info));
-  ASSERT_EQ(range_info.max_macro_block_count_, 0);
-  ASSERT_EQ(OB_SUCCESS, range_spliter.split_ranges(range_info, allocator_, false, range_array));
-  ASSERT_EQ(1, range_array.count());
+  ranges.reset();
+  ASSERT_EQ(OB_SUCCESS, ranges.push_back(store_range));
+  ASSERT_EQ(
+      OB_SUCCESS,
+      spliter.get_split_multi_ranges(
+          ranges, target_parallel_cnt, index_read_info, tables, allocator_, split_ranges_3, false));
+  ASSERT_EQ(split_ranges_3.count(), 1);
+  ASSERT_EQ(split_ranges_3.at(0).count(), 1);
 }
 
 } // namespace blocksstable
