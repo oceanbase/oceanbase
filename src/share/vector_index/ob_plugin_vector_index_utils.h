@@ -79,7 +79,8 @@ public:
   }
   static void set_ls_leader_flag(const ObLSID &ls_id, const bool is_leader);
   static int get_ls_leader_flag(const ObLSID &ls_id, bool &is_leader);
-  static int query_need_refresh_memdata(ObPluginVectorIndexAdaptor *adapter, ObLSID &ls_id);
+  static int get_read_scn(bool is_leader, ObLSID &ls_id, SCN &target_scn);
+  static int query_need_refresh_memdata(ObPluginVectorIndexAdaptor *adapter, ObLSID &ls_id, bool is_leader);
 
   static int add_key_ranges(uint64_t table_id, ObRowkey& rowkey, storage::ObTableScanParam &scan_param);
   static int iter_table_rescan(storage::ObTableScanParam &scan_param, common::ObNewRowIterator *iter);
