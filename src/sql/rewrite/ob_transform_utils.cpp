@@ -14701,16 +14701,20 @@ int ObTransformUtils::check_is_bypass_string_expr(const ObRawExpr *expr,
 {
   int ret = OB_SUCCESS;
   is_bypass = false;
+  bool is_lossless_cast = false;
   if (OB_ISNULL(expr) || OB_ISNULL(src_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(expr));
+  } else if (OB_FAIL(ObOptimizerUtil::is_lossless_column_cast(expr, is_lossless_cast))) {
+    LOG_WARN("failed to check is lossless column cast", K(ret), K(expr));
   } else {
     const ObExprOperatorType op_type = expr->get_expr_type();
     if (T_FUN_SYS_CAST == op_type || T_FUN_SYS_CONVERT == op_type) {
       const ObExprResType &src_type = src_expr->get_result_type();
       const ObExprResType &dst_type = expr->get_result_type();
-      is_bypass = src_type.get_type() == dst_type.get_type() &&
-                  src_type.get_collation_type() == dst_type.get_collation_type();
+      is_bypass = (src_type.get_type() == dst_type.get_type() &&
+                   src_type.get_collation_type() == dst_type.get_collation_type()) ||
+                   is_lossless_cast;
     } else {
       // ATTENTION: this does not work for the uca900 collation in the future
       is_bypass = T_FUN_SYS_SUBSTR == op_type;

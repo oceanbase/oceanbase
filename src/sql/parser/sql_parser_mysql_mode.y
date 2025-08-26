@@ -549,6 +549,7 @@ END_P SET_VAR DELIMITER
 %type <node> cache_index_stmt load_index_into_cache_stmt tbl_index_list tbl_index tbl_partition_list opt_tbl_partition_list tbl_index_or_partition_list tbl_index_or_partition opt_ignore_leaves key_cache_name
 %type <node> module_name info_type opt_infile
 %type <node> flashback_standby_log_stmt
+%type <node> sys_view_cast_opt
 %start sql_stmt
 %%
 ////////////////////////////////////////////////////////////////
@@ -2425,6 +2426,14 @@ opt_win_window:
 }
 ;
 
+sys_view_cast_opt:
+/* empty */     { $$= NULL; }
+| IGNORE        {
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 1;
+  $$->is_hidden_const_ = 1; }
+;
+
 case_arg:
 expr                  { $$ = $1; }
 | /*EMPTY*/             { $$ = NULL; }
@@ -2636,13 +2645,18 @@ MOD '(' expr ',' expr ')'
 {
   $$ = $1;
 }
-| CAST '(' expr AS cast_data_type ')'
+| CAST '(' expr AS cast_data_type sys_view_cast_opt ')'
 {
   //cast_data_type is a T_CAST_ARGUMENT rather than a T_INT to avoid being parameterized automatically
   ParseNode *params = NULL;
   malloc_non_terminal_node(params, result->malloc_pool_, T_EXPR_LIST, 2, $3, $5);
   make_name_node($$, result->malloc_pool_, "cast");
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS, 2, $$, params);
+  if ($6 != NULL) {
+    $$->value_ = 1;
+  } else {
+    $$->value_ = 0;
+  }
 }
 | INSERT '(' expr ',' expr ',' expr ',' expr ')'
 {

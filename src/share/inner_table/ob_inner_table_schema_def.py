@@ -15784,8 +15784,8 @@ def_table_schema(
   view_definition = """
                     select /*+ leading(a) no_use_nl(ts)*/
                     cast('def' as char(512)) as TABLE_CATALOG,
-                    cast(b.database_name as char(64)) as TABLE_SCHEMA,
-                    cast(a.table_name as char(64)) as TABLE_NAME,
+                    cast(b.database_name as char(64) IGNORE) as TABLE_SCHEMA,
+                    cast(a.table_name as char(64) IGNORE) as TABLE_NAME,
                     cast(case when (a.database_id = 201002 or a.table_type = 1) then 'SYSTEM VIEW'
                          when a.table_type in (0, 2) then 'SYSTEM TABLE'
                          when a.table_type = 4 then 'VIEW'
@@ -15819,10 +15819,13 @@ def_table_schema(
                            c.collation_type,
                            c.table_type,
                            usec_to_time(d.schema_version) as gmt_create,
-                           usec_to_time(c.schema_version) as gmt_modified,
+                           usec_to_time(d.schema_version) as gmt_modified,
                            c.comment,
                            c.store_format
-                    from oceanbase.__all_virtual_core_all_table c
+                    from (select effective_tenant_id() as tenant_id, 201001 as database_id, 1 as table_id, '__all_core_table' as table_name, 45 as collation_type, 0 as table_type, '' as comment, 'DYNAMIC' as store_format, 0 as auto_part, 0 as auto_part_size, 0 as table_mode
+                union all select effective_tenant_id() as tenant_id, 201001 as database_id, 3 as table_id, '__all_table'      as table_name, 45 as collation_type, 0 as table_type, '' as comment, 'DYNAMIC' as store_format, 0 as auto_part, 0 as auto_part_size, 0 as table_mode
+                union all select effective_tenant_id() as tenant_id, 201001 as database_id, 4 as table_id, '__all_column'     as table_name, 45 as collation_type, 0 as table_type, '' as comment, 'DYNAMIC' as store_format, 0 as auto_part, 0 as auto_part_size, 0 as table_mode
+                union all select effective_tenant_id() as tenant_id, 201001 as database_id, 5 as table_id, '__all_ddl_operation'     as table_name, 45 as collation_type, 0 as table_type, '' as comment, 'DYNAMIC' as store_format, 0 as auto_part, 0 as auto_part_size, 0 as table_mode) c
                     join oceanbase.__all_virtual_core_all_table d
                       on c.tenant_id = d.tenant_id and d.table_name = '__all_core_table'
                     where c.tenant_id = effective_tenant_id()

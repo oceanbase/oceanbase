@@ -6160,8 +6160,6 @@ int ObOptimizerUtil::is_lossless_column_cast(const ObRawExpr *expr,
     // do nothing
   } else if (CM_IS_ORA_SYS_VIEW_CAST(expr->get_extra())) {
     is_lossless = true;
-  } else if (CM_IS_ORA_SYS_VIEW_CAST(expr->get_extra())) {
-    is_lossless = true;
   } else if (OB_ISNULL(child_expr = expr->get_param_expr(0))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), KPC(expr));
