@@ -514,10 +514,14 @@ private:
   int delete_all_tablets();
   int offline_gc_tablet_for_create_or_transfer_in_abort_();
   int mock_duplicated_rows_(common::ObNewRowIterator *&duplicated_rows);
-  int get_tablet_and_acquire_new(
+  int get_tablet_and_address(
       const ObTabletMapKey &key,
       ObTabletHandle &old_tablet,
       ObMetaDiskAddr &old_tablet_addr,
+      ObTimeGuard &time_guard);
+  int acquire_new_tablet(
+      const ObTabletMapKey &key,
+      const ObTabletHandle &old_tablet,
       ObTabletHandle &new_tablet,
       ObTimeGuard &time_guard);
 private:
