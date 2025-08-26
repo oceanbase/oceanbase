@@ -1167,6 +1167,7 @@ int ObCSMicroBlockTransformer::dump_cs_encoding_info(char *hex_print_buf, const 
     const uint32_t stream_cnt = all_column_header_->stream_count_;
     uint16_t col_first_stream_idx = 0;
     uint16_t col_end_stream_idx = 0;
+    int32_t decoding_ctx_offset = 0;
     for (int64_t i = 0; i < col_cnt; i++) {
       printer.print_cs_encoding_column_header(column_headers_[i], i);
       ObMicroBlockTransformDesc::Pos &meta_pos = original_desc_.column_meta_pos_arr_[i];
@@ -1181,7 +1182,6 @@ int ObCSMicroBlockTransformer::dump_cs_encoding_info(char *hex_print_buf, const 
       } else {
         col_end_stream_idx = stream_cnt;
       }
-      int32_t decoding_ctx_offset = 0;
       while (col_first_stream_idx < col_end_stream_idx) {
         if (original_desc_.is_integer_stream(col_first_stream_idx)) {
           ObIntegerStreamDecoderCtx *ctx = reinterpret_cast<ObIntegerStreamDecoderCtx *>(stream_decoding_ctx_buf_ + decoding_ctx_offset);
