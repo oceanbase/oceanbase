@@ -35,7 +35,7 @@ void fin_obdal_env();
 static constexpr int POOL_MAX_IDLE_PER_HOST = 32;         // the max idle http client count
 static constexpr int POOL_MAX_IDLE_TIME_S = 45;          // the max time of idle http client (unit s)
 static constexpr int CONNECT_TIMEOUT_S = 10;             // the max time of connect timeout (unit s)
-static constexpr int OBDAL_MALLOC_BIG_SIZE = 8 * 1024; // 8k
+static constexpr int OBDAL_MALLOC_BIG_SIZE = 512 * 1024; // 512k
 
 static constexpr int MAX_OBDAL_REGION_LENGTH = 128;
 static constexpr int MAX_OBDAL_ENDPOINT_LENGTH = 256;
