@@ -56,7 +56,7 @@ int ObExprAssign::calc_result_type2(ObExprResType &type,
     type.set_collation_type(value.get_collation_type());
   } else {
     type.set_type(val_type);
-    type.set_collation_level(common::CS_LEVEL_IMPLICIT);
+    type.set_collation_level(value.get_collation_level());
     type.set_collation_type(value.get_collation_type());
   }
   type.set_precision(value.get_precision());
