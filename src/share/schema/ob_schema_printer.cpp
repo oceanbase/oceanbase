@@ -3657,8 +3657,7 @@ int ObSchemaPrinter::add_create_tenant_variables(
   return ret;
 }
 
-int ObSchemaPrinter::print_element_type(const uint64_t tenant_id,
-                                        const uint64_t element_type_id,
+int ObSchemaPrinter::print_element_type(const uint64_t element_type_id,
                                         const ObUDTBase *elem_type_info,
                                         char* buf,
                                         const int64_t& buf_len,
@@ -3684,6 +3683,7 @@ int ObSchemaPrinter::print_element_type(const uint64_t tenant_id,
   } else {
     const ObUDTTypeInfo *udt_info = NULL;
     const ObDatabaseSchema *db_schema = NULL;
+    uint64_t tenant_id = pl::get_tenant_id_by_object_id(element_type_id);
     OZ (schema_guard_.get_udt_info(tenant_id, element_type_id, udt_info));
     if (OB_SUCC(ret) && OB_ISNULL(udt_info)) {
       ret = OB_ERR_SP_UNDECLARED_TYPE;
@@ -3739,8 +3739,7 @@ int ObSchemaPrinter::print_udt_definition(const uint64_t tenant_id,
     } else {
       OZ (databuff_printf(buf, buf_len, pos, " IS TABLE OF "));
     }
-    OZ (print_element_type(tenant_id,
-                           udt_info->get_coll_info()->get_elem_type_id(),
+    OZ (print_element_type(udt_info->get_coll_info()->get_elem_type_id(),
                            udt_info->get_coll_info(),
                            buf, buf_len, pos));
     if (OB_SUCC(ret)
@@ -3757,8 +3756,7 @@ int ObSchemaPrinter::print_udt_definition(const uint64_t tenant_id,
         CK (OB_NOT_NULL(attr));
         OZ (databuff_printf(buf, buf_len, pos, "  \"%.*s\" ",
                             attr->get_name().length(), attr->get_name().ptr()));
-        OZ (print_element_type(tenant_id,
-                               attr->get_type_attr_id(), attr,
+        OZ (print_element_type(attr->get_type_attr_id(), attr,
                                buf, buf_len, pos));
         if (OB_SUCC(ret)) {
           if (i != udt_info->get_attributes() - 1) {
