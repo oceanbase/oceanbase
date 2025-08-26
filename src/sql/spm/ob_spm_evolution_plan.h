@@ -48,6 +48,21 @@ private:
   common::SpinRWLock &ref_lock_;
 };
 
+struct ObEvolutionRes {
+  ObEvolutionRes()  { reset();  }
+  void reset()  {
+    evolving_plan_rt_ = 0.0;
+    baseline_plan_rt_ = 0.0;
+    is_evo_plan_better_ = false;
+    consider_executing_info_ = false;
+  }
+
+  double evolving_plan_rt_;
+  double baseline_plan_rt_;
+  bool is_evo_plan_better_;
+  bool consider_executing_info_;
+};
+
 class ObEvolutionPlan
 {
 public:
@@ -124,14 +139,18 @@ private:
                         ObPhysicalPlan *&plan);
   int get_evolving_plan(ObPlanCacheCtx &ctx,
                         ObPhysicalPlan *&plan);
+  int check_is_plan_matched(const ObPhysicalPlan *plan,
+                            ObPlanCacheCtx &ctx,
+                            bool &is_matched);
   int compare_and_finalize_plan(ObPlanCacheCtx &ctx,
                                 ObPhysicalPlan *&plan);
   // Use the hash value of the plan to determine whether it is the same plan
   int is_same_plan(const ObPhysicalPlan *l_plan,
                    const ObPhysicalPlan *r_plan,
                    bool &is_same) const;
-  int is_evolving_plan_better(bool &is_better) const;
-  int process_plan_evolution_result(const bool is_better);
+  int is_evolving_plan_better(ObEvolutionRes &evo_res) const;
+  int print_evo_res(const ObEvolutionRes &evo_res);
+  void process_plan_evolution_result(const bool is_better);
   void discard_evolving_plan_add_baseline_plan_to_pc(ObPlanCacheCtx &ctx);
   void discard_baseline_plan_add_evolving_plan_to_pc(ObPlanCacheCtx &ctx);
   int discard_all_plan_by_type(EvolutionPlanType plan_type, bool evict_plan = false);
@@ -140,9 +159,6 @@ private:
   void reset_evolution_plan_info();
   int choose_plan_for_online_evolution(bool &use_baseline_plan);
   int choose_plan_for_online_evolution_compat(bool &use_baseline_plan);
-  int get_final_plan_and_discard_other_plan(const bool need_evolving_plan,
-                                            ObPlanCacheCtx &ctx,
-                                            ObPhysicalPlan *&plan);
   int64_t get_plan_finish_cnt();
   inline bool is_verifying_plan() const { return baseline_plans_.empty();  }
   int init_evolution_records();
