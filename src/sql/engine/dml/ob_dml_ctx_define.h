@@ -974,6 +974,11 @@ public:
     : ins_ctdef_(NULL),
       upd_ctdef_(NULL),
       is_upd_rowkey_(false),
+      do_opt_path_(false),
+      do_index_lookup_(false),
+      unique_key_conv_exprs_(alloc),
+      unique_index_rowkey_exprs_(alloc),
+      das_index_scan_ctdef_(NULL),
       alloc_(alloc)
   { }
   TO_STRING_KV(KPC_(ins_ctdef),
@@ -982,6 +987,13 @@ public:
   ObInsCtDef *ins_ctdef_;
   ObUpdCtDef *upd_ctdef_;
   bool is_upd_rowkey_;
+
+  /* for opt path */
+  bool do_opt_path_;                     // is do opt path
+  bool do_index_lookup_;                 // is do index lookup
+  ExprFixedArray unique_key_conv_exprs_;      // index unique conv exprs
+  ExprFixedArray unique_index_rowkey_exprs_;  // index unique rowkey exprs
+  ObDASScanCtDef *das_index_scan_ctdef_; // scan the unique index table
   common::ObIAllocator &alloc_;
 };
 
