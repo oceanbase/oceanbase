@@ -114,6 +114,15 @@ int ObTenantVectorAllocator::init()
   return ret;
 }
 
+void ObTenantVectorAllocator::destroy()
+{
+  is_inited_ = false;
+  if (memory_context_ != nullptr) {
+    DESTROY_CONTEXT(memory_context_);
+    memory_context_ = nullptr;
+  }
+}
+
 int64_t ObTenantVectorAllocator::hold()
 {
   return lib::get_tenant_memory_hold(MTL_ID(), ObCtxIds::VECTOR_CTX_ID) + get_rb_mem_used();
