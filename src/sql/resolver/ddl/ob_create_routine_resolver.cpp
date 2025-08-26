@@ -204,7 +204,7 @@ int ObCreateRoutineResolver::resolve_sp_name(const ParseNode *parse_node,
       LOG_WARN("failed to resolve sp name", K(ret));
     } else if (OB_FAIL(proc_info.set_routine_name(sp_name))) {
       LOG_WARN("failed to set routine name", K(sp_name), K(ret));
-    } else {
+    } else if (crt_routine_arg->db_name_.empty()) {
       crt_routine_arg->db_name_ = db_name;
     }
   }
