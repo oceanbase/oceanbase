@@ -1222,7 +1222,7 @@ int ObVariableSetExecutor::switch_to_session_variable(const ObExprCtx &expr_ctx,
     sess_var.value_ = value;
     sess_var.meta_.set_type(value.get_type());
     sess_var.meta_.set_scale(value.get_scale());
-    sess_var.meta_.set_collation_level(CS_LEVEL_IMPLICIT);
+    sess_var.meta_.set_collation_level(value.get_collation_level());
     sess_var.meta_.set_collation_type(value.get_collation_type());
   }
   return ret;
@@ -1243,7 +1243,7 @@ int ObVariableSetExecutor::switch_to_session_variable(const ObObj &value,
     sess_var.value_ = value;
     sess_var.meta_.set_type(value.get_type());
     sess_var.meta_.set_scale(value.get_scale());
-    sess_var.meta_.set_collation_level(CS_LEVEL_IMPLICIT);
+    sess_var.meta_.set_collation_level(value.get_collation_level());
     sess_var.meta_.set_collation_type(value.get_collation_type());
   }
   return ret;
