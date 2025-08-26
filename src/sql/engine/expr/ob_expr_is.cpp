@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include <math.h>
 #include "sql/engine/expr/ob_expr_is.h"
+#include "ob_expr_json_func_helper.h"
 #include "share/object/ob_obj_cast.h"
 //#include "sql/engine/expr/ob_expr_promotion_util.h"
 #include "objit/common/ob_item_type.h"
@@ -65,6 +66,9 @@ int ObExprIsBase::calc_result_type2(ObExprResType &type,
         type1.set_calc_accuracy(type1.get_accuracy());
     } else if (!const_param2->get_value().is_null()) {  // is true/false
       if (ob_is_numeric_type(type1.get_type())) {
+        type1.set_calc_meta(type1.get_obj_meta());
+        type1.set_calc_accuracy(type1.get_accuracy());
+      } else if (ob_is_json(type1.get_type())) {
         type1.set_calc_meta(type1.get_obj_meta());
         type1.set_calc_accuracy(type1.get_accuracy());
       } else {
@@ -208,6 +212,10 @@ int ObExprIsBase::cg_result_type_class(ObObjType type, ObExpr::EvalFunc &eval_fu
     case ObUDoubleType: {
         EVAL_FUNC(double);
         break;
+    }
+    case ObJsonType: {
+      EVAL_FUNC(json);
+      break;
     }
     case ObMaxType: {
         ret = OB_ERR_UNEXPECTED;
@@ -472,6 +480,9 @@ int ObExprInnerIsTrue::calc_result_type2(ObExprResType &type,
     if (ob_is_numeric_type(type1.get_type())) {
       type1.set_calc_meta(type1.get_obj_meta());
       type1.set_calc_accuracy(type1.get_accuracy());
+    } else if (ob_is_json(type1.get_type())) {
+      type1.set_calc_meta(type1.get_obj_meta());
+      type1.set_calc_accuracy(type1.get_accuracy());
     } else {
       type1.set_calc_type(ObNumberType);
       const ObAccuracy &calc_acc = ObAccuracy::DDL_DEFAULT_ACCURACY2[0][ObNumberType];
@@ -531,6 +542,11 @@ int ObExprInnerIsTrue::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr
                                         : ObExprInnerIsTrue::double_is_true_end;
           break;
       }
+      case ObJsonType: {
+        rt_expr.eval_func_ = is_start ? ObExprInnerIsTrue::json_is_true_start
+                                        : ObExprInnerIsTrue::json_is_true_end;
+        break;
+      }
       case ObMaxType: {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("is expr got unexpected type param", K(ret), K(param1_type));
@@ -557,47 +573,75 @@ int ObExprIsBase::is_zero<number::ObCompactNumber>(number::ObCompactNumber numbe
   return number.is_zero();
 }
 
+template <>
+int ObExprIsBase::is_zero<common::ObString>(common::ObString string)
+{
+  return string.length() == 0;
+}
+
 #define NUMERIC_CALC_FUNC(type, func_name, bool_is_not, is_true, str_is_not)                \
   int func_name::type##_##str_is_not##_##is_true(const ObExpr &expr, ObEvalCtx &ctx,        \
                                                 ObDatum &expr_datum)                    \
-  {                                                           \
-    int ret = OB_SUCCESS;                                     \
-    ObDatum *param1 = NULL;                                   \
-    bool ret_bool = false;                                    \
-    if (OB_FAIL(expr.args_[0]->eval(ctx, param1))) {          \
-      LOG_WARN("eval first param failed", K(ret));            \
-    } else if (param1->is_null()) {                           \
-      ret_bool = bool_is_not;                                 \
-    } else {                                                  \
-      ret_bool = bool_is_not == is_true ?                     \
-                is_zero(param1->get_##type()) :               \
-                !is_zero(param1->get_##type());               \
-    }                                                         \
-    if (OB_SUCC(ret)) {                                       \
-      expr_datum.set_int32(static_cast<int32_t>(ret_bool));   \
-    }                                                         \
-    return ret;                                               \
+  {                                                                             \
+    int ret = OB_SUCCESS;                                                       \
+    ObDatum *param1 = NULL;                                                     \
+    bool ret_bool = false;                                                      \
+    if (OB_FAIL(expr.args_[0]->eval(ctx, param1))) {                            \
+      LOG_WARN("eval first param failed", K(ret));                              \
+    } else if (param1->is_null()) {                                             \
+      ret_bool = bool_is_not;                                                   \
+    } else if (ob_is_json(expr.args_[0]->datum_meta_.type_)) {                  \
+      ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);                               \
+      common::ObIAllocator &allocator = tmp_alloc_g.get_allocator();            \
+      common::ObString j_str;                                                   \
+      int cmp_result = 0;                                                       \
+      ObIJsonBase *j_base = nullptr;                                            \
+      if (OB_FAIL(ObTextStringHelper::read_real_string_data(allocator, *param1, \
+        expr.args_[0]->datum_meta_, expr.args_[0]->obj_meta_.has_lob_header(), j_str))) {           \
+        LOG_WARN("fail to get real data.", K(ret), K(j_str));                   \
+      } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&allocator, j_str,    \
+        ObJsonInType::JSON_BIN, ObJsonInType::JSON_BIN, j_base))) {             \
+        LOG_WARN("fail to get json base", K(ret));                              \
+        ret = OB_ERR_INVALID_JSON_TEXT;                                         \
+      } else if (OB_FAIL(ObJsonExprHelper::is_json_true(j_str, cmp_result))) {  \
+        LOG_WARN("failed: compare json", K(ret));                               \
+      } else {                                                                  \
+        ret_bool = cmp_result && bool_is_not != is_true;                    \
+      }                                                                         \
+    } else {                                                                    \
+      ret_bool = bool_is_not == is_true ?                                       \
+                is_zero(param1->get_##type()) :                                 \
+                !is_zero(param1->get_##type());                                 \
+    }                                                                           \
+    if (OB_SUCC(ret)) {                                                         \
+      expr_datum.set_int32(static_cast<int32_t>(ret_bool));                     \
+    }                                                                           \
+    return ret;                                                                 \
   }
 
 NUMERIC_CALC_FUNC(int, ObExprIsNot, true, true, is_not)
 NUMERIC_CALC_FUNC(float, ObExprIsNot, true, true, is_not)
 NUMERIC_CALC_FUNC(double, ObExprIsNot, true, true, is_not)
 NUMERIC_CALC_FUNC(number, ObExprIsNot, true, true, is_not)
+NUMERIC_CALC_FUNC(json, ObExprIsNot, true, true, is_not)
 
 NUMERIC_CALC_FUNC(int, ObExprIsNot, true, false, is_not)
 NUMERIC_CALC_FUNC(float, ObExprIsNot, true, false, is_not)
 NUMERIC_CALC_FUNC(double, ObExprIsNot, true, false, is_not)
 NUMERIC_CALC_FUNC(number, ObExprIsNot, true, false, is_not)
+NUMERIC_CALC_FUNC(json, ObExprIsNot, true, false, is_not)
 
 NUMERIC_CALC_FUNC(int, ObExprIs, false, true, is)
 NUMERIC_CALC_FUNC(float, ObExprIs, false, true, is)
 NUMERIC_CALC_FUNC(double, ObExprIs, false, true, is)
 NUMERIC_CALC_FUNC(number, ObExprIs, false, true, is)
+NUMERIC_CALC_FUNC(json, ObExprIs, false, true, is)
 
 NUMERIC_CALC_FUNC(int, ObExprIs, false, false, is)
 NUMERIC_CALC_FUNC(float, ObExprIs, false, false, is)
 NUMERIC_CALC_FUNC(double, ObExprIs, false, false, is)
 NUMERIC_CALC_FUNC(number, ObExprIs, false, false, is)
+NUMERIC_CALC_FUNC(json, ObExprIs, false, false, is)
 
 #define INNER_NUMERIC_CALC_FUNC(type, is_start, str_pos)                          \
   int ObExprInnerIsTrue::type##_##is_true##_##str_pos(const ObExpr &expr, ObEvalCtx &ctx,     \
@@ -611,6 +655,24 @@ NUMERIC_CALC_FUNC(number, ObExprIs, false, false, is)
       LOG_WARN("eval first param failed", K(ret));                                \
     } else if (param1->is_null()) {                                               \
       ret_bool = false;                                                           \
+    } else if (ob_is_json(expr.args_[0]->datum_meta_.type_)) {                    \
+      ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);                                 \
+      common::ObIAllocator &allocator = tmp_alloc_g.get_allocator();              \
+      ObString j_str;                                                             \
+      int cmp_result = 0;                                                         \
+      ObIJsonBase *j_base = nullptr;                                              \
+      if (OB_FAIL(ObTextStringHelper::read_real_string_data(allocator, *param1,   \
+        expr.args_[0]->datum_meta_, expr.args_[0]->obj_meta_.has_lob_header(), j_str))) {             \
+        LOG_WARN("fail to get real data.", K(ret), K(j_str));                     \
+      } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&allocator, j_str,      \
+        ObJsonInType::JSON_BIN, ObJsonInType::JSON_BIN, j_base))) {               \
+        LOG_WARN("fail to get json base", K(ret));                                \
+        ret = OB_ERR_INVALID_JSON_TEXT;                                           \
+      } else if (OB_FAIL(ObJsonExprHelper::is_json_true(j_str, cmp_result))) {    \
+        LOG_WARN("failed: compare json", K(ret));                                 \
+      } else {                                                                    \
+        ret_bool = cmp_result > 0;                                                \
+      }                                                                           \
     } else {                                                                      \
       ret_bool = !is_zero(param1->get_##type());                                  \
     }                                                                             \
@@ -635,11 +697,13 @@ INNER_NUMERIC_CALC_FUNC(int, true, start)
 INNER_NUMERIC_CALC_FUNC(float, true, start)
 INNER_NUMERIC_CALC_FUNC(double, true, start)
 INNER_NUMERIC_CALC_FUNC(number, true, start)
+INNER_NUMERIC_CALC_FUNC(json, true, start)
 
 INNER_NUMERIC_CALC_FUNC(int, false, end)
 INNER_NUMERIC_CALC_FUNC(float, false, end)
 INNER_NUMERIC_CALC_FUNC(double, false, end)
 INNER_NUMERIC_CALC_FUNC(number, false, end)
+INNER_NUMERIC_CALC_FUNC(json, false, end)
 
 }
 }

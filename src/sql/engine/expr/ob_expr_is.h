@@ -72,6 +72,8 @@ class ObExprIs: public ObExprIsBase
   static int calc_is_null(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
   static int int_is_true(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
   static int int_is_false(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int json_is_true(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int json_is_false(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
   static int float_is_true(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
   static int float_is_false(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
   static int double_is_true(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
@@ -104,6 +106,8 @@ public:
   static int calc_is_not_null(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
   static int int_is_not_true(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
   static int int_is_not_false(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int json_is_not_true(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int json_is_not_false(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
   static int float_is_not_true(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
   static int float_is_not_false(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
   static int double_is_not_true(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
@@ -153,6 +157,8 @@ class ObExprInnerIsTrue: public ObExprIsBase
 
   static int int_is_true_start(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
   static int int_is_true_end(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int json_is_true_start(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int json_is_true_end(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
   static int float_is_true_start(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
   static int float_is_true_end(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
   static int double_is_true_start(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);

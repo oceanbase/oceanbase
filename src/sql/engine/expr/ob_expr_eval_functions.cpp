@@ -1132,8 +1132,8 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprInnerTableSequenceGetter::eval_inner_table_sequence_getter,   /* 672 */
   ObExprDecodeTraceId::calc_decode_trace_id_expr,                     /* 673 */
   NULL, //ObExprInnerRowCmpVal::eval_inner_row_cmp_val,               /* 674 */
-  NULL, //ObExprIs::json_is_true,                                     /* 675 */
-  NULL, //ObExprIs::json_is_false,                                    /* 676 */
+  ObExprIs::json_is_true,                                             /* 675 */
+  ObExprIs::json_is_false,                                            /* 676 */
   ObExprCurrentRole::eval_current_role,                               /* 677 */
   NULL, //ObExprMod::mod_decimalint,                                  /* 678 */
   ObExprPrivSTGeoHash::eval_priv_st_geohash,                          /* 679 */

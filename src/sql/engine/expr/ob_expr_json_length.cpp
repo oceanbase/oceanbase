@@ -104,13 +104,15 @@ int ObExprJsonLength::calc(ObEvalCtx &ctx, const ObDatum &data1, ObDatumMeta met
         ObJsonPath *j_path = NULL;
         if (OB_FAIL(ObTextStringHelper::read_real_string_data(*allocator, *data2, meta2, has_lob_header2, j_path_text))) {
           LOG_WARN("fail to get real data.", K(ret), K(j_path_text));
-        } else if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(path_cache, j_path, j_path_text, 1, false))) {
+        } else if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(path_cache, j_path, j_path_text, 1, true))) {
           LOG_USER_ERROR(OB_ERR_INVALID_JSON_PATH);
           LOG_WARN("fail to parse json path", K(ret), K(type2), K(j_path_text));
-        } else if (OB_FAIL(j_base->seek(*j_path, j_path->path_node_cnt(), true, true, hit))) {
+        } else if (OB_FAIL(j_base->seek(*j_path, j_path->path_node_cnt(), true, false, hit))) {
           LOG_WARN("fail to seek json node", K(ret), K(j_path_text));
-        } else if (hit.size() != 1) { // not found node by path, display "NULL"
+        } else if (hit.size() == 0) { // not found node by path, display "NULL"
           is_null = true;
+        } else if (hit.size() > 1) {
+          res_len = hit.size();
         } else {
           res_len = hit[0]->member_count();
         }

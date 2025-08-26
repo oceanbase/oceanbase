@@ -1521,6 +1521,10 @@ int ObJsonBin::deserialize_json_value(ObJsonNode *&json_tree)
       break;
     }
   }
+
+  if (OB_SUCC(ret) && OB_NOT_NULL(json_tree)) {
+    json_tree->set_allocator(allocator_);
+  }
   return ret;
 }
 

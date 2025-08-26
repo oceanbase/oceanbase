@@ -53,14 +53,18 @@ int ObExprJsonRemove::calc_result_typeN(ObExprResType& type,
   return ret;
 }
 
-static int remove_from_json(ObJsonPath *path_node, ObIJsonBase *parent)
+static int remove_from_json(ObJsonPath *path_node, ObIJsonBase *child)
 {
   INIT_SUCC(ret);
   // remove item in hits
   ObJsonPathBasicNode* last_node = path_node->last_path_node();
   // get node to be removed
-  ObJsonNodeType type = parent->json_type();
-  if (type == ObJsonNodeType::J_OBJECT && last_node->get_node_type() == JPN_MEMBER) {
+  ObJsonNodeType type;
+  ObIJsonBase* parent = nullptr;
+  if (OB_FAIL(child->get_parent(parent)) || OB_ISNULL(parent)) {
+    ret = OB_SUCCESS;
+  } else if (FALSE_IT(type = parent->json_type())) {
+  } else if (type == ObJsonNodeType::J_OBJECT && last_node->get_node_type() == JPN_MEMBER) {
     ObPathMember member = last_node->get_object();
     ObString key(member.len_, member.object_name_);
     if (OB_FAIL(parent->object_remove(key))) {
@@ -120,7 +124,7 @@ int ObExprJsonRemove::eval_json_remove(const ObExpr &expr, ObEvalCtx &ctx, ObDat
       } else if (json_path->path_node_cnt() == 0) {
         ret = OB_ERR_JSON_VACUOUS_PATH;
         LOG_USER_ERROR(OB_ERR_JSON_VACUOUS_PATH); 
-      } else if (OB_FAIL(json_doc->seek(*json_path, json_path->path_node_cnt() - 1, true, false, hits))) {
+      } else if (OB_FAIL(json_doc->seek(*json_path, json_path->path_node_cnt(), true, false, hits))) {
         LOG_WARN("json seek failed", K(path_data->get_string()), K(ret));
       } else if (hits.size() == 0){
         continue;

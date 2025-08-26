@@ -1326,6 +1326,37 @@ int ObJsonExprHelper::is_json_zero(const ObString& data, int& result)
   return ret;
 }
 
+int ObJsonExprHelper::is_json_true(const ObString& data, int& result)
+{
+  INIT_SUCC(ret);
+  int tmp_result = 0;
+  ObJsonBinCtx ctx;
+  ObJsonBin j_bin(data.ptr(), data.length(), &ctx);
+  if (data.length() == 0) {
+    result = 0;
+  } else if (OB_FAIL(j_bin.reset_iter())) {
+    LOG_WARN("failed: reset iter", K(ret));
+  } else if ((j_bin.json_type() == ObJsonNodeType::J_OBJECT ||
+             j_bin.json_type() == ObJsonNodeType::J_ARRAY ||
+             j_bin.json_type() == ObJsonNodeType::J_STRING ||
+             j_bin.json_type() == ObJsonNodeType::J_NULL ||
+             j_bin.json_type() == ObJsonNodeType::J_BOOLEAN)) {
+    result = 1;
+  } else if ((j_bin.json_type() == ObJsonNodeType::J_INT || j_bin.json_type() == ObJsonNodeType::J_UINT)
+             && OB_FAIL(ObJsonBaseUtil::compare_int_json(0, &j_bin, tmp_result))) {
+    LOG_WARN("failed: cmp json", K(ret));
+  } else if ((j_bin.json_type() == ObJsonNodeType::J_DECIMAL)
+             && OB_FAIL(ObJsonBaseUtil::compare_decimal_uint(j_bin.get_decimal_data(), 0, tmp_result))) {
+    LOG_WARN("failed: cmp json", K(ret));
+  } else if ((j_bin.json_type() == ObJsonNodeType::J_DOUBLE)
+             && OB_FAIL(ObJsonBaseUtil::compare_double_int(j_bin.get_double(), 0, tmp_result))) {
+    LOG_WARN("failed: cmp json", K(ret));
+  } else {
+    result = (tmp_result == 0) ? 0 : 1;
+  }
+  return ret;
+}
+
 template <typename T>
 int ObJsonExprHelper::transform_scalar_2jsonBase(const T &datum,
                                                  ObObjType type,
@@ -1458,10 +1489,17 @@ int ObJsonExprHelper::transform_scalar_2jsonBase(const T &datum,
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("session is NULL", K(ret));
           } else {
-            const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(session);
-            if (OB_FAIL(get_otimestamp_from_datum(datum, in_val, type))) {
+            if (datum.is_null()) {
+              void* buffer = allocator->alloc(sizeof(ObJsonNull));
+              if (OB_ISNULL(buffer)) {
+                ret = OB_ALLOCATE_MEMORY_FAILED;
+                LOG_WARN("fail to allocate json null.", K(ret));
+              } else {
+                json_node = (ObJsonNull*)new(buffer)ObJsonNull();
+              }
+            } else if (OB_FAIL(get_otimestamp_from_datum(datum, in_val, type))) {
               LOG_WARN("get otimestamp fail", K(ret));
-            } else if (OB_SUCC(ret) && OB_FAIL(ObTimeConverter::otimestamp_to_ob_time(type, in_val, NULL, ob_time))) {
+            } else if (OB_FAIL(ObTimeConverter::otimestamp_to_ob_time(type, in_val, NULL, ob_time))) {
               LOG_WARN("fail to convert otimestamp to ob_time", K(ret), K(in_val));
             }
           }
@@ -1603,40 +1641,6 @@ int ObJsonExprHelper::transform_scalar_2jsonBase(const T &datum,
 
   return ret;
 }
-
-#define PRINT_OB_DATETIME(ob_time, value, j_buf) \
-  const int64_t tmp_buf_len = DATETIME_MAX_LENGTH + 1; \
-  char tmp_buf[tmp_buf_len] = {0}; \
-  int64_t pos = 0; \
-  const int16_t print_scale = 6; \
-  if (OB_FAIL(j_buf.append("\""))) { \
-    LOG_WARN("fail to append \"", K(ret)); \
-  } else if (OB_FAIL(ObTimeConverter::datetime_to_ob_time(value, tz_info, ob_time))) { \
-  } else if (OB_FAIL(ObTimeConverter::ob_time_to_str(ob_time, ob_time.mode_, print_scale,  \
-                                                      tmp_buf, tmp_buf_len, pos, true))) { \
-    LOG_WARN("fail to change time to string", K(ret), K(ob_time), K(pos)); \
-  } else if (OB_FAIL(j_buf.append(tmp_buf))) { \
-    LOG_WARN("fail to append date_buf to j_buf", K(ret), KCSTRING(tmp_buf)); \
-  } else if (OB_FAIL(j_buf.append("\""))) { \
-    LOG_WARN("fail to append \"", K(ret)); \
-  }
-
-#define PRINT_OB_TIME(ob_time, value, TO_OB_TIME_METHOD, j_buf) \
-  const int64_t tmp_buf_len = DATETIME_MAX_LENGTH + 1; \
-  char tmp_buf[tmp_buf_len] = {0}; \
-  int64_t pos = 0; \
-  const int16_t print_scale = 6; \
-  if (OB_FAIL(j_buf.append("\""))) { \
-    LOG_WARN("fail to append \"", K(ret)); \
-  } else if (OB_FAIL(ObTimeConverter::TO_OB_TIME_METHOD(value, ob_time))) { \
-  } else if (OB_FAIL(ObTimeConverter::ob_time_to_str(ob_time, ob_time.mode_, print_scale,  \
-                                                      tmp_buf, tmp_buf_len, pos, true))) { \
-    LOG_WARN("fail to change time to string", K(ret), K(ob_time), K(pos)); \
-  } else if (OB_FAIL(j_buf.append(tmp_buf))) { \
-    LOG_WARN("fail to append date_buf to j_buf", K(ret), KCSTRING(tmp_buf)); \
-  } else if (OB_FAIL(j_buf.append("\""))) { \
-    LOG_WARN("fail to append \"", K(ret)); \
-  }
 
 struct ObFindDoubleEscapeFunc {
   ObFindDoubleEscapeFunc() {}

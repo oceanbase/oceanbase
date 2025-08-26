@@ -619,11 +619,12 @@ int ObMultiModeDMLResolver::multimode_table_resolve_regular_column(const ParseNo
                    && OB_FAIL(xml_check_xpath(col_def, data_type, json_table_infos, dml_resolver->allocator_))) {
           LOG_WARN("fail to check xpath in xmltype column", K(ret));
         } else if (OB_FAIL(multimode_table_generate_column_item(table_item,
-                                                                  data_type,
-                                                                  col_def->col_base_info_.col_name_,
-                                                                  jt_dml_ctx.cur_column_id_,
-                                                                  col_item,
-                                                                  dml_resolver))) {
+                                                                data_type,
+                                                                *return_type,
+                                                                col_def->col_base_info_.col_name_,
+                                                                jt_dml_ctx.cur_column_id_,
+                                                                col_item,
+                                                                dml_resolver))) {
           LOG_WARN("failed to generate json column.", K(ret));
         } else {
           col_def->col_base_info_.parent_id_ = parent;
@@ -937,6 +938,7 @@ int ObMultiModeDMLResolver::multimode_table_resolve_column_type(const ParseNode 
 
 int ObMultiModeDMLResolver::multimode_table_generate_column_item(TableItem *table_item,
                                                                 const ObDataType &data_type,
+                                                                const ParseNode &data_type_node,
                                                                 const ObString &column_name,
                                                                 int64_t column_id,
                                                                 ColumnItem *&col_item,
@@ -981,6 +983,14 @@ int ObMultiModeDMLResolver::multimode_table_generate_column_item(TableItem *tabl
     OZ (col_expr->extract_info());
     OZ (stmt->add_column_item(column_item));
     OX (col_item = stmt->get_column_item(stmt->get_column_size() - 1));
+    if (ob_is_enumset_tc(data_type.get_obj_type())) {
+      ObArray<ObString> type_info_array;
+      if (OB_FAIL(ObResolverUtils::resolve_extended_type_info(*(data_type_node.children_[3]), type_info_array))) {
+        LOG_WARN("fail to resolve extended type info", K(ret));
+      } else if (col_expr->set_enum_set_values(type_info_array)) {
+        LOG_WARN("fail to set enum string info", K(ret));
+      }
+    }
   }
   return ret;
 }

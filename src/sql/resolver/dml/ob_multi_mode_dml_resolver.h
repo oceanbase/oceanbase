@@ -68,6 +68,7 @@ public:
                                                 ObSQLSessionInfo *session_info);
   static int multimode_table_generate_column_item(TableItem *table_item,
                                                   const ObDataType &data_type,
+                                                  const ParseNode &data_type_node,
                                                   const ObString &column_name,
                                                   int64_t column_id,
                                                   ColumnItem *&col_item,

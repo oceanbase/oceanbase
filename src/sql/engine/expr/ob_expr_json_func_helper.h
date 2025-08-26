@@ -303,6 +303,8 @@ public:
   static ObJsonSchemaCache* get_schema_cache_ctx(const uint64_t& id, ObExecContext *exec_ctx);
 
   static int is_json_zero(const ObString& data, int& result);
+
+  static int is_json_true(const ObString& data, int& result);
   
   /*
   try to transfrom scalar data to jsonBase

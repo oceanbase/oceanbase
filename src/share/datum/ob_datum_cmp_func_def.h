@@ -349,6 +349,14 @@ struct ObDatumJsonCmp : public ObDefined<>
       COMMON_LOG(WARN, "Lob: init right lob str iter failed", K(ret), K(ret), K(r));
     } else if (OB_FAIL(r_instr_iter.get_full_data(r_data))) {
       COMMON_LOG(WARN, "Lob: get right lob str iter full data failed ", K(ret), K(r_instr_iter));
+    } else if (r_data.empty() || l_data.empty()) {
+      if (l_data.empty() && r_data.empty()) {
+        cmp_ret = 0;
+      } else if (l_data.empty()) {
+        cmp_ret = -1;
+      } else {
+        cmp_ret = 1;
+      }
     } else {
       ObJsonBin j_bin_l(l_data.ptr(), l_data.length(), &allocator);
       ObJsonBin j_bin_r(r_data.ptr(), r_data.length(), &allocator);
@@ -356,9 +364,9 @@ struct ObDatumJsonCmp : public ObDefined<>
       ObIJsonBase *j_base_r = &j_bin_r;
 
       if (OB_FAIL(j_bin_l.reset_iter())) {
-        COMMON_LOG(WARN, "fail to reset left json bin iter", K(ret), K(l.len_));
+        COMMON_LOG(WARN, "fail to reset left json bin iter", K(ret), K(l_data));
       } else if (OB_FAIL(j_bin_r.reset_iter())) {
-        COMMON_LOG(WARN, "fail to reset right json bin iter", K(ret), K(r.len_));
+        COMMON_LOG(WARN, "fail to reset right json bin iter", K(ret), K(r_data));
       } else if (OB_FAIL(j_base_l->compare(*j_base_r, cmp_ret))) {
         COMMON_LOG(WARN, "fail to compare json", K(ret), K(*j_base_l), K(*j_base_r));
       }
