@@ -4979,7 +4979,13 @@ int ObQueryRange::and_single_gt_head_graphs(
           } else { // normal case
             // 1. do and of the first general item
             // no always true or always false key part reached here
-            if (l_cur_gt->is_in_key() && r_cur_gt->is_in_key()) {
+            if (l_cur_gt->is_phy_rowid_key_part_ != r_cur_gt->is_phy_rowid_key_part_) {
+              if (l_cur_gt->is_phy_rowid_key_part_) {
+                tmp_result = l_cur_gt;
+              } else if (r_cur_gt->is_phy_rowid_key_part_) {
+                tmp_result = r_cur_gt;
+              }
+            } else if (l_cur_gt->is_in_key() && r_cur_gt->is_in_key()) {
               ObSEArray<int64_t, 4> common_offsets;
               if (OB_FAIL(ObOptimizerUtil::intersect(l_cur_gt->in_keypart_->offsets_,
                                                      r_cur_gt->in_keypart_->offsets_,
@@ -5019,12 +5025,6 @@ int ObQueryRange::and_single_gt_head_graphs(
               } else {
                 tmp_result = r_cur_gt;
                 l_and_next = l_cur_gt;
-              }
-            } else if (l_cur_gt->is_phy_rowid_key_part_ != r_cur_gt->is_phy_rowid_key_part_) {
-              if (l_cur_gt->is_phy_rowid_key_part_) {
-                tmp_result = l_cur_gt;
-              } else if (r_cur_gt->is_phy_rowid_key_part_) {
-                tmp_result = r_cur_gt;
               }
             } else if (l_cur_gt->pos_.offset_ < r_cur_gt->pos_.offset_) {
               tmp_result = l_cur_gt;
