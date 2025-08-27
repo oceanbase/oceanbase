@@ -482,7 +482,6 @@ int ObAggregatedStoreVec::fill_rows(
     if (OB_ISNULL(reader)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected null reader", K(ret), K(reader));
-    } else if (FALSE_IT(reader->reserve_reader_memory(false))) {
     } else if (OB_FAIL(reader->get_row_count(micro_row_count))) {
       LOG_WARN("Failed to get micro row count", K(ret));
     } else if (!need_access_data_) {
@@ -505,8 +504,12 @@ int ObAggregatedStoreVec::fill_rows(
                                                        !filter_is_null()))) {
       LOG_WARN("Failed to project rows in aggregate pushdown", K(ret), K(begin_index), K(end_index), K(res));
     }
-    if (OB_SUCC(ret) && OB_FAIL(do_aggregate(reader, need_access_data_))) {
-      LOG_WARN("Failed to aggregate rows", K(ret), KP(reader));
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(do_aggregate(reader, need_access_data_))) {
+        LOG_WARN("Failed to aggregate rows", K(ret), KP(reader));
+      } else {
+        reader->reserve_reader_memory(false);
+      }
     }
   }
   return ret;
