@@ -86,6 +86,7 @@
 #include "pl/sys_package/ob_dbms_java.h"
 #include "pl/sys_package/ob_dbms_xprofile.h"
 #include "pl/sys_package/ob_dbms_data_dict.h"
+#include "pl/sys_package/ob_dbms_python.h"
 
 #ifdef INTERFACE_DEF
   INTERFACE_DEF(INTERFACE_START, "TEST", (ObPLInterfaceImpl::call))
@@ -912,6 +913,11 @@
   INTERFACE_DEF(INTERFACE_DBMS_DATA_DICT_MODIFY_DICT_ITEM_RETENTION, "DBMS_DATA_DICT_MODIFY_RETENTION", (ObDBMSDataDict::modify_retention))
 
   // end of dbms_data_dict
+
+  // start of dbms_python
+  INTERFACE_DEF(INTERFACE_DBMS_PYTHON_LOADPYTHON_MYSQL, "DBMS_PYTHON_LOADPYTHON_MYSQL", (ObDBMSPython::loadpython_mysql))
+  INTERFACE_DEF(INTERFACE_DBMS_PYTHON_DROPPYTHON_MYSQL, "DBMS_PYTHON_DROPPYTHON_MYSQL", (ObDBMSPython::droppython_mysql))
+  // end of dbms_python
 
   INTERFACE_DEF(INTERFACE_END, "INVALID", (nullptr))
 #endif

@@ -43387,7 +43387,9 @@ def_table_schema(
           RESOURCE_ID,
           DATABASE_ID,
           NAME,
-          CASE TYPE WHEN 1 THEN 'JAVA_JAR' ELSE 'INVALID_TYPE' END AS TYPE,
+          CASE TYPE WHEN 1 THEN 'JAVA_JAR'
+                    WHEN 2 THEN 'PYTHON_PY'
+                    ELSE 'INVALID_TYPE' END AS TYPE,
           CONTENT,
           COMMENT
         FROM oceanbase.__all_virtual_external_resource

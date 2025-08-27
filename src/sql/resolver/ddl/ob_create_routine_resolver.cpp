@@ -1247,8 +1247,6 @@ int ObCreateRoutineResolver::resolve_external_udf(const ParseNode &parse_tree,
   constexpr int64_t PROPERTY_IDX = 6;
 
   int64_t tenant_id = MTL_ID();
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-  uint64_t data_version = 0;
 
   uint64_t database_id = OB_INVALID_ID;
   const share::schema::ObDatabaseSchema *database_schema = nullptr;
@@ -1263,17 +1261,6 @@ int ObCreateRoutineResolver::resolve_external_udf(const ParseNode &parse_tree,
 
   if (OB_FAIL(ret)) {
     // do nothing
-  } else if (!tenant_config.is_valid()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected invalid tenant_config", K(ret), K(tenant_id));
-  } else if (!tenant_config->ob_enable_java_udf) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("ob_enable_java_udf is not enabled", K(ret));
-  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
-    LOG_WARN("failed to GET_MIN_DATA_VERSION", K(ret), K(tenant_id));
-  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_0_0 || data_version < DATA_VERSION_4_4_0_0) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("Java UDF is only supported after 4.4.0", K(ret));
   } else if (OB_FAIL(resolve_sp_definer(parse_tree.children_[DEFINER_IDX],
                                         crt_routine_arg.routine_info_))) {
     LOG_WARN("failed to resolve sp definer",K(ret), K(crt_routine_arg));
@@ -1336,10 +1323,12 @@ int ObCreateRoutineResolver::resolve_external_udf(const ParseNode &parse_tree,
       const ObString file_key = "file";
 
       const ObString odps_jar_type = "OdpsJar";
+      const ObString py_type = "Python";
 
       ObString entry_name;
       ObString udf_type;
       ObString file;
+      bool is_py = false;
 
       CK (T_UDF_PROPERTY_LIST == property_node->type_);
 
@@ -1371,21 +1360,27 @@ int ObCreateRoutineResolver::resolve_external_udf(const ParseNode &parse_tree,
       } else if (entry_name.empty() || udf_type.empty() || file.empty()) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid argument to create external UDF", K(ret), K(entry_name), K(udf_type), K(file));
+      } else if (OB_FAIL(routine_info.set_external_routine_entry(entry_name))) {
+        LOG_WARN("failed to set external routine entry", K(ret), K(entry_name));
+      } else if (0 == udf_type.case_compare(py_type)) {
+        is_py = true;
       } else if (0 != udf_type.case_compare(odps_jar_type)) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("udf type not supported", K(ret), K(udf_type));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "udf type");
-      } else if (OB_FAIL(routine_info.set_external_routine_entry(entry_name))) {
-        LOG_WARN("failed to set external routine entry", K(ret), K(entry_name));
       }
 
       if (OB_FAIL(ret)) {
         // do nothing
+      } else if (OB_FAIL(check_external_udf_version(tenant_id, is_py))) {
+        LOG_WARN("failed to check external udf version", K(ret), K(tenant_id), K(is_py));
       } else if (file.prefix_match_ci("http://") || file.prefix_match_ci("https://") || file.prefix_match_ci("file://")) {
         if (OB_FAIL(routine_info.set_external_routine_url(file))) {
           LOG_WARN("failed to set external routine url", K(ret), K(file));
         } else {
-          routine_info.set_external_routine_type(ObExternalRoutineType::EXTERNAL_JAVA_UDF_FROM_URL);
+          routine_info.set_external_routine_type(is_py ?
+                                                 ObExternalRoutineType::EXTERNAL_PY_UDF_FROM_URL :
+                                                 ObExternalRoutineType::EXTERNAL_JAVA_UDF_FROM_URL);
         }
       } else {
         // make sure there is no "://" protocol pattern in file string, in case user uses other protocols
@@ -1403,7 +1398,9 @@ int ObCreateRoutineResolver::resolve_external_udf(const ParseNode &parse_tree,
           if (OB_FAIL(routine_info.set_external_routine_resource(file))) {
             LOG_WARN("failed to set external routine resource", K(ret), K(file));
           } else {
-            routine_info.set_external_routine_type(ObExternalRoutineType::EXTERNAL_JAVA_UDF_FROM_RES);
+            routine_info.set_external_routine_type(is_py ?
+                                                   ObExternalRoutineType::EXTERNAL_PY_UDF_FROM_RES :
+                                                   ObExternalRoutineType::EXTERNAL_JAVA_UDF_FROM_RES);
           }
         }
       }
@@ -1431,6 +1428,39 @@ int ObCreateRoutineResolver::resolve_external_udf(const ParseNode &parse_tree,
     }
   }
 
+  return ret;
+}
+
+int ObCreateRoutineResolver::check_external_udf_version(uint64_t tenant_id,
+                                                        bool is_py)
+{
+  int ret = OB_SUCCESS;
+
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  uint64_t data_version = 0;
+  uint64_t udf_data_version = is_py ? CLUSTER_VERSION_4_4_1_0 : CLUSTER_VERSION_4_4_0_0;
+  uint64_t udf_cluster_version = is_py ? DATA_VERSION_4_4_1_0 : DATA_VERSION_4_4_0_0;
+
+  if (!tenant_config.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected invalid tenant_config", K(ret), K(tenant_id));
+  } else if (is_py && !tenant_config->ob_enable_python_udf) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                   "ob_enable_python_udf is not enabled, create or drop python external resource/udf is");
+  } else if (!is_py && !tenant_config->ob_enable_java_udf) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "ob_enable_java_udf is not enabled, create or drop java external resource/udf is");
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("failed to GET_MIN_DATA_VERSION", K(ret), K(tenant_id));
+  } else if (GET_MIN_CLUSTER_VERSION() < udf_data_version || data_version < udf_cluster_version) {
+    ret = OB_NOT_SUPPORTED;
+    if (is_py) {
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "before version 4.4.1, create or drop python external resource/udf is");
+    } else {
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "before version 4.4.0, create or drop java external resource/udf is");
+    }
+  }
   return ret;
 }
 

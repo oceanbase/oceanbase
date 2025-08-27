@@ -17,6 +17,7 @@
 #include "pl/ob_pl_stmt.h"
 #include "ob_udf_result_cache.h"
 #include "pl/external_routine/ob_java_udf.h"
+#include "pl/external_routine/ob_py_udf.h"
 
 namespace oceanbase
 {
@@ -536,12 +537,25 @@ int ObExprUDF::eval_external_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &re
       ObIAllocator &result_allocator = udf_info.is_called_in_sql_ ? memory_guard.get_allocator() : ctx.exec_ctx_.get_allocator();
       ObSEArray<ObObj, 1> res_array;
 
-      pl::ObJavaUDFExecutor executor(ctx.exec_ctx_, udf_info);
+#define EXTERNAL_EXEC \
+  do {  \
+    if (OB_FAIL(executor.init())) { \
+      LOG_WARN("failed to init external udf executor", K(ret)); \
+    } else if (OB_FAIL(executor.execute(1, arg_types, args, result_allocator, res_array))) {  \
+      LOG_WARN("failed to execute udf", K(ret));  \
+    } \
+  } while (0)
 
-      if (OB_FAIL(executor.init())) {
-        LOG_WARN("failed to init java udf executor", K(ret));
-      } else if (OB_FAIL(executor.execute(1, arg_types, args, result_allocator, res_array))) {
-        LOG_WARN("failed to execute udf", K(ret));
+      if (udf_info.is_py_udf()) {
+        pl::ObPyUDFExecutor executor(ctx.exec_ctx_, udf_info);
+        EXTERNAL_EXEC;
+      } else {
+        pl::ObJavaUDFExecutor executor(ctx.exec_ctx_, udf_info);
+        EXTERNAL_EXEC;
+      }
+
+
+      if (OB_FAIL(ret)) {
       } else if (1 != res_array.count()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected res_array count", K(ret), K(res_array));
@@ -552,7 +566,7 @@ int ObExprUDF::eval_external_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &re
       }
     }
   }
-
+#undef EXTERNAL_EXEC
   return ret;
 }
 

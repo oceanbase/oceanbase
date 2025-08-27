@@ -20,6 +20,7 @@
 #include "share/schema/ob_package_info.h"
 #include "share/schema/ob_trigger_info.h"
 #include "share/table/ob_ttl_util.h"
+#include "sql/resolver/ddl/ob_create_routine_resolver.h"
 
 namespace oceanbase
 {
@@ -128,20 +129,9 @@ int ObPLDDLService::create_routine(const obrpc::ObCreateRoutineArg &arg,
       }
 
       if (OB_SUCC(ret) && ObExternalRoutineType::INTERNAL_ROUTINE != routine_info.get_external_routine_type()) {
-        omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-        uint64_t data_version = 0;
-
-        if (!tenant_config.is_valid()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected invalid tenant_config", K(ret), K(tenant_id));
-        } else if (!tenant_config->ob_enable_java_udf) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("ob_enable_java_udf is not enabled", K(ret));
-        } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
-          LOG_WARN("failed to GET_MIN_DATA_VERSION", K(ret), K(tenant_id));
-        } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_0_0 || data_version < DATA_VERSION_4_4_0_0) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("Java UDF is only supported after 4.4.0", K(ret));
+        if (OB_FAIL(ObCreateRoutineResolver::check_external_udf_version(tenant_id,
+                                                                        routine_info.is_py_external_routine()))) {
+          LOG_WARN("failed to check external udf version", K(tenant_id), K(ret));
         }
       }
 
@@ -2321,25 +2311,15 @@ int ObPLDDLService::create_external_resource(const obrpc::ObCreateExternalResour
 {
   int ret = OB_SUCCESS;
 
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(arg.tenant_id_));
-  uint64_t data_version = 0;
   ObSchemaGetterGuard schema_guard;
   const ObDatabaseSchema *db_schema = nullptr;
   bool is_exist = false;
 
   if (OB_FAIL(check_env_before_ddl(schema_guard, arg, ddl_service))) {
     LOG_WARN("failed to check_env_before_ddl", K(ret), K(arg));
-  } else if (!tenant_config.is_valid()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected invalid tenant_config", K(ret), K(arg));
-  } else if (!tenant_config->ob_enable_java_udf) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("ob_enable_java_udf is not enabled", K(ret));
-  } else if (OB_FAIL(GET_MIN_DATA_VERSION(arg.tenant_id_, data_version))) {
-    LOG_WARN("failed to GET_MIN_DATA_VERSION", K(ret), K(arg));
-  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_0_0 || data_version < DATA_VERSION_4_4_0_0) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("external resource is only supported after 4.4.0", K(ret));
+  } else if (OB_FAIL(ObCreateRoutineResolver::check_external_udf_version(arg.tenant_id_,
+                          share::schema::ObSimpleExternalResourceSchema::ResourceType::PYTHON_PY_TYPE == arg.type_))) {
+    LOG_WARN("create external resource version is not supported", K(ret), K(arg));
   } else if (OB_FAIL(schema_guard.get_database_schema(arg.tenant_id_, arg.database_id_, db_schema))) {
     LOG_WARN("failed to get_database_schema", K(ret), K(arg));
   } else if (OB_ISNULL(db_schema)) {
@@ -2395,24 +2375,14 @@ int ObPLDDLService::drop_external_resource(const obrpc::ObDropExternalResourceAr
 {
   int ret = OB_SUCCESS;
 
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(arg.tenant_id_));
-  uint64_t data_version = 0;
   ObSchemaGetterGuard schema_guard;
   const ObDatabaseSchema *db_schema = nullptr;
 
   if (OB_FAIL(check_env_before_ddl(schema_guard, arg, ddl_service))) {
     LOG_WARN("failed to check_env_before_ddl", K(ret), K(arg));
-  } else if (!tenant_config.is_valid()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected invalid tenant_config", K(ret), K(arg));
-  } else if (!tenant_config->ob_enable_java_udf) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("ob_enable_java_udf is not enabled", K(ret));
-  } else if (OB_FAIL(GET_MIN_DATA_VERSION(arg.tenant_id_, data_version))) {
-    LOG_WARN("failed to GET_MIN_DATA_VERSION", K(ret), K(arg));
-  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_0_0 || data_version < DATA_VERSION_4_4_0_0) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("external resource is only supported after 4.4.0", K(ret));
+  } else if (OB_FAIL(ObCreateRoutineResolver::check_external_udf_version(arg.tenant_id_,
+                          share::schema::ObSimpleExternalResourceSchema::ResourceType::PYTHON_PY_TYPE == arg.type_))) {
+    LOG_WARN("drop external resource version is not supported", K(ret), K(arg));
   } else if (OB_FAIL(schema_guard.get_database_schema(arg.tenant_id_, arg.database_id_, db_schema))) {
     LOG_WARN("failed to get_database_schema", K(ret), K(arg));
   } else if (OB_ISNULL(db_schema)) {

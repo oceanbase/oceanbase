@@ -82,4 +82,10 @@ then
   do_install ./usr/lib/oracle/12.2/client64/lib/libmql1.so $LIB_DIR true
   do_install ./usr/lib/oracle/12.2/client64/lib/libipc1.so $LIB_DIR true
 
+
+  do_install ./usr/local/oceanbase/deps/devel/python3/lib/python3.13 $LIB_DIR true
+  do_install ./usr/local/oceanbase/deps/devel/python3/lib/pkgconfig $LIB_DIR true
+  do_install ./usr/local/oceanbase/deps/devel/python3/lib/libpython3.so $LIB_DIR true
+  do_install ./usr/local/oceanbase/deps/devel/python3/lib/libpython3.13.so.1.0 $LIB_DIR true
+
 fi

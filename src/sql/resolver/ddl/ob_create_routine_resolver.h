@@ -57,7 +57,7 @@ public:
   
   virtual int resolve(const ParseNode &parse_tree);
   virtual int resolve_impl(const ParseNode &parse_tree, obrpc::ObCreateRoutineArg *crt_routine_arg) = 0;
-
+  static int check_external_udf_version(uint64_t tenant_id, bool is_py);
 protected:
   int resolve_sp_body(const ParseNode *parse_node, share::schema::ObRoutineInfo &routine_info);
   int resolve_external_udf(const ParseNode &parse_tree, obrpc::ObCreateRoutineArg &crt_routine_arg);

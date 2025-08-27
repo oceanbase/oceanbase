@@ -68,6 +68,11 @@ public:
 
   template <typename RE> int from_raw_expr(RE &expr);
 
+  inline bool is_py_udf() {
+    return external_routine_type_ == ObExternalRoutineType::EXTERNAL_PY_UDF_FROM_URL
+        || external_routine_type_ == ObExternalRoutineType::EXTERNAL_PY_UDF_FROM_RES;
+  }
+
   int64_t udf_id_;
   int64_t udf_package_id_;
   common::ObFixedArray<int64_t, common::ObIAllocator> subprogram_path_;

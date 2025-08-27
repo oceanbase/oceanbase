@@ -24,7 +24,7 @@
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/ob_pl_profiler.h"
 #endif // OB_BUILD_ORACLE_PL
-
+#include "src/pl/external_routine/ob_py_utils.h"
 
 namespace oceanbase
 {
@@ -141,7 +141,10 @@ ObExecContext::ObExecContext(ObIAllocator &allocator)
     force_local_plan_(false),
     diagnosis_manager_(),
     deterministic_udf_cache_allocator_("UDFCACHE", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
-    external_url_resource_cache_(nullptr)
+    external_url_resource_cache_(nullptr),
+    external_py_url_resource_cache_(nullptr),
+    external_py_sch_resource_cache_(nullptr),
+    py_sub_inter_ctx_(nullptr)
 {
 }
 
@@ -232,6 +235,24 @@ ObExecContext::~ObExecContext()
     cache->~Cache();
     cache = nullptr;
     external_url_resource_cache_ = nullptr;
+  }
+  if (OB_NOT_NULL(external_py_url_resource_cache_)) {
+    using Cache = pl::ObExternalResourceCache<pl::ObExternalURLPy>;
+    Cache *cache = static_cast<Cache *>(external_py_url_resource_cache_);
+    cache->~Cache();
+    cache = nullptr;
+    external_py_url_resource_cache_ = nullptr;
+  }
+  if (OB_NOT_NULL(external_py_sch_resource_cache_)) {
+    using Cache = pl::ObExternalResourceCache<pl::ObExternalSchemaPy>;
+    Cache *cache = static_cast<Cache *>(external_py_sch_resource_cache_);
+    cache->~Cache();
+    cache = nullptr;
+    external_py_sch_resource_cache_ = nullptr;
+  }
+  if (OB_NOT_NULL(py_sub_inter_ctx_)) {
+    pl::ObPyUtils::ob_py_end_sub_inter(py_sub_inter_ctx_);
+    py_sub_inter_ctx_ = nullptr;
   }
 }
 

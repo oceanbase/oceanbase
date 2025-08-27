@@ -582,6 +582,12 @@ public:
 
   void *get_external_url_resource_cache() { return external_url_resource_cache_; }
   void set_external_url_resource_cache(void *cache) { external_url_resource_cache_ = cache; }
+  void *get_external_py_url_resource_cache() { return external_py_url_resource_cache_; }
+  void set_external_py_url_resource_cache(void *cache) { external_py_url_resource_cache_ = cache; }
+  void *get_external_py_sch_resource_cache() { return external_py_sch_resource_cache_; }
+  void set_external_py_sch_resource_cache(void *cache) { external_py_sch_resource_cache_ = cache; }
+  void *get_py_sub_inter_ctx() { return py_sub_inter_ctx_; }
+  void set_py_sub_inter_ctx(void *sub_inter_ctx) { py_sub_inter_ctx_ = sub_inter_ctx; }
 
 private:
   int build_temp_expr_ctx(const ObTempExpr &temp_expr, ObTempExprCtx *&temp_expr_ctx);
@@ -779,6 +785,9 @@ protected:
   common::ObArenaAllocator deterministic_udf_cache_allocator_;
 
   void *external_url_resource_cache_;
+  void *external_py_url_resource_cache_;
+  void *external_py_sch_resource_cache_;
+  void *py_sub_inter_ctx_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExecContext);
 };

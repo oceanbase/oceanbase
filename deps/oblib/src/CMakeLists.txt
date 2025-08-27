@@ -28,6 +28,7 @@ target_include_directories(
   ${DEP_DIR}/include/apache-orc
   ${DEP_DIR}/include/fast_float
   ${USSL_INCLUDE_DIRS}
+  ${DEP_DIR}/python3/include/python3.13
 )
 
 if(OB_BUILD_OPENSOURCE)

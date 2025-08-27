@@ -519,7 +519,7 @@ int ObInnerTableSchema::cdb_ob_external_resources_schema(ObTableSchema &table_sc
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(         SELECT           TENANT_ID,           RESOURCE_ID,           DATABASE_ID,           NAME,           CASE TYPE WHEN 1 THEN 'JAVA_JAR' ELSE 'INVALID_TYPE' END AS TYPE,           CONTENT,           COMMENT         FROM oceanbase.__all_virtual_external_resource         )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(         SELECT           TENANT_ID,           RESOURCE_ID,           DATABASE_ID,           NAME,           CASE TYPE WHEN 1 THEN 'JAVA_JAR'                      WHEN 2 THEN 'PYTHON_PY'                     ELSE 'INVALID_TYPE' END AS TYPE,           CONTENT,           COMMENT         FROM oceanbase.__all_virtual_external_resource         )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

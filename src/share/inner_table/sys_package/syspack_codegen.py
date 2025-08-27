@@ -289,6 +289,7 @@ syspack_config = [
     SysPackConfig(SysPackGroup.MYSQL, "dbms_xprofile", "dbms_xprofile_mysql.sql", "dbms_xprofile_mysql_body.sql"),
     SysPackConfig(SysPackGroup.MYSQL, "dbms_balance", "dbms_balance_mysql.sql", "dbms_balance_body_mysql.sql"),
     SysPackConfig(SysPackGroup.MYSQL, "dbms_data_dict", "dbms_data_dict_mysql.sql", "dbms_data_dict_body_mysql.sql"),
+    SysPackConfig(SysPackGroup.MYSQL, "dbms_python", "dbms_python_mysql.sql", "dbms_python_body_mysql.sql"),
     # Oracle Special
     SysPackConfig(SysPackGroup.ORACLE_SPECIAL, "__dbms_upgrade", "__dbms_upgrade.sql", "__dbms_upgrade_body.sql", orc_build_req=True),
     # MySQL Special

@@ -617,6 +617,11 @@ public:
     return dblink_id_ != OB_INVALID_ID;
   }
 
+  OB_INLINE bool is_py_external_routine() const {
+    return ObExternalRoutineType::EXTERNAL_PY_UDF_FROM_URL == external_routine_type_
+           || ObExternalRoutineType::EXTERNAL_PY_UDF_FROM_RES == external_routine_type_;
+  }
+
   TO_STRING_KV(K_(tenant_id),
                K_(database_id),
                K_(package_id),

@@ -2992,3 +2992,10 @@ DEF_BOOL(_enable_sql_ccl_rule, OB_TENANT_PARAMETER, "True",
 DEF_INT(approx_count_distinct_precision, OB_TENANT_PARAMETER, "10", "[4, 16]",
         "specify the result accuracy of approx_count_distinct",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_STR(ob_python_home, OB_CLUSTER_PARAMETER, "",
+  "specifies the python home path",
+  ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(ob_enable_python_udf, OB_TENANT_PARAMETER, "False",
+   "Enable or disable python udf.",
+   ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
