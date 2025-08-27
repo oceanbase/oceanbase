@@ -315,6 +315,7 @@ struct ToDateCastImpl
       ObDateSqlMode date_sql_mode;
       date_sql_mode.allow_invalid_dates_ = CM_IS_ALLOW_INVALID_DATES(expr.extra_);
       date_sql_mode.no_zero_date_ = CM_IS_NO_ZERO_DATE(expr.extra_);
+      date_sql_mode.implicit_first_century_year_ = CM_IS_IMPLICIT_FIRST_CENTURY_YEAR(expr.extra_);
       StringToDateFn cast_fn(CAST_ARG_DECL, arg_vec, res_vec, date_sql_mode);
       if (OB_FAIL(CastHelperImpl::batch_cast(cast_fn, expr, arg_vec, res_vec, eval_flags,
                                             skip, bound, is_diagnosis, diagnosis_manager))) {
