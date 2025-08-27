@@ -4723,6 +4723,7 @@ OB_SERIALIZE_MEMBER(ObDiagnosisInfo, is_enabled_, limit_num_, log_file_, bad_fil
 
 OB_DEF_SERIALIZE(ObBasicSessionInfo::SysVarsCacheData)
 {
+  // don't serialize sys_vars_cache_data_
   int ret = OB_SUCCESS;
   LST_DO_CODE(OB_UNIS_ENCODE,
               autocommit_,
@@ -4757,38 +4758,62 @@ OB_DEF_SERIALIZE(ObBasicSessionInfo::SysVarsCacheData)
 OB_DEF_DESERIALIZE(ObBasicSessionInfo::SysVarsCacheData)
 {
   int ret = OB_SUCCESS;
+  // don't deserialize to sys_vars_cache_data_,
+  // inc flag for session variable in sys_vars_cache_data_ may be true.
+  bool autocommit;
+  bool ob_enable_trace_log;
+  int64_t ob_org_cluster_id;
+  int64_t ob_query_timeout;
+  int64_t ob_trx_timeout;
+  int64_t collation_connection;
+  ObSQLMode sql_mode;
+  int64_t ob_trx_idle_timeout;
+  ObCollationType nls_collation;
+  ObCollationType nls_nation_collation;
+  bool ob_enable_sql_audit;
+  ObLengthSemantics nls_length_semantics;
+  ObString nls_format_date;
+  ObString nls_format_timestamp;
+  ObString nls_format_timestamp_tz;
+  int64_t ob_trx_lock_timeout;
+  ObString ob_trace_info;
+  ObString ob_plsql_ccflags;
+  int64_t ob_max_read_stale_time;
+  int64_t runtime_filter_type;
+  int64_t runtime_filter_wait_time_ms;
+  int64_t runtime_filter_max_in_num;
+  int64_t runtime_bloom_filter_max_size;
+  bool enable_rich_vector_format;
+  bool enable_sql_plan_monitor;
+  uint64_t current_default_catalog;
+
   LST_DO_CODE(OB_UNIS_DECODE,
-              autocommit_,
-              ob_enable_trace_log_,
-              ob_org_cluster_id_,
-              ob_query_timeout_,
-              ob_trx_timeout_,
-              collation_connection_,
-              sql_mode_,
-              ob_trx_idle_timeout_,
-              nls_collation_,
-              nls_nation_collation_,
-              ob_enable_sql_audit_,
-              nls_length_semantics_,
-              nls_formats_[NLS_DATE],
-              nls_formats_[NLS_TIMESTAMP],
-              nls_formats_[NLS_TIMESTAMP_TZ],
-              ob_trx_lock_timeout_,
-              ob_trace_info_,
-              ob_plsql_ccflags_,
-              ob_max_read_stale_time_,
-              runtime_filter_type_,
-              runtime_filter_wait_time_ms_,
-              runtime_filter_max_in_num_,
-              runtime_bloom_filter_max_size_,
-              enable_rich_vector_format_,
-              enable_sql_plan_monitor_,
-              current_default_catalog_);
-  set_nls_date_format(nls_formats_[NLS_DATE]);
-  set_nls_timestamp_format(nls_formats_[NLS_TIMESTAMP]);
-  set_nls_timestamp_tz_format(nls_formats_[NLS_TIMESTAMP_TZ]);
-  set_ob_trace_info(ob_trace_info_);
-  set_plsql_ccflags(ob_plsql_ccflags_);
+              autocommit,
+              ob_enable_trace_log,
+              ob_org_cluster_id,
+              ob_query_timeout,
+              ob_trx_timeout,
+              collation_connection,
+              sql_mode,
+              ob_trx_idle_timeout,
+              nls_collation,
+              nls_nation_collation,
+              ob_enable_sql_audit,
+              nls_length_semantics,
+              nls_format_date,
+              nls_format_timestamp,
+              nls_format_timestamp_tz,
+              ob_trx_lock_timeout,
+              ob_trace_info,
+              ob_plsql_ccflags,
+              ob_max_read_stale_time,
+              runtime_filter_type,
+              runtime_filter_wait_time_ms,
+              runtime_filter_max_in_num,
+              runtime_bloom_filter_max_size,
+              enable_rich_vector_format,
+              enable_sql_plan_monitor,
+              current_default_catalog);
   return ret;
 }
 
