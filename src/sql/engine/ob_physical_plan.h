@@ -177,7 +177,7 @@ public:
 
   int alloc_op_spec(
     const ObPhyOperatorType type, const int64_t child_cnt, ObOpSpec *&op, const uint64_t op_id);
-  int alloc_op_spec_for_cg(ObLogicalOperator *op, ObSqlSchemaGuard *schema_guard,
+  int alloc_op_spec_for_cg(ObLogicalOperator *op, ObSqlSchemaGuard *schema_guard, const bool plan_use_rich_format,
                            const ObPhyOperatorType type, const int64_t child_cnt, ObOpSpec *&spec,
                            const uint64_t op_id);
 

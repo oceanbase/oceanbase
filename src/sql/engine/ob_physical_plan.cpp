@@ -1150,6 +1150,7 @@ int ObPhysicalPlan::alloc_op_spec(const ObPhyOperatorType type,
 }
 
 int ObPhysicalPlan::alloc_op_spec_for_cg(ObLogicalOperator *op, ObSqlSchemaGuard *schema_guard,
+                                         const bool plan_use_rich_format,
                                          const ObPhyOperatorType type, const int64_t child_cnt,
                                          ObOpSpec *&spec, const uint64_t op_id)
 {
@@ -1157,7 +1158,8 @@ int ObPhysicalPlan::alloc_op_spec_for_cg(ObLogicalOperator *op, ObSqlSchemaGuard
   bool disable_vectorize = false;
   if (OB_FAIL(alloc_op_spec(type, child_cnt, spec, op_id))) {
     LOG_WARN("alloc op spec failed", K(ret));
-  } else if (OB_FAIL(ObStaticEngineCG::check_op_vectorization(op, schema_guard, type, disable_vectorize))) {
+  } else if (OB_FAIL(ObStaticEngineCG::check_op_vectorization(
+               op, schema_guard, plan_use_rich_format, disable_vectorize))) {
     LOG_WARN("check op vectorization failed", K(ret));
   } else if (disable_vectorize) {
     spec->max_batch_size_ = 0;
