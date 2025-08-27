@@ -45,6 +45,7 @@ int ObIndexBlockTreeTraverser::init(ObSSTable &sstable, const ObITableReadInfo &
     read_info_ = &index_read_info;
     context_ = nullptr;
     visited_node_count_ = 0;
+    visited_macro_node_count_ = 0;
     avg_range_visited_node_cnt_ = 0;
     remain_can_visited_node_cnt_ = 0;
     is_inited_ = true;
@@ -57,6 +58,7 @@ void ObIndexBlockTreeTraverser::reuse()
 {
   allocator_.reuse();
   visited_node_count_ = 0;
+  visited_macro_node_count_ = 0;
   avg_range_visited_node_cnt_ = 0;
   remain_can_visited_node_cnt_ = 0;
 }
@@ -109,6 +111,8 @@ int ObIndexBlockTreeTraverser::traverse(ObIMultiRangeEstimateContext &context,
   } else if (OB_FAIL(handle_overflow_ranges())) {
     LOG_WARN("Fail to handle overflow ranges", KR(ret), KPC(context_));
   }
+
+  LOG_TRACE("Traverse index block tree, stats:", K(visited_node_count_), K(visited_macro_node_count_));
 
   return ret;
 }
@@ -182,9 +186,13 @@ int ObIndexBlockTreeTraverser::goto_next_level_node(const ObMicroIndexInfo &micr
     }
   } else {
     if (!is_in_cache) {
-      visited_node_count_++;
       borrow_from_parent ? remain_can_visited_node_cnt_ = 0 : remain_can_visited_node_cnt_--;
     }
+
+    if (micro_index_info.is_leaf_block()) {
+      visited_macro_node_count_++;
+    }
+    visited_node_count_++;
 
     if (OB_FAIL(micro_index_info.is_data_block()
                     ? leaf_node_traverse(micro_index_info, path_info, level)
@@ -560,10 +568,31 @@ int ObIndexBlockTreeTraverser::TreeNodeContext::get_next_index_row(ObMicroIndexI
   return ret;
 }
 
+template <typename Range>
+int ObRangeCompartor::is_sorted(const ObIArray<Range> &ranges, ObRangeCompartor &compartor, bool &is_sorted)
+{
+  int ret = OB_SUCCESS;
+
+  is_sorted = true;
+
+  for (int64_t i = 1; OB_SUCC(ret) && is_sorted && i < ranges.count(); i++) {
+    is_sorted = compartor.operator()(ranges.at(i - 1), ranges.at(i));
+    if (OB_FAIL(compartor.sort_ret_)) {
+      LOG_WARN("Fail to compare range", KR(ret), K(ranges), K(i));
+    }
+  }
+
+  return ret;
+}
+
+template int ObRangeCompartor::is_sorted<ObRangeInfo>(const ObIArray<ObRangeInfo> &ranges, ObRangeCompartor &compartor, bool &is_sorted);
+template int ObRangeCompartor::is_sorted<ObPairStoreAndDatumRange>(const ObIArray<ObPairStoreAndDatumRange> &ranges, ObRangeCompartor &compartor, bool &is_sorted);
+
 int ObMultiRangeRowEstimateContext::init(const ObIArray<ObPairStoreAndDatumRange> &ranges,
                                          const ObITableReadInfo &read_info,
                                          const bool need_sort,
-                                         const ObRangePrecision &range_precision)
+                                         const ObRangePrecision &range_precision,
+                                         const bool can_goto_micro_level)
 {
   int ret = OB_SUCCESS;
 
@@ -582,6 +611,7 @@ int ObMultiRangeRowEstimateContext::init(const ObIArray<ObPairStoreAndDatumRange
   } else {
     curr_range_idx_ = 0;
     sample_step_ = range_precision_.get_sample_step();
+    can_goto_micro_level_ = can_goto_micro_level;
     for (int64_t i = 0; OB_SUCC(ret) && i < ranges.count(); i++) {
       if (OB_FAIL(ranges_.push_back(ObRangeInfo(&ranges.at(i).datum_range_)))) {
         LOG_WARN("Fail to push back to range array", KR(ret), K(ranges), K(i));
@@ -593,9 +623,15 @@ int ObMultiRangeRowEstimateContext::init(const ObIArray<ObPairStoreAndDatumRange
   if (OB_FAIL(ret)) {
   } else if (need_sort) {
     ObRangeCompartor compartor(read_info);
-    lib::ob_sort(ranges_.begin(), ranges_.end(), compartor);
-    if (OB_FAIL(compartor.sort_ret_)) {
-      LOG_WARN("Fail to sort range array", KR(ret), K(ranges_));
+    bool is_sorted = false;
+
+    if (OB_FAIL(ObRangeCompartor::is_sorted(ranges_, compartor, is_sorted))) {
+      LOG_WARN("Fail to check if ranges is sorted", KR(ret), K(ranges_));
+    } else if (!is_sorted) {
+      lib::ob_sort(ranges_.begin(), ranges_.end(), compartor);
+      if (OB_FAIL(compartor.sort_ret_)) {
+        LOG_WARN("Fail to sort range array", KR(ret), K(ranges_));
+      }
     }
   }
 
@@ -609,6 +645,10 @@ int ObMultiRangeRowEstimateContext::on_node_estimate(const ObMicroIndexInfo &ind
 {
   ranges_.at(curr_range_idx_).row_count_
       += is_coverd_by_range ? index_row.get_row_count() : index_row.get_row_count() >> 1;
+  ranges_.at(curr_range_idx_).macro_block_count_
+      += max(1ll,
+             is_coverd_by_range ? index_row.get_macro_block_count()
+                                : index_row.get_macro_block_count() >> 1);
   return OB_SUCCESS;
 }
 
@@ -627,12 +667,14 @@ int ObMultiRangeRowEstimateContext::on_inner_node(const ObMicroIndexInfo &index_
 
   if (is_coverd_by_range) {
     ranges_.at(curr_range_idx_).row_count_ += index_row.get_row_count();
+    ranges_.at(curr_range_idx_).macro_block_count_ += index_row.get_macro_block_count();
     operation = NOTHING;
-  } else if (index_row.get_row_count()
-             < (ranges_.at(curr_range_idx_).row_count_ / SHOULD_ESTIMATE_RATIO)) {
-    // If the node's row count is significantly smaller than the current range's row count,
-    // it is suitable for estimating the current range.
+  } else if (index_row.get_row_count() < (ranges_.at(curr_range_idx_).row_count_ / SHOULD_ESTIMATE_RATIO)
+             || (!can_goto_micro_level_ && index_row.is_leaf_block())) {
+    // If the node's row count is significantly smaller than the current range's row count, it is suitable for estimating the current range.
+    // if we can't goto micro level, we only estimate on leaf node
     ranges_.at(curr_range_idx_).row_count_ += index_row.get_row_count() >> 1;
+    ranges_.at(curr_range_idx_).macro_block_count_ += max(1ll, index_row.get_macro_block_count() >> 1);
     operation = NOTHING;
   } else {
     operation = ObTraverserOperationType::GOTO_NEXT_LEVEL;
@@ -656,6 +698,8 @@ int ObMultiRangeRowEstimateContext::next_range()
       if (curr_range_idx_ < next_index) {
         ranges_.at(curr_range_idx_).row_count_
             = curr_range_idx_ - 1 >= 0 ? ranges_.at(curr_range_idx_ - 1).row_count_ : 0;
+        ranges_.at(curr_range_idx_).macro_block_count_
+            = curr_range_idx_ - 1 >= 0 ? ranges_.at(curr_range_idx_ - 1).macro_block_count_ : 0;
       }
     }
   } while (OB_SUCC(ret) && curr_range_idx_ < next_index);
@@ -674,10 +718,22 @@ int64_t ObMultiRangeRowEstimateContext::get_row_count_sum() const
   return sum;
 }
 
+int64_t ObMultiRangeRowEstimateContext::get_macro_block_count_sum() const
+{
+  int64_t sum = 0;
+
+  for (int64_t i = 0; i < ranges_.count(); i++) {
+    sum += ranges_.at(i).macro_block_count_;
+  }
+
+  return sum;
+}
+
 void ObMultiRangeRowEstimateContext::reuse()
 {
   for (int64_t i = 0; i < ranges_.count(); i++) {
     ranges_.at(i).row_count_ = 0;
+    ranges_.at(i).macro_block_count_ = 0;
   }
   curr_range_idx_ = 0;
 }
@@ -738,6 +794,15 @@ int ObMultiRangeInfoEstimateContext::on_inner_node(const ObMicroIndexInfo &index
     operation = ObTraverserOperationType::GOTO_NEXT_LEVEL;
   }
 
+  // adapt now sql implement, macro level is enough
+  if (operation == GOTO_NEXT_LEVEL && index_row.is_leaf_block()) {
+    if (OB_FAIL(on_node_estimate(index_row, is_coverd_by_range))) {
+      LOG_WARN("Fail to on node estimate", KR(ret), K(index_row));
+    } else {
+      operation = NOTHING;
+    }
+  }
+
   return ret;
 }
 
@@ -748,11 +813,12 @@ int ObMultiRangeSplitContext::init(const ObIArray<ObPairStoreAndDatumRange> &ran
                                    const ObIArray<ObRangeInfo> &range_infos,
                                    ObIArray<ObSplitRangeInfo> &split_ranges,
                                    const bool need_sort,
-                                   const ObRangePrecision &range_precision)
+                                   const ObRangePrecision &range_precision,
+                                   const bool can_goto_micro_level)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_FAIL(ObMultiRangeRowEstimateContext::init(ranges, read_info, need_sort, range_precision))) {
+  if (OB_FAIL(ObMultiRangeRowEstimateContext::init(ranges, read_info, need_sort, range_precision, can_goto_micro_level))) {
     LOG_WARN("Fail to init base context", KR(ret));
   } else {
     split_row_limit_ = split_row_limit;
@@ -871,6 +937,11 @@ int ObMultiRangeSplitContext::on_inner_node(const ObMicroIndexInfo &index_row,
     operation = NOTHING;
   } else {
     operation = GOTO_NEXT_LEVEL;
+  }
+
+  if (operation == GOTO_NEXT_LEVEL && !can_goto_micro_level_ && index_row.is_leaf_block()) {
+    inc_row_count = is_coverd_by_range ? index_row.get_row_count() : index_row.get_row_count() >> 1;
+    operation = NOTHING;
   }
 
   if (operation == NOTHING) {
@@ -1111,9 +1182,15 @@ int ObPartitionMultiRangeSpliter::transform_to_datum_range_and_sort(
   if (OB_FAIL(ret)) {
   } else {
     ObRangeCompartor cmp(read_info);
-    lib::ob_sort(sorted_ranges.get_data(), sorted_ranges.get_data() + sorted_ranges.count(), cmp);
-    if (OB_FAIL(cmp.sort_ret_)) {
-      LOG_WARN("Fail to sort range array", KR(ret));
+    bool is_sorted = false;
+
+    if (OB_FAIL(ObRangeCompartor::is_sorted(sorted_ranges, cmp, is_sorted))) {
+      LOG_WARN("Fail to check if ranges is sorted", KR(ret), K(sorted_ranges));
+    } else if (!is_sorted) {
+      lib::ob_sort(sorted_ranges.get_data(), sorted_ranges.get_data() + sorted_ranges.count(), cmp);
+      if (OB_FAIL(cmp.sort_ret_)) {
+        LOG_WARN("Fail to sort range array", KR(ret));
+      }
     }
   }
 
@@ -1334,17 +1411,30 @@ int ObPartitionMultiRangeSpliter::split_ranges_for_sstable(
   ObMultiRangeRowEstimateContext row_estimate_context;
   ObMultiRangeSplitContext split_context;
   ObSplitRangeHeapElementIter *iter = nullptr;
+  bool can_goto_micro_level = false;
 
   if (OB_ISNULL(iter = heap_element_iters.alloc_place_holder())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("Fail to alloc place holder", KR(ret));
   } else if (OB_FAIL(row_estimate_context.init(
-                 sorted_ranges, read_info, /* need_sort */ false, range_precision))) {
+                 sorted_ranges, read_info, /* need_sort */ false, range_precision, /* can_goto_micro_level */ false))) {
     LOG_WARN("Fail to init row estimate context", KR(ret));
   } else if (OB_FAIL(traverser.init(sstable, read_info))) {
     LOG_WARN("Fail to init row estimate traverser", KR(ret));
   } else if (OB_FAIL(traverser.traverse(row_estimate_context, open_index_block_limit))) {
     LOG_WARN("Fail to traverse sstable index block tree", KR(ret));
+  } else if (row_estimate_context.get_macro_block_count_sum() < expected_task_count * SPLIT_RANGE_FACTOR) {
+    can_goto_micro_level = true;
+    row_estimate_context.reuse();
+    row_estimate_context.set_can_goto_micro_level(true);
+    traverser.reuse();
+
+    if (OB_FAIL(traverser.traverse(row_estimate_context, open_index_block_limit))) {
+      LOG_WARN("Fail to traverse sstable index block tree", KR(ret));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (FALSE_IT(estimate_rows_sum += row_estimate_context.get_row_count_sum())) {
   } else if (OB_FAIL(
                  split_context.init(sorted_ranges,
@@ -1356,7 +1446,8 @@ int ObPartitionMultiRangeSpliter::split_ranges_for_sstable(
                                     row_estimate_context.get_ranges(),
                                     iter->get_split_ranges(),
                                     /* need_sort */ false,
-                                    range_precision))) {
+                                    range_precision,
+                                    can_goto_micro_level))) {
     LOG_WARN("Fail to init split context", KR(ret));
   } else if (FALSE_IT(traverser.reuse())) {
   } else if (OB_FAIL(traverser.traverse(split_context, open_index_block_limit))) {
