@@ -1755,7 +1755,8 @@ int check_will_be_having_domain_index_operation(
       share::schema::ObTableSchema &new_table_schema,
       share::schema::ObTableSchema &index_schema,
       const ObIArray<obrpc::ObColumnSortItem> &vec_index_columns,
-      const ObIArray<ObString> &vec_store_columns);
+      const ObIArray<ObString> &vec_store_columns,
+      const uint64_t data_version);
   int alter_table_sess_active_time_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                                             obrpc::ObAlterTableRes &res,
                                             const uint64_t tenant_data_version);

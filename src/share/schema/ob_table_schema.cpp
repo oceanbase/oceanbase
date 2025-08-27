@@ -5206,6 +5206,8 @@ int ObTableSchema::check_prohibition_rules(const ObColumnSchemaV2 &src_schema,
   bool is_enable = false;
   bool is_same = false;
   bool has_prefix_idx_col_deps = false;
+  bool can_change_prefix_column_length = false;
+  const ObColumnSchemaV2 *prefix_column = nullptr;
   bool is_tbl_part_key = false;
   bool is_column_in_fk = is_column_in_foreign_key(src_schema.get_column_id());
   uint64_t data_version = 0;
@@ -5233,16 +5235,24 @@ int ObTableSchema::check_prohibition_rules(const ObColumnSchemaV2 &src_schema,
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "Alter column that the generated column depends on");
   } else if (!is_oracle_mode && is_offline
-    && OB_FAIL(check_prefix_index_columns_depend(src_schema, schema_guard, has_prefix_idx_col_deps))) {
+    && OB_FAIL(check_prefix_index_columns_depend(src_schema,
+                                                 schema_guard,
+                                                 has_prefix_idx_col_deps,
+                                                 can_change_prefix_column_length,
+                                                 prefix_column))) {
     LOG_WARN("check prefix index columns cascaded failed", K(ret));
   } else if (has_prefix_idx_col_deps) {
     if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {
       LOG_WARN("fail to get min data version", KR(ret), K(tenant_id_));
     } else if (DATA_VERSION_4_3_5_2 <= data_version
-     && ObCharType == src_schema.get_data_type()
+     && ((ObCharType == src_schema.get_data_type()
      && ObVarcharType == dst_schema.get_data_type()
-     && src_schema.get_data_length() == dst_schema.get_data_length()) {
-      // now we can support alter predix index column type char -> varchar
+     && src_schema.get_data_length() == dst_schema.get_data_length())
+     || (DATA_VERSION_4_3_5_4 <= data_version
+     && src_schema.get_data_type() == dst_schema.get_data_type()
+     && can_change_prefix_column_length))) {
+      // now we can support alter predix index column type char -> varchar wist some length,
+      // or alter column length with only one prefix index and index only include one prefix column
     } else {
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "Alter column that the prefix index column depends on");
@@ -7051,13 +7061,36 @@ int ObTableSchema::check_functional_index_columns_depend(
   }
   return ret;
 }
+
+/**
+ * @brief 检查指定数据列是否被前缀索引依赖，并判断是否可以安全修改该列长度
+ *
+ *
+ * @param[in]  data_column_schema           要检查的数据列schema
+ * @param[in]  schema_guard                 schema_guard
+ * @param[out] has_prefix_idx_col_deps      是否存在前缀索引列依赖该数据列
+ * @param[out] can_change_prefix_column_length 是否可以安全修改前缀列长度
+ *                                          只有在以下条件同时满足时才为true：
+ *                                          1. 前缀索引只包含一列
+ *                                          2. 只有一个前缀索引依赖该数据列
+ *                                          3. 只有一个生成列依赖该数据列
+ * @param[out] prefix_column                找到的前缀列指针，如果can_change_prefix_column_length
+ *                                          为false则重置为nullptr
+ *
+ */
 int ObTableSchema::check_prefix_index_columns_depend(
     const ObColumnSchemaV2 &data_column_schema,
     ObSchemaGetterGuard &schema_guard,
-    bool &has_prefix_idx_col_deps) const
+    bool &has_prefix_idx_col_deps,
+    bool &can_change_prefix_column_length,
+    const ObColumnSchemaV2 *&prefix_column) const
 {
   int ret = OB_SUCCESS;
   has_prefix_idx_col_deps = false;
+  can_change_prefix_column_length = false;
+  prefix_column = nullptr;
+  int64_t prefix_idx_deps_count = 0;
+  bool prefix_index_only_include_one_column = true;
   ObHashSet<ObString> deps_gen_columns; // generated columns depend on the data column.
   ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
   if (!data_column_schema.has_generated_column_deps()) {
@@ -7073,16 +7106,17 @@ int ObTableSchema::check_prefix_index_columns_depend(
       if (OB_ISNULL(column)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected err", K(ret), KPC(this));
-      } else if (column->is_prefix_column()) {
+      } else if (column->is_prefix_column() && column->has_cascaded_column_id(data_column_schema.get_column_id())) {
         // prefix index columns are hidden generated column in data table.
-        if (column->has_cascaded_column_id(data_column_schema.get_column_id())
-          && OB_FAIL(deps_gen_columns.set_refactored(column->get_column_name()))) {
+        if (OB_FAIL(deps_gen_columns.set_refactored(column->get_column_name()))) {
           LOG_WARN("set refactored failed", K(ret));
+        } else {
+          prefix_column = column;
         }
       } else {/* do nothing. */}
     }
 
-    for (int64_t i = 0; OB_SUCC(ret) && !has_prefix_idx_col_deps && i < simple_index_infos.count(); i++) {
+    for (int64_t i = 0; OB_SUCC(ret) && prefix_idx_deps_count <= 1 && i < simple_index_infos.count(); i++) {
       const ObTableSchema *index_schema = nullptr;
       if (OB_FAIL(schema_guard.get_table_schema(tenant_id, simple_index_infos.at(i).table_id_, index_schema))) {
         LOG_WARN("get table schema failed", K(ret), K(tenant_id), "table_id", simple_index_infos.at(i).table_id_);
@@ -7091,15 +7125,31 @@ int ObTableSchema::check_prefix_index_columns_depend(
         LOG_WARN("index table not exist", K(ret), K(tenant_id), "table_id", simple_index_infos.at(i).table_id_);
       } else {
         const ObIndexInfo &index_info = index_schema->get_index_info();
-        for (int j = 0; OB_SUCC(ret) && !has_prefix_idx_col_deps && j < index_info.get_size(); j++) {
+        bool current_index_has_prefix_dep = false;
+        for (int j = 0; OB_SUCC(ret) && j < index_info.get_size(); j++) {
           const ObColumnSchemaV2 *index_col = nullptr;
           if (OB_ISNULL(index_col = index_schema->get_column_schema(index_info.get_column(j)->column_id_))) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected err", K(ret), "column_id", index_info.get_column(j)->column_id_);
           } else if (OB_HASH_EXIST == deps_gen_columns.exist_refactored(index_col->get_column_name())) {
-            has_prefix_idx_col_deps = true;
-          } else { /* do nothing. */}
+            current_index_has_prefix_dep = true;
+            if (index_info.get_size() > 1) {
+              prefix_index_only_include_one_column = false;
+            }
+            break;
+          }
         }
+
+        if (current_index_has_prefix_dep) {
+          has_prefix_idx_col_deps = true;
+          prefix_idx_deps_count++;
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      can_change_prefix_column_length = prefix_index_only_include_one_column && prefix_idx_deps_count == 1 && deps_gen_columns.size() == 1;
+      if (!can_change_prefix_column_length) {
+        prefix_column = nullptr; // reset prefix_column
       }
     }
   }
