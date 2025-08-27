@@ -1790,7 +1790,8 @@ int ObSql::handle_pl_execute(const ObString &sql,
     context.is_from_pl_ = true;
     context.is_dynamic_sql_ = is_dynamic_sql;
     context.is_prepare_protocol_ = is_prepare_protocol;
-    context.spm_ctx_.bl_key_.db_id_ = session.get_database_id();
+    uint64_t db_id = session.get_database_id();
+    context.spm_ctx_.bl_key_.db_id_ = db_id == OB_INVALID_ID ? OB_MOCK_DEFAULT_DATABASE_ID : db_id;
     context.disable_privilege_check_ = OB_SYS_TENANT_ID == session.get_priv_tenant_id()
                                           ? PRIV_CHECK_FLAG_DISABLE
                                           : PRIV_CHECK_FLAG_IN_PL;
@@ -2481,7 +2482,8 @@ int ObSql::handle_ps_execute(const ObPsStmtId client_stmt_id,
                               session.get_effective_tenant_id());
         pc_ctx.fp_result_.pc_key_.key_id_ = inner_stmt_id;
         pc_ctx.normal_parse_const_cnt_ = ps_params.count();
-        context.spm_ctx_.bl_key_.db_id_ = session.get_database_id();
+        uint64_t db_id = session.get_database_id();
+        context.spm_ctx_.bl_key_.db_id_ = db_id == OB_INVALID_ID ? OB_MOCK_DEFAULT_DATABASE_ID : db_id;
         pc_ctx.set_is_parameterized_execute();
         pc_ctx.set_is_inner_sql(is_inner_sql);
         pc_ctx.ab_params_ = ps_ab_params;
@@ -2637,7 +2639,6 @@ int ObSql::handle_remote_query(const ObRemoteSqlInfo &remote_sql_info,
       //由于普通的文本协议key_id是OB_INVALID_ID,因此这里使用key_id=0+name=参数化SQL的方式来区分
       //@todo: shengle 普通的ps协议和文本协议的计划共享也存在同样的问题，这里需要统一解决一下
       context.is_prepare_protocol_ = remote_sql_info.use_ps_;
-      context.spm_ctx_.bl_key_.db_id_ = session->get_database_id();
       pc_ctx->fp_result_.pc_key_.key_id_ = 0;
       pc_ctx->fp_result_.pc_key_.name_ = trimed_stmt;
       pc_ctx->normal_parse_const_cnt_ = remote_sql_info.ps_params_->count();
@@ -2666,9 +2667,9 @@ int ObSql::handle_remote_query(const ObRemoteSqlInfo &remote_sql_info,
     if (OB_SUCC(ret)) {
       ObCacheObjGuard tmp_guard(MAX_HANDLE);
       ObPhysicalPlan* plan = nullptr;
-      if (OB_FAIL(session->get_database_id(context.spm_ctx_.bl_key_.db_id_))) {
-        LOG_WARN("Failed to get database id", K(ret));
-      } else if (!use_plan_cache) {
+      uint64_t db_id = session->get_database_id();
+      context.spm_ctx_.bl_key_.db_id_ = db_id == OB_INVALID_ID ? OB_MOCK_DEFAULT_DATABASE_ID : db_id;
+      if (!use_plan_cache) {
         if (context.is_batch_params_execute()) {
           ret = OB_BATCHED_MULTI_STMT_ROLLBACK;
           LOG_WARN("batched multi_stmt needs rollback");
