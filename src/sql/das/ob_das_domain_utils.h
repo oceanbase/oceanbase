@@ -77,41 +77,23 @@ public:
       doc_word_found_(false)
   {}
   ~ObFTDocWordInfo() = default;
-  ObFTDocWordInfo(const ObFTDocWordInfo &src)
-    : table_id_(src.table_id_),
-      doc_word_table_id_(src.doc_word_table_id_),
-      doc_word_ls_id_(src.doc_word_ls_id_),
-      doc_word_tablet_id_(src.doc_word_tablet_id_),
-      snapshot_(),
-      doc_word_schema_version_(src.doc_word_schema_version_),
-      doc_word_found_(src.doc_word_found_)
+
+  int assign(const ObFTDocWordInfo &src)
   {
-    snapshot_.valid_ = src.snapshot_.valid_;
-    snapshot_.committed_ = src.snapshot_.committed_;
-    snapshot_.core_ = src.snapshot_.core_;
-    snapshot_.source_ = src.snapshot_.source_;
-    snapshot_.snapshot_lsid_ = src.snapshot_.snapshot_lsid_;
-    snapshot_.snapshot_ls_role_ = src.snapshot_.snapshot_ls_role_;
-    snapshot_.snapshot_acquire_addr_ = src.snapshot_.snapshot_acquire_addr_;
+    int ret = OB_SUCCESS;
+    table_id_ = src.table_id_;
+    doc_word_table_id_ = src.doc_word_table_id_;
+    doc_word_ls_id_ = src.doc_word_ls_id_;
+    doc_word_tablet_id_ = src.doc_word_tablet_id_;
+    doc_word_schema_version_ = src.doc_word_schema_version_;
+    doc_word_found_ = src.doc_word_found_;
+
+    if (OB_FAIL(snapshot_.assign(src.snapshot_))) {
+      STORAGE_LOG(WARN, "failed to assign snapshot", K(ret));
+    }
+    return ret;
   }
 
-  ObFTDocWordInfo &operator=(const ObFTDocWordInfo &src)
-  {
-      table_id_ =src.table_id_;
-      doc_word_table_id_ = src.doc_word_table_id_;
-      doc_word_ls_id_ = src.doc_word_ls_id_;
-      doc_word_tablet_id_ = src.doc_word_tablet_id_;
-      doc_word_schema_version_ = src.doc_word_schema_version_;
-      doc_word_found_ = src.doc_word_found_;
-      snapshot_.valid_ = src.snapshot_.valid_;
-      snapshot_.committed_ = src.snapshot_.committed_;
-      snapshot_.core_ = src.snapshot_.core_;
-      snapshot_.source_ = src.snapshot_.source_;
-      snapshot_.snapshot_lsid_ = src.snapshot_.snapshot_lsid_;
-      snapshot_.snapshot_ls_role_ = src.snapshot_.snapshot_ls_role_;
-      snapshot_.snapshot_acquire_addr_ = src.snapshot_.snapshot_acquire_addr_;
-      return *this;
-  }
   TO_STRING_KV(K_(table_id),
                K_(doc_word_table_id),
                K_(doc_word_ls_id),
@@ -127,6 +109,9 @@ public:
   transaction::ObTxReadSnapshot snapshot_;
   int64_t doc_word_schema_version_;
   bool doc_word_found_;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObFTDocWordInfo);
 };
 
 class ObDomainDMLParam final
