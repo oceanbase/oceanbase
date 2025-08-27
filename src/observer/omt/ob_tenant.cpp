@@ -1802,7 +1802,6 @@ void ObTenant::check_worker_count()
                  && ((0 != w->blocking_ts() && now - w->blocking_ts() >= threshold) || w->is_doing_ddl())
                  && w->is_default_worker()
                  && enable_dynamic_worker) {
-        ++token;
         if (w->is_doing_ddl()) {
           ddl_token++;
         } else {
