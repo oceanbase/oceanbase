@@ -63,6 +63,7 @@ public:
   virtual void unset_need_retry() override { need_retry_ = false; }
   virtual bool need_retry() const override { return need_retry_; }
   virtual void resume() override;
+  virtual int try_add_stream_rpc_session_wait_cnt(int cnt) override;
 
   int init();
   void destroy();
