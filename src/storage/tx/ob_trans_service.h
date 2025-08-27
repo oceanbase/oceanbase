@@ -290,6 +290,13 @@ public:
   int check_dup_table_tablet_readable();
 
   int retry_redo_sync_by_task(ObTransID tx_id, share::ObLSID ls_id);
+
+  int acquire_weak_read_snapshot(ObTxDesc &tx,
+                                 const ObTxIsolationLevel iso_level,
+                                 const int64_t expire_ts,
+                                 const int64_t max_read_stale_time,
+                                 const bool local_single_ls_plan,
+                                 ObTxReadSnapshot &snapshot);
 public:
   int end_1pc_trans(ObTxDesc &trans_desc,
                     ObITxCallback *endTransCb,

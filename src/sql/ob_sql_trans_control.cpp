@@ -849,11 +849,21 @@ int ObSqlTransControl::stmt_sanity_check_(ObSQLSessionInfo *session,
     // check isolation with consistency type
     ObTxIsolationLevel iso = session->get_tx_desc()->get_isolation_level();
     ObConsistencyLevel cl = plan_ctx->get_consistency_level();
-    if (ObConsistencyLevel::WEAK == cl && is_isolation_RR_or_SE(iso)) {
-      ret = OB_NOT_SUPPORTED;
-      TRANS_LOG(ERROR, "statement of weak consistency is not allowed under SERIALIZABLE isolation",
-                KR(ret), "trans_id", session->get_tx_id(), "consistency_level", cl);
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "weak consistency under SERIALIZABLE and REPEATABLE-READ isolation level");
+    if (ObConsistencyLevel::WEAK == cl &&
+      (iso == ObTxIsolationLevel::SERIAL || iso == ObTxIsolationLevel::RR)) {
+      // ret = OB_NOT_SUPPORTED;
+      // TRANS_LOG(ERROR, "statement of weak consistency is not allowed under SERIALIZABLE isolation",
+      //           KR(ret), "trans_id", session->get_tx_id(), "consistency_level", cl);
+      // LOG_USER_ERROR(OB_NOT_SUPPORTED, "weak consistency under SERIALIZABLE and REPEATABLE-READ isolation level");
+      TRANS_LOG(INFO,
+                "start a weak read statement in a serializable transaction",
+                K(ret),
+                "trans_id",
+                session->get_tx_id(),
+                "consistency_level",
+                cl,
+                "tx_desc",
+                *session->get_tx_desc());
     }
   }
   if (OB_SUCC(ret)
@@ -878,22 +888,17 @@ int ObSqlTransControl::stmt_setup_snapshot_(ObSQLSessionInfo *session,
   ObConsistencyLevel cl = plan_ctx->get_consistency_level();
   ObTxReadSnapshot &snapshot = das_ctx.get_snapshot();
   bool can_plain_insert = false;
-  if (cl == ObConsistencyLevel::WEAK || cl == ObConsistencyLevel::FROZEN) {
+  if (cl == ObConsistencyLevel::WEAK || cl == ObConsistencyLevel::FROZEN
+      || session->get_tx_desc()->get_tx_consistency_type()
+             == ObTxConsistencyType::BOUNDED_STALENESS_READ) {
     SCN snapshot_version = SCN::min_scn();
-    const bool local_single_ls = plan->is_local_plan() &&
-                                 OB_PHY_PLAN_LOCAL == plan->get_location_type();
-    if (OB_FAIL(txs->get_weak_read_snapshot_version(session->get_ob_max_read_stale_time(),
-                                                    local_single_ls,
-                                                    snapshot_version))) {
+    const bool local_single_ls =
+        plan->is_local_plan() && OB_PHY_PLAN_LOCAL == plan->get_location_type();
+    if (OB_FAIL(txs->acquire_weak_read_snapshot(*session->get_tx_desc(), session->get_tx_isolation(),
+                                            get_stmt_expire_ts(plan_ctx, *session),
+                                            session->get_ob_max_read_stale_time(), local_single_ls,
+                                            snapshot))) {
       TRANS_LOG(WARN, "get weak read snapshot fail", KPC(txs));
-      int64_t stale_time = session->get_ob_max_read_stale_time();
-      int64_t refresh_interval = GCONF.weak_read_version_refresh_interval;
-      if (stale_time > 0 && refresh_interval > stale_time) {
-        TRANS_LOG(WARN, "weak_read_version_refresh_interval is larger than ob_max_read_stale_time ",
-                  K(refresh_interval), K(stale_time), KPC(txs));
-      }
-    } else {
-      snapshot.init_weak_read(snapshot_version);
     }
   // 1) acquire snapshot version when insert operator is executed
   // 2) don't resolve RR and SERIALIZABLE isolation scenario temporarily, because of remote stmt plan
