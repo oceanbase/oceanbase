@@ -3521,9 +3521,13 @@ int ObPLResolver::adjust_routine_param_type(ObPLDataType &type)
         data_type.set_precision(-1);
         data_type.set_scale(-85);
       } break;
+      case ObDecimalIntTC:
       case ObNumberTC: {
         data_type.set_precision(-1);
         data_type.set_scale(-85);
+        if (data_type.get_obj_type() == ObDecimalIntType) {
+          data_type.set_obj_type(ObNumberType);
+        }
       } break;
       case ObOTimestampTC: {
         data_type.set_precision(
@@ -3687,9 +3691,8 @@ int ObPLResolver::resolve_sp_data_type(const ParseNode *sp_data_type_node,
    */
   if (OB_SUCC(ret)
       && OB_NOT_NULL(extern_type_info)
-      && ObNumberType == data_type.get_obj_type()
-      && 38 == data_type.get_data_type()->get_precision()
-      && 0 == data_type.get_data_type()->get_scale()) {
+      && ((ObNumberType == data_type.get_obj_type() && 38 == data_type.get_data_type()->get_precision() && 0 == data_type.get_data_type()->get_scale())
+          || ObDecimalIntType == data_type.get_obj_type())) {
     OZ (adjust_routine_param_type(data_type));
   }
   // datatype is parameter type if extern_type_info is not null, need adjust presicion and scale etc...

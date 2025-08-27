@@ -273,6 +273,22 @@ int ObPLDataType::get_table_type_by_name(uint64_t tenant_id,
   return ret;
 }
 
+int ObPLDataType::adjust_routine_param_type(const ObRoutineParam *iparam,
+                                            pl::ObPLDataType &pl_type)
+{
+  int ret = OB_SUCCESS;
+  if (ob_is_numeric_type(pl_type.get_obj_type())) {
+    if (iparam->is_in_param()) {
+      OZ (ObPLResolver::adjust_routine_param_type(pl_type));
+    } else {
+      // do nothing
+    }
+  } else {
+    OZ (ObPLResolver::adjust_routine_param_type(pl_type));
+  }
+  return ret;
+}
+
 int ObPLDataType::transform_from_iparam(const ObRoutineParam *iparam,
                                         share::schema::ObSchemaGetterGuard &schema_guard,
                                         sql::ObSQLSessionInfo &session_info,
@@ -350,6 +366,7 @@ int ObPLDataType::transform_from_iparam(const ObRoutineParam *iparam,
                                  true,
                                  pl_type,
                                  deps));
+        OZ (adjust_routine_param_type(iparam, pl_type));
         break;
       }
       case SP_EXTERN_TAB_COL: {
@@ -363,13 +380,7 @@ int ObPLDataType::transform_from_iparam(const ObRoutineParam *iparam,
                                    false,
                                    pl_type,
                                    deps));
-        if (OB_SUCC(ret) && iparam->is_in_param() && ob_is_numeric_type(pl_type.get_obj_type())) {
-          const ObAccuracy &default_accuracy =  ObAccuracy::DDL_DEFAULT_ACCURACY2[lib::is_oracle_mode()][pl_type.get_obj_type()];
-          // precision of decimal int must be equal to precision defined in schema.
-          if (!pl_type.get_data_type()->get_meta_type().is_decimal_int()) {
-            pl_type.get_data_type()->set_accuracy(default_accuracy);
-          }
-        }
+        OZ (adjust_routine_param_type(iparam, pl_type));
         break;
       }
       case SP_EXTERN_PKGVAR_OR_TABCOL: {
@@ -397,6 +408,7 @@ int ObPLDataType::transform_from_iparam(const ObRoutineParam *iparam,
                                    pl_type,
                                    deps));
         }
+        OZ (adjust_routine_param_type(iparam, pl_type));
         break;
       }
       case SP_EXTERN_SYS_REFCURSOR: {
@@ -2613,6 +2625,7 @@ int ObPLCursorInfo::prepare_entity(ObSQLSessionInfo &session,
                                    lib::MemoryContext &entity)
 {
   int ret = OB_SUCCESS;
+  OZ (session.init_cursor_cache());
   if (OB_ISNULL(entity)) {
     uint64_t eff_tenant_id = session.get_effective_tenant_id();
     lib::MemoryContext parent_entity = session.get_cursor_cache().mem_context_;
