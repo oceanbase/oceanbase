@@ -515,6 +515,9 @@
 #include "sql/engine/expr/ob_expr_tmp_file_close.h"
 #include "sql/engine/expr/ob_expr_tmp_file_write.h"
 #include "sql/engine/expr/ob_expr_tmp_file_read.h"
+#include "sql/engine/expr/ob_expr_ai/ob_expr_ai_complete.h"
+#include "sql/engine/expr/ob_expr_ai/ob_expr_ai_embed.h"
+#include "sql/engine/expr/ob_expr_ai/ob_expr_ai_rerank.h"
 #include "sql/engine/expr/ob_expr_local_dynamic_filter.h"
 
 
@@ -1299,6 +1302,9 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprInnerInfoColsColumnKeyPrinter);
     REG_OP(ObExprCheckLocationAccess);
     REG_OP(ObExprStartUpMode);
+    REG_OP(ObExprAIComplete);
+    REG_OP(ObExprAIEmbed);
+    REG_OP(ObExprAIRerank);
     REG_OP(ObExprLocalDynamicFilter);
     REG_OP(ObExprFormatProfile);
   }();

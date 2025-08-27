@@ -766,6 +766,11 @@ ident:
     {
       $$ = $1;
       $$->pl_str_off_ = @1.first_column;
+      // Check if this identifier is create_ai_model_endpoint or alter_ai_model_endpoint and set sensitive data flag
+      if (($$->str_len_ == 24 && !strncasecmp($$->str_value_, "create_ai_model_endpoint", 24))
+        || ($$->str_len_ == 23 &&  !strncasecmp($$->str_value_, "alter_ai_model_endpoint", 23))) {
+        parse_ctx->contain_sensitive_data_ = 1;
+      }
     }
   | unreserved_keyword
     {

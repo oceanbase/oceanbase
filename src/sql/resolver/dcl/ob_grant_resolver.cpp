@@ -1364,6 +1364,14 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_3_5_2", K(ret));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant create catalog/use catalog privilege");
+          } else if (compat_version < DATA_VERSION_4_4_1_0
+                     && ((priv_set & OB_PRIV_CREATE_AI_MODEL) != 0 ||
+                         (priv_set & OB_PRIV_ALTER_AI_MODEL) != 0 ||
+                         (priv_set & OB_PRIV_DROP_AI_MODEL) != 0 ||
+                         (priv_set & OB_PRIV_ACCESS_AI_MODEL) != 0)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_4_1_0", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant create/alter/drop/access ai model privilege");
           }
           if (OB_FAIL(ret)) {
           } else {

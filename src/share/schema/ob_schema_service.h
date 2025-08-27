@@ -50,6 +50,7 @@ class ObPackageInfo;
 class ObTriggerInfo;
 class ObUDTTypeInfo;
 class ObSimpleExternalResourceSchema;
+class ObAiModelSchema;
 
 enum ObSchemaOperationCategory
 {
@@ -450,6 +451,7 @@ IS_DDL_TYPE(RLS_GROUP, rls_group)
 IS_DDL_TYPE(RLS_CONTEXT, rls_context)
 IS_DDL_TYPE(CATALOG, catalog)
 IS_DDL_TYPE(EXTERNAL_RESOURCE, external_resource)
+IS_DDL_TYPE(AI_MODEL, ai_model)
 IS_DDL_TYPE(CCL_RULE, ccl_rule)
 
 struct ObSchemaOperation
@@ -808,6 +810,7 @@ class ObServerSchemaService;
 class ObContextSqlService;
 class ObCatalogSqlService;
 class ObExternalResourceSqlService;
+class ObAiModelSqlService;
 class ObCCLRuleSqlService;
 class ObSchemaService
 {
@@ -869,6 +872,7 @@ public:
   DECLARE_GET_DDL_SQL_SERVICE_FUNC(Catalog, catalog);
   //DECLARE_GET_DDL_SQL_SERVICE_FUNC(sys_priv, priv);
   DECLARE_GET_DDL_SQL_SERVICE_FUNC(ExternalResource, external_resource);
+  DECLARE_GET_DDL_SQL_SERVICE_FUNC(AiModel, ai_model);
   DECLARE_GET_DDL_SQL_SERVICE_FUNC(CCLRule, ccl_rule);
 
 
@@ -1021,6 +1025,7 @@ public:
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(rls_context, ObRlsContextSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(catalog, ObCatalogSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(external_resource, ObSimpleExternalResourceSchema);
+  GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(ai_model, ObAiModelSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(ccl_rule, ObSimpleCCLRuleSchema);
 
   //get tenant increment schema operation between (base_version, new_schema_version]
@@ -1100,6 +1105,7 @@ public:
   virtual int fetch_new_priv_id(const uint64_t tenant_id, uint64_t &new_priv_id) = 0;
   virtual int fetch_new_catalog_id(const uint64_t tenant_id, uint64_t &new_catalog_id) = 0;
   virtual int fetch_new_external_resource_id(const uint64_t tenant_id, uint64_t &new_external_resource_id) = 0;
+  virtual int fetch_new_ai_model_id(const uint64_t tenant_id, uint64_t &new_ai_model_id) = 0;
   virtual int fetch_new_ccl_rule_id(const uint64_t tenant_id, uint64_t &new_ccl_rule_id) = 0;
 
 //------------------For managing privileges-----------------------------//
@@ -1159,6 +1165,7 @@ public:
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(rls_context, ObRlsContextSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(catalog, ObCatalogSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(external_resource, ObSimpleExternalResourceSchema);
+  GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(ai_model, ObAiModelSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(ccl_rule, ObSimpleCCLRuleSchema);
 
 

@@ -15560,6 +15560,86 @@ end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_VECTOR_MEMORY limit 1);
 cnt
 1
+desc oceanbase.DBA_OB_AI_MODELS;
+Field	Type	Null	Key	Default	Extra
+MODEL_ID	bigint(20)	NO		NULL	
+NAME	varchar(128)	NO		NULL	
+TYPE	varchar(16)	NO		NULL	
+MODEL_NAME	varchar(128)	NO		NULL	
+set @query_type = (select 
+case 
+when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|DBA_OB_AI_MODELS|%') then 2
+when ('|CDB_OB_SERVER_SPACE_USAGE|' like '%|DBA_OB_AI_MODELS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_AI_MODELS|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_AI_MODELS limit 1);
+cnt
+1
+desc oceanbase.DBA_OB_AI_MODEL_ENDPOINTS;
+Field	Type	Null	Key	Default	Extra
+ENDPOINT_ID	bigint(20)	NO		NULL	
+ENDPOINT_NAME	varchar(128)	NO		NULL	
+AI_MODEL_NAME	varchar(128)	NO		NULL	
+SCOPE	varchar(128)	NO		NULL	
+URL	varchar(2048)	YES		NULL	
+ACCESS_KEY	varchar(2048)	YES		NULL	
+PROVIDER	varchar(128)	YES		NULL	
+REQUEST_MODEL_NAME	varchar(128)	YES		NULL	
+PARAMETERS	varchar(2048)	YES		NULL	
+REQUEST_TRANSFORM_FN	varchar(64)	YES		NULL	
+RESPONSE_TRANSFORM_FN	varchar(64)	YES		NULL	
+set @query_type = (select 
+case 
+when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|DBA_OB_AI_MODEL_ENDPOINTS|%') then 2
+when ('|CDB_OB_SERVER_SPACE_USAGE|' like '%|DBA_OB_AI_MODEL_ENDPOINTS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_AI_MODEL_ENDPOINTS|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_AI_MODEL_ENDPOINTS limit 1);
+cnt
+1
+desc oceanbase.CDB_OB_AI_MODELS;
+Field	Type	Null	Key	Default	Extra
+TENANT_ID	bigint(20)	NO		NULL	
+MODEL_ID	bigint(20)	NO		NULL	
+NAME	varchar(128)	NO		NULL	
+TYPE	varchar(16)	NO		NULL	
+MODEL_NAME	varchar(128)	NO		NULL	
+set @query_type = (select 
+case 
+when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|CDB_OB_AI_MODELS|%') then 2
+when ('|CDB_OB_SERVER_SPACE_USAGE|' like '%|CDB_OB_AI_MODELS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|CDB_OB_AI_MODELS|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_OB_AI_MODELS limit 1);
+cnt
+1
+desc oceanbase.CDB_OB_AI_MODEL_ENDPOINTS;
+Field	Type	Null	Key	Default	Extra
+TENANT_ID	bigint(20)	NO		NULL	
+ENDPOINT_ID	bigint(20)	NO		NULL	
+ENDPOINT_NAME	varchar(128)	NO		NULL	
+AI_MODEL_NAME	varchar(128)	NO		NULL	
+SCOPE	varchar(128)	NO		NULL	
+URL	varchar(2048)	YES		NULL	
+ACCESS_KEY	varchar(2048)	YES		NULL	
+PROVIDER	varchar(128)	YES		NULL	
+REQUEST_MODEL_NAME	varchar(128)	YES		NULL	
+PARAMETERS	varchar(2048)	YES		NULL	
+REQUEST_TRANSFORM_FN	varchar(64)	YES		NULL	
+RESPONSE_TRANSFORM_FN	varchar(64)	YES		NULL	
+set @query_type = (select 
+case 
+when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|CDB_OB_AI_MODEL_ENDPOINTS|%') then 2
+when ('|CDB_OB_SERVER_SPACE_USAGE|' like '%|CDB_OB_AI_MODEL_ENDPOINTS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|CDB_OB_AI_MODEL_ENDPOINTS|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_OB_AI_MODEL_ENDPOINTS limit 1);
+cnt
+1
 select case cnt when 0 then NULL else 'UNEXPECTED ERROR: It is expected to be an empty set, which means that all GV$ and V$ view column names are defined consistently' end ERROR_INFO from (select /*+no_rewrite*/ count(*) cnt from
 (SELECT t.table_name,
 group_concat(c.column_name) as column_name_list

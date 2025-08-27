@@ -950,6 +950,11 @@ int ObSchemaHistoryRecycler::try_recycle_schema_history(
                          location_id);
     ret = OB_SUCCESS; // overwrite ret
 
+    // --------------------------- ai_model --------------------------------------------------
+    RECYCLE_FIRST_SCHEMA(RECYCLE_AND_COMPRESS, ai_model, OB_ALL_AI_MODEL_HISTORY_TNAME,
+                         model_id);
+    ret = OB_SUCCESS; // overwrite ret
+
     // -------------------------- object priv --------------------------------------------
     // (RECYCLE_AND_COMPRESS)
     {

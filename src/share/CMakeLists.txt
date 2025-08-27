@@ -613,6 +613,8 @@ ob_set_subtarget(ob_share schema
   schema/ob_external_resource_sql_service.cpp
   schema/ob_location_schema_struct.cpp
   schema/ob_schema_getter_guard_location.cpp
+  schema/ob_ai_model_mgr.cpp
+  schema/ob_ai_model_sql_service.cpp
   schema/ob_ccl_schema_struct.cpp
   schema/ob_ccl_rule_mgr.cpp
   schema/ob_ccl_rule_sql_service.cpp
@@ -792,6 +794,12 @@ if (NOT OB_BUILD_STANDALONE)
     ob_dummy_license_utils.cpp
   )
 endif()
+
+ob_set_subtarget(ob_share ai_service
+  ai_service/ob_ai_service_struct.cpp
+  ai_service/ob_ai_service_proxy.cpp
+  ai_service/ob_ai_service_executor.cpp
+)
 
 ob_add_new_object_target(ob_share ob_share)
 ob_add_new_object_target(ob_share_extra ob_share_extra)

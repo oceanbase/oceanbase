@@ -750,6 +750,11 @@ public:
   int drop_external_resource(const obrpc::ObDropExternalResourceArg &arg, obrpc::ObDropExternalResourceRes &result);
   //----End of functions for managing external resource----
 
+  //----Functions for managing ai model----
+  int create_ai_model(const obrpc::ObCreateAiModelArg &arg);
+  int drop_ai_model(const obrpc::ObDropAiModelArg &arg);
+  //----End of functions for managing ai model----
+
   //----Functions for managing CCL rules----
   int create_ccl_rule_ddl(const obrpc::ObCreateCCLRuleArg &arg);
   int drop_ccl_rule_ddl(const obrpc::ObDropCCLRuleArg &arg);

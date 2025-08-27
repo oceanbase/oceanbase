@@ -286,6 +286,7 @@ syspack_config = [
     SysPackConfig(SysPackGroup.MYSQL, "dbms_space", "dbms_space_mysql.sql", "dbms_space_body_mysql.sql"),
     SysPackConfig(SysPackGroup.MYSQL, "dbms_partition", "dbms_partition_mysql.sql", "dbms_partition_body_mysql.sql"),
     SysPackConfig(SysPackGroup.MYSQL, "dbms_java", "dbms_java_mysql.sql", "dbms_java_body_mysql.sql"),
+    SysPackConfig(SysPackGroup.MYSQL, "dbms_ai_service", "dbms_ai_service_mysql.sql", "dbms_ai_service_body_mysql.sql"),
     SysPackConfig(SysPackGroup.MYSQL, "dbms_xprofile", "dbms_xprofile_mysql.sql", "dbms_xprofile_mysql_body.sql"),
     SysPackConfig(SysPackGroup.MYSQL, "dbms_balance", "dbms_balance_mysql.sql", "dbms_balance_body_mysql.sql"),
     SysPackConfig(SysPackGroup.MYSQL, "dbms_data_dict", "dbms_data_dict_mysql.sql", "dbms_data_dict_body_mysql.sql"),

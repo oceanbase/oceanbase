@@ -6138,3 +6138,23 @@ database_id	decimal(38,0)	NO		NULL
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_dba_source_v1;
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_ai_model_endpoint;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+endpoint_id	bigint(20)	NO	PRI	NULL	
+scope	varchar(128)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+version	bigint(20)	NO		NULL	
+endpoint_name	varchar(128)	NO		NULL	
+ai_model_name	varchar(128)	NO		NULL	
+url	varchar(2048)	YES		NULL	
+access_key	varchar(2048)	YES		NULL	
+provider	varchar(128)	YES		NULL	
+request_model_name	varchar(128)	YES		NULL	
+parameters	varchar(2048)	YES		NULL	
+request_transform_fn	varchar(64)	YES		NULL	
+response_transform_fn	varchar(64)	YES		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ai_model_endpoint;
+IF(count(*) >= 0, 1, 0)
+1

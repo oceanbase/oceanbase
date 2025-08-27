@@ -32,6 +32,7 @@ ob_set_subtarget(ob_sql common_mixed
   dblink/ob_tm_service.cpp
   privilege_check/ob_ora_priv_check.cpp
   privilege_check/ob_privilege_check.cpp
+  privilege_check/ob_ai_model_priv_util.cpp
   resolver/mv/ob_mv_checker.cpp
   resolver/mv/ob_mv_provider.cpp
   resolver/mv/ob_mv_printer.cpp
@@ -903,6 +904,12 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_tmp_file_close.cpp
   engine/expr/ob_expr_tmp_file_write.cpp
   engine/expr/ob_expr_tmp_file_read.cpp
+  engine/expr/ob_expr_ai/ob_ai_func.cpp
+  engine/expr/ob_expr_ai/ob_ai_func_client.cpp
+  engine/expr/ob_expr_ai/ob_ai_func_utils.cpp
+  engine/expr/ob_expr_ai/ob_expr_ai_complete.cpp
+  engine/expr/ob_expr_ai/ob_expr_ai_embed.cpp
+  engine/expr/ob_expr_ai/ob_expr_ai_rerank.cpp
   engine/expr/ob_expr_local_dynamic_filter.cpp
   engine/expr/ob_expr_format_profile.cpp
 )

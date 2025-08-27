@@ -8348,6 +8348,58 @@ def_table_schema(**gen_history_table_def(555, all_external_resource))
 # 571: __all_ai_model_history
 # 572: __all_ai_model_endpoint
 
+all_ai_model_def = dict(
+    owner = 'shenyunlong.syl',
+    table_name = '__all_ai_model',
+    table_id = '570',
+    table_type = 'SYSTEM_TABLE',
+    gm_columns = ['gmt_create', 'gmt_modified'],
+    rowkey_columns = [
+      ('tenant_id', 'int'),
+      ('model_id', 'int'),
+    ],
+    in_tenant_space = True,
+    is_cluster_private = False,
+    meta_record_in_sys = False,
+    normal_columns = [
+        ('name', 'varchar:128', 'false'),
+        ('type', 'int', 'false'),
+        ('model_name', 'varchar:128', 'false'),
+    ]
+)
+
+def_table_schema(**all_ai_model_def)
+def_table_schema(**gen_history_table_def(571, all_ai_model_def))
+
+all_ai_model_endpoint_def = dict(
+    owner = 'shenyunlong.syl',
+    table_name = '__all_ai_model_endpoint',
+    table_id = '572',
+    table_type = 'SYSTEM_TABLE',
+    gm_columns = ['gmt_create', 'gmt_modified'],
+    rowkey_columns = [
+      ('tenant_id', 'int'),
+      ('endpoint_id', 'int'),
+      ('scope', 'varchar:128')
+    ],
+    in_tenant_space = True,
+    is_cluster_private = True,
+    meta_record_in_sys = False,
+    normal_columns = [
+        ('version', 'int', 'false'),
+        ('endpoint_name', 'varchar:128'),
+        ('ai_model_name', 'varchar:128', 'false'),
+        ('url', 'varchar:2048', 'true'),
+        ('access_key', 'varchar:2048', 'true'),
+        ('provider', 'varchar:128', 'true'),
+        ('request_model_name', 'varchar:128', 'true'),
+        ('parameters', 'varchar:2048', 'true'),
+        ('request_transform_fn', 'varchar:64', 'true'),
+        ('response_transform_fn', 'varchar:64', 'true')
+    ]
+)
+def_table_schema(**all_ai_model_endpoint_def)
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -17012,9 +17064,22 @@ def_table_schema(
   in_tenant_space = True,
 )
 
-# 12572: __all_virtual_ai_model
-# 12573: __all_virtual_ai_model_history
-# 12574: __all_virtual_ai_model_endpoint
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12572',
+  table_name = '__all_virtual_ai_model',
+  keywords = all_def_keywords['__all_ai_model']))
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12573',
+  table_name = '__all_virtual_ai_model_history',
+  keywords = all_def_keywords['__all_ai_model_history']))
+
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12574',
+  table_name = '__all_virtual_ai_model_endpoint',
+  keywords = all_def_keywords['__all_ai_model_endpoint'],
+  in_tenant_space=True))
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -33204,6 +33269,14 @@ def_table_schema(
                      AND (U.PRIV_OTHERS & (1 << 14) != 0) THEN 'CREATE CATALOG'
                 WHEN V1.C1 = 51
                      AND (U.PRIV_OTHERS & (1 << 15) != 0) THEN 'USE CATALOG'
+                WHEN V1.C1 = 55
+                     AND (U.PRIV_OTHERS & (1 << 19) != 0) THEN 'CREATE AI MODEL'
+                WHEN V1.C1 = 56
+                     AND (U.PRIV_OTHERS & (1 << 20) != 0) THEN 'ALTER AI MODEL'
+                WHEN V1.C1 = 57
+                     AND (U.PRIV_OTHERS & (1 << 21) != 0) THEN 'DROP AI MODEL'
+                WHEN V1.C1 = 58
+                     AND (U.PRIV_OTHERS & (1 << 22) != 0) THEN 'ACCESS AI MODEL'
                 WHEN V1.C1 = 0
                      AND U.PRIV_ALTER = 0
                      AND U.PRIV_CREATE = 0
@@ -33301,7 +33374,11 @@ def_table_schema(
         UNION ALL SELECT 47 AS C1
         UNION ALL SELECT 49 AS C1
         UNION ALL SELECT 50 AS C1
-        UNION ALL SELECT 51 AS C1) V1,
+        UNION ALL SELECT 51 AS C1
+        UNION ALL SELECT 55 AS C1
+        UNION ALL SELECT 56 AS C1
+        UNION ALL SELECT 57 AS C1
+        UNION ALL SELECT 58 AS C1) V1,
        (SELECT USER_ID
         FROM oceanbase.__all_user
         WHERE TENANT_ID = 0
@@ -43515,10 +43592,116 @@ WHERE
 # 21686: DBA_OB_SS_SPACE_USAGE
 # 21687: GV$OB_HMS_CLIENT_POOL_STAT
 # 21688: V$OB_HMS_CLIENT_POOL_STAT
-# 21689: DBA_OB_AI_MODELS
-# 21690: DBA_OB_AI_MODEL_ENDPOINTS
-# 21691: CDB_OB_AI_MODELS
-# 21692: CDB_OB_AI_MODEL_ENDPOINTS
+
+def_table_schema(
+  owner           = 'shenyunlong.syl',
+  table_name      = 'DBA_OB_AI_MODELS',
+  table_id        = '21689',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+    SELECT
+      MODEL_ID,
+      NAME,
+      case type
+        when 1 then 'DENSE_EMBEDDING'
+        when 2 then 'SPARSE_EMBEDDING'
+        when 3 then 'COMPLETION'
+        when 4 then 'RERANK'
+        else 'INVALID'
+      END AS TYPE,
+      MODEL_NAME
+    FROM oceanbase.__all_ai_model;
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'shenyunlong.syl',
+  table_name      = 'DBA_OB_AI_MODEL_ENDPOINTS',
+  table_id        = '21690',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+    SELECT
+      ENDPOINT_ID,
+      ENDPOINT_NAME,
+      AI_MODEL_NAME,
+      SCOPE,
+      URL,
+      ACCESS_KEY,
+      PROVIDER,
+      REQUEST_MODEL_NAME,
+      PARAMETERS,
+      REQUEST_TRANSFORM_FN,
+      RESPONSE_TRANSFORM_FN
+    FROM oceanbase.__all_virtual_ai_model_endpoint WHERE tenant_id = effective_tenant_id() AND ENDPOINT_ID != -1;
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'shenyunlong.syl',
+  table_name      = 'CDB_OB_AI_MODELS',
+  table_id        = '21691',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = False,
+  view_definition =
+  """
+    SELECT
+      TENANT_ID,
+      MODEL_ID,
+      NAME,
+      case type
+        when 1 then 'DENSE_EMBEDDING'
+        when 2 then 'SPARSE_EMBEDDING'
+        when 3 then 'COMPLETION'
+        when 4 then 'RERANK'
+        else 'INVALID'
+      END AS TYPE,
+      MODEL_NAME
+    FROM oceanbase.__all_virtual_ai_model;
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'shenyunlong.syl',
+  table_name      = 'CDB_OB_AI_MODEL_ENDPOINTS',
+  table_id        = '21692',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = False,
+  view_definition =
+  """
+    SELECT
+      TENANT_ID,
+      ENDPOINT_ID,
+      ENDPOINT_NAME,
+      AI_MODEL_NAME,
+      SCOPE,
+      URL,
+      ACCESS_KEY,
+      PROVIDER,
+      REQUEST_MODEL_NAME,
+      PARAMETERS,
+      REQUEST_TRANSFORM_FN,
+      RESPONSE_TRANSFORM_FN
+    FROM oceanbase.__all_virtual_ai_model_endpoint
+    WHERE ENDPOINT_ID != -1;
+  """.replace("\n", " ")
+)
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
 ################################################################################
@@ -78641,8 +78824,21 @@ def_sys_index_table(
   index_type = 'INDEX_TYPE_UNIQUE_LOCAL',
   keywords = all_def_keywords['__all_external_resource'])
 
-# 101120: __all_ai_model_endpoint
-# 101121: __all_ai_model_endpoint
+def_sys_index_table(
+  index_name = 'idx_endpoint_name',
+  index_table_id = 101120,
+  index_columns = ['endpoint_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_UNIQUE_LOCAL',
+  keywords = all_def_keywords['__all_ai_model_endpoint'])
+
+def_sys_index_table(
+  index_name = 'idx_ai_model_name',
+  index_table_id = 101121,
+  index_columns = ['ai_model_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_ai_model_endpoint'])
 
 # 余留位置（此行之前占位）
 # 索引表占位建议：基于基表（数据表）表名来占位，其他方式包括：索引名（index_name）、索引表表名

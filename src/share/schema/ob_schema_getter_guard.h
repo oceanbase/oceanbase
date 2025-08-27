@@ -27,6 +27,7 @@
 #include "share/schema/ob_external_resource_mgr.h"
 #include "share/schema/ob_location_schema_struct.h"
 #include "share/schema/ob_objpriv_mysql_schema_struct.h"
+#include "share/schema/ob_ai_model_mgr.h"
 #include "share/schema/ob_ccl_schema_struct.h"
 #include "share/schema/ob_ccl_rule_mgr.h"
 
@@ -1223,6 +1224,14 @@ public:
                                        const uint64_t obj_type,
                                        ObIArray<const ObObjMysqlPriv *> &obj_privs,
                                        bool reset_flag);
+  // ai function
+  int get_ai_model_schema(const uint64_t tenant_id,
+                          const uint64_t ai_model_id,
+                          const ObAiModelSchema *&ai_model_schema);
+
+  int get_ai_model_schema(const uint64_t tenant_id,
+                          const ObString &ai_model_name,
+                          const ObAiModelSchema *&ai_model_schema);
 
   int get_ccl_rule_with_name(const uint64_t tenant_id,
                              const common::ObString &name,

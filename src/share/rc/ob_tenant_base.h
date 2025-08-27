@@ -45,6 +45,7 @@ namespace omt {
  class ObTenant;
  class ObSharedTimer;
  class ObTenantSrs;
+ class ObTenantAiService;
 }
 namespace obmysql {
   class ObMySQLRequestManager;
@@ -515,6 +516,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       rootserver::ObDDLScheduler*,                   \
       storage::ObInnerTabletAccessService*,          \
       storage::ObTabletReorgInfoTableService*,       \
+      omt::ObTenantAiService*,                       \
       sql::ObSQLCCLRuleManager*,                     \
       share::ObBackupDestIOPermissionMgr*            \
   )

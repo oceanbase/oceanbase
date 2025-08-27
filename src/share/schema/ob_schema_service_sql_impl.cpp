@@ -257,6 +257,7 @@ ObSchemaServiceSQLImpl::ObSchemaServiceSQLImpl()
       rls_service_(*this),
       catalog_service_(*this),
       external_resource_service_(*this),
+      ai_model_service_(*this),
       ccl_rule_service_(*this),
       cluster_schema_status_(ObClusterSchemaStatus::NORMAL_STATUS),
       gen_schema_version_map_(),
@@ -1366,6 +1367,7 @@ GET_ALL_SCHEMA_FUNC_DEFINE(catalog, ObCatalogSchema);
 GET_ALL_SCHEMA_FUNC_DEFINE(catalog_priv, ObCatalogPriv);
 GET_ALL_SCHEMA_FUNC_DEFINE(external_resource, ObSimpleExternalResourceSchema);
 GET_ALL_SCHEMA_FUNC_DEFINE(location, ObLocationSchema);
+GET_ALL_SCHEMA_FUNC_DEFINE(ai_model, ObAiModelSchema);
 GET_ALL_SCHEMA_FUNC_DEFINE(ccl_rule, ObSimpleCCLRuleSchema);
 
 int ObSchemaServiceSQLImpl::get_all_db_privs(ObISQLClient &client,
@@ -3248,6 +3250,7 @@ FETCH_NEW_SCHEMA_ID(RLS_CONTEXT, rls_context);
 FETCH_NEW_SCHEMA_ID(CATALOG, catalog);
 FETCH_NEW_SCHEMA_ID(EXTERNAL_RESOURCE, external_resource);
 FETCH_NEW_SCHEMA_ID(LOCATION, location);
+FETCH_NEW_SCHEMA_ID(AI_MODEL, ai_model);
 FETCH_NEW_SCHEMA_ID(CCL_RULE, ccl_rule);
 
 #undef FETCH_NEW_SCHEMA_ID
@@ -3663,6 +3666,7 @@ GET_BATCH_SCHEMAS_FUNC_DEFINE(catalog, ObCatalogSchema);
 GET_BATCH_SCHEMAS_FUNC_DEFINE(external_resource, ObSimpleExternalResourceSchema);
 GET_BATCH_SCHEMAS_FUNC_DEFINE(location, ObLocationSchema);
 GET_BATCH_SCHEMAS_FUNC_DEFINE(obj_mysql_priv, ObObjMysqlPriv);
+GET_BATCH_SCHEMAS_FUNC_DEFINE(ai_model, ObAiModelSchema);
 GET_BATCH_SCHEMAS_FUNC_DEFINE(ccl_rule, ObSimpleCCLRuleSchema);
 
 int ObSchemaServiceSQLImpl::sql_append_pure_ids(
@@ -11435,6 +11439,55 @@ int ObSchemaServiceSQLImpl::get_table_id_and_table_name_in_tablegroup(
       }
     }
   }
+  return ret;
+}
+
+int ObSchemaServiceSQLImpl::fetch_ai_models(ObISQLClient &sql_client,
+                                            const ObRefreshSchemaStatus &schema_status,
+                                            const int64_t schema_version,
+                                            const uint64_t tenant_id,
+                                            ObIArray<ObAiModelSchema> &schema_array,
+                                            const SchemaKey *schema_keys,
+                                            const int64_t schema_key_size)
+{
+  int ret = OB_SUCCESS;
+
+  const uint64_t exec_tenant_id = fill_exec_tenant_id(schema_status);
+
+  SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+    ObMySQLResult *result = nullptr;
+    ObSqlString sql;
+
+    if (OB_FAIL(sql.append_fmt("SELECT * FROM %s WHERE tenant_id=0",
+                               OB_ALL_AI_MODEL_HISTORY_TNAME))) {
+      LOG_WARN("failed to append_fmt to sql", K(ret), K(sql));
+    } else if (OB_FAIL(sql.append_fmt(" AND schema_version <= %ld", schema_version))) {
+      LOG_WARN("failed to append_fmt to sql", K(ret), K(sql));
+    } else if (OB_NOT_NULL(schema_keys) && schema_key_size > 0) {
+      if (OB_FAIL(sql.append(" AND model_id IN"))) {
+        LOG_WARN("failed to append_fmt to sql", K(ret), K(sql));
+      } else if (OB_FAIL(SQL_APPEND_SCHEMA_ID(ai_model, schema_keys, schema_key_size, sql))) {
+        LOG_WARN("failed to append ai_model id to sql", K(ret), K(sql));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      const int64_t snapshot_timestamp = schema_status.snapshot_timestamp_;
+      DEFINE_SQL_CLIENT_RETRY_WEAK_WITH_SNAPSHOT(sql_client, snapshot_timestamp);
+
+      if (OB_FAIL(sql.append(" ORDER BY tenant_id DESC, model_id DESC, schema_version DESC"))) {
+        LOG_WARN("failed to append_fmt to sql", K(ret), K(sql));
+      } else if (OB_FAIL(sql_client_retry_weak.read(res, exec_tenant_id, sql.ptr()))) {
+        LOG_WARN("failed to execute sql", K(ret), K(tenant_id), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected NULL result", K(ret), K(sql));
+      } else if (OB_FAIL(ObSchemaRetrieveUtils::retrieve_ai_model_schema(tenant_id, *result, schema_array))) {
+        LOG_WARN("failed to ObSchemaRetrieveUtils::retrieve_ai_model_schema", K(ret), K(tenant_id), K(sql));
+      }
+    }
+  }
+
   return ret;
 }
 

@@ -703,6 +703,12 @@ struct ObPLExecCtx : public ObPLINS
                             const ObUserDefinedType *&user_type,
                             ObIAllocator *allocator = NULL) const;
   virtual int calc_expr(uint64_t package_id, int64_t expr_idx, ObObjParam &result);
+  void set_is_sensitive(bool is_sensitive) const
+  {
+    if (OB_NOT_NULL(exec_ctx_) && OB_NOT_NULL(exec_ctx_->get_sql_ctx())) {
+      exec_ctx_->get_sql_ctx()->is_sensitive_ = is_sensitive;
+    }
+  }
 
   common::ObIAllocator *allocator_; // Symbol Allocator
   sql::ObExecContext *exec_ctx_;

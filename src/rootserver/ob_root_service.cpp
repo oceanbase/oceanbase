@@ -74,6 +74,7 @@
 #include "parallel_ddl/ob_htable_ddl_handler.h" // ObUpdateIndexStatusHelper
 #include "pl_ddl/ob_pl_ddl_service.h"
 #include "storage/ddl/ob_tablet_split_util.h"
+#include "rootserver/ob_ai_model_ddl_service.h"
 #include "parallel_ddl/ob_drop_tablegroup_helper.h" // ObDropTableGroupHelper
 #include "parallel_ddl/ob_create_tablegroup_helper.h" // ObCreateTableGroupHelper
 #include "share/table/ob_ttl_util.h"
@@ -12204,6 +12205,45 @@ int ObRootService::drop_external_resource(const obrpc::ObDropExternalResourceArg
   }
 
   LOG_INFO("out drop_external_resource", K(ret), K(arg));
+
+  return ret;
+}
+
+int ObRootService::create_ai_model(const obrpc::ObCreateAiModelArg &arg)
+{
+  int ret = OB_SUCCESS;
+  LOG_TRACE("receive create ai model arg", K(arg));
+  ObAiModelDDLService ai_model_ddl_service(ddl_service_);
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(arg.check_valid())) {
+    LOG_WARN("invalid arg", K(ret), K(arg));
+  } else if (OB_FAIL(ai_model_ddl_service.create_ai_model(arg))) {
+    LOG_WARN("failed to create ai model", K(ret), K(arg));
+  }
+
+  LOG_TRACE("finish create ai model", K(ret), K(arg));
+
+  return ret;
+}
+
+int ObRootService::drop_ai_model(const obrpc::ObDropAiModelArg &arg)
+{
+  int ret = OB_SUCCESS;
+  LOG_TRACE("receive drop ai model arg", K(arg));
+  ObAiModelDDLService ai_model_ddl_service(ddl_service_);
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(arg), K(ret));
+  } else if (OB_FAIL(ai_model_ddl_service.drop_ai_model(arg))) {
+    LOG_WARN("failed to drop ai model", K(ret), K(arg));
+  }
+
+  LOG_TRACE("finish drop ai model", K(ret), K(arg));
 
   return ret;
 }

@@ -23,6 +23,7 @@
 #include "share/catalog/ob_catalog_utils.h"
 
 #include "ob_external_resource_schema_getter_guard.ipp"
+#include "ob_ai_model_schema_getter_guard.ipp"
 namespace oceanbase
 {
 using namespace common;

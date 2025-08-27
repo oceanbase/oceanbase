@@ -454,6 +454,9 @@
 #include "ob_expr_tmp_file_write.h"
 #include "ob_expr_tmp_file_read.h"
 #include "ob_expr_tmp_file_close.h"
+#include "sql/engine/expr/ob_expr_ai/ob_expr_ai_complete.h"
+#include "sql/engine/expr/ob_expr_ai/ob_expr_ai_embed.h"
+#include "sql/engine/expr/ob_expr_ai/ob_expr_ai_rerank.h"
 #include "ob_expr_local_dynamic_filter.h"
 #include "ob_expr_format_profile.h"
 
@@ -1421,9 +1424,9 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL,// ObExprTmpFileWrite::eval_tmp_file_write,                    /* 855 */
   NULL,// ObExprTmpFileRead::eval_tmp_file_read,                      /* 856 */
 #endif
-  NULL,//ObExprAIComplete::eval_ai_complete,                          /* 857 */
-  NULL,//ObExprAIEmbed::eval_ai_embed,                                /* 858 */
-  NULL,//ObExprAIRerank::eval_ai_rerank,                              /* 859 */
+  ObExprAIComplete::eval_ai_complete,                                 /* 857 */
+  ObExprAIEmbed::eval_ai_embed,                                       /* 858 */
+  ObExprAIRerank::eval_ai_rerank,                                     /* 859 */
   NULL,//ObExprMd5ConcatWs::calc_md5_concat_ws_expr                   /* 860 */
   NULL,//ObExprUDF::eval_mysql_udtf,                                  /* 861 */
   NULL,//ObExprHiddenClusteringKey::eval_hidden_clustering_key,       /* 862 */
@@ -1849,8 +1852,8 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   ObExprConvertTZ::calc_convert_tz_vector,                               /* 226 */
   NULL, // ObExprMul::mul_decimalint64_int64_int64_vector,                        /* 227 */
   NULL, // ObExprHash::calc_hash_value_expr_vector,                               /* 228 */
-  NULL, // ObExprAIComplete::eval_ai_complete_vector,                           /* 229 */
-  NULL, // ObExprAIEmbed::eval_ai_embed_vector,                                 /* 230 */
+  ObExprAIComplete::eval_ai_complete_vector,                             /* 229 */
+  ObExprAIEmbed::eval_ai_embed_vector,                                   /* 230 */
   NULL, // ObExprAIRerank::eval_ai_rerank_vector,                               /* 231 */
   NULL, // ObExprMd5ConcatWs::calc_md5_concat_ws_vector                         /* 232 */
   NULL, // ObExprHiddenClusteringKey::eval_vector_hidden_clustering_key,         /* 233 */

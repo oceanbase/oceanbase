@@ -942,7 +942,6 @@ public:
                                     share::schema::ObSchemaGetterGuard &schema_guard);
   //----End of functions for row level security----
 
-
   virtual int insert_temp_table_info(common::ObMySQLTransaction &trans,
                                      const share::schema::ObTableSchema &table_schema);
   virtual int delete_temp_table_info(common::ObMySQLTransaction &trans,
