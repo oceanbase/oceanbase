@@ -342,12 +342,14 @@ int ObRpcLoadDataTaskExecuteP::process()
     int64_t major_freeze_trigger = 0;
     int64_t memstore_limit = 0;
     int64_t freeze_cnt = 0;
+    int64_t unused_throttle_trigger = 0;
     if (OB_UNLIKELY(OB_SUCCESS != (memory_check_ret =
                                    freezer->get_tenant_memstore_cond(active_memstore_used,
                                                                      total_memstore_used,
                                                                      major_freeze_trigger,
                                                                      memstore_limit,
-                                                                     freeze_cnt)))) {
+                                                                     freeze_cnt,
+                                                                     unused_throttle_trigger)))) {
       LOG_WARN("fail to get memstore used", K(memory_check_ret));
     } else {
       if (static_cast<double>(total_memstore_used)

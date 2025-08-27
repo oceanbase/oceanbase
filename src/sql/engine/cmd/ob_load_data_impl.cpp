@@ -230,12 +230,14 @@ int ObLoadDataBase::memory_check_remote(uint64_t tenant_id, bool &need_wait_mino
       int64_t major_freeze_trigger = 0;
       int64_t memstore_limit = 0;
       int64_t freeze_cnt = 0;
+      int64_t unused_throttle_trigger = 0;
 
       if (OB_FAIL(freezer->get_tenant_memstore_cond(active_memstore_used,
                                                     total_memstore_used,
                                                     major_freeze_trigger,
                                                     memstore_limit,
-                                                    freeze_cnt))) {
+                                                    freeze_cnt,
+                                                    unused_throttle_trigger))) {
         LOG_WARN("fail to get memstore used", K(ret));
       } else {
         if (total_memstore_used > (memstore_limit - major_freeze_trigger)/2 + major_freeze_trigger) {
