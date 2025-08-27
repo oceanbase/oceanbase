@@ -773,7 +773,25 @@ int ObPluginVectorIndexUtils::refresh_adp_from_table(
   return ret;
 }
 
-int ObPluginVectorIndexUtils::query_need_refresh_memdata(ObPluginVectorIndexAdaptor *adapter, ObLSID &ls_id)
+int ObPluginVectorIndexUtils::get_read_scn(bool is_leader, ObLSID &ls_id, SCN &target_scn)
+{
+  int ret = OB_SUCCESS;
+  ObLSHandle ls_handle;
+  // ObLSWRSHandler::get_ls_weak_read_ts
+  storage::ObLSService *ls_svr = MTL(storage::ObLSService*);
+  if (OB_ISNULL(ls_svr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr", K(ret), KP(ls_svr), K(ls_id));
+  } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::SHARE_MOD))) {
+    LOG_WARN("failed to get log stream", K(ret), K(ls_id));
+  } else  if (is_leader && OB_FAIL(target_scn.convert_from_ts(ObTimeUtility::fast_current_time()))) {
+    LOG_WARN("failed to convert ts to scn", K(ret));
+  } else if (!is_leader && FALSE_IT(target_scn = ls_handle.get_ls()->get_ls_wrs_handler()->get_ls_weak_read_ts())) {
+  }
+  return ret;
+}
+
+int ObPluginVectorIndexUtils::query_need_refresh_memdata(ObPluginVectorIndexAdaptor *adapter, ObLSID &ls_id, bool is_leader)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator("VectorAdaptor", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
@@ -786,8 +804,8 @@ int ObPluginVectorIndexUtils::query_need_refresh_memdata(ObPluginVectorIndexAdap
     common::ObSpinLockGuard ctx_guard(adapter->get_reload_lock());
     if (adapter->get_reload_finish()) {
       need_retry = true;
-    } else if (OB_FAIL(target_scn.convert_from_ts(ObTimeUtility::fast_current_time()))) {
-      LOG_WARN("failed to convert ts to scn", K(ret));
+    } else if (OB_FAIL(get_read_scn(is_leader, ls_id, target_scn))) {
+      LOG_WARN("failed to get weak read scn", K(ret), K(is_leader));
     } else if (OB_FAIL(ObPluginVectorIndexUtils::refresh_memdata(ls_id, adapter, target_scn, allocator))) {
       LOG_WARN("fail to refresh adapter", K(ret));
     } else if (OB_FALSE_IT(adapter->set_reload_finish(true))) {
