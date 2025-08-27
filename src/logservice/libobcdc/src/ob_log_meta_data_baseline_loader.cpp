@@ -8,12 +8,12 @@
 // MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 // See the Mulan PubL v2 for more details.
 
-#define USING_LOG_PREFIX OBLOG
+#define USING_LOG_PREFIX DATA_DICT
 
 #include "ob_log_meta_data_baseline_loader.h"
 
-#define _STAT(level, fmt, args...) _OBLOG_LOG(level, "[LOG_META_DATA] [LOADER] " fmt, ##args)
-#define STAT(level, fmt, args...) OBLOG_LOG(level, "[LOG_META_DATA] [LOADER] " fmt, ##args)
+#define _STAT(level, fmt, args...) _DATA_DICT_LOG(level, "[LOG_META_DATA] [LOADER] " fmt, ##args)
+#define STAT(level, fmt, args...) DATA_DICT_LOG(level, "[LOG_META_DATA] [LOADER] " fmt, ##args)
 #define _ISTAT(fmt, args...) _STAT(INFO, fmt, ##args)
 #define ISTAT(fmt, args...) STAT(INFO, fmt, ##args)
 #define _DSTAT(fmt, args...) _STAT(DEBUG, fmt, ##args)

@@ -46,6 +46,7 @@ public:
       const int64_t start_seq,
       const bool enable_direct_load_inc);
   int start();
+  void mark_stop_flag();
   void stop();
   void destroy();
 
@@ -56,7 +57,6 @@ public:
       const int64_t timeout);
 
 private:
-  static const int64_t TASK_POOL_ALLOCATOR_TOTAL_LIMIT = (1LL << 32); // 4G
   // Setting the page size to 64K can prevent ObVSliceAlloc from caching too much memory. The scenario is as follows:
   // 1. During the startup, the baseline data for the data dictionary is constructed. This may replay too many
   //    SYS log stream transactions, in which only a portion of them are DDL transactions that need to be concerned.
@@ -72,6 +72,7 @@ private:
 
 private:
   bool is_inited_;
+  volatile bool stop_flag_;
   common::ObConcurrentFIFOAllocator trans_task_pool_alloc_;
   PartTransTaskPool trans_task_pool_;
   ObLogEntryTaskPool log_entry_task_pool_;

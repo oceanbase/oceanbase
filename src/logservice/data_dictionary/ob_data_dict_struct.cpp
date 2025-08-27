@@ -13,6 +13,8 @@
 * This file defines Struct of Meta Dict
 */
 
+#define USING_LOG_PREFIX DATA_DICT
+
 #include "ob_data_dict_struct.h"
 
 #include "share/schema/ob_column_schema.h"
@@ -27,7 +29,7 @@
         || OB_UNLIKELY(buf_len <= 0) \
         || OB_UNLIKELY(pos < 0)) { \
       ret = OB_INVALID_ARGUMENT; \
-      DDLOG(WARN, "invalid arguments", KR(ret), K(buf), K(buf_len), K(pos)); \
+      LOG_WARN("invalid arguments", KR(ret), K(buf), K(buf_len), K(pos)); \
     }
 
 #define PRECHECK_DESERIALIZE \
@@ -38,18 +40,18 @@
       || OB_UNLIKELY(pos < 0) \
       || OB_UNLIKELY(data_len <= pos)) { \
       ret = OB_INVALID_ARGUMENT; \
-      DDLOG(WARN, "invalid arguments", KR(ret), K(buf), K(data_len), K(pos), K_(allocator)); \
+      LOG_WARN("invalid arguments", KR(ret), K(buf), K(data_len), K(pos), K_(allocator)); \
     } \
 
 #define SEARILIZE_ARRAR(ARRAY_TYPE, array_ptr, array_size) \
     do { \
       if (OB_SUCC(ret)) { \
         if (OB_FAIL(serialization::encode_vi64(buf, buf_len, pos, array_size))) { \
-          DDLOG(WARN, #ARRAY_TYPE " encode array size failed", KR(ret), K(buf_len), K(pos)); \
+          LOG_WARN(#ARRAY_TYPE " encode array size failed", KR(ret), K(buf_len), K(pos)); \
         } else if (array_size > 0) { \
           for (int i = 0; OB_SUCC(ret) && i < array_size; i++) { \
             if (OB_FAIL(array_ptr[i].serialize(buf, buf_len, pos))) { \
-              DDLOG(WARN, #ARRAY_TYPE " serialize array failed", KR(ret), K(i), K(array_size)); \
+              LOG_WARN(#ARRAY_TYPE " serialize array failed", KR(ret), K(i), K(array_size)); \
             } \
           } \
         } \
@@ -60,20 +62,20 @@
     do { \
       if (OB_SUCC(ret)) { \
         if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &array_size))) { \
-          DDLOG(WARN, #ARRAY_TYPE " decode array size failed", KR(ret), K(buf), K(data_len), K(pos)); \
+          LOG_WARN(#ARRAY_TYPE " decode array size failed", KR(ret), K(buf), K(data_len), K(pos)); \
         } else if (array_size > 0){ \
           const int64_t alloc_size = sizeof(ARRAY_TYPE) * array_size; \
           if (OB_ISNULL(allocator)) { \
             ret = oceanbase::common::OB_ERR_UNEXPECTED; \
-            DDLOG(WARN, "expected valid allocator while deserialize meta", KR(ret), K(allocator)); \
+            LOG_WARN("expected valid allocator while deserialize meta", KR(ret), K(allocator)); \
           } else if (OB_ISNULL(array_ptr = static_cast<ARRAY_TYPE*>(allocator->alloc(alloc_size)))) { \
             ret = oceanbase::common::OB_ALLOCATE_MEMORY_FAILED; \
-            DDLOG(WARN, #ARRAY_TYPE ": alloc memory for deserialize array", KR(ret), K(alloc_size)); \
+            LOG_WARN(#ARRAY_TYPE ": alloc memory for deserialize array", KR(ret), K(alloc_size)); \
           } else { \
             for (int i = 0; OB_SUCC(ret) && i < array_size; i++) { \
                 new (array_ptr + i) ARRAY_TYPE(); \
               if (OB_FAIL(array_ptr[i].deserialize(buf, data_len, pos))) { \
-                DDLOG(WARN, #ARRAY_TYPE " deserialize fail", KR(ret), K(array_size), K(i)); \
+                LOG_WARN(#ARRAY_TYPE " deserialize fail", KR(ret), K(array_size), K(i)); \
               } \
             } \
           } \
@@ -89,20 +91,20 @@
     do { \
       if (OB_SUCC(ret)) { \
         if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &array_size))) { \
-          DDLOG(WARN, #ARRAY_TYPE " decode array size failed", KR(ret), K(buf), K(data_len), K(pos)); \
+          LOG_WARN(#ARRAY_TYPE " decode array size failed", KR(ret), K(buf), K(data_len), K(pos)); \
         } else if (array_size > 0){ \
           const int64_t alloc_size = sizeof(ARRAY_TYPE) * array_size; \
           if (OB_ISNULL(allocator)) { \
             ret = oceanbase::common::OB_ERR_UNEXPECTED; \
-            DDLOG(WARN, "expected valid allocator while deserialize meta", KR(ret), K(allocator)); \
+            LOG_WARN("expected valid allocator while deserialize meta", KR(ret), K(allocator)); \
           } else if (OB_ISNULL(array_ptr = static_cast<ARRAY_TYPE*>(allocator->alloc(alloc_size)))) { \
             ret = oceanbase::common::OB_ALLOCATE_MEMORY_FAILED; \
-            DDLOG(WARN, #ARRAY_TYPE ": alloc memory for deserialize array", KR(ret), K(alloc_size)); \
+            LOG_WARN(#ARRAY_TYPE ": alloc memory for deserialize array", KR(ret), K(alloc_size)); \
           } else { \
             for (int i = 0; OB_SUCC(ret) && i < array_size; i++) { \
                 new (array_ptr + i) ARRAY_TYPE(args); \
               if (OB_FAIL(array_ptr[i].deserialize(header, buf, data_len, pos))) { \
-                DDLOG(WARN, #ARRAY_TYPE " deserialize fail", KR(ret), K(array_size), K(i)); \
+                LOG_WARN(#ARRAY_TYPE " deserialize fail", KR(ret), K(array_size), K(i)); \
               } \
             } \
           } \
@@ -139,7 +141,7 @@
       if (arg == other.arg) { \
       } else { \
         is_equal = false; \
-        DDLOG_RET(WARN, OB_ERR_UNEXPECTED, #arg " not equal", "current", arg, "other", other.arg); \
+        LOG_WARN_RET(OB_ERR_UNEXPECTED, #arg " not equal", "current", arg, "other", other.arg); \
       } \
     }
 
@@ -151,12 +153,12 @@
           is_equal = ((array_ptr[i]) == (other.array_ptr[i])); \
         } \
         if (! is_equal) { \
-          DDLOG_RET(WARN, OB_ERR_UNEXPECTED, #array_ptr " not equal", K(i), K(array_size), \
+          LOG_WARN_RET(OB_ERR_UNEXPECTED, #array_ptr " not equal", K(i), K(array_size), \
               "current", array_ptr[i], "other", other.array_ptr[i]); \
         } \
       } else { \
         is_equal = false; \
-        DDLOG_RET(WARN, OB_ERR_UNEXPECTED, #array_size " not equal", K(array_size), "other", other.array_size); \
+        LOG_WARN_RET(OB_ERR_UNEXPECTED, #array_size " not equal", K(array_size), "other", other.array_size); \
       } \
     }
 
@@ -168,12 +170,12 @@
           is_equal = array_ref.at(i) == other.array_ref.at(i); \
         } \
         if (! is_equal) { \
-          DDLOG_RET(WARN, OB_ERR_UNEXPECTED, #array_ref " not equal", K(i), "count", array_ref.count(), \
+          LOG_WARN_RET(OB_ERR_UNEXPECTED, #array_ref " not equal", K(i), "count", array_ref.count(), \
               "current", array_ref.at(i), "other", other.array_ref.at(i)); \
         } \
       } else { \
         is_equal = false; \
-        DDLOG_RET(WARN, OB_ERR_UNEXPECTED, #array_ref " size not equal", \
+        LOG_WARN_RET(OB_ERR_UNEXPECTED, #array_ref " size not equal", \
             "current", array_ref.count(), "other", other.array_ref.count()); \
       } \
     }
@@ -305,7 +307,7 @@ DEFINE_DESERIALIZE_DATA_DICT(ObDictTenantMeta)
       ls_arr_);
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(deep_copy_str(tmp_tenant_name, tenant_name_, *allocator_))) {
-      DDLOG(WARN, "deep_copy_str for tenant_name failed", KR(ret), K(tmp_tenant_name));
+      LOG_WARN("deep_copy_str for tenant_name failed", KR(ret), K(tmp_tenant_name));
     }
   }
 
@@ -336,9 +338,9 @@ int ObDictTenantMeta::init(const schema::ObTenantSchema &tenant_schema)
 
   if (OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
-    DDLOG(WARN, "expect valid allocator", KR(ret), K_(allocator));
+    LOG_WARN("expect valid allocator", KR(ret), K_(allocator));
   } else if (OB_FAIL(deep_copy_str(tenant_schema.get_tenant_name_str(), tenant_name_, *allocator_))) {
-    DDLOG(WARN, "assign tenant_name failed", KR(ret), K(tenant_schema), KPC(this));
+    LOG_WARN("assign tenant_name failed", KR(ret), K(tenant_schema), KPC(this));
   } else {
     tenant_id_ = tenant_schema.get_tenant_id();
     schema_version_ = tenant_schema.get_schema_version();
@@ -353,28 +355,51 @@ int ObDictTenantMeta::init(const schema::ObTenantSchema &tenant_schema)
   return ret;
 }
 
-int ObDictTenantMeta::incremental_data_update(const ObDictTenantMeta &new_tenant_meta)
+int ObDictTenantMeta::set_tenant_name(const char *tenant_name, bool &is_tenant_name_not_change)
+{
+  int ret = OB_SUCCESS;
+  is_tenant_name_not_change = false;
+  common::ObString tmp_tenant_name(tenant_name);
+  char *old_buf_ptr = tenant_name_.ptr();
+
+  if (OB_ISNULL(allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expect valid allocator", KR(ret), K_(allocator));
+  } else if (OB_LIKELY(is_tenant_name_not_change = (0 == tenant_name_.compare(tmp_tenant_name)))) {
+    // tenant name not changed, do nothing
+  } else if (OB_FAIL(deep_copy_str(tmp_tenant_name, tenant_name_, *allocator_))) {
+    LOG_WARN("deep_copy_str for tenant_name failed", KR(ret), K(tmp_tenant_name), KPC(this));
+  } else {
+    if (OB_NOT_NULL(old_buf_ptr)) {
+      allocator_->free(old_buf_ptr);
+    }
+    LOG_TRACE("set_tenant_name", K_(tenant_id), K_(schema_version), K_(tenant_name), K(is_tenant_name_not_change));
+  }
+
+  return ret;
+}
+
+int ObDictTenantMeta::incremental_data_update(const ObDictTenantMeta &new_tenant_meta, const bool update_tenant_name)
 {
   int ret = OB_SUCCESS;
 
   if (OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
-    DDLOG(WARN, "expect valid allocator", KR(ret), K_(allocator));
+    LOG_WARN("expect valid allocator", KR(ret), K_(allocator));
   } else {
-    if (nullptr != tenant_name_.ptr()) {
-      allocator_->free(tenant_name_.ptr());
-    }
+    schema_version_ = new_tenant_meta.get_schema_version();
+    compatibility_mode_ = new_tenant_meta.get_compatibility_mode();
+    tenant_status_ = new_tenant_meta.get_status();
+    charset_type_ = new_tenant_meta.get_charset_type();
+    collation_type_ = new_tenant_meta.get_collation_type();
+    drop_tenant_time_ = new_tenant_meta.get_drop_tenant_time();
+    in_recyclebin_ = new_tenant_meta.is_in_recyclebin();
 
-    if (OB_FAIL(deep_copy_str(new_tenant_meta.get_tenant_name(), tenant_name_, *allocator_))) {
-      DDLOG(WARN, "assign tenant_name failed", KR(ret), K(new_tenant_meta), KPC(this));
-    } else {
-      schema_version_ = new_tenant_meta.get_schema_version();
-      compatibility_mode_ = new_tenant_meta.get_compatibility_mode();
-      tenant_status_ = new_tenant_meta.get_status();
-      charset_type_ = new_tenant_meta.get_charset_type();
-      collation_type_ = new_tenant_meta.get_collation_type();
-      drop_tenant_time_ = new_tenant_meta.get_drop_tenant_time();
-      in_recyclebin_ = new_tenant_meta.is_in_recyclebin();
+    if (update_tenant_name) {
+      bool is_tenant_name_not_change = false;
+      if (OB_FAIL(set_tenant_name(new_tenant_meta.get_tenant_name(), is_tenant_name_not_change))) {
+        LOG_WARN("set_tenant_name failed", KR(ret), K(is_tenant_name_not_change), K(new_tenant_meta), KPC(this));
+      }
     }
   }
 
@@ -387,12 +412,12 @@ int ObDictTenantMeta::incremental_data_update(const share::ObLSAttr &ls_attr)
 
   if (OB_UNLIKELY(! ls_attr.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    DDLOG(WARN, "ls attr is invalid", KR(ret), K(ls_attr));
+    LOG_WARN("ls attr is invalid", KR(ret), K(ls_attr));
   } else if (share::is_ls_create_end_op(ls_attr.get_ls_operation_type())) {
     if (OB_FAIL(ls_arr_.push_back(ls_attr.get_ls_id()))) {
-      DDLOG(WARN, "ls_arr_ push_back failed", KR(ret), K(ls_attr), K(ls_arr_));
+      LOG_WARN("ls_arr_ push_back failed", KR(ret), K(ls_attr), K(ls_arr_));
     } else {
-      DDLOG(TRACE, "ls_arr_ push back succ", K(ls_attr), K(ls_arr_));
+      LOG_TRACE("ls_arr_ push back succ", K(ls_attr), K(ls_arr_));
     }
   } else if (share::is_ls_drop_end_op(ls_attr.get_ls_operation_type())) {
     int64_t ls_idx = -1;
@@ -408,9 +433,9 @@ int ObDictTenantMeta::incremental_data_update(const share::ObLSAttr &ls_attr)
 
     if (-1 != ls_idx) {
       if (OB_FAIL(ls_arr_.remove(ls_idx))) {
-        DDLOG(ERROR, "remove ls from ls_arr failed", K(ls_idx), K(ls_arr_), K(ls_attr));
+        LOG_ERROR("remove ls from ls_arr failed", K(ls_idx), K(ls_arr_), K(ls_attr));
       } else {
-        DDLOG(TRACE, "remove ls from ls_arr finished", K(ls_idx), K(ls_arr_), K(ls_attr));
+        LOG_TRACE("remove ls from ls_arr finished", K(ls_idx), K(ls_arr_), K(ls_attr));
       }
     }
 
@@ -426,9 +451,9 @@ int ObDictTenantMeta::init_with_ls_info(
   int ret = OB_SUCCESS;
 
   if (OB_FAIL(init(tenant_schema))) {
-    DDLOG(WARN, "init tenant_meta by schema failed", KR(ret), K(tenant_schema));
+    LOG_WARN("init tenant_meta by schema failed", KR(ret), K(tenant_schema));
   } else if (OB_FAIL(ls_arr_.assign(ls_array))) {
-    DDLOG(WARN, "assign ls_info_arr failed", KR(ret), K(ls_array), K(tenant_schema), KPC(this));
+    LOG_WARN("assign ls_info_arr failed", KR(ret), K(ls_array), K(tenant_schema), KPC(this));
   }
 
   return ret;
@@ -505,7 +530,7 @@ DEFINE_DESERIALIZE_DATA_DICT(ObDictDatabaseMeta)
       in_recyclebin_);
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(deep_copy_str(tmp_db_name, database_name_, *allocator_))) {
-      DDLOG(WARN, "deep_copy_str for database_name_ failed", KR(ret), K(tmp_db_name));
+      LOG_WARN("deep_copy_str for database_name_ failed", KR(ret), K(tmp_db_name));
     }
   }
 
@@ -533,7 +558,7 @@ int ObDictDatabaseMeta::init(const schema::ObDatabaseSchema &database_schema)
   int ret = OB_SUCCESS;
 
   if (OB_FAIL(assign_(database_schema))) {
-    DDLOG(WARN, "assign_ failed", KR(ret), K(database_schema), KPC(this));
+    LOG_WARN("assign_ failed", KR(ret), K(database_schema), KPC(this));
   } else {
     // success
   }
@@ -549,14 +574,14 @@ int ObDictDatabaseMeta::assign(const ObDictDatabaseMeta &src_database_meta)
     reset();
 
     if (OB_FAIL(assign_(src_database_meta))) {
-      DDLOG(WARN, "assign_ failed", KR(ret), K(src_database_meta), KPC(this));
+      LOG_WARN("assign_ failed", KR(ret), K(src_database_meta), KPC(this));
     } else {
       // success
     }
   }
 
   if (OB_FAIL(ret)) {
-    DDLOG(WARN, "ObDictDatabaseMeta assign failed", KR(ret));
+    LOG_WARN("ObDictDatabaseMeta assign failed", KR(ret));
   }
 
   return ret;
@@ -569,9 +594,9 @@ int ObDictDatabaseMeta::assign_(DATABASE_SCHEMA &database_schema)
 
   if (OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
-    DDLOG(WARN, "expect valid allocator", KR(ret), K_(allocator));
+    LOG_WARN("expect valid allocator", KR(ret), K_(allocator));
   } else if (OB_FAIL(deep_copy_str(database_schema.get_database_name_str(), database_name_, *allocator_))) {
-    DDLOG(WARN, "assign tenant_name failed", KR(ret), K(database_schema), KPC(this));
+    LOG_WARN("assign tenant_name failed", KR(ret), K(database_schema), KPC(this));
   } else {
     tenant_id_ = database_schema.get_tenant_id();
     database_id_ = database_schema.get_database_id();
@@ -696,34 +721,34 @@ DEFINE_DESERIALIZE_DATA_DICT(ObDictColumnMeta)
       );
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(deserialize_string_array(buf, data_len, pos, extended_type_info_, *allocator_))) {
-      DDLOG(WARN, "deserialize_extinfo_array failed", KR(ret));
+      LOG_WARN("deserialize_extinfo_array failed", KR(ret));
     } else if (OB_FAIL(deep_copy_str(tmp_col_name, column_name_, *allocator_))) {
-      DDLOG(WARN, "deep copy column_name failed", KR(ret), K(tmp_col_name));
+      LOG_WARN("deep copy column_name failed", KR(ret), K(tmp_col_name));
     } else if (OB_FAIL(deep_copy_default_val_(tmp_orig_default_val, orig_default_value_))) {
-      DDLOG(WARN, "deep copy orig_default_value failed", KR(ret), K(tmp_orig_default_val));
+      LOG_WARN("deep copy orig_default_value failed", KR(ret), K(tmp_orig_default_val));
     } else if (OB_FAIL(deep_copy_default_val_(tmp_cur_default_val, cur_default_value_))) {
-      DDLOG(WARN, "deep copy cur_default_value failed", KR(ret), K(tmp_cur_default_val));
+      LOG_WARN("deep copy cur_default_value failed", KR(ret), K(tmp_cur_default_val));
     } else {
       if (header.get_version() > 1) {
         // column_ref_ids_ is serialized when versin >= 2
         if (OB_FAIL(common::serialization::decode(buf, data_len, pos, column_ref_ids_))) {
-          DDLOG(WARN, "deserialize column_ref_ids_ failed", KR(ret), K(data_len), K(pos));
+          LOG_WARN("deserialize column_ref_ids_ failed", KR(ret), K(data_len), K(pos));
         }
       }
       if (OB_SUCC(ret) && header.get_version() > 2) {
         //udt_set_id_ and sub_type_ is serialized when versin >= 3
         if (OB_FAIL(NS_::decode(buf, data_len, pos, udt_set_id_))) {
-          DDLOG(WARN, "deserialize col_group_id failed", KR(ret));
+          LOG_WARN("deserialize col_group_id failed", KR(ret));
         } else if (OB_FAIL(NS_::decode(buf, data_len, pos, sub_type_))) {
-          DDLOG(WARN, "deserialize sub_type failed", KR(ret));
+          LOG_WARN("deserialize sub_type failed", KR(ret));
         }
       }
       if (OB_SUCC(ret) && header.get_version() > 3) {
         // srs_id_ and local_session_vars are serialized when version >= 4
         if (OB_FAIL(NS_::decode(buf, data_len, pos, srs_id_))) {
-          DDLOG(WARN, "deserialize srs_id failed", KR(ret));
+          LOG_WARN("deserialize srs_id failed", KR(ret));
         } else if (OB_FAIL(NS_::decode(buf, data_len, pos, local_session_vars_))) {
-          DDLOG(WARN, "deserialize local_session_var failed", KR(ret));
+          LOG_WARN("deserialize local_session_var failed", KR(ret));
         }
       }
     }
@@ -762,7 +787,7 @@ int ObDictColumnMeta::init(const schema::ObColumnSchemaV2 &column_schema)
   int ret = OB_SUCCESS;
 
   if (OB_FAIL(assign_(column_schema))) {
-    DDLOG(WARN, "assign failed", KR(ret), K(column_schema), KPC(this));
+    LOG_WARN("assign failed", KR(ret), K(column_schema), KPC(this));
   } else {
     // success
   }
@@ -777,19 +802,19 @@ int ObDictColumnMeta::assign_(COLUMN_META &column_schema)
 
   if (OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
-    DDLOG(WARN, "expect valid allocator", KR(ret), K_(allocator));
+    LOG_WARN("expect valid allocator", KR(ret), K_(allocator));
   } else if (OB_FAIL(deep_copy_str(column_schema.get_column_name_str(), column_name_, *allocator_))) {
-    DDLOG(WARN, "assign column name failed", KR(ret), K(column_schema), KPC(this));
+    LOG_WARN("assign column name failed", KR(ret), K(column_schema), KPC(this));
   } else if (OB_FAIL(deep_copy_default_val_(column_schema.get_orig_default_value(), orig_default_value_))) {
-    DDLOG(WARN, "copy_orig_default_value failed", KR(ret), K(column_schema), KPC(this));
+    LOG_WARN("copy_orig_default_value failed", KR(ret), K(column_schema), KPC(this));
   } else if (OB_FAIL(deep_copy_default_val_(column_schema.get_cur_default_value(), cur_default_value_))) {
-    DDLOG(WARN, "copy_cur_default_value failed", KR(ret), K(column_schema), KPC(this));
+    LOG_WARN("copy_cur_default_value failed", KR(ret), K(column_schema), KPC(this));
   } else if (OB_FAIL(deep_copy_str_array(column_schema.get_extended_type_info(), extended_type_info_, *allocator_))) {
-    DDLOG(WARN, "assign extended_type_info failed", KR(ret), K(column_schema), KPC(this));
+    LOG_WARN("assign extended_type_info failed", KR(ret), K(column_schema), KPC(this));
   } else if (OB_FAIL(column_schema.get_cascaded_column_ids(column_ref_ids_))) {
-    DDLOG(WARN, "get_cascaded_column_ids failed", KR(ret), K(column_schema));
+    LOG_WARN("get_cascaded_column_ids failed", KR(ret), K(column_schema));
   } else if (OB_FAIL(local_session_vars_.deep_copy(column_schema.get_local_session_var()))) {
-    DDLOG(WARN, "copy_local_session_vars failed", KR(ret), K(column_schema), KPC(this));
+    LOG_WARN("copy_local_session_vars failed", KR(ret), K(column_schema), KPC(this));
   } else {
     column_id_ = column_schema.get_column_id();
     rowkey_position_ = column_schema.get_rowkey_position();
@@ -820,14 +845,14 @@ int ObDictColumnMeta::assign(const ObDictColumnMeta &src_column_meta)
     reset();
 
     if (OB_FAIL(assign_(src_column_meta))) {
-      DDLOG(WARN, "assign failed", KR(ret), K(src_column_meta), KPC(this));
+      LOG_WARN("assign failed", KR(ret), K(src_column_meta), KPC(this));
     } else {
       // success
     }
   }
 
   if (OB_FAIL(ret)) {
-    DDLOG(WARN, "ObDictColumnMeta assign failed", KR(ret));
+    LOG_WARN("ObDictColumnMeta assign failed", KR(ret));
   }
 
   return ret;
@@ -839,7 +864,7 @@ int ObDictColumnMeta::get_cascaded_column_ids(ObIArray<uint64_t> &column_ids) co
   column_ids.reset();
 
   if (OB_FAIL(column_ids.assign(column_ref_ids_))) {
-    DDLOG(WARN, "assign cascaded_columns failed", KR(ret), KPC(this), K_(column_ref_ids));
+    LOG_WARN("assign cascaded_columns failed", KR(ret), KPC(this), K_(column_ref_ids));
   }
 
   return ret;
@@ -850,7 +875,7 @@ int ObDictColumnMeta::deep_copy_default_val_(const ObObj &src_default_val, ObObj
   int ret = OB_SUCCESS;
   if (OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
-    DDLOG(WARN, "expect valid allocator_", KR(ret), K(allocator_));
+    LOG_WARN("expect valid allocator_", KR(ret), K(allocator_));
   } else if (src_default_val.get_deep_copy_size() > 0) {
     char *buf = nullptr;
     int64_t pos = 0;
@@ -858,12 +883,12 @@ int ObDictColumnMeta::deep_copy_default_val_(const ObObj &src_default_val, ObObj
 
     if (OB_ISNULL(buf = (char *)allocator_->alloc(alloc_size))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      DDLOG(WARN, "failed to alloc memory", KR(ret), K(alloc_size));
+      LOG_WARN("failed to alloc memory", KR(ret), K(alloc_size));
     } else if (OB_FAIL(dest_default_val.deep_copy(src_default_val, buf, alloc_size, pos))) {
       orig_default_value_.reset();
       allocator_->free(buf);
       buf = nullptr;
-      DDLOG(WARN, "failed to deep copy", KR(ret), K(src_default_val), K(pos));
+      LOG_WARN("failed to deep copy", KR(ret), K(src_default_val), K(pos));
     }
   } else {
     dest_default_val = src_default_val;
@@ -1006,7 +1031,7 @@ DEFINE_DESERIALIZE_DATA_DICT(ObDictTableMeta)
         association_table_id_);
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(deep_copy_str(tmp_table_name, table_name_, *allocator_))) {
-      DDLOG(WARN, "deep_copy_str for table_name failed", KR(ret), K(tmp_table_name));
+      LOG_WARN("deep_copy_str for table_name failed", KR(ret), K(tmp_table_name));
     } else {
       DESERIALIZE_DICT_ARRAY_WITH_ARGS(ObDictColumnMeta, col_metas_, column_count_, allocator_, header, allocator_);
       DESERIALIZE_ARRAY(ObRowkeyColumn, rowkey_cols_, rowkey_column_count_, allocator_);
@@ -1052,21 +1077,21 @@ int ObDictTableMeta::init(const schema::ObTableSchema &table_schema)
 
   if (OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
-    DDLOG(WARN, "invalid allocator_", KR(ret));
+    LOG_WARN("invalid allocator_", KR(ret));
   } else if (OB_FAIL(build_column_info_(table_schema))) {
-    DDLOG(WARN, "build_column_info_ failed", KR(ret), KPC(this));
+    LOG_WARN("build_column_info_ failed", KR(ret), KPC(this));
   } else if (OB_FAIL(build_rowkey_info_(table_schema))) {
-    DDLOG(WARN, "build_rowkey_info_ failed", KR(ret), KPC(this));
+    LOG_WARN("build_rowkey_info_ failed", KR(ret), KPC(this));
   } else if (OB_FAIL(build_index_info_(table_schema))) {
-    DDLOG(WARN, "build_index_info_ failed", KR(ret), KPC(this));
+    LOG_WARN("build_index_info_ failed", KR(ret), KPC(this));
   } else if (OB_FAIL(build_column_id_arr_(table_schema))) {
-    DDLOG(WARN, "build_column_id_arr failed", KR(ret), K(table_schema), KPC(this));
+    LOG_WARN("build_column_id_arr failed", KR(ret), K(table_schema), KPC(this));
   } else if (OB_FAIL(assign_(table_schema))) {
-    DDLOG(WARN, "assign_ failed", KR(ret), KPC(this));
+    LOG_WARN("assign_ failed", KR(ret), KPC(this));
   } else {
     if (table_schema.has_tablet()) {
       if (OB_FAIL(table_schema.get_tablet_ids(tablet_id_arr_))) {
-        DDLOG(WARN, "get_tablet_ids failed", KR(ret), KPC(this));
+        LOG_WARN("get_tablet_ids failed", KR(ret), KPC(this));
       }
     }
   }
@@ -1081,9 +1106,9 @@ int ObDictTableMeta::assign_(const TABLE_SCHEMA &table_schema)
 
   if (OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
-    DDLOG(WARN, "invalid allocator_", KR(ret));
+    LOG_WARN("invalid allocator_", KR(ret));
   } else if (OB_FAIL(deep_copy_str(table_schema.get_table_name_str(), table_name_, *allocator_))) {
-    DDLOG(WARN, "copy table_name failed", KR(ret), K(table_schema), KPC(this));
+    LOG_WARN("copy table_name failed", KR(ret), K(table_schema), KPC(this));
   } else {
     tenant_id_ = table_schema.get_tenant_id();
     database_id_ = table_schema.get_database_id();
@@ -1114,29 +1139,29 @@ int ObDictTableMeta::assign(const ObDictTableMeta &src_table_meta)
 
     if (OB_ISNULL(allocator_)) {
       ret = OB_ERR_UNEXPECTED;
-      DDLOG(WARN, "expect valid allocator", KR(ret), K_(allocator));
+      LOG_WARN("expect valid allocator", KR(ret), K_(allocator));
     } else if (OB_FAIL(build_column_info_(src_table_meta))) {
-      DDLOG(WARN, "build_column_info_ failed", KR(ret), KPC(this));
+      LOG_WARN("build_column_info_ failed", KR(ret), KPC(this));
     } else if (OB_FAIL(build_rowkey_info_(src_table_meta))) {
-      DDLOG(WARN, "build_rowkey_info_ failed", KR(ret), KPC(this));
+      LOG_WARN("build_rowkey_info_ failed", KR(ret), KPC(this));
     } else if (OB_FAIL(build_index_info_(src_table_meta))) {
-      DDLOG(WARN, "build_index_info_ failed", KR(ret), KPC(this));
+      LOG_WARN("build_index_info_ failed", KR(ret), KPC(this));
     } else if (OB_FAIL(assign_(src_table_meta))) {
-      DDLOG(WARN, "assign_ failed", KR(ret), KPC(this));
+      LOG_WARN("assign_ failed", KR(ret), KPC(this));
     } else if (OB_FAIL(column_id_arr_order_by_table_def_.assign(src_table_meta.get_column_id_arr_order_by_table_define()))) {
-      DDLOG(WARN, "assign_column_id_arr failed", KR(ret), K(src_table_meta),
+      LOG_WARN("assign_column_id_arr failed", KR(ret), K(src_table_meta),
           "src_column_id_arr", src_table_meta.get_column_id_arr_order_by_table_define());
     } else {
       if (src_table_meta.has_tablet()) {
         if (OB_FAIL(tablet_id_arr_.assign(src_table_meta.get_tablet_ids()))) {
-          DDLOG(WARN, "tablet_id_arr_ assign failed", KR(ret), KPC(this));
+          LOG_WARN("tablet_id_arr_ assign failed", KR(ret), KPC(this));
         }
       }
     }
   }
 
   if (OB_FAIL(ret)) {
-    DDLOG(WARN, "ObDictTableMeta assign failed", KR(ret));
+    LOG_WARN("ObDictTableMeta assign failed", KR(ret));
   }
 
   return ret;
@@ -1154,10 +1179,10 @@ int ObDictTableMeta::build_index_info_(const schema::ObTableSchema &table_schema
       ObAuxTableMetaInfo index_table_info;
       if (OB_FAIL(simple_index_infos.at(i, index_table_info))) {
       } else if (! ObTableSchema::is_unique_index(index_table_info.index_type_)) {
-        DDLOG(DEBUG, "TableMeta ignore non-unique-index table for unique_index_tid_arr",
+        LOG_DEBUG("TableMeta ignore non-unique-index table for unique_index_tid_arr",
             K(index_table_info), K_(table_id));
       } else if (OB_FAIL(unique_index_tid_arr_.push_back(index_table_info.table_id_))) {
-        DDLOG(WARN, "failed to push_back index_table_id into unique_index_tid_arr",
+        LOG_WARN("failed to push_back index_table_id into unique_index_tid_arr",
             KR(ret), K(i), K(simple_index_infos), K_(unique_index_tid_arr), KPC(this));
       }
     }
@@ -1168,12 +1193,12 @@ int ObDictTableMeta::build_index_info_(const schema::ObTableSchema &table_schema
 
     if (OB_ISNULL(allocator_)) {
       ret = OB_ERR_UNEXPECTED;
-      DDLOG(WARN, "invalid allocator_", KR(ret));
+      LOG_WARN("invalid allocator_", KR(ret));
     } else if (index_column_count_ <= 0) {
-      DDLOG(TRACE, "not found index_cols_, skip", KPC(this));
+      LOG_TRACE("not found index_cols_, skip", KPC(this));
     } else if (OB_ISNULL(index_cols_ = static_cast<ObIndexColumn*>(allocator_->alloc(alloc_size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      DDLOG(WARN, "alloc for index_cols_ failed", KR(ret), K(alloc_size), KPC(this));
+      LOG_WARN("alloc for index_cols_ failed", KR(ret), K(alloc_size), KPC(this));
     } else {
       // build index_columns
       for (int i = 0; OB_SUCC(ret) && i < index_column_count_; i++) {
@@ -1181,10 +1206,10 @@ int ObDictTableMeta::build_index_info_(const schema::ObTableSchema &table_schema
         ObIndexColumn tmp_idx_col;
 
         if (OB_FAIL(index_info.get_column(i, tmp_idx_col))) {
-          DDLOG(WARN, "get_index_column from ObIndexInfo failed", KR(ret), K(index_info), K(i), KPC(this));
+          LOG_WARN("get_index_column from ObIndexInfo failed", KR(ret), K(index_info), K(i), KPC(this));
         } else if (OB_ISNULL(idx_col)) {
           ret = OB_INVALID_DATA;
-          DDLOG(WARN, "expect valid index_column", KR(ret), K(index_info), K(i), KPC(this));
+          LOG_WARN("expect valid index_column", KR(ret), K(index_info), K(i), KPC(this));
         } else {
           *idx_col = tmp_idx_col;
         }
@@ -1208,20 +1233,20 @@ int ObDictTableMeta::build_index_info_(const ObDictTableMeta &src_table_meta)
   if (src_table_meta.is_user_table()) {
     // build index_table_id_arr
     if (OB_FAIL(unique_index_tid_arr_.assign(src_table_meta.get_unique_index_table_id_arr()))) {
-      DDLOG(WARN, "unique_index_tid_arr_ assign failed", KR(ret), K(unique_index_tid_arr_), K(src_table_meta));
+      LOG_WARN("unique_index_tid_arr_ assign failed", KR(ret), K(unique_index_tid_arr_), K(src_table_meta));
     }
   } else if (src_table_meta.is_unique_index()) {
     if (OB_ISNULL(allocator_)) {
       ret = OB_ERR_UNEXPECTED;
-      DDLOG(WARN, "invalid allocator_", KR(ret));
+      LOG_WARN("invalid allocator_", KR(ret));
     } else if (index_column_count_ <= 0) {
-      DDLOG(TRACE, "not found index_cols_, skip", KPC(this));
+      LOG_TRACE("not found index_cols_, skip", KPC(this));
     } else if (OB_ISNULL(index_cols_ = static_cast<ObIndexColumn*>(allocator_->alloc(alloc_size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      DDLOG(WARN, "alloc for index_cols_ failed", KR(ret), K(alloc_size), KPC(this));
+      LOG_WARN("alloc for index_cols_ failed", KR(ret), K(alloc_size), KPC(this));
     } else if (OB_ISNULL(src_index_cols)) {
       ret = OB_ERR_UNEXPECTED;
-      DDLOG(WARN, "src_index_cols is nullptr", KR(ret), K(src_index_cols), K(src_table_meta));
+      LOG_WARN("src_index_cols is nullptr", KR(ret), K(src_index_cols), K(src_table_meta));
     } else {
       // build index_columns
       for (int idx = 0; OB_SUCC(ret) && idx < index_column_count_; idx++) {
@@ -1230,7 +1255,7 @@ int ObDictTableMeta::build_index_info_(const ObDictTableMeta &src_table_meta)
 
         if (OB_ISNULL(index_col) || OB_ISNULL(src_index_col)) {
           ret = OB_INVALID_DATA;
-          DDLOG(WARN, "expect valid index_col", KR(ret), K(idx), K(index_col), K(src_index_col), KPC(this));
+          LOG_WARN("expect valid index_col", KR(ret), K(idx), K(index_col), K(src_index_col), KPC(this));
         } else {
           *index_col = *src_index_col;
         }
@@ -1253,20 +1278,20 @@ int ObDictTableMeta::build_rowkey_info_(const schema::ObTableSchema &table_schem
     const int64_t alloc_size = sizeof(common::ObRowkeyColumn) * rowkey_column_count_;
 
     if (rowkey_column_count_ <= 0) {
-      DDLOG(TRACE, "not found rowkey cols, skip", KPC(this));
+      LOG_TRACE("not found rowkey cols, skip", KPC(this));
     } else if (OB_ISNULL(rowkey_cols_ = static_cast<ObRowkeyColumn*>(allocator_->alloc(alloc_size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      DDLOG(WARN, "alloc for rowkey_cols_ failed", KR(ret), K(alloc_size), KPC(this));
+      LOG_WARN("alloc for rowkey_cols_ failed", KR(ret), K(alloc_size), KPC(this));
     } else {
       for (int i = 0; OB_SUCC(ret) && i < rowkey_column_count_; i++) {
         ObRowkeyColumn *rowkey_col = new (rowkey_cols_ + i) ObRowkeyColumn();
         ObRowkeyColumn tmp_rowkey_col;
 
         if (OB_FAIL(rowkey_info.get_column(i, tmp_rowkey_col))) {
-          DDLOG(WARN, "get_rowkey_column from ObRowkeyInfo failed", KR(ret), K(rowkey_info), K(i), KPC(this));
+          LOG_WARN("get_rowkey_column from ObRowkeyInfo failed", KR(ret), K(rowkey_info), K(i), KPC(this));
         } else if (OB_ISNULL(rowkey_col)) {
           ret = OB_INVALID_DATA;
-          DDLOG(WARN, "expect valid rowkey_column", KR(ret), K(rowkey_info), K(i), KPC(this));
+          LOG_WARN("expect valid rowkey_column", KR(ret), K(rowkey_info), K(i), KPC(this));
         } else {
           *rowkey_col = tmp_rowkey_col;
         }
@@ -1285,13 +1310,13 @@ int ObDictTableMeta::build_rowkey_info_(const ObDictTableMeta &src_table_meta)
   const int64_t alloc_size = sizeof(common::ObRowkeyColumn) * rowkey_column_count_;
 
   if (rowkey_column_count_ <= 0) {
-    DDLOG(TRACE, "not found rowkey cols, skip", KPC(this));
+    LOG_TRACE("not found rowkey cols, skip", KPC(this));
   } else if (OB_ISNULL(rowkey_cols_ = static_cast<ObRowkeyColumn*>(allocator_->alloc(alloc_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    DDLOG(WARN, "alloc for rowkey_cols_ failed", KR(ret), K(alloc_size), KPC(this));
+    LOG_WARN("alloc for rowkey_cols_ failed", KR(ret), K(alloc_size), KPC(this));
   } else if (OB_ISNULL(src_rowkey_cols)) {
     ret = OB_ERR_UNEXPECTED;
-    DDLOG(WARN, "src_rowkey_cols is nullptr", KR(ret), K(src_rowkey_cols), K(src_table_meta));
+    LOG_WARN("src_rowkey_cols is nullptr", KR(ret), K(src_rowkey_cols), K(src_table_meta));
   } else {
     for (int idx = 0; OB_SUCC(ret) && idx < rowkey_column_count_; idx++) {
       ObRowkeyColumn *rowkey_col = new (rowkey_cols_ + idx) ObRowkeyColumn();
@@ -1299,7 +1324,7 @@ int ObDictTableMeta::build_rowkey_info_(const ObDictTableMeta &src_table_meta)
 
       if (OB_ISNULL(rowkey_col) || OB_ISNULL(src_rowkey_col)) {
         ret = OB_INVALID_DATA;
-        DDLOG(WARN, "expect valid rowkey_column", KR(ret), K(idx), K(rowkey_col), K(src_rowkey_col), KPC(this));
+        LOG_WARN("expect valid rowkey_column", KR(ret), K(idx), K(rowkey_col), K(src_rowkey_col), KPC(this));
       } else {
         *rowkey_col = *src_rowkey_col;
       }
@@ -1318,18 +1343,18 @@ int ObDictTableMeta::build_column_info_(const schema::ObTableSchema &table_schem
     // only build_column_info_ for user table.
   } else if (OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
-    DDLOG(WARN, "invalid allocator_", KR(ret));
+    LOG_WARN("invalid allocator_", KR(ret));
   } else if (OB_FAIL(table_schema.get_column_ids(column_ids))) {
-    DDLOG(WARN, "get_column_ids from table_schema failed", KR(ret), K(table_schema));
+    LOG_WARN("get_column_ids from table_schema failed", KR(ret), K(table_schema));
   } else {
     column_count_ = column_ids.count();
     const int64_t alloc_size = sizeof(ObDictColumnMeta) * column_count_;
 
     if (column_count_ <= 0) {
-      DDLOG(TRACE, "table don't have columns, skip", KR(ret), KPC(this));
+      LOG_TRACE("table don't have columns, skip", KR(ret), KPC(this));
     } else if (OB_ISNULL(col_metas_ = static_cast<ObDictColumnMeta*>(allocator_->alloc(alloc_size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      DDLOG(WARN, "alloc for col_metas_ failed", KR(ret), K(alloc_size), KPC(this));
+      LOG_WARN("alloc for col_metas_ failed", KR(ret), K(alloc_size), KPC(this));
     } else {
       for (int i = 0; OB_SUCC(ret) && i < column_count_; i++) {
         const schema::ObColDesc &col_desc = column_ids.at(i);
@@ -1339,14 +1364,14 @@ int ObDictTableMeta::build_column_info_(const schema::ObTableSchema &table_schem
 
         if (OB_ISNULL(col_meta)) {
           ret = OB_INVALID_DATA;
-          DDLOG(WARN, "unexpected invalid ObDictColumnMeta", KR(ret),
+          LOG_WARN("unexpected invalid ObDictColumnMeta", KR(ret),
               K(column_id), K(i), K(column_ids), KPC(this));
         } else if (OB_ISNULL(column_schema = table_schema.get_column_schema(column_id))) {
           ret = OB_ERR_UNEXPECTED;
-          DDLOG(WARN, "get_column_schema failed", KR(ret),
+          LOG_WARN("get_column_schema failed", KR(ret),
               K(column_id), K(i), K(column_ids), K(table_schema), KPC(this));
         } else if (OB_FAIL(col_meta->init(*column_schema))) {
-          DDLOG(WARN, "init ObDictColumnMeta failed", KR(ret),
+          LOG_WARN("init ObDictColumnMeta failed", KR(ret),
               K(column_schema), K(i), K(column_ids), K(table_schema), KPC(this));
         }
       }
@@ -1367,20 +1392,20 @@ int ObDictTableMeta::build_column_info_(const ObDictTableMeta &src_table_meta)
 
   if (OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
-    DDLOG(WARN, "invalid allocator_", KR(ret));
+    LOG_WARN("invalid allocator_", KR(ret));
   } else {
     column_count_ = src_table_meta.get_column_count();
     const ObDictColumnMeta *src_col_metas = src_table_meta.get_column_metas();
     const int64_t alloc_size = sizeof(ObDictColumnMeta) * column_count_;
 
     if (column_count_ <= 0) {
-      DDLOG(TRACE, "table don't have columns, skip", KPC(this));
+      LOG_TRACE("table don't have columns, skip", KPC(this));
     } else if (OB_ISNULL(col_metas_ = static_cast<ObDictColumnMeta*>(allocator_->alloc(alloc_size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      DDLOG(WARN, "alloc for col_metas_ failed", KR(ret), K(alloc_size), KPC(this));
+      LOG_WARN("alloc for col_metas_ failed", KR(ret), K(alloc_size), KPC(this));
     } else if (OB_ISNULL(src_col_metas)) {
       ret = OB_ERR_UNEXPECTED;
-      DDLOG(WARN, "src_col_metas is nullptr", KR(ret), K(src_col_metas), K(src_table_meta));
+      LOG_WARN("src_col_metas is nullptr", KR(ret), K(src_col_metas), K(src_table_meta));
     } else {
       for (int idx = 0; OB_SUCC(ret) && idx < column_count_; idx++) {
         ObDictColumnMeta *col_meta = new (col_metas_ + idx) ObDictColumnMeta(allocator_);
@@ -1388,10 +1413,10 @@ int ObDictTableMeta::build_column_info_(const ObDictTableMeta &src_table_meta)
 
         if (OB_ISNULL(col_meta) ||OB_ISNULL(src_col_meta)) {
           ret = OB_INVALID_DATA;
-          DDLOG(WARN, "unexpected invalid ObDictColumnMeta", KR(ret), K(idx), K(col_meta), K(src_col_meta),
+          LOG_WARN("unexpected invalid ObDictColumnMeta", KR(ret), K(idx), K(col_meta), K(src_col_meta),
               KPC(this), K(src_table_meta));
         } else if (OB_FAIL(col_meta->assign(*src_col_meta))) {
-          DDLOG(WARN, "col_meta assign failed", KR(ret), KPC(src_col_meta));
+          LOG_WARN("col_meta assign failed", KR(ret), KPC(src_col_meta));
         } else {}
       }
     }
@@ -1405,7 +1430,7 @@ int ObDictTableMeta::build_column_id_arr_(const share::schema::ObTableSchema &ta
   int ret = OB_SUCCESS;
   column_id_arr_order_by_table_def_.reset();
   if (table_schema.is_view_table() && !table_schema.is_materialized_view()) {
-    DDLOG(DEBUG, "build_column_id_arr_ skip view", KPC(this));
+    LOG_DEBUG("build_column_id_arr_ skip view", KPC(this));
   } else {
     ObColumnIterByPrevNextID pre_next_id_iter(table_schema);
 
@@ -1414,13 +1439,13 @@ int ObDictTableMeta::build_column_id_arr_(const share::schema::ObTableSchema &ta
 
       if (OB_FAIL(pre_next_id_iter.next(column_schema))) {
         if (OB_ITER_END != ret) {
-          DDLOG(WARN, "pre_next_id_iter next fail", KR(ret), K(table_schema), KPC(column_schema));
+          LOG_WARN("pre_next_id_iter next fail", KR(ret), K(table_schema), KPC(column_schema));
         }
       } else if (OB_ISNULL(column_schema)) {
         ret = OB_ERR_UNEXPECTED;
-        DDLOG(WARN, "column_schema is null", KR(ret), KPC(column_schema));
+        LOG_WARN("column_schema is null", KR(ret), KPC(column_schema));
       } else if (OB_FAIL(column_id_arr_order_by_table_def_.push_back(column_schema->get_column_id()))) {
-        DDLOG(WARN, "push_back column_id into column_id_arr_order_by_table_def_ failed", KR(ret),
+        LOG_WARN("push_back column_id into column_id_arr_order_by_table_def_ failed", KR(ret),
             K(table_schema), KPC(column_schema), K_(column_id_arr_order_by_table_def));
       }
     }
@@ -1484,19 +1509,19 @@ int ObDictTableMeta::get_rowkey_info(ObRowkeyInfo &rowkey_info) const
 
   if (OB_UNLIKELY(rowkey_info.get_size() != 0)) {
     ret = OB_INVALID_ARGUMENT;
-    DDLOG(WARN, "invalid arguments", KR(ret), K(rowkey_info), KPC(this));
+    LOG_WARN("invalid arguments", KR(ret), K(rowkey_info), KPC(this));
   } else if (OB_UNLIKELY(rowkey_column_count_ <= 0)) {
     // ignore cause table doesn't have rowkey_column.
   } else if (OB_FAIL(rowkey_info.reserve(rowkey_column_count_))) {
-    DDLOG(WARN, "reserve rowkey_info size failed", KR(ret), K_(rowkey_column_count));
+    LOG_WARN("reserve rowkey_info size failed", KR(ret), K_(rowkey_column_count));
   } else {
     for (int i = 0; OB_SUCC(ret) && i < rowkey_column_count_; i++) {
       const ObRowkeyColumn &rowkey_column = rowkey_cols_[i];
       if (OB_UNLIKELY(! rowkey_column.is_valid())) {
         ret = OB_ERR_UNEXPECTED;
-        DDLOG(WARN, "rowkey_column is not valid", KR(ret), K(i), K(rowkey_column), KPC(this));
+        LOG_WARN("rowkey_column is not valid", KR(ret), K(i), K(rowkey_column), KPC(this));
       } else if (OB_FAIL(rowkey_info.add_column(rowkey_column))) {
-        DDLOG(WARN, "add_column to rowkey_info failed", KR(ret), K(i), K(rowkey_column), KPC(this));
+        LOG_WARN("add_column to rowkey_info failed", KR(ret), K(i), K(rowkey_column), KPC(this));
       }
     }
   }
@@ -1510,7 +1535,7 @@ int ObDictTableMeta::get_index_info(ObIndexInfo &index_info) const
 
   if (OB_UNLIKELY(index_info.get_size() != 0)) {
     ret = OB_INVALID_ARGUMENT;
-    DDLOG(WARN, "expect empty index_info", KR(ret), K(index_info), KPC(this));
+    LOG_WARN("expect empty index_info", KR(ret), K(index_info), KPC(this));
   } else if (OB_UNLIKELY(index_column_count_ <= 0)) {
     // ignore cause table doesn't have index_column
   } else {
@@ -1518,9 +1543,9 @@ int ObDictTableMeta::get_index_info(ObIndexInfo &index_info) const
       const ObIndexColumn &index_column = index_cols_[i];
       if (OB_UNLIKELY(! index_column.is_valid())) {
         ret = OB_ERR_UNEXPECTED;
-        DDLOG(WARN, "index_column is not valid", KR(ret), K(i), K(index_column), KPC(this));
+        LOG_WARN("index_column is not valid", KR(ret), K(i), K(index_column), KPC(this));
       } else if (OB_FAIL(index_info.add_column(index_column))) {
-        DDLOG(WARN, "add_column to index_info failed", KR(ret), K(i), K(index_column), KPC(this));
+        LOG_WARN("add_column to index_info failed", KR(ret), K(i), K(index_column), KPC(this));
       }
     }
   }
@@ -1534,7 +1559,7 @@ int ObDictTableMeta::get_simple_index_infos(ObIArray<ObAuxTableMetaInfo> &simple
 
   if (OB_UNLIKELY(0 != simple_index_infos_array.count())) {
     ret = OB_INVALID_ARGUMENT;
-    DDLOG(WARN, "expect empty input simple_index_infos_array", KR(ret), K(simple_index_infos_array));
+    LOG_WARN("expect empty input simple_index_infos_array", KR(ret), K(simple_index_infos_array));
   } else {
     for (int i = 0; OB_SUCC(ret) && i < unique_index_tid_arr_.count(); i++) {
       const uint64_t unique_index_tid = unique_index_tid_arr_.at(i);
@@ -1544,9 +1569,9 @@ int ObDictTableMeta::get_simple_index_infos(ObIArray<ObAuxTableMetaInfo> &simple
 
       if (OB_UNLIKELY(unique_index_tid == OB_INVALID_ID)) {
         ret = OB_ERR_UNEXPECTED;
-        DDLOG(WARN, "invalid unique_index_tid", KR(ret), K(unique_index_tid), K(i), K_(unique_index_tid_arr), KPC(this));
+        LOG_WARN("invalid unique_index_tid", KR(ret), K(unique_index_tid), K(i), K_(unique_index_tid_arr), KPC(this));
       } else if (OB_FAIL(simple_index_infos_array.push_back(info))) {
-        DDLOG(WARN, "push_back into simple_index_infos_array failed", KR(ret), K(info), K(i), K_(unique_index_tid_arr), KPC(this));
+        LOG_WARN("push_back into simple_index_infos_array failed", KR(ret), K(info), K(i), K_(unique_index_tid_arr), KPC(this));
       }
     }
   }
@@ -1563,7 +1588,7 @@ int ObDictTableMeta::get_column_ids(ObIArray<ObColDesc> &column_ids, bool no_vir
     const ObRowkeyColumn &rowkey_column = rowkey_cols_[i];
 
     if (OB_UNLIKELY(! rowkey_column.is_valid())) {
-      DDLOG(WARN, "rowkey_column is not valid", KR(ret), K(i), K(rowkey_column), KPC(this));
+      LOG_WARN("rowkey_column is not valid", KR(ret), K(i), K(rowkey_column), KPC(this));
     } else {
       ObColDesc col_desc;
       col_desc.col_id_ = rowkey_column.column_id_;
@@ -1571,7 +1596,7 @@ int ObDictTableMeta::get_column_ids(ObIArray<ObColDesc> &column_ids, bool no_vir
       col_desc.col_order_ = rowkey_column.order_;
 
       if (OB_FAIL(column_ids.push_back(col_desc))) {
-        DDLOG(WARN, "Fail to add rowkey column to column_ids", KR(ret), K(i), K(rowkey_column), K(col_desc), KPC(this));
+        LOG_WARN("Fail to add rowkey column to column_ids", KR(ret), K(i), K(rowkey_column), K(col_desc), KPC(this));
       }
     }
   }
@@ -1582,7 +1607,7 @@ int ObDictTableMeta::get_column_ids(ObIArray<ObColDesc> &column_ids, bool no_vir
 
     if (column_meta.is_rowkey_column()
         || (no_virtual && column_meta.is_virtual_generated_column())) {
-      DDLOG(INFO, "skip non-rowkey_column and virtual_generate_column", K(no_virtual), K(column_meta), KPC(this));
+      LOG_INFO("skip non-rowkey_column and virtual_generate_column", K(no_virtual), K(column_meta), KPC(this));
     } else {
       ObColDesc col_desc;
       col_desc.col_id_ = column_meta.get_column_id();
@@ -1590,7 +1615,7 @@ int ObDictTableMeta::get_column_ids(ObIArray<ObColDesc> &column_ids, bool no_vir
       //for non-rowkey, col_desc.col_order_ is not meaningful
 
       if (OB_FAIL(column_ids.push_back(col_desc))) {
-        DDLOG(WARN, "Fail to add non-rowkey column to column_ids", KR(ret), K(i), K(column_meta), K(col_desc), KPC(this));
+        LOG_WARN("Fail to add non-rowkey column to column_ids", KR(ret), K(i), K(column_meta), K(col_desc), KPC(this));
       }
     }
   }
@@ -1616,7 +1641,7 @@ int ObDictTableMeta::get_column_meta(const uint64_t column_id, const ObDictColum
       ret = OB_ENTRY_NOT_EXIST;
     } else if (OB_ISNULL(column_meta)) {
       ret = OB_ERR_UNEXPECTED;
-      DDLOG(WARN, "column_meta should be valid", KR(ret), K(column_id), KP(column_meta), KPC(this));
+      LOG_WARN("column_meta should be valid", KR(ret), K(column_id), KP(column_meta), KPC(this));
     }
   }
 
@@ -1629,7 +1654,7 @@ const ObDictColumnMeta *ObDictTableMeta::get_column_schema(const uint64_t column
   const ObDictColumnMeta *column_meta = NULL;
 
   if (OB_FAIL(get_column_meta(column_id, column_meta))) {
-    DDLOG(WARN, "get_column_meta failed", KR(ret), K(column_id), KPC(this));
+    LOG_WARN("get_column_meta failed", KR(ret), K(column_id), KPC(this));
   }
 
   return column_meta;

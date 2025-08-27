@@ -74,16 +74,16 @@ TEST(ObDictTenantMeta, test_raw)
   tenant_meta.ls_arr_.assign(ls_arr);
 
   const int64_t serialize_size = tenant_meta.get_serialize_size();
-  DDLOG(INFO, "tenant_meta", K(tenant_meta), K(serialize_size));
+  DATA_DICT_LOG(INFO, "tenant_meta", K(tenant_meta), K(serialize_size));
   char *buf = (char*)ob_malloc(serialize_size, "test");
   int64_t pos = 0;
   EXPECT_EQ(OB_SUCCESS, tenant_meta.serialize(buf, serialize_size, pos));
-  DDLOG(INFO, "serialize_info", K(serialize_size), K(pos));
+  DATA_DICT_LOG(INFO, "serialize_info", K(serialize_size), K(pos));
 
   ObDictTenantMeta tenant_meta_after(&allocator_for_deserialize);
   int64_t deserialize_pos = 0;
   EXPECT_EQ(OB_SUCCESS, tenant_meta_after.deserialize(header, buf, serialize_size, deserialize_pos));
-  DDLOG(INFO, "deserialized_meta", K(deserialize_pos), K(tenant_meta_after));
+  DATA_DICT_LOG(INFO, "deserialized_meta", K(deserialize_pos), K(tenant_meta_after));
   ob_free(buf);
 
   EXPECT_EQ(serialize_size, deserialize_pos);
@@ -112,16 +112,16 @@ TEST(ObDictDatabaseMeta, test_raw)
   db_meta.in_recyclebin_ = true;
 
   const int64_t serialize_size = db_meta.get_serialize_size();
-  DDLOG(INFO, "db_meta", K(db_meta), K(serialize_size));
+  DATA_DICT_LOG(INFO, "db_meta", K(db_meta), K(serialize_size));
   char *buf = (char*)ob_malloc(serialize_size, "test");
   int64_t pos = 0;
   EXPECT_EQ(OB_SUCCESS, db_meta.serialize(buf, serialize_size, pos));
-  DDLOG(INFO, "serialize_info", K(serialize_size), K(pos));
+  DATA_DICT_LOG(INFO, "serialize_info", K(serialize_size), K(pos));
 
   ObDictDatabaseMeta db_meta_after(&allocator_for_deserialize);
   int64_t deserialize_pos = 0;
   EXPECT_EQ(OB_SUCCESS, db_meta_after.deserialize(header, buf, serialize_size, deserialize_pos));
-  DDLOG(INFO, "deserialized_meta", K(deserialize_pos), K(db_meta_after));
+  DATA_DICT_LOG(INFO, "deserialized_meta", K(deserialize_pos), K(db_meta_after));
   ob_free(buf);
 
   EXPECT_EQ(serialize_size, deserialize_pos);
@@ -146,18 +146,18 @@ TEST(ObDictColumnMeta, test_raw)
   ObDictColumnMeta col_meta(&allocator);
   ObDictMetaHeader header(ObDictMetaType::TABLE_META);
   meta_builder.build_column_meta(&col_meta);
-  DDLOG(INFO, "build_column_meta", K(col_meta));
+  DATA_DICT_LOG(INFO, "build_column_meta", K(col_meta));
 
   const int64_t serialize_size = col_meta.get_serialize_size();
   char *buf = (char*)ob_malloc(serialize_size, "test");
   int64_t pos = 0;
   EXPECT_EQ(OB_SUCCESS, col_meta.serialize(buf, serialize_size, pos));
-  DDLOG(INFO, "serialize_info", K(serialize_size), K(pos));
+  DATA_DICT_LOG(INFO, "serialize_info", K(serialize_size), K(pos));
 
   ObDictColumnMeta col_meta_after(&allocator_for_deserialize);
   int64_t deserialize_pos = 0;
   EXPECT_EQ(OB_SUCCESS, col_meta_after.deserialize(header, buf, serialize_size, deserialize_pos));
-  DDLOG(INFO, "deserialized_meta", K(deserialize_pos), K(col_meta_after));
+  DATA_DICT_LOG(INFO, "deserialized_meta", K(deserialize_pos), K(col_meta_after));
   ob_free(buf);
 
   EXPECT_EQ(serialize_size, deserialize_pos);
@@ -175,18 +175,18 @@ TEST(ObObjMeta, test_objmeta_serialize)
   ObObjMeta objmeta;
   objmeta.set_collation_type(ObCollationType::CS_TYPE_GB18030_BIN);
   objmeta.set_collation_level(ObCollationLevel::CS_LEVEL_IGNORABLE);
-  DDLOG(INFO, "build_objmeta", K(objmeta));
+  DATA_DICT_LOG(INFO, "build_objmeta", K(objmeta));
 
   const int64_t serialize_size = objmeta.get_serialize_size();
   char *buf = (char*)ob_malloc(serialize_size, "test");
   int64_t pos = 0;
   EXPECT_EQ(OB_SUCCESS, objmeta.serialize(buf, serialize_size, pos));
-  DDLOG(INFO, "serialize_info", K(serialize_size), K(pos));
+  DATA_DICT_LOG(INFO, "serialize_info", K(serialize_size), K(pos));
 
   ObObjMeta objmet_after;
   int64_t deserialize_pos = 0;
   EXPECT_EQ(OB_SUCCESS, objmet_after.deserialize(buf, serialize_size, deserialize_pos));
-  DDLOG(INFO, "deserialized_meta", K(deserialize_pos), K(objmet_after));
+  DATA_DICT_LOG(INFO, "deserialized_meta", K(deserialize_pos), K(objmet_after));
 
   EXPECT_EQ(serialize_size, deserialize_pos);
   EXPECT_TRUE(objmeta == objmet_after);
@@ -200,18 +200,18 @@ TEST(ObRowkeyColumn, test_rowkey_col)
   rcol.length_ = 431652345;
   rcol.order_ = ObOrderType::DESC;
   rcol.fulltext_flag_ = true;
-  DDLOG(INFO, "build_rowkey_column", K(rcol));
+  DATA_DICT_LOG(INFO, "build_rowkey_column", K(rcol));
 
   const int64_t serialize_size = rcol.get_serialize_size();
   char *buf = (char*)ob_malloc(serialize_size, "test");
   int64_t pos = 0;
   EXPECT_EQ(OB_SUCCESS, rcol.serialize(buf, serialize_size, pos));
-  DDLOG(INFO, "serialize_info", K(serialize_size), K(pos));
+  DATA_DICT_LOG(INFO, "serialize_info", K(serialize_size), K(pos));
 
   ObRowkeyColumn rcol_after_serialize;
   int64_t deserialize_pos = 0;
   EXPECT_EQ(OB_SUCCESS, rcol_after_serialize.deserialize(buf, serialize_size, deserialize_pos));
-  DDLOG(INFO, "deserialized_meta", K(deserialize_pos), K(rcol_after_serialize));
+  DATA_DICT_LOG(INFO, "deserialized_meta", K(deserialize_pos), K(rcol_after_serialize));
   ob_free(buf);
 
   EXPECT_EQ(serialize_size, deserialize_pos);
@@ -228,7 +228,7 @@ TEST(ObDictTableMeta, test_raw)
   const int64_t index_column_count = 1235;
   EXPECT_EQ(OB_SUCCESS, meta_builder.build_table_meta(tb_meta, rowkey_count, col_count, index_column_count));
   EXPECT_NE(nullptr, tb_meta);
-  DDLOG(INFO, "build_table_meta", KPC(tb_meta));
+  DATA_DICT_LOG(INFO, "build_table_meta", KPC(tb_meta));
   EXPECT_EQ(rowkey_count, tb_meta->rowkey_column_count_);
   EXPECT_EQ(col_count, tb_meta->column_count_);
 
@@ -236,12 +236,12 @@ TEST(ObDictTableMeta, test_raw)
   char *buf = (char*)ob_malloc(serialize_size, "test");
   int64_t pos = 0;
   EXPECT_EQ(OB_SUCCESS, tb_meta->serialize(buf, serialize_size, pos));
-  DDLOG(INFO, "serialize_info", K(serialize_size), K(pos));
+  DATA_DICT_LOG(INFO, "serialize_info", K(serialize_size), K(pos));
 
   ObDictTableMeta tb_meta_after(&allocator_for_deserialize);
   int64_t deserialize_pos = 0;
   EXPECT_EQ(OB_SUCCESS, tb_meta_after.deserialize(header, buf, serialize_size, deserialize_pos));
-  DDLOG(INFO, "deserialized_meta", K(deserialize_pos), K(tb_meta_after));
+  DATA_DICT_LOG(INFO, "deserialized_meta", K(deserialize_pos), K(tb_meta_after));
   ob_free(buf);
 
   EXPECT_EQ(serialize_size, deserialize_pos);

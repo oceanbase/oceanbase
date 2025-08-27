@@ -10,10 +10,11 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define USING_LOG_PREFIX OBLOG
+#define USING_LOG_PREFIX DATA_DICT
 #include "ob_log_meta_data_struct.h"
 #include "ob_log_meta_data_service.h"
 #include "ob_log_schema_getter.h"           // TenantSchemaInfo, DBSchemaInfo
+#include "ob_log_instance.h"                // TCTX
 
 namespace oceanbase
 {
@@ -75,17 +76,38 @@ void ObDictTenantInfo::destroy()
   }
 }
 
+int ObDictTenantInfo::update_tenant_name(const char* tenant_name)
+{
+  int ret = OB_SUCCESS;
+  bool is_tenant_name_not_change = false;
+  ObFixedLengthString<OB_MAX_TENANT_NAME_LENGTH + 1> old_tenant_name(get_tenant_name());
+
+  if (OB_ISNULL(tenant_name)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("tenant_name is NULL", KR(ret), KPC(this));
+  } else if (OB_FAIL(dict_tenant_meta_.set_tenant_name(tenant_name, is_tenant_name_not_change))) {
+    LOG_ERROR("dict_tenant_meta_ set_tenant_name failed", KR(ret), KPC(this), K(tenant_name));
+  } else if (OB_UNLIKELY(!is_tenant_name_not_change)) {
+    LOG_INFO("ObDictTenantInfo update_tenant_name", "tenant_id", get_tenant_id(), K(tenant_name), K(old_tenant_name));
+  }
+
+  return ret;
+}
+
 int ObDictTenantInfo::replace_dict_tenant_meta(
     datadict::ObDictTenantMeta *new_dict_tenant_meta)
 {
   int ret = OB_SUCCESS;
+  const bool update_tenant_name = is_data_dict_refresh_mode(TCTX.get_refresh_mode()) && ! TCTX.is_online_sql_not_available();
+  // won't update tenant_name if online sql is available cause we should use tenant_name query from observer instead of in dict_tenant_meta;
+  // Because tenant_name in dict may from primary tenant however cdc may sync from standby
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_ERROR("ObDictTenantInfo has not been initialized", KR(ret));
   } else {
-    if (OB_FAIL(dict_tenant_meta_.incremental_data_update(*new_dict_tenant_meta))) {
-      LOG_ERROR("dict_tenant_meta_ incremental_data_update failed", KR(ret), K(dict_tenant_meta_), KPC(new_dict_tenant_meta));
+    if (OB_FAIL(dict_tenant_meta_.incremental_data_update(*new_dict_tenant_meta, update_tenant_name))) {
+      LOG_ERROR("dict_tenant_meta_ incremental_data_update failed", KR(ret), K(update_tenant_name), K(dict_tenant_meta_), KPC(new_dict_tenant_meta));
     }
   }
 
@@ -382,7 +404,7 @@ int ObDictTenantInfo::get_tenant_schema_info(TenantSchemaInfo &tenant_schema_inf
         dict_tenant_meta_.get_tenant_id(),
         dict_tenant_meta_.get_schema_version(),
         dict_tenant_meta_.get_tenant_name(),
-        dict_tenant_meta_.is_restore());
+        dict_tenant_meta_.get_status());
   }
 
   return ret;

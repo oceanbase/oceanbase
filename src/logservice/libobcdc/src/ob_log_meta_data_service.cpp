@@ -8,7 +8,8 @@
 // MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 // See the Mulan PubL v2 for more details.
 
-#define USING_LOG_PREFIX OBLOG
+#define USING_LOG_PREFIX DATA_DICT
+#include "lib/utility/ob_macro_utils.h"  // RETRY_FUNC
 #include "ob_log_meta_data_service.h"
 #include "ob_log_instance.h"
 #include "ob_log_fetching_mode.h"
@@ -19,9 +20,8 @@
 #include "logservice/archiveservice/ob_archive_define.h"
 #include "ob_log_part_trans_parser.h"
 
-
-#define _STAT(level, fmt, args...) _OBLOG_LOG(level, "[LOG_META_DATA] [SERVICE] " fmt, ##args)
-#define STAT(level, fmt, args...) OBLOG_LOG(level, "[LOG_META_DATA] [SERVICE] " fmt, ##args)
+#define _STAT(level, fmt, args...) _DATA_DICT_LOG(level, "[LOG_META_DATA] [SERVICE] " fmt, ##args)
+#define STAT(level, fmt, args...) DATA_DICT_LOG(level, "[LOG_META_DATA] [SERVICE] " fmt, ##args)
 #define _ISTAT(fmt, args...) _STAT(INFO, fmt, ##args)
 #define ISTAT(fmt, args...) STAT(INFO, fmt, ##args)
 #define _DSTAT(fmt, args...) _STAT(DEBUG, fmt, ##args)
@@ -39,6 +39,8 @@ ObLogMetaDataService &ObLogMetaDataService::get_instance()
 
 ObLogMetaDataService::ObLogMetaDataService() :
     is_inited_(false),
+    start_timestamp_ns_(common::OB_INVALID_TIMESTAMP),
+    err_handler_(nullptr),
     fetcher_(),
     baseline_loader_(),
     incremental_replayer_(),
@@ -50,6 +52,19 @@ ObLogMetaDataService::ObLogMetaDataService() :
 ObLogMetaDataService::~ObLogMetaDataService()
 {
   destroy();
+}
+
+void ObLogMetaDataService::mark_stop_flag()
+{
+  incremental_replayer_.stop();
+  // stop fetcher_dispatcher and baseline_loader by stop fetcher
+  fetcher_.mark_stop_flag();
+}
+
+void ObLogMetaDataService::stop()
+{
+  mark_stop_flag();
+  fetcher_.stop();
 }
 
 int ObLogMetaDataService::init(
@@ -70,10 +85,13 @@ int ObLogMetaDataService::init(
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_ERROR("init twice", KR(ret));
+  } else if (OB_UNLIKELY(common::OB_INVALID_TIMESTAMP >= start_tstamp_ns)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid start timestamp", KR(ret), K(start_tstamp_ns));
   } else if (OB_FAIL(baseline_loader_.init(cfg))) {
     LOG_ERROR("ObLogMetaDataBaselineLoader init fail", KR(ret));
-  } else if (OB_FAIL(incremental_replayer_.init(part_trans_parser))) {
-    LOG_ERROR("ObLogMetaDataReplayer init fail", KR(ret));
+  } else if (OB_FAIL(incremental_replayer_.init(start_tstamp_ns, part_trans_parser))) {
+    LOG_ERROR("ObLogMetaDataReplayer init fail", KR(ret), K(start_tstamp_ns));
   } else if (OB_FAIL(fetcher_dispatcher_.init(&incremental_replayer_, start_seq))) {
     LOG_ERROR("ObLogMetaDataFetcherDispatcher init fail", KR(ret));
   } else if (OB_FAIL(fetcher_.init(fetching_mode, archive_dest, &fetcher_dispatcher_, sys_ls_handler,
@@ -83,8 +101,10 @@ int ObLogMetaDataService::init(
   } else if (OB_FAIL(fetcher_.start())) {
     LOG_ERROR("fetcher_ start failed", KR(ret));
   } else {
+    err_handler_ = err_handler;
+    start_timestamp_ns_ = start_tstamp_ns;
     is_inited_ = true;
-    ISTAT("ObLogMetaDataService init success");
+    ISTAT("ObLogMetaDataService init success", K_(start_timestamp_ns));
   }
 
   return ret;
@@ -92,22 +112,25 @@ int ObLogMetaDataService::init(
 
 void ObLogMetaDataService::destroy()
 {
+  stop();
   if (IS_INIT) {
     fetcher_.destroy();
     baseline_loader_.destroy();
     incremental_replayer_.destroy();
     fetcher_dispatcher_.destroy();
     part_trans_parser_ = NULL;
+    err_handler_ = nullptr;
     is_inited_ = false;
   }
 }
 
 int ObLogMetaDataService::refresh_baseline_meta_data(
-    const uint64_t tenant_id,
-    const int64_t start_timestamp_ns,
+    TenantCheckpoint &tenant_checkpoint,
     const int64_t timeout)
 {
   int ret = OB_SUCCESS;
+  const uint64_t tenant_id = tenant_checkpoint.get_tenant_id();
+  bool is_clog_of_dict_snapshot_served = false;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -122,17 +145,25 @@ int ObLogMetaDataService::refresh_baseline_meta_data(
 
     if (OB_FAIL(baseline_loader_.add_tenant(tenant_id))) {
       LOG_ERROR("baseline_loader_ add_tenant success", KR(ret), K(tenant_id));
-    } else if (OB_FAIL(get_data_dict_in_log_info_(tenant_id, start_timestamp_ns, data_dict_in_log_info))) {
+    } else if (OB_FAIL(get_data_dict_in_log_info_(tenant_id, start_timestamp_ns_, data_dict_in_log_info))) {
       LOG_ERROR("log_meta_data_service get_data_dict_in_log_info failed", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(tenant_checkpoint.wait_until_clog_served(data_dict_in_log_info.snapshot_scn_, is_clog_of_dict_snapshot_served, timeout))) {
+      LOG_ERROR("check_clog_served failed", KR(ret), K(tenant_checkpoint), K(data_dict_in_log_info));
+    } else if (OB_UNLIKELY(! is_clog_of_dict_snapshot_served)) {
+      ret = OB_STATE_NOT_MATCH;
+      LOG_ERROR("[ADD_TENANT][DATA_DICT][REFRESH_BASELINE][FAIL][CLOG_NOT_SERVE][LOG_AT_DICT_SNAPSHOT]",
+          KR(ret), K(tenant_checkpoint), K_(start_timestamp_ns), K(data_dict_in_log_info));
     } else {
-      ISTAT("get_data_dict_in_log_info success", K(tenant_id), K(start_timestamp_ns), K(data_dict_in_log_info));
-      start_parameters.reset(data_dict_in_log_info.snapshot_scn_, std::max(start_timestamp_ns, data_dict_in_log_info.end_scn_), data_dict_in_log_info);
+      ISTAT("get_data_dict_in_log_info success", K(tenant_id), K_(start_timestamp_ns), K(data_dict_in_log_info));
+      start_parameters.reset(data_dict_in_log_info.snapshot_scn_, std::max(start_timestamp_ns_, data_dict_in_log_info.end_scn_), data_dict_in_log_info);
     }
 
     if (OB_SUCC(ret)) {
       if (OB_FAIL(fetcher_.add_ls_and_fetch_until_the_progress_is_reached(tenant_id, start_parameters, timeout))) {
-        LOG_ERROR("fetcher_ add_ls_and_fetch_until_the_progress_is_reached", KR(ret), K(tenant_id),
-            K(start_parameters), K(timeout));
+        if (OB_IN_STOP_STATE != ret) {
+          LOG_ERROR("fetcher_ add_ls_and_fetch_until_the_progress_is_reached", KR(ret), K(tenant_id),
+              K(start_parameters), K(timeout));
+        }
       } else {
       }
     }
@@ -140,25 +171,26 @@ int ObLogMetaDataService::refresh_baseline_meta_data(
     // To get the accurate meta data for start timestamp, we should fetch and parse the corresponding baseline data,
     // and the incremental meta data is then replayed.
     // Note: non-blocking DDL, we must ensure that all DDL transactions are not missed.
-    if (OB_SUCC(ret)) {
-      ObDictTenantInfoGuard dict_tenant_info_guard;
-      ObDictTenantInfo *tenant_info = nullptr;
-
-      if (OB_FAIL(get_tenant_info_guard(tenant_id, dict_tenant_info_guard))) {
-        LOG_ERROR("get_tenant_info_guard failed", KR(ret), K(tenant_id));
-      } else if (OB_ISNULL(tenant_info = dict_tenant_info_guard.get_tenant_info())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("tenant_info is nullptr", K(tenant_id));
-      } else {
-        ISTAT("Increment data replayed begin", K(tenant_id), KPC(tenant_info));
-
-        if (OB_FAIL(incremental_replayer_.replay(tenant_id, start_timestamp_ns, *tenant_info))) {
-          LOG_ERROR("incremental_replayer_ replay failed", KR(ret), K(tenant_id), K(start_timestamp_ns));
-        } else {}
-
-        ISTAT("Increment data replayed end", KR(ret), K(tenant_id), KPC(tenant_info));
-      }
+    if (FAILEDx(incremental_replayer_.wait_replay_end())) {
+      LOG_ERROR("wait incremental_replayer_ replay end failed", KR(ret), K_(start_timestamp_ns), K(start_parameters));
     }
+    LOG_INFO("incremental_replayer_ replay finish", KR(ret), K(tenant_id), K_(start_timestamp_ns), K(start_parameters));
+  }
+
+  if (OB_FAIL(ret) && ret != OB_IN_STOP_STATE && OB_NOT_NULL(err_handler_)) {
+    err_handler_->handle_error(ret, "meta_data_service exit on error(ret = %ld)", ret);
+    mark_stop_flag();
+  }
+
+  return ret;
+}
+
+int ObLogMetaDataService::finish_fetch_tenant_baseline_meta_data(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(incremental_replayer_.replay(tenant_id))) {
+    LOG_ERROR("start replay incremental meta data failed", KR(ret), K(tenant_id), K_(start_timestamp_ns));
   }
 
   return ret;
@@ -368,8 +400,9 @@ int ObLogMetaDataService::get_data_dict_in_log_info_(
           done = true;
         }
       } else if (is_integrated_fetching_mode(fetching_mode)) {
-        common::ObMySQLProxy& sql_proxy = TCTX.is_tenant_sync_mode() ? TCTX.mysql_proxy_.get_ob_mysql_proxy() : TCTX.tenant_sql_proxy_.get_ob_mysql_proxy();
-        ObLogMetaDataSQLQueryer sql_queryer(start_timestamp_ns, sql_proxy);
+        const bool is_cluster_sql_proxy_available = ! TCTX.is_tenant_sync_mode();
+        common::ObMySQLProxy& sql_proxy = is_cluster_sql_proxy_available ? TCTX.tenant_sql_proxy_.get_ob_mysql_proxy() : TCTX.mysql_proxy_.get_ob_mysql_proxy();
+        ObLogMetaDataSQLQueryer sql_queryer(start_timestamp_ns, is_cluster_sql_proxy_available, sql_proxy);
 
         if (OB_FAIL(sql_queryer.get_data_dict_in_log_info(tenant_id, start_timestamp_ns, data_dict_in_log_info))) {
           LOG_WARN("sql_queryer get_data_dict_in_log_info fail", KR(ret), K(tenant_id), K(start_timestamp_ns), K(data_dict_in_log_info));

@@ -45,13 +45,13 @@ int ObDataDictScheduler::create_scheduled_trigger_dump_data_dict_job(const schem
 
   if (OB_UNLIKELY(!is_user_tenant(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
-    DDLOG(WARN, "must be user tenant", KR(ret), K(tenant_id));
+    LOG_WARN("must be user tenant", KR(ret), K(tenant_id));
   } else if (OB_FAIL(sys_variable.get_oracle_mode(is_oracle_mode))) {
-    DDLOG(WARN, "failed to get oracle mode", KR(ret));
+    LOG_WARN("failed to get oracle mode", KR(ret));
   } else if (OB_FAIL(sql::ObExecEnv::gen_exec_env(sys_variable, buf, OB_MAX_PROC_ENV_LENGTH, pos))) {
-    DDLOG(WARN, "failed to gen exec env", KR(ret));
+    LOG_WARN("failed to gen exec env", KR(ret));
   } else if (OB_FAIL(ObDBMSSchedJobUtils::generate_job_id(tenant_id, job_id))) {
-    DDLOG(WARN, "generate_job_id failed", KR(ret), K(tenant_id));
+    LOG_WARN("generate_job_id failed", KR(ret), K(tenant_id));
   } else {
     ObString exec_env(pos, buf);
     const int64_t start_usec = (current_time/_MIN_ + 1) * _MIN_; // one minute after current_time
@@ -85,15 +85,15 @@ int ObDataDictScheduler::create_scheduled_trigger_dump_data_dict_job(const schem
       if (OB_FAIL(ObDBMSSchedJobUtils::create_dbms_sched_job(trans, tenant_id, job_id, job_info))) {
         if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
           ret = OB_SUCCESS;
-          DDLOG(INFO, "finish create data_dict dump job, job duplicated", K(job_info));
+          LOG_INFO("finish create data_dict dump job, job duplicated", K(job_info));
         } else {
-          DDLOG(WARN, "failed to create data_dict dump job", KR(ret), K(job_info));
+          LOG_WARN("failed to create data_dict dump job", KR(ret), K(job_info));
         }
       } else {
-        DDLOG(INFO, "finish create data_dict dump job", K(job_info));
+        LOG_INFO("finish create data_dict dump job", K(job_info));
       }
     } else {
-      DDLOG(WARN, "alloc dbms_schduled_job_info for data_dict failed", KR(ret));
+      LOG_WARN("alloc dbms_schduled_job_info for data_dict failed", KR(ret));
     }
   }
   return ret;

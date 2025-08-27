@@ -41,7 +41,7 @@ const char *print_refresh_mode(const RefreshMode mode)
   return mode_str;
 }
 
-RefreshMode get_refresh_mode(const char *refresh_mode_str)
+RefreshMode parse_refresh_mode(const char *refresh_mode_str)
 {
   RefreshMode ret_mode = UNKNOWN_REFRSH_MODE;
 

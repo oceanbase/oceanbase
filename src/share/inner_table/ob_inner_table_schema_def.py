@@ -17299,7 +17299,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15290'
 # 15291: __all_virtual_backup_transferring_tablets
 
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15292', all_def_keywords['__all_external_table_file']))
-def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15293', all_def_keywords['__all_data_dictionary_in_log'])))
+def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15293', all_def_keywords['__all_data_dictionary_in_log']))
 
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15294', all_def_keywords['__all_virtual_task_opt_stat_gather_history'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15295', all_def_keywords['__all_virtual_table_opt_stat_gather_history'])))

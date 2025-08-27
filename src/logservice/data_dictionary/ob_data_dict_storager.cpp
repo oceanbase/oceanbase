@@ -11,6 +11,8 @@
 *
 */
 
+#define USING_LOG_PREFIX DATA_DICT
+
 #include "ob_data_dict_storager.h"
 
 #include "logservice/ob_log_handler.h"        // ObLogHandler
@@ -22,9 +24,9 @@ using namespace oceanbase::logservice;
 #define SERIALIZE_SCHEMA_TO_BUF \
     if (OB_ISNULL(schema)) { \
       ret = OB_ERR_UNEXPECTED; \
-      DDLOG(WARN, "expect valid schema", KR(ret), KP(schema), K(idx), K(count)); \
+      LOG_WARN("expect valid schema", KR(ret), KP(schema), K(idx), K(count)); \
     } else if (OB_FAIL(meta.init(*schema))) { \
-      DDLOG(WARN, "init meta with schema failed", KR(ret), K(schema), K(meta)); \
+      LOG_WARN("init meta with schema failed", KR(ret), K(schema), K(meta)); \
     } else { \
       const int64_t meta_serialize_size = meta.get_serialize_size(); \
       header.set_dict_serialize_length(meta_serialize_size); \
@@ -40,11 +42,11 @@ using namespace oceanbase::logservice;
       if (OB_FAIL(ret)) { \
       } else if (OB_ISNULL(buf)) { \
         ret = OB_ALLOCATE_MEMORY_FAILED; \
-        DDLOG(WARN, "expect valid buf", KR(ret), KP(buf), K(buf_len), K(expect_buf_len), K(pos)); \
+        LOG_WARN("expect valid buf", KR(ret), KP(buf), K(buf_len), K(expect_buf_len), K(pos)); \
       } else if (OB_FAIL(header.serialize(buf, buf_len, pos))) { \
-        DDLOG(WARN, "serialize meta header failed", KR(ret), K(header), KP(buf), K(buf_len), K(pos)); \
+        LOG_WARN("serialize meta header failed", KR(ret), K(header), KP(buf), K(buf_len), K(pos)); \
       } else if (OB_FAIL(meta.serialize(buf, buf_len, pos))) { \
-        DDLOG(WARN, "serialize meta failed", KR(ret), K(header), K(meta), KP(buf), K(buf_len), K(pos)); \
+        LOG_WARN("serialize meta failed", KR(ret), K(header), K(meta), KP(buf), K(buf_len), K(pos)); \
       } else { \
       } \
     }
@@ -106,13 +108,13 @@ int ObDataDictStorage::init(const uint64_t tenant_id)
 
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
-    DDLOG(WARN, "invalid tenant_id", KR(ret), K(tenant_id));
+    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
   } else if (OB_NOT_NULL(palf_buf_) || OB_NOT_NULL(dict_buf_)) {
     ret = OB_ERR_UNEXPECTED;
-    DDLOG(WARN, "expect palf_buf and dict_buf NULL", KR(ret), KP_(palf_buf), KP_(dict_buf));
+    LOG_WARN("expect palf_buf and dict_buf NULL", KR(ret), KP_(palf_buf), KP_(dict_buf));
   } else {
     tenant_id_ = tenant_id;
-    DDLOG(INFO, "data_dict_storager init success", K_(tenant_id));
+    LOG_INFO("data_dict_storager init success", K_(tenant_id));
   }
 
   return ret;
@@ -125,14 +127,14 @@ int ObDataDictStorage::prepare(const share::SCN &snapshot_scn, ObLogHandler *log
   if (OB_UNLIKELY(! snapshot_scn.is_valid())
       || OB_ISNULL(log_handler)) {
     ret = OB_INVALID_ARGUMENT;
-    DDLOG(WARN, "invalid log_handler", KR(ret), K_(tenant_id), K(snapshot_scn_));
+    LOG_WARN("invalid log_handler", KR(ret), K_(tenant_id), K(snapshot_scn_));
   } else if (OB_FAIL(prepare_buf_())) {
-    DDLOG(WARN, "prepare_buf_ failed", KR(ret));
+    LOG_WARN("prepare_buf_ failed", KR(ret));
   } else {
     reuse();
     snapshot_scn_ = snapshot_scn;
     log_handler_ = log_handler;
-    DDLOG(INFO, "data_dict_storager prepare success", K_(tenant_id), K(snapshot_scn));
+    LOG_INFO("data_dict_storager prepare success", K_(tenant_id), K(snapshot_scn));
   }
 
   return ret;
@@ -156,26 +158,26 @@ int ObDataDictStorage::handle_dict_meta(
 
   if (! need_new_palf_buf_(total_serialize_size)) {
     if (OB_FAIL(serialize_to_palf_buf_(header, data_dict_meta))) {
-      DDLOG(WARN, "serialize header_and_dict to palf_buf_ failed", KR(ret), K(header), K(data_dict_meta));
+      LOG_WARN("serialize header_and_dict to palf_buf_ failed", KR(ret), K(header), K(data_dict_meta));
     }
   } else if (OB_FAIL(submit_to_palf_())) {
-    DDLOG(WARN, "submit_data_dict_to_palf_ failed", KR(ret), K_(palf_buf_len), K_(palf_pos));
+    LOG_WARN("submit_data_dict_to_palf_ failed", KR(ret), K_(palf_buf_len), K_(palf_pos));
   } else if (! need_new_palf_buf_(total_serialize_size)) {
     // check if palf_buf_len is enough for header + data_dict.
     if (OB_FAIL(serialize_to_palf_buf_(header, data_dict_meta))) {
-      DDLOG(WARN, "serialize header_and_dict to palf_buf_ failed", KR(ret), K(header), K(data_dict_meta));
+      LOG_WARN("serialize header_and_dict to palf_buf_ failed", KR(ret), K(header), K(data_dict_meta));
     }
   } else if (OB_FAIL(prepare_dict_buf_(dict_serialize_size))) {
-    DDLOG(WARN, "prepare_dict_buf_ failed", KR(ret), K(dict_serialize_size), K_(dict_buf_len), K_(dict_pos));
+    LOG_WARN("prepare_dict_buf_ failed", KR(ret), K(dict_serialize_size), K_(dict_buf_len), K_(dict_pos));
   } else if (OB_FAIL(data_dict_meta.serialize(dict_buf_, dict_buf_len_, dict_pos_))) {
-    DDLOG(WARN, "serialize data_dict_meta to dict_buf failed", KR(ret),
+    LOG_WARN("serialize data_dict_meta to dict_buf failed", KR(ret),
         K(dict_serialize_size), K_(dict_buf_len), K_(dict_pos));
   } else if (OB_FAIL(segment_dict_buf_to_palf_(header))) {
-    DDLOG(WARN, "segment_dict_buf_to_palf_ failed", KR(ret), K(header), K_(dict_buf_len), K_(dict_pos), K_(palf_pos));
+    LOG_WARN("segment_dict_buf_to_palf_ failed", KR(ret), K(header), K_(dict_buf_len), K_(dict_pos), K_(palf_pos));
   }
 
   if (OB_SUCC(ret)) {
-    DDLOG(TRACE, "handle data_dict success", K(header), K(data_dict_meta));
+    LOG_TRACE("handle data_dict success", K(header), K(data_dict_meta));
   }
 
   return ret;
@@ -197,21 +199,21 @@ int ObDataDictStorage::finish(
 
   // try submit remian palf_buf if exist data not submit to palf.
   if (OB_FAIL(submit_to_palf_())) {
-    DDLOG(WARN, "try submit remain palf_buf to palf failed", KR(ret));
+    LOG_WARN("try submit remain palf_buf to palf failed", KR(ret));
   }
 
   if (OB_FAIL(wait_palf_callback_(is_any_log_callback_fail, stop_flag))) {
-    DDLOG(WARN, "wait palf_callback failed", KR(ret), K(is_dump_success), K(is_any_log_callback_fail), K(stop_flag));
+    LOG_WARN("wait palf_callback failed", KR(ret), K(is_dump_success), K(is_any_log_callback_fail), K(stop_flag));
   } else if (is_dump_success && ! is_any_log_callback_fail) {
     if (OB_UNLIKELY(! start_lsn_.is_valid())
         || OB_UNLIKELY(! end_lsn_.is_valid())) {
       ret = OB_STATE_NOT_MATCH;
-      DDLOG(WARN, "invalid start_lsn or end_lsn for data_dict_service", KR(ret),
+      LOG_WARN("invalid start_lsn or end_lsn for data_dict_service", KR(ret),
           K_(tenant_id), K_(snapshot_scn), K(start_lsn), K(end_lsn));
     } else {
       start_lsn = start_lsn_;
       end_lsn = end_lsn_;
-      DDLOG(INFO, "finish persist data_dict", K_(total_log_cnt), K_(total_dict_size));
+      LOG_INFO("finish persist data_dict", K_(total_log_cnt), K_(total_dict_size));
     }
   }
 
@@ -234,16 +236,16 @@ int ObDataDictStorage::gen_and_serialize_dict_metas(
   if (OB_NOT_NULL(buf)
       || OB_UNLIKELY(buf_len > 0)) {
     ret = OB_INVALID_ARGUMENT;
-    DDLOG(WARN, "expect empty input buf", KR(ret), KP(buf), K(buf_len));
+    LOG_WARN("expect empty input buf", KR(ret), KP(buf), K(buf_len));
   } else if (OB_UNLIKELY((0 >= tenant_schemas.count())
       && (0 >= database_schemas.count())
       && (0 >= table_schemas.count()))) {
-    DDLOG(INFO, "all schema_array is empty, use default msg", KCSTRING(DEFAULT_DDL_MDS_MSG));
+    LOG_INFO("all schema_array is empty, use default msg", KCSTRING(DEFAULT_DDL_MDS_MSG));
     buf = static_cast<char*>(allocator.alloc(DEFAULT_DDL_MDS_MSG_LEN + 1)); // with '\0'
 
     if (OB_ISNULL(buf)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      DDLOG(WARN, "expect valid buf", KR(ret), KP(buf), K(DEFAULT_DDL_MDS_MSG_LEN));
+      LOG_WARN("expect valid buf", KR(ret), KP(buf), K(DEFAULT_DDL_MDS_MSG_LEN));
     } else {
       buf_len = DEFAULT_DDL_MDS_MSG_LEN + 1;
       pos = DEFAULT_DDL_MDS_MSG_LEN + 1;
@@ -257,7 +259,7 @@ int ObDataDictStorage::gen_and_serialize_dict_metas(
 
     if (OB_ISNULL(buf)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      DDLOG(WARN, "expect valid buf", KR(ret), KP(buf), K(buf_len));
+      LOG_WARN("expect valid buf", KR(ret), KP(buf), K(buf_len));
     } else {
       ARRAY_FOREACH_N(tenant_schemas, idx, count) {
         const ObTenantSchema *schema = tenant_schemas.at(idx);
@@ -301,68 +303,68 @@ int ObDataDictStorage::parse_dict_metas(
       || OB_UNLIKELY(buf_len < pos)
       || OB_UNLIKELY(pos < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    DDLOG(WARN, "invalid args", KR(ret), KP(buf), K(pos), K(buf_len));
+    LOG_WARN("invalid args", KR(ret), KP(buf), K(pos), K(buf_len));
   } else if (OB_FAIL(iterator.init(OB_SERVER_TENANT_ID))) {
-    DDLOG(WARN, "iterator init failed", KR(ret), KP(buf), K(pos), K(buf_len));
+    LOG_WARN("iterator init failed", KR(ret), KP(buf), K(pos), K(buf_len));
   } else if (0 == strncmp(buf, DEFAULT_DDL_MDS_MSG, DEFAULT_DDL_MDS_MSG_LEN)) {
     // found DEFAULT_DDL_MDS_MSG, means ddl has no schema change.
     // buf == DEFAULT_DDL_MDS_MSG if in OB4.0.0.0 or DDL doesn't change schema.
-    DDLOG(INFO, "detect default_ddl_msg", KR(ret), K(buf_len), KCSTRING(buf));
+    LOG_INFO("detect default_ddl_msg", KR(ret), K(buf_len), KCSTRING(buf));
   } else if (OB_FAIL(iterator.append_log_buf(buf, buf_len, pos))) {
-    DDLOG(WARN, "append_log_buf failed", KR(ret), KP(buf), K(pos), K(buf_len));
+    LOG_WARN("append_log_buf failed", KR(ret), KP(buf), K(pos), K(buf_len));
   } else {
     while (OB_SUCC(ret)) {
       ObDictMetaHeader header;
       if (OB_FAIL(iterator.next_dict_header(header))) {
         if (OB_ITER_END != ret) {
-          DDLOG(WARN, "next_dict_header failed", KR(ret), KP(buf), K(buf_len), K(pos));
+          LOG_WARN("next_dict_header failed", KR(ret), KP(buf), K(buf_len), K(pos));
         }
       } else {
         if (header.get_dict_meta_type() == ObDictMetaType::TENANT_META) {
           ObDictTenantMeta *meta = static_cast<ObDictTenantMeta*>(allocator.alloc(sizeof(ObDictTenantMeta)));
           if (OB_ISNULL(meta)) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
-            DDLOG(WARN, "alloc memroy for ObDictTenantMeta failed", KR(ret), KP(meta));
+            LOG_WARN("alloc memroy for ObDictTenantMeta failed", KR(ret), KP(meta));
           } else {
             new (meta) ObDictTenantMeta(&allocator);
 
             if (OB_FAIL(iterator.next_dict_entry(header, *meta))) {
-              DDLOG(WARN, "next_dict_entry for tenant_meta failed", KR(ret), K(header));
+              LOG_WARN("next_dict_entry for tenant_meta failed", KR(ret), K(header));
             } else if (OB_FAIL(tenant_metas.push_back(meta))) {
-              DDLOG(WARN, "push_back tenant_meta failed", KR(ret), K(header), KPC(meta));
+              LOG_WARN("push_back tenant_meta failed", KR(ret), K(header), KPC(meta));
             }
           }
         } else if (header.get_dict_meta_type() == ObDictMetaType::DATABASE_META) {
           ObDictDatabaseMeta *meta = static_cast<ObDictDatabaseMeta*>(allocator.alloc(sizeof(ObDictDatabaseMeta)));
           if (OB_ISNULL(meta)) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
-            DDLOG(WARN, "alloc memroy for ObDictDatabaseMeta failed", KR(ret), KP(meta));
+            LOG_WARN("alloc memroy for ObDictDatabaseMeta failed", KR(ret), KP(meta));
           } else {
             new (meta) ObDictDatabaseMeta(&allocator);
 
             if (OB_FAIL(iterator.next_dict_entry(header, *meta))) {
-              DDLOG(WARN, "next_dict_entry for database_meta failed", KR(ret), K(header));
+              LOG_WARN("next_dict_entry for database_meta failed", KR(ret), K(header));
             } else if (OB_FAIL(database_metas.push_back(meta))) {
-              DDLOG(WARN, "push_back database_meta failed", KR(ret), K(header), KPC(meta));
+              LOG_WARN("push_back database_meta failed", KR(ret), K(header), KPC(meta));
             }
           }
         } else if (header.get_dict_meta_type() == ObDictMetaType::TABLE_META) {
           ObDictTableMeta *meta = static_cast<ObDictTableMeta*>(allocator.alloc(sizeof(ObDictTableMeta)));
           if (OB_ISNULL(meta)) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
-            DDLOG(WARN, "alloc memroy for ObDictTableMeta failed", KR(ret), KP(meta));
+            LOG_WARN("alloc memroy for ObDictTableMeta failed", KR(ret), KP(meta));
           } else {
             new (meta) ObDictTableMeta(&allocator);
 
             if (OB_FAIL(iterator.next_dict_entry(header, *meta))) {
-              DDLOG(WARN, "next_dict_entry for table_meta failed", KR(ret), K(header));
+              LOG_WARN("next_dict_entry for table_meta failed", KR(ret), K(header));
             } else if (OB_FAIL(table_metas.push_back(meta))) {
-              DDLOG(WARN, "push_back table_meta failed", KR(ret), K(header), KPC(meta));
+              LOG_WARN("push_back table_meta failed", KR(ret), K(header), KPC(meta));
             }
           }
         } else {
           ret = OB_NOT_SUPPORTED;
-          DDLOG(WARN, "unknown data_dict_meta_type", KR(ret), K(header));
+          LOG_WARN("unknown data_dict_meta_type", KR(ret), K(header));
         }
       }
     }
@@ -381,10 +383,10 @@ int ObDataDictStorage::prepare_buf_()
 
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id_ || ! is_user_tenant(tenant_id_))) {
     ret = OB_STATE_NOT_MATCH;
-    DDLOG(WARN, "data_dict_service only work for user_tenant", KR(ret), K_(tenant_id));
+    LOG_WARN("data_dict_service only work for user_tenant", KR(ret), K_(tenant_id));
   } else if (OB_NOT_NULL(palf_buf_) || OB_NOT_NULL(dict_buf_)) {
     ret = OB_ERR_UNEXPECTED;
-    DDLOG(WARN, "expect invalid palf_buf and dict_buf before prepare dump data_dict", KR(ret),
+    LOG_WARN("expect invalid palf_buf and dict_buf before prepare dump data_dict", KR(ret),
         KP_(palf_buf), KP_(dict_buf));
   } else {
     palf_buf_len_ = DEFAULT_PALF_BUF_SIZE;
@@ -417,9 +419,9 @@ int ObDataDictStorage::serialize_log_base_header_()
   if (OB_ISNULL(palf_buf_)
       || OB_UNLIKELY(palf_pos_ != 0)) {
     ret = OB_STATE_NOT_MATCH;
-    DDLOG(WARN, "expect valid palf_buf and palf_pos", KR(ret), K_(palf_pos));
+    LOG_WARN("expect valid palf_buf and palf_pos", KR(ret), K_(palf_pos));
   } else if (OB_FAIL(log_base_header_.serialize(palf_buf_, palf_buf_len_, palf_pos_))) {
-    DDLOG(WARN, "serialize log_base_header failed", KR(ret), K_(palf_pos), K_(log_base_header));
+    LOG_WARN("serialize log_base_header failed", KR(ret), K_(palf_pos), K_(log_base_header));
   }
 
   return ret;
@@ -431,7 +433,7 @@ int ObDataDictStorage::prepare_dict_buf_(const int64_t required_size)
 
   if (OB_UNLIKELY(required_size <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    DDLOG(WARN, "invalid args", KR(ret), K(required_size));
+    LOG_WARN("invalid args", KR(ret), K(required_size));
   } else if (required_size <= dict_buf_len_) {
     // current dict_buf is enough.
     dict_pos_ = 0;
@@ -445,7 +447,7 @@ int ObDataDictStorage::prepare_dict_buf_(const int64_t required_size)
 
     if (OB_ISNULL(dict_buf_ = static_cast<char*>(ob_dict_malloc(alloc_size, tenant_id_)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      DDLOG(WARN, "malloc data_dict_buf failed", KR(ret),
+      LOG_WARN("malloc data_dict_buf failed", KR(ret),
           K(alloc_size), K(required_size), K(block_cnt), K(block_size));
     } else {
       dict_buf_len_ = alloc_size;
@@ -465,22 +467,22 @@ int ObDataDictStorage::serialize_to_palf_buf_(
 
   if (OB_ISNULL(palf_buf_)) {
     ret = OB_STATE_NOT_MATCH;
-    DDLOG(WARN, "palf_buf shoule be valid", KR(ret));
+    LOG_WARN("palf_buf shoule be valid", KR(ret));
   } else if (palf_pos_ == 0) {
     if (OB_FAIL(serialize_log_base_header_())) {
-      DDLOG(WARN, "serialize_log_base_header_ failed", KR(ret), K_(palf_pos));
+      LOG_WARN("serialize_log_base_header_ failed", KR(ret), K_(palf_pos));
     }
   }
 
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(header.serialize(palf_buf_, palf_buf_len_, palf_pos_))) {
-    DDLOG(WARN, "serialize header to palf_buf failed", KR(ret), K(header),
+    LOG_WARN("serialize header to palf_buf failed", KR(ret), K(header),
         K_(palf_buf_len), K_(palf_pos), "header_serialize_size", header.get_serialize_size());
   } else if (OB_FAIL(data_dict.serialize(palf_buf_, palf_buf_len_, palf_pos_))) {
-    DDLOG(WARN, "serialize data_dict to palf_buf failed", KR(ret), K(header), K(data_dict),
+    LOG_WARN("serialize data_dict to palf_buf failed", KR(ret), K(header), K(data_dict),
         K_(palf_buf_len), K_(palf_pos), "dict_serialize_size", data_dict.get_serialize_size());
   } else {
-    DDLOG(DEBUG, "serialize data_dict to palf_buf success", KR(ret), K(header), K(data_dict),
+    LOG_DEBUG("serialize data_dict to palf_buf success", KR(ret), K(header), K(data_dict),
         K_(palf_buf_len), K_(palf_pos),
         "header_size", header.get_serialize_size(),
         "data_dict_size", data_dict.get_serialize_size());
@@ -502,9 +504,9 @@ int ObDataDictStorage::segment_dict_buf_to_palf_(ObDictMetaHeader &header)
   while (OB_SUCC(ret) && segment_pos < dict_pos_) {
     if (OB_UNLIKELY(palf_pos_ > 0)) {
       ret = OB_ERR_UNEXPECTED;
-      DDLOG(WARN, "palf_buf expect empty", KR(ret), K_(palf_buf_len), K_(palf_pos));
+      LOG_WARN("palf_buf expect empty", KR(ret), K_(palf_buf_len), K_(palf_pos));
     } else if (OB_FAIL(serialize_log_base_header_())) {
-      DDLOG(WARN, "serialize_log_base_header_ failed", KR(ret));
+      LOG_WARN("serialize_log_base_header_ failed", KR(ret));
     } else {
       const int64_t palf_remain_size = palf_buf_len_ - palf_pos_ - header_serialize_size;
       const int64_t dict_remain_size = dict_pos_ - segment_pos; // dict not persist buf len
@@ -520,10 +522,10 @@ int ObDataDictStorage::segment_dict_buf_to_palf_(ObDictMetaHeader &header)
 
       if (OB_UNLIKELY(palf_remain_size <= 0)) {
         ret = OB_ERR_UNEXPECTED;
-        DDLOG(WARN, "expect valid palf_remain_size after serialize headers", KR(ret),
+        LOG_WARN("expect valid palf_remain_size after serialize headers", KR(ret),
             K_(palf_pos), K(header_serialize_size), K_(palf_buf_len));
       } else if (OB_FAIL(header.serialize(palf_buf_, palf_buf_len_, palf_pos_))) {
-        DDLOG(WARN, "serialize header to palf_buf failed", KR(ret), K(header), K_(palf_pos));
+        LOG_WARN("serialize header to palf_buf failed", KR(ret), K(header), K_(palf_pos));
       } else {
         MEMCPY(
             palf_buf_ + palf_pos_,
@@ -536,7 +538,7 @@ int ObDataDictStorage::segment_dict_buf_to_palf_(ObDictMetaHeader &header)
         // expect all palf_buf except LAST should submit to palf.
         if ((ObDictMetaStorageType::LAST != header.get_storage_type())
             && OB_FAIL(submit_to_palf_())) {
-          DDLOG(WARN, "submit_to_palf_ failed", KR(ret),
+          LOG_WARN("submit_to_palf_ failed", KR(ret),
               K(header), K_(palf_pos), K_(dict_pos), K(copy_size), K(segment_pos));
         }
       }
@@ -563,19 +565,19 @@ int ObDataDictStorage::submit_to_palf_()
       || OB_UNLIKELY(palf_pos_ < 0)
       || OB_UNLIKELY(palf_buf_len_ < palf_pos_)) {
     ret = OB_INVALID_ARGUMENT;
-    DDLOG(WARN, "invalid args", KR(ret), K_(palf_buf_len), K_(palf_pos));
+    LOG_WARN("invalid args", KR(ret), K_(palf_buf_len), K_(palf_pos));
   } else if (OB_UNLIKELY(! log_handler_->is_valid())) {
     ret = OB_ERR_UNEXPECTED;
-    DDLOG(WARN, "log_handler_ is not valid", KR(ret));
+    LOG_WARN("log_handler_ is not valid", KR(ret));
   } else if (OB_UNLIKELY(palf_pos_ == 0)) {
-    DDLOG(INFO, "empty palf_buf, do nothing", K_(palf_buf_len), K_(palf_pos));
+    LOG_INFO("empty palf_buf, do nothing", K_(palf_buf_len), K_(palf_pos));
   } else if (OB_FAIL(check_ls_leader(log_handler_, is_leader, proposal_id))) {
-    DDLOG(WARN, "check_ls_leader failed", KR(ret), K(is_leader), K(proposal_id));
+    LOG_WARN("check_ls_leader failed", KR(ret), K(is_leader), K(proposal_id));
   } else if (OB_UNLIKELY(! is_leader)) {
     ret = OB_STATE_NOT_MATCH;
-    DDLOG(INFO, "do-nothing on non-leader logstream.", KR(ret), K(is_leader), K(proposal_id));
+    LOG_INFO("do-nothing on non-leader logstream.", KR(ret), K(is_leader), K(proposal_id));
   } else if (OB_FAIL(alloc_palf_cb_(callback))) {
-    DDLOG(WARN, "alloc_palf_cb_ failed", KR(ret));
+    LOG_WARN("alloc_palf_cb_ failed", KR(ret));
   } else if (OB_FAIL(log_handler_->append(
       palf_buf_,
       palf_pos_,
@@ -586,14 +588,14 @@ int ObDataDictStorage::submit_to_palf_()
       lsn,
       submit_scn
       ))){
-    DDLOG(WARN, "append log to palf failed", KR(ret),
+    LOG_WARN("append log to palf failed", KR(ret),
         K_(palf_buf), K_(palf_pos), K(ref_scn), K(need_nonblock), K(lsn), K(submit_scn));
   } else if (OB_FAIL(update_palf_lsn_(lsn))) {
-    DDLOG(WARN, "update_palf_lsn_ failed", KR(ret), K(lsn), K_(start_lsn), K_(end_lsn));
+    LOG_WARN("update_palf_lsn_ failed", KR(ret), K(lsn), K_(start_lsn), K_(end_lsn));
   } else {
     cb_queue_.push(callback);
     // submit to palf success
-    DDLOG(DEBUG, "submit palf_buf to palf succ", K(lsn), K(submit_scn), K_(palf_pos));
+    LOG_DEBUG("submit palf_buf to palf succ", K(lsn), K(submit_scn), K_(palf_pos));
     total_log_cnt_++;
     total_dict_size_ += palf_pos_;
     palf_pos_ = 0;
@@ -610,7 +612,7 @@ int ObDataDictStorage::alloc_palf_cb_(ObDataDictPersistCallback *&callback)
 
   if (OB_ISNULL(buf = allocator_.alloc(callback_size))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    DDLOG(WARN, "alloc memory for data_dict_palf_callback failed", KR(ret), K(callback_size));
+    LOG_WARN("alloc memory for data_dict_palf_callback failed", KR(ret), K(callback_size));
   } else {
     callback = new(buf) ObDataDictPersistCallback();
   }
@@ -624,7 +626,7 @@ int ObDataDictStorage::update_palf_lsn_(const palf::LSN &lsn)
 
   if (OB_UNLIKELY(! lsn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    DDLOG(WARN, "invalid LSN", KR(ret), K(lsn));
+    LOG_WARN("invalid LSN", KR(ret), K(lsn));
   } else if (! start_lsn_.is_valid()) {
     start_lsn_ = lsn;
     end_lsn_ = lsn;
@@ -648,7 +650,7 @@ int ObDataDictStorage::wait_palf_callback_(bool &is_any_cb_fail, volatile bool &
   // exit loop if any of below cases occur: (1) check_callback_list_ failed; (2) all log_callback invoked.
   do {
     if (OB_FAIL(check_callback_list_(is_all_cb_invoked, is_any_cb_fail, print_cb_status, stop_flag))) {
-      DDLOG(WARN, "check_callback_list_ failed", KR(ret));
+      LOG_WARN("check_callback_list_ failed", KR(ret));
     } else if (! is_all_cb_invoked) {
       if (REACH_TIME_INTERVAL_THREAD_LOCAL(PRINT_CB_STATUS_INTERVAL)) {
         print_cb_status = true;
@@ -683,7 +685,7 @@ int ObDataDictStorage::check_callback_list_(
 
     if (OB_ISNULL(cb)) {
       ret = OB_ERR_UNEXPECTED;
-      DDLOG(WARN, "convert ObLink to ObDataDictPersistCallback failed", KR(ret), K(item));
+      LOG_WARN("convert ObLink to ObDataDictPersistCallback failed", KR(ret), K(item));
     } else {
       if (! cb->is_invoked()) {
         not_invoked_cb_count++;
@@ -705,7 +707,7 @@ int ObDataDictStorage::check_callback_list_(
 
   if (is_all_invoked || need_print_cb_status) {
     // log callback status, NOTICE: stop_flag may set if ls role change or tenant stop.
-    DDLOG(INFO, "[STAT] callbacks_status", KR(ret), K(total_cb_count), K(not_invoked_cb_count), K(failed_cb_count),
+    LOG_INFO("[STAT] callbacks_status", KR(ret), K(total_cb_count), K(not_invoked_cb_count), K(failed_cb_count),
         K(is_all_invoked), K(need_print_cb_status), K(stop_flag));
   }
 
@@ -723,7 +725,7 @@ void ObDataDictStorage::reset_cb_queue_()
     QLink *item = NULL;
     if (OB_ISNULL(item = cb_queue_.pop())) {
       ret = OB_ERR_UNEXPECTED;
-      DDLOG(WARN, "pop item from data_dict_meta persist_callback_queue failed", KR(ret));
+      LOG_WARN("pop item from data_dict_meta persist_callback_queue failed", KR(ret));
     } else {
       allocator_.free(item);
       item = NULL;

@@ -100,7 +100,6 @@ public:
   static const int64_t TASK_POOL_ALLOCATOR_PAGE_SIZE = common::OB_MALLOC_BIG_BLOCK_SIZE;
   static const int64_t TASK_POOL_ALLOCATOR_TOTAL_LIMIT = (1LL << 37); // 128G
   static const int64_t TASK_POOL_ALLOCATOR_HOLD_LIMIT = TASK_POOL_ALLOCATOR_PAGE_SIZE;
-  static const int64_t DATA_OP_TIMEOUT = 10L * 1000L * 1000L;
   static const int64_t CLEAN_LOG_INTERVAL = 60L * 1000L * 1000L;
   static const int64_t REFRESH_SERVER_LIST_INTERVAL = 10L * 1000L * 1000L;
 
@@ -191,6 +190,7 @@ public:
   {
     return is_data_dict_refresh_mode(refresh_mode_) && is_direct_fetching_mode(fetching_mode_);
   }
+  OB_INLINE const RefreshMode& get_refresh_mode() const { return refresh_mode_; }
   OB_INLINE bool is_tenant_sync_mode() const { return is_tenant_sync_mode_; }
 
 public:
@@ -210,11 +210,13 @@ private:
   void do_destroy_(const bool force_destroy = false);
   int get_pid_();
   int init_self_addr_();
-  int init_schema_(const int64_t start_tstamp_us, int64_t &sys_start_schema_version);
+  int init_schema_(const int64_t start_tstamp_us, int64_t &sys_start_schema_version, const int64_t timeout);
   int init_components_(const uint64_t start_tstamp_ns);
   void destroy_components_();
-  int start_tenant_service_();
-  int config_tenant_mgr_(const int64_t start_tstamp_us, const int64_t sys_schema_version);
+  int start_tenant_service_(const int64_t timeout);
+  int config_tenant_mgr_(const int64_t start_tstamp_us,
+      const int64_t sys_schema_version,
+      const int64_t timeout);
   void write_pid_file_();
   static void *timer_thread_func_(void *args);
   static void *sql_thread_func_(void *args);
@@ -274,7 +276,7 @@ private:
   int get_br_filter_value_(IBinlogRecord &br,
       const int64_t idx,
       common::ObString &str);
-  int query_cluster_info_(ObLogSysTableHelper::ClusterInfo &cluser_info);
+  int query_cluster_info_(ObLogSysTableHelper::ClusterInfo &cluser_info, const int64_t timeout);
   void update_cluster_version_();
   int check_ob_version_legal_(const uint64_t ob_version);
   // 1. In Integrated fetching log mode, check observer versin <= libobcdc version

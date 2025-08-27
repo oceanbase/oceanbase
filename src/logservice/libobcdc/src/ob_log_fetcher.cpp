@@ -524,6 +524,8 @@ int ObLogFetcher::wait_for_all_ls_to_be_removed(const int64_t timeout)
       if (end_time - start_time >= timeout) {
         ret = OB_TIMEOUT;
         break;
+      } else if (stop_flag_) {
+        ret = OB_IN_STOP_STATE;
       } else {
         usec_sleep(100L);
       }
@@ -680,6 +682,8 @@ int ObLogFetcher::check_progress(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_ERROR("fetcher is not inited", KR(ret), K_(is_inited));
+  } else if (stop_flag_) {
+    ret = OB_IN_STOP_STATE;
   } else {
     is_exceeded = false;
     logservice::TenantLSID tls_id(tenant_id, share::SYS_LS);
