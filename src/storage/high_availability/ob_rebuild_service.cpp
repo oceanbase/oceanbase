@@ -22,6 +22,7 @@ using namespace share;
 using namespace storage;
 
 ERRSIM_POINT_DEF(CHECK_CAN_REBUILD);
+ERRSIM_POINT_DEF(EN_MANUAL_REBUILD);
 
 ObLSRebuildCtx::ObLSRebuildCtx()
   : ls_id_(),
@@ -445,6 +446,10 @@ void ObRebuildService::run1()
     if (!ObServerCheckpointSlogHandler::get_instance().is_started()) {
       ret = OB_SERVER_IS_INIT;
       LOG_WARN("server is not serving", K(ret), K(GCTX.status_));
+#ifdef ERRSIM
+    } else if (OB_FAIL(errsim_manual_rebuild_())) {
+      LOG_WARN("[ERRSIM] fail to manual rebuild", K(ret));
+#endif
     } else if (OB_FAIL(build_rebuild_ctx_map_())) {
       LOG_WARN("failed to build rebuild ctx map", K(ret));
     } else if (OB_FAIL(build_ls_rebuild_info_())) {
@@ -776,11 +781,45 @@ int ObRebuildService::check_can_rebuild_(
       can_rebuild = true;
     }
   }
+
+  if (OB_SUCC(ret) && OB_SUCCESS != EN_MANUAL_REBUILD) {
+    can_rebuild = true;
+    LOG_INFO("[ERRSIM] force rebuild", K(rebuild_ctx), K(can_rebuild));
+  }
 #endif
 
   return ret;
 }
 
+#ifdef ERRSIM
+int ObRebuildService::errsim_manual_rebuild_() {
+  int ret = OB_SUCCESS;
+  if (OB_SUCCESS != EN_MANUAL_REBUILD && GCONF.errsim_rebuild_ls_id != 0) {
+    const int64_t errsim_rebuild_ls_id = GCONF.errsim_rebuild_ls_id;
+    const ObLSID errsim_ls_id(errsim_rebuild_ls_id);
+    const ObString &errsim_rebuild_addr = GCONF.errsim_rebuild_addr.str();
+    common::ObAddr addr;
+    const ObAddr &my_addr = GCONF.self_addr_;
+
+    // trigger follower rebuild
+    const ObLSRebuildType rebuild_type(ObLSRebuildType::TRANSFER);
+    if (!errsim_rebuild_addr.empty() && OB_FAIL(addr.parse_from_string(errsim_rebuild_addr))) {
+      LOG_WARN("failed to parse from string to addr", K(ret), K(errsim_rebuild_addr));
+    } else if (my_addr == addr) {
+      if (OB_FAIL(add_rebuild_ls(errsim_ls_id, rebuild_type))) {
+        LOG_WARN("[ERRSIM] failed to add rebuild ls", K(ret), K(errsim_ls_id), K(rebuild_type));
+      } else {
+        LOG_INFO("fake EN_MANUAL_REBUILD", K(errsim_ls_id), K(rebuild_type));
+        SERVER_EVENT_SYNC_ADD("storage_ha", "mannual_rebuild",
+                        "ls_id", errsim_ls_id.id());
+      }
+    } else {
+      LOG_INFO("[ERRSIM] not my addr, won't trigger rebuild", K(my_addr), K(addr));
+    }
+  }
+  return ret;
+}
+#endif
 
 ObLSRebuildMgr::ObLSRebuildMgr()
   : is_inited_(false),

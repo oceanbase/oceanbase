@@ -331,6 +331,8 @@ int ObLSCompleteMigrationDagNet::clear_dag_net_ctx()
   ObLSHandle ls_handle;
   LOG_INFO("start clear dag net ctx", K(ctx_));
 
+  DEBUG_SYNC(BEFORE_COMPLETE_MIGRATION_CLEAR_DAG_NET_CTX);
+
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls complete migration dag net do not init", K(ret));
@@ -339,19 +341,19 @@ int ObLSCompleteMigrationDagNet::clear_dag_net_ctx()
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_SYS;
     LOG_ERROR("ls should not be NULL", K(ret), K(ctx_));
+  } else if (OB_ISNULL(ls_migration_handler = ls->get_ls_migration_handler())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls migration handler should not be NULL", K(ret), K(ctx_));
   } else {
-    if (OB_SUCCESS != (tmp_ret = update_migration_status_(ls))) {
+    if (OB_TMP_FAIL(update_migration_status_(ls))) {
       LOG_WARN("failed to update migration status", K(tmp_ret), K(ret), K(ctx_));
     }
 
-    if (OB_SUCCESS != (tmp_ret = report_ls_meta_table_(ls))) {
+    if (OB_TMP_FAIL(report_ls_meta_table_(ls))) {
       LOG_WARN("failed to report ls meta table", K(tmp_ret), K(ret), K(ctx_));
     }
 
-    if (OB_ISNULL(ls_migration_handler = ls->get_ls_migration_handler())) {
-      tmp_ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("ls migration handler should not be NULL", K(tmp_ret), K(ctx_));
-    } else if (OB_FAIL(ctx_.get_result(result))) {
+    if (OB_FAIL(ctx_.get_result(result))) {
       LOG_WARN("failed to get ls complate migration ctx result", K(ret), K(ctx_));
     } else if (OB_FAIL(ls_migration_handler->set_result(result))) {
       LOG_WARN("failed to set result", K(ret), K(result), K(ctx_));
@@ -360,6 +362,10 @@ int ObLSCompleteMigrationDagNet::clear_dag_net_ctx()
     ctx_.finish_ts_ = ObTimeUtil::current_time();
     const int64_t cost_ts = ctx_.finish_ts_ - ctx_.start_ts_;
     FLOG_INFO("finish ls complete migration dag net", "ls id", ctx_.arg_.ls_id_, "type", ctx_.arg_.type_, K(cost_ts));
+  }
+
+  if (OB_NOT_NULL(ls_migration_handler)) {
+    ls_migration_handler->set_dag_net_cleared();
   }
   return ret;
 }
@@ -2078,6 +2084,12 @@ int ObStartCompleteMigrationTask::check_ls_and_task_status_(
   } else if (ctx_->is_failed()) {
     ret = OB_CANCELED;
     STORAGE_LOG(WARN, "ls migration task is failed", K(ret), KPC(ctx_));
+#ifdef ERRSIM
+    SERVER_EVENT_SYNC_ADD("storage_ha", "wait_data_ready_task_cancel",
+                          "tenant_id", ctx_->tenant_id_,
+                          "ls_id", ctx_->arg_.ls_id_.id(),
+                          "ret", ret);
+#endif
   } else if (ls->is_stopped()) {
     ret = OB_NOT_RUNNING;
     LOG_WARN("ls is not running, stop migration dag net", K(ret), KPC(ctx_));

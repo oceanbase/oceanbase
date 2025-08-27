@@ -449,10 +449,10 @@ int ObMigrationDagNet::fill_dag_net_key(char *buf, const int64_t buf_len) const
 int ObMigrationDagNet::clear_dag_net_ctx()
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
   ObLS *ls = nullptr;
   int32_t result = OB_SUCCESS;
   ObLSHandle ls_handle;
+  ObLSMigrationHandler *ls_migration_handler = nullptr;
   LOG_INFO("start clear dag net ctx", KPC(ctx_));
 
   if (!is_inited_) {
@@ -463,16 +463,23 @@ int ObMigrationDagNet::clear_dag_net_ctx()
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls should not be NULL", K(ret), KPC(ctx_), KP(ls));
+  } else if (OB_ISNULL(ls_migration_handler = ls->get_ls_migration_handler())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls migration handler should not be NULL", K(ret), KPC(ctx_));
   } else {
-    if (OB_FAIL(ctx_->get_result(result))) {
+     if (OB_FAIL(ctx_->get_result(result))) {
       LOG_WARN("failed to get migration ctx result", K(ret), KPC(ctx_));
-    } else if (OB_FAIL(ls->get_ls_migration_handler()->set_result(result))) {
+    } else if (OB_FAIL(ls_migration_handler->set_result(result))) {
       LOG_WARN("failed to report result", K(ret), KPC(ctx_));
     }
 
     ctx_->finish_ts_ = ObTimeUtil::current_time();
     const int64_t cost_ts = ctx_->finish_ts_ - ctx_->start_ts_;
     FLOG_INFO("finish migration dag net", "ls id", ctx_->arg_.ls_id_, "type", ctx_->arg_.type_, K(cost_ts), K(result));
+  }
+
+  if (OB_NOT_NULL(ls_migration_handler)) {
+    ls_migration_handler->set_dag_net_cleared();
   }
   return ret;
 }
@@ -698,7 +705,9 @@ int ObInitialMigrationTask::process()
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
 #ifdef ERRSIM
-  SERVER_EVENT_SYNC_ADD("storage_ha", "before_prepare_migration_task");
+  SERVER_EVENT_SYNC_ADD("storage_ha", "before_prepare_migration_task",
+                        "tenant_id", ctx_->tenant_id_,
+                        "ls_id", ctx_->arg_.ls_id_.id());
   DEBUG_SYNC(BEFORE_PREPARE_MIGRATION_TASK);
 #endif
 
@@ -772,6 +781,12 @@ int ObInitialMigrationTask::generate_migration_dags_()
     LOG_WARN("failed to init migration finish dag", K(ret));
   } else if (OB_FAIL(this->get_dag()->add_child(*start_migration_dag))) {
     LOG_WARN("failed to add start migration dag", K(ret), KPC(start_migration_dag));
+    #ifdef ERRSIM
+SERVER_EVENT_SYNC_ADD("storage_ha", "initial_migration_task_add_child_failed",
+                      "tenant_id", ctx_->tenant_id_,
+                      "ls_id", ctx_->arg_.ls_id_.id(),
+                      "ret", ret);
+#endif
   } else if (OB_FAIL(start_migration_dag->create_first_task())) {
     LOG_WARN("failed to create first task", K(ret));
   } else if (OB_FAIL(start_migration_dag->add_child(*migration_finish_dag))) {

@@ -2302,3 +2302,9 @@ DEF_BOOL(enable_ls_leader_balance, OB_TENANT_PARAMETER, "True",
          "controls whether LS leaders balance is turned on."
          "Value:  True:turned on  False: turned off",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+ERRSIM_DEF_INT(errsim_rebuild_ls_id, OB_CLUSTER_PARAMETER, "0", "[0,)",
+               "rebuild ls id. Range: [0,) in integer",
+               ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+ERRSIM_DEF_STR(errsim_rebuild_addr, OB_CLUSTER_PARAMETER, "",
+               "rebuild addr (ip:port)",
+               ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

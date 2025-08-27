@@ -300,7 +300,6 @@ int ObLSPrepareMigrationDagNet::fill_dag_net_key(char *buf, const int64_t buf_le
 int ObLSPrepareMigrationDagNet::clear_dag_net_ctx()
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
   ObLS *ls = nullptr;
   int32_t result = OB_SUCCESS;
   ObLSMigrationHandler *ls_migration_handler = nullptr;
@@ -310,24 +309,28 @@ int ObLSPrepareMigrationDagNet::clear_dag_net_ctx()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls prepare migration dag net do not init", K(ret));
-  } else if (OB_FAIL(ctx_.get_result(result))) {
-    LOG_WARN("failed to get result", K(ret), K(ctx_));
   } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_.arg_.ls_id_, ls_handle))) {
     LOG_WARN("failed to get ls", K(ret), K(ctx_));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_SYS;
     LOG_ERROR("ls should not be NULL", K(ret), K(ctx_));
+  } else if (OB_ISNULL(ls_migration_handler = ls->get_ls_migration_handler())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls migration handler should not be NULL", K(ret), K(ctx_));
   } else {
-    if (OB_ISNULL(ls_migration_handler = ls->get_ls_migration_handler())) {
-      tmp_ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("ls migration handler should not be NULL", K(tmp_ret), K(ctx_));
-    } else if (OB_TMP_FAIL(ls_migration_handler->set_result(result))) {
-      LOG_WARN("failed to set result", K(ret), K(tmp_ret), K(ctx_));
+    if (OB_FAIL(ctx_.get_result(result))) {
+      LOG_WARN("failed to get result", K(ret), K(ctx_));
+    } else if (OB_FAIL(ls_migration_handler->set_result(result))) {
+      LOG_WARN("failed to set result", K(ret), K(ctx_));
     }
 
     ctx_.finish_ts_ = ObTimeUtil::current_time();
     const int64_t cost_ts = ctx_.finish_ts_ - ctx_.start_ts_;
     FLOG_INFO("finish ls prepare migration dag net", "ls id", ctx_.arg_.ls_id_, "type", ctx_.arg_.type_, K(cost_ts));
+  }
+
+  if (OB_NOT_NULL(ls_migration_handler)) {
+    ls_migration_handler->set_dag_net_cleared();
   }
   return ret;
 }
@@ -1298,6 +1301,12 @@ int ObStartPrepareMigrationTask::wait_transfer_tablets_ready_()
   } else if (OB_FAIL(ls->build_tablet_iter(tablet_iterator))) {
     LOG_WARN("failed to build ls tablet iter", K(ret), KPC(ctx_));
   } else {
+#ifdef ERRSIM
+    SERVER_EVENT_SYNC_ADD("storage_ha", "before_wait_transfer_out_tablet_ready",
+                          "tenant_id", ctx_->tenant_id_,
+                          "ls_id", ctx_->arg_.ls_id_.id(),
+                          "ret", ret);
+#endif
     DEBUG_SYNC(BEFORE_WAIT_TRANSFER_OUT_TABLET_READY);
     ObIDagNet *dag_net = nullptr;
     while (OB_SUCC(ret)) {
@@ -1313,6 +1322,12 @@ int ObStartPrepareMigrationTask::wait_transfer_tablets_ready_()
       } else if (dag_net->is_cancel()) {
         ret = OB_CANCELED;
         LOG_WARN("task is cancelled", K(ret), K(*this));
+#ifdef ERRSIM
+        SERVER_EVENT_SYNC_ADD("storage_ha", "start_prepare_migration_task_cancel",
+                              "tenant_id", ctx_->tenant_id_,
+                              "ls_id", ctx_->arg_.ls_id_.id(),
+                              "ret", ret);
+#endif
       } else if (OB_FAIL(tablet_iterator.get_next_tablet(tablet_handle))) {
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;

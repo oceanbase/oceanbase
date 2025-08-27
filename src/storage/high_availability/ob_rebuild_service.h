@@ -100,7 +100,9 @@ private:
       const ObLSRebuildCtx &rebuild_ctx,
       ObLS *ls,
       bool &can_rebuild);
-
+#ifdef ERRSIM
+  int errsim_manual_rebuild_();
+#endif
 private:
   static const int64_t SCHEDULER_WAIT_TIME_MS = 5 * 60 * 1000L; // 5min
   static const int64_t WAIT_SERVER_IN_SERVICE_TIME_MS = 1000; //1s
