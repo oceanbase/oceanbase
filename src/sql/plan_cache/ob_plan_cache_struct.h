@@ -27,6 +27,7 @@
 #include "sql/ob_sql_utils.h"
 #include "sql/plan_cache/ob_plan_cache_util.h"
 #include "sql/udr/ob_udr_struct.h"
+#include "sql/plan_cache/ob_plan_cache_param_constraint.h"
 
 namespace oceanbase
 {
@@ -414,7 +415,8 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
       compare_plan_(nullptr),
       flag_(0),
       parameterized_ps_sql_(),
-      regenerating_expired_plan_(false)
+      regenerating_expired_plan_(false),
+      params_constraint_(allocator)
   {
     fp_result_.pc_key_.mode_ = mode_;
   }
@@ -494,7 +496,8 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
     K(exist_local_plan_),
     K(flag_),
     K(parameterized_ps_sql_),
-    K(regenerating_expired_plan_)
+    K(regenerating_expired_plan_),
+    K(params_constraint_)
     );
   PlanCacheMode mode_; //control use which variables to do match
 
@@ -578,6 +581,7 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
   };
   common::ObString parameterized_ps_sql_;
   bool regenerating_expired_plan_;
+  common::ObFixedArray<ObPCParamConstraint *, common::ObIAllocator> params_constraint_;
 };
 
 struct ObPlanCacheStat
