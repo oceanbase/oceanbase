@@ -569,6 +569,7 @@ private:
                         const ObIArray<ObNewRange> &column_ranges,
                         const int range_num, const double sample_pct,
                         const bool is_oracle_mode,
+                        const bool query_index,
                         ObSqlString &sql);
   int add_sample_condition_sqls_(const ObIArray<ObString> &columns,
                                  const ObIArray<ObNewRange> &column_ranges,
@@ -588,6 +589,8 @@ private:
                                common::ObRowkey &low_bound_val,
                                common::ObRowkey &high_bound_val,
                                common::ObArenaAllocator &allocator);
+  int set_lower_case_table_names_(const uint64_t tenant_id,
+                                  ObSingleConnectionProxy &single_conn_proxy);
 };
 }
 
