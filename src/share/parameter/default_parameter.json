@@ -185,6 +185,11 @@
           "name": "_force_subquery_unnest",
           "value": true,
           "comment": "aggressively unnest all subqueries that can be unnested for olap mode"
+        },
+        {
+          "name": "max_partition_num",
+          "value": 65536,
+          "comment": "increase the maximum number of partitions per table to 65536 for AP/HTAP workloads, supporting large-scale partitioning by time range and hash subpartitioning, which is common in data warehouse and real-time analytics scenarios."
         }
       ]
     }
@@ -285,6 +290,11 @@
           "name": "default_table_merge_engine",
           "value": "PARTIAL_UPDATE",
           "comment": "use partial_update merge engine for htap workloads"
+        },
+        {
+          "name": "max_partition_num",
+          "value": 65536,
+          "comment": "increase the maximum number of partitions per table to 65536 for AP/HTAP workloads, supporting large-scale partitioning by time range and hash subpartitioning, which is common in data warehouse and real-time analytics scenarios."
         }
       ]
     }
