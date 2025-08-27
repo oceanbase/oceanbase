@@ -2417,6 +2417,10 @@ public:
   bool associated_xa() const { return associated_xa_; }
   int associate_xa(const transaction::ObXATransID &xid) { associated_xa_ = true; return xid_.set(xid); }
   void disassociate_xa() { associated_xa_ = false; xid_.reset(); }
+
+  void visiable_top_query_string() { shadow_top_query_string_ = false; }
+  void shadow_top_query_string() { shadow_top_query_string_ = true; }
+  bool has_top_query_string() const { return thread_data_.top_query_len_ > 0 && thread_data_.top_query_ != nullptr; }
 private:
   common::ObSEArray<TableStmtType, 2> total_stmt_tables_;
   common::ObSEArray<TableStmtType, 1> cur_stmt_tables_;
@@ -2626,6 +2630,7 @@ private:
   int64_t sql_mem_used_;
   bool has_ccl_rule_;
   int64_t last_ccl_cnt_update_time_;
+  bool shadow_top_query_string_;
 public:
   bool get_enable_hyperscan_regexp_engine() const;
   int8_t get_min_const_integer_precision() const;
@@ -2642,7 +2647,9 @@ inline const common::ObString ObBasicSessionInfo::get_current_query_string() con
 inline const common::ObString ObBasicSessionInfo::get_top_query_string() const
 {
   common::ObString str_ret;
-  str_ret.assign_ptr(const_cast<char *>(thread_data_.top_query_), static_cast<int32_t>(thread_data_.top_query_len_));
+  if (!shadow_top_query_string_) {
+    str_ret.assign_ptr(const_cast<char *>(thread_data_.top_query_), static_cast<int32_t>(thread_data_.top_query_len_));
+  }
   return str_ret;
 }
 

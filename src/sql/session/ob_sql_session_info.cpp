@@ -2120,6 +2120,7 @@ const ObAuditRecordData &ObSQLSessionInfo::get_final_audit_record(
                                        OB_MAX_USER_NAME_LENGTH);
 
     if (EXECUTE_PS_EXECUTE == mode
+        || EXECUTE_LOCAL == mode
         || EXECUTE_PS_SEND_PIECE == mode
         || EXECUTE_PS_GET_PIECE == mode
         || EXECUTE_PS_SEND_LONG_DATA == mode
@@ -2504,18 +2505,17 @@ bool ObSQLSessionInfo::get_changed_package_state_num() const
   return changed_num;
 }
 
-int ObSQLSessionInfo::add_changed_package_info(ObExecContext &exec_ctx)
+int ObSQLSessionInfo::add_changed_package_info()
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator;
-  ObPLExecCtx pl_ctx(&allocator, &exec_ctx, NULL, NULL, NULL, NULL);
   if (0 != package_state_map_.size()) {
     FOREACH(it, package_state_map_) {
       ObPLPackageState *package_state = it->second;
       if (package_state->is_package_info_changed()) {
         ObSEArray<ObString, 4> key;
         ObSEArray<ObObj, 4> value;
-        if (OB_FAIL(package_state->convert_changed_info_to_string_kvs(pl_ctx, key, value))) {
+        if (OB_FAIL(package_state->convert_changed_info_to_string_kvs(*this, allocator, key, value))) {
           LOG_WARN("convert package state to string kv failed", K(ret));
         } else {
           ObSessionVariable sess_var;

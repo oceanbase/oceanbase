@@ -5700,15 +5700,11 @@ int ObPLCodeGenerator::generate_fetch(const ObPLStmt &s,
                                                     return_type_array_value));
 
       for (int64_t i = 0; OB_SUCC(ret) && i < return_type->get_record_member_count(); ++i) {
-        type_value.reset();
-        OZ (helper_.create_gep(ObString("extract_datatype"),
-                                return_type_array_value,
-                                i, type_value));
         pl_data_type = return_type->get_record_member_type(i);
         CK (OB_NOT_NULL(pl_data_type));
         if (OB_SUCC(ret)) {
           if (pl_data_type->is_obj_type()) {
-            OZ (store_data_type(*(pl_data_type->get_data_type()), type_value));
+            OZ (store_datatype_of_record(*(pl_data_type->get_data_type()), i, return_type_array_value));
           } else { // 构造函数场景
             ObDataType ext_type;
             ObObjMeta meta;
@@ -5716,7 +5712,7 @@ int ObPLCodeGenerator::generate_fetch(const ObPLStmt &s,
             meta.set_extend_type(pl_data_type->get_type());
             ext_type.set_meta_type(meta);
             ext_type.set_udt_id(pl_data_type->get_user_type_id());
-            OZ (store_data_type(ext_type, type_value));
+            OZ (store_datatype_of_record(ext_type, i, return_type_array_value));
           }
         }
       }
@@ -6640,6 +6636,73 @@ int ObPLCodeGenerator::store_objparam(const ObObjParam &object, ObLLVMValue &p_o
   return ret;
 }
 
+#define STORE_RECORD_MEMBER_META(first, second, name, get_func) \
+  do { \
+    if (OB_SUCC(ret)) { \
+      indices.reset();  \
+      if (OB_FAIL(indices.push_back(0)) ||  \
+          OB_FAIL(indices.push_back(offset)) ||  \
+          OB_FAIL(indices.push_back(first)) ||  \
+          OB_FAIL(indices.push_back(second))) {  \
+        LOG_WARN("push_back error", K(ret));  \
+      } else if (helper_.create_gep(ObString(name), record, indices, dest)) {  \
+        LOG_WARN("failed to create gep", K(ret));  \
+      } else if (OB_FAIL(helper_.get_int8(meta.get_func(), src))) {  \
+        LOG_WARN("failed to get_int64", K(meta), K(ret));  \
+      } else if (OB_FAIL(helper_.create_store(src, dest))) {  \
+        LOG_WARN("failed to create store", K(ret));  \
+      }  \
+    } \
+  } while (0)
+
+#define STORE_RECORD_MEMBER_ELEMENT(idx, name, get_func, length) \
+  do {  \
+    if (OB_SUCC(ret)) {   \
+      indices.reset();    \
+      if (OB_FAIL(indices.push_back(0)) ||  \
+          OB_FAIL(indices.push_back(offset)) ||  \
+          OB_FAIL(indices.push_back(idx))) {   \
+        LOG_WARN("push_back error", K(ret));  \
+      } else if (helper_.create_gep(ObString(name), record, indices, dest)) {  \
+        LOG_WARN("failed to create gep", K(ret));  \
+      } else if (OB_FAIL(helper_.get_int##length(object.get_func(), src))) {  \
+        LOG_WARN("failed to get_int64", K(object), K(ret));  \
+      } else if (OB_FAIL(helper_.create_store(src, dest))) {  \
+        LOG_WARN("failed to create store", K(ret));  \
+      }  \
+    }  \
+  } while (0)
+
+int ObPLCodeGenerator::store_datatype_of_record(const ObDataType &object,
+                                                int64_t idx,
+                                                jit::ObLLVMValue &record)
+{
+  int ret = OB_SUCCESS;
+  const ObObjMeta &meta = object.get_meta_type();
+  ObSEArray<int64_t, 4> indices;
+  ObLLVMValue src;
+  ObLLVMValue dest;
+  int64_t offset = idx;
+  //obj type
+  STORE_RECORD_MEMBER_META(0, 0, "extract_elem_objtype", get_type);
+  //collation level
+  STORE_RECORD_MEMBER_META(0, 1, "extract_elem_collation_level", get_collation_level);
+  //collation type
+  STORE_RECORD_MEMBER_META(0, 2, "extract_elem_collation_type", get_collation_type);
+  //scale
+  STORE_RECORD_MEMBER_META(0, 3, "extract_elem_obj_scale", get_scale);
+  //accuracy
+  STORE_RECORD_MEMBER_ELEMENT(1, "extract_elem_accuracy", get_accuracy_value, 64);
+  //charset
+  STORE_RECORD_MEMBER_ELEMENT(2, "extract_elem_charset", get_charset_type, 32);
+  //is_binary_collation
+  STORE_RECORD_MEMBER_ELEMENT(3, "extract_elem_binary_collation", is_binary_collation, 8);
+  //is_zero_fill
+  STORE_RECORD_MEMBER_ELEMENT(4, "extract_elem_zero_fill", is_zero_fill, 8);
+
+  return ret;
+}
+
 int ObPLCodeGenerator::store_data_type(const ObDataType &object, jit::ObLLVMValue &p_obj)
 {
   int ret = OB_SUCCESS;
@@ -7523,9 +7586,7 @@ int ObPLCodeGenerator::generate_into(const ObPLInto &into,
       ObLLVMValue type_value;
 
       for (int64_t i = 0; OB_SUCC(ret) && i < into.get_data_type().count(); ++i) {
-        type_value.reset();
-        OZ (helper_.create_gep(ObString("extract_datatype"), type_array_value, i, type_value));
-        OZ (store_data_type(into.get_data_type(i), type_value));
+        OZ (store_datatype_of_record(into.get_data_type(i), i, type_array_value));
 
         OZ (not_null_array.push_back(into.get_not_null_flag(i)));
         OZ (range_array.push_back(into.get_pl_integer_range(i)));
@@ -8485,7 +8546,8 @@ int ObPLCodeGenerator::generate_obj_access_expr()
       LOG_WARN("expr is not obj access", K(i), K(*expr), K(ret));
     } else {
       const ObObjAccessRawExpr *obj_access_expr = static_cast<const ObObjAccessRawExpr*>(expr);
-      if (OB_FAIL(generate_get_attr_func(
+      if (obj_access_expr->for_write()) {
+      } else if (OB_FAIL(generate_get_attr_func(
           obj_access_expr->get_access_idxs(),
           obj_access_expr->get_var_indexs().count() + obj_access_expr->get_param_count(),
           obj_access_expr->get_func_name(),
@@ -8604,6 +8666,8 @@ int ObPLCodeGenerator::final_expression(ObPLCompileUnit &pl_func)
     } else if (OB_ISNULL(obj_access_expr = static_cast<ObObjAccessRawExpr*>(expr))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected NULL obj_access_expr", K(ret), K(*expr));
+    } else if (obj_access_expr->for_write()) {
+      obj_access_expr->set_get_attr_func_addr(0);
     } else if (OB_FAIL(helper_.get_function_address(obj_access_expr->get_func_name(), addr))) {
       if (OB_ENTRY_NOT_EXIST == ret) {
         LOG_INFO("failed to find obj_access_expr symbol in JIT engine, will ignore this error",

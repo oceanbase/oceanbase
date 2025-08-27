@@ -485,8 +485,7 @@ int ObPLPackageState::is_oversize_value(const ObObj &val, bool &is_invalid)
   return ret;
 }
 
-int ObPLPackageState::encode_pkg_var_value(ObPLExecCtx &pl_ctx,
-                                            ObPLResolveCtx &resolve_ctx,
+int ObPLPackageState::encode_pkg_var_value(ObPLResolveCtx &resolve_ctx,
                                             common::ObString &key,
                                             common::ObObj &value,
                                             ObIArray<ObString> &old_keys)
@@ -497,7 +496,7 @@ int ObPLPackageState::encode_pkg_var_value(ObPLExecCtx &pl_ctx,
   bool is_oversize_value = false;
   hash::ObHashMap<int64_t, ObPackageVarEncodeInfo> value_map;
   ObPackageStateVersion state_version(OB_INVALID_VERSION, OB_INVALID_VERSION);
-  if (OB_ISNULL(cur_ser_val = pl_ctx.exec_ctx_->get_my_session()->get_user_variable_value(key))) {
+  if (OB_ISNULL(cur_ser_val = resolve_ctx.session_info_.get_user_variable_value(key))) {
     // do nothing
   } else if (cur_ser_val->is_null()) {
     // expired data, do nothing
@@ -521,7 +520,7 @@ int ObPLPackageState::encode_pkg_var_value(ObPLExecCtx &pl_ctx,
       if (changed_vars_.has_member(i)
           && vars_.at(i).get_meta().get_extend_type() != PL_REF_CURSOR_TYPE) {
         pkg_enc_info.var_idx_ = i;
-        if (OB_FAIL(make_pkg_var_kv_value(pl_ctx, resolve_ctx, vars_.at(i), i, pkg_enc_info.encode_value_))) {
+        if (OB_FAIL(make_pkg_var_kv_value(resolve_ctx, vars_.at(i), i, pkg_enc_info.encode_value_))) {
           LOG_WARN("fail to make pkg var value", K(ret));
         } else if (OB_FAIL(pkg_enc_info.construct())) {
           LOG_WARN("fail to construct pkg enc info", K(ret));
@@ -538,9 +537,9 @@ int ObPLPackageState::encode_pkg_var_value(ObPLExecCtx &pl_ctx,
         }
 
         // for mark old user var invalid which encode with old rule
-        if (FAILEDx(make_pkg_var_kv_key(*pl_ctx.allocator_, i, VARIABLE, old_key))) {
+        if (FAILEDx(make_pkg_var_kv_key(resolve_ctx.allocator_, i, VARIABLE, old_key))) {
           LOG_WARN("make package var name failed", K(ret), K(package_id_), K(i));
-        } else if (OB_ISNULL(old_value = pl_ctx.exec_ctx_->get_my_session()->get_user_variable_value(old_key))) {
+        } else if (OB_ISNULL(old_value = resolve_ctx.session_info_.get_user_variable_value(old_key))) {
           // do nothing
         } else if (OB_FAIL(old_keys.push_back(old_key))) {
           LOG_WARN("fail to push back old key", K(ret));
@@ -576,7 +575,7 @@ int ObPLPackageState::encode_pkg_var_value(ObPLExecCtx &pl_ctx,
       } else {
         char *serialize_buff = nullptr;
         int64_t serialize_pos = 0;
-        if (OB_ISNULL(serialize_buff = static_cast<char*>(pl_ctx.allocator_->alloc(total_serialize_len)))) {
+        if (OB_ISNULL(serialize_buff = static_cast<char*>(resolve_ctx.allocator_.alloc(total_serialize_len)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("failed to allocator memory for serialize pkg var buffer!",
                   K(ret), K(total_serialize_len));
@@ -635,50 +634,45 @@ int ObPLPackageState::decode_pkg_var_value(const common::ObObj &serialize_value,
 }
 
 
-int ObPLPackageState::make_pkg_var_kv_value(ObPLExecCtx &ctx, ObPLResolveCtx &resolve_ctx, ObObj &var_val, int64_t var_idx, ObObj &value)
+int ObPLPackageState::make_pkg_var_kv_value(ObPLResolveCtx &resolve_ctx, ObObj &var_val, int64_t var_idx, ObObj &value)
 {
   int ret = OB_SUCCESS;
-  ObSQLSessionInfo *sql_session = ctx.exec_ctx_->get_my_session();
-  if (OB_ISNULL(sql_session)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("sql session is null.", K(ret));
-  } else {
-    const ObPLVar *var = NULL;
-    OZ (sql_session->get_pl_engine()
-        ->get_package_manager().get_package_var(resolve_ctx, package_id_, var_idx, var));
-    CK (OB_NOT_NULL(var));
-    if (OB_FAIL(ret)) {
-    } else if (var->get_type().is_cursor_type()) {
-      ObPLCursorInfo *cursor = reinterpret_cast<ObPLCursorInfo *>(var_val.get_ext());
-      // package cursor sync, we only sync open status and close status.
-      // when remote server got open status, set cursor is sync status,
-      // and user can not use cursor when cursor is synced.
-      // when remote server got close status, set cursor is normal status,
-      // and user can use cursor normally.
-      if (OB_ISNULL(cursor) || !cursor->isopen()) {
-        OX (value.set_bool(false));
-      } else {
-        OX (value.set_bool(true));
-      }
-    } else if (var->get_type().is_opaque_type()) {
-      value.set_null();
+  const ObPLVar *var = NULL;
+  OZ (resolve_ctx.session_info_.get_pl_engine()
+      ->get_package_manager().get_package_var(resolve_ctx, package_id_, var_idx, var));
+  CK (OB_NOT_NULL(var));
+  if (OB_FAIL(ret)) {
+  } else if (var->get_type().is_cursor_type()) {
+    ObPLCursorInfo *cursor = reinterpret_cast<ObPLCursorInfo *>(var_val.get_ext());
+    // package cursor sync, we only sync open status and close status.
+    // when remote server got open status, set cursor is sync status,
+    // and user can not use cursor when cursor is synced.
+    // when remote server got close status, set cursor is normal status,
+    // and user can use cursor normally.
+    if (OB_ISNULL(cursor) || !cursor->isopen()) {
+      OX (value.set_bool(false));
     } else {
-      OZ (var->get_type().serialize(resolve_ctx, var_val, value));
+      OX (value.set_bool(true));
     }
+  } else if (var->get_type().is_opaque_type()) {
+    value.set_null();
+  } else {
+    OZ (var->get_type().serialize(resolve_ctx, var_val, value));
   }
+
   return ret;
 }
 
 int ObPLPackageState::convert_info_to_string_kv(
-  ObPLExecCtx &pl_ctx, ObPLResolveCtx &resolve_ctx, int64_t var_idx, PackageVarType var_type, ObString &key, ObObj &value)
+  ObPLResolveCtx &resolve_ctx, int64_t var_idx, PackageVarType var_type, ObString &key, ObObj &value)
 {
   int ret = OB_SUCCESS;
   if (var_idx < 0 || var_idx >= vars_.count() || INVALID == var_type) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(var_idx), K(var_type), K(ret));
-  } else if (OB_FAIL(make_pkg_var_kv_key(*pl_ctx.allocator_, var_idx, var_type, key))) {
+  } else if (OB_FAIL(make_pkg_var_kv_key(resolve_ctx.allocator_, var_idx, var_type, key))) {
     LOG_WARN("make package var kv key failed", K(var_idx), K(var_type), K(ret));
-  } else if (OB_FAIL(make_pkg_var_kv_value(pl_ctx, resolve_ctx, vars_.at(var_idx), var_idx, value))) {
+  } else if (OB_FAIL(make_pkg_var_kv_value(resolve_ctx, vars_.at(var_idx), var_idx, value))) {
     LOG_WARN("make package var kv value failed", K(var_idx), K(var_type), K(ret));
   } else {
     LOG_DEBUG("convert pacakge var info to string kv",
@@ -700,17 +694,16 @@ int ObPLPackageState::encode_pkg_var_key(ObIAllocator &alloc, ObString &key)
   return ret;
 }
 
-int ObPLPackageState::encode_info_to_string_kvs(ObPLExecCtx &pl_ctx,
-                                                ObPLResolveCtx &resolve_ctx,
+int ObPLPackageState::encode_info_to_string_kvs(ObPLResolveCtx &resolve_ctx,
                                                 common::ObString &key,
                                                 common::ObObj &value,
                                                 ObIArray<ObString> &old_keys)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_FAIL(encode_pkg_var_key(*pl_ctx.allocator_, key))) {
+  if (OB_FAIL(encode_pkg_var_key(resolve_ctx.allocator_, key))) {
     LOG_WARN("package var key encode failed", K(ret));
-  } else if (OB_FAIL(encode_pkg_var_value(pl_ctx, resolve_ctx, key, value, old_keys))) {
+  } else if (OB_FAIL(encode_pkg_var_value(resolve_ctx, key, value, old_keys))) {
     LOG_WARN("package var value encode failed", K(ret));
   } else {
     LOG_TRACE("encode_info_to_string_kvs", K(key), K(value), K(old_keys));
@@ -737,7 +730,10 @@ int ObPLPackageState::need_use_new_sync_policy(int64_t tenant_id, bool &use_new)
   return ret;
 }
 
-int ObPLPackageState::convert_changed_info_to_string_kvs(ObPLExecCtx &pl_ctx, ObIArray<ObString> &key, ObIArray<ObObj> &value)
+int ObPLPackageState::convert_changed_info_to_string_kvs(ObSQLSessionInfo &session,
+                                                         ObIAllocator &allocator,
+                                                         ObIArray<ObString> &key,
+                                                         ObIArray<ObObj> &value)
 {
   int ret = OB_SUCCESS;
   ObString key_str;
@@ -750,10 +746,7 @@ int ObPLPackageState::convert_changed_info_to_string_kvs(ObPLExecCtx &pl_ctx, Ob
   share::schema::ObSchemaGetterGuard schema_guard;
   ObPLPackageGuard package_guard(MTL_ID());
 
-  if (OB_ISNULL(pl_ctx.exec_ctx_) || OB_ISNULL(pl_ctx.exec_ctx_->get_my_session())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected pointer", K(ret));
-  } else if (OB_FAIL(package_guard.init())) {
+  if (OB_FAIL(package_guard.init())) {
     LOG_WARN("fail to init package guard", K(ret));
   } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(MTL_ID(), schema_guard))) {
     LOG_WARN("fail to get tenant schema guard", K(ret));
@@ -761,27 +754,27 @@ int ObPLPackageState::convert_changed_info_to_string_kvs(ObPLExecCtx &pl_ctx, Ob
     LOG_WARN("fail to get package info", K(ret));
   }
   if (OB_SUCC(ret) && OB_NOT_NULL(package_info)) {
-    ObPLResolveCtx resolve_ctx(pl_ctx.exec_ctx_->get_allocator(),
-                              *pl_ctx.exec_ctx_->get_my_session(),
+    ObPLResolveCtx resolve_ctx(allocator,
+                              session,
                               schema_guard,
                               package_guard,
-                              *pl_ctx.exec_ctx_->get_sql_proxy(),
+                              *GCTX.sql_proxy_,
                               false);
-    if (OB_FAIL(check_package_state_valid(*pl_ctx.exec_ctx_, resolve_ctx, is_valid))) {
+    if (OB_FAIL(check_package_state_valid(resolve_ctx, is_valid))) {
       LOG_WARN("check package state failed", K(ret), KPC(this));
     } else if (!is_valid) {
       LOG_INFO("package state is invalid, ignore this package.", KPC(this));
       ObString key;
-      if (OB_FAIL(encode_pkg_var_key(*pl_ctx.allocator_, key))) {
+      if (OB_FAIL(encode_pkg_var_key(allocator, key))) {
         LOG_WARN("fail to encode pkg var key", K(ret));
-      } else if (OB_FAIL(disable_expired_user_variables(*pl_ctx.exec_ctx_->get_my_session(), key))) {
+      } else if (OB_FAIL(disable_expired_user_variables(session, key))) {
         LOG_WARN("fail to disable expired user var", K(ret));
       }
     } else if (OB_FAIL(need_use_new_sync_policy(MTL_ID(), use_new))) {
       LOG_WARN("fail to get sync policy", K(ret));
     } else if (use_new) {
       if (is_package_info_changed()) {
-        if (OB_FAIL(encode_info_to_string_kvs(pl_ctx, resolve_ctx, key_str, value_obj, old_keys))) {
+        if (OB_FAIL(encode_info_to_string_kvs(resolve_ctx, key_str, value_obj, old_keys))) {
           LOG_WARN("fail to encode info", K(ret));
         } else if (OB_FAIL(key.push_back(key_str))) {
           LOG_WARN("fail to push key ", K(ret));
@@ -807,7 +800,7 @@ int ObPLPackageState::convert_changed_info_to_string_kvs(ObPLExecCtx &pl_ctx, Ob
             && vars_.at(i).get_meta().get_extend_type() != PL_REF_CURSOR_TYPE) {
           key_str.reset();
           value_obj.reset();
-          if (OB_FAIL(convert_info_to_string_kv(pl_ctx, resolve_ctx, i, VARIABLE, key_str, value_obj))) {
+          if (OB_FAIL(convert_info_to_string_kv(resolve_ctx, i, VARIABLE, key_str, value_obj))) {
             LOG_WARN("fail to convert package variable to string kv", K(i), K(ret));
           } else if (OB_FAIL(key.push_back(key_str))) {
             LOG_WARN("fail to push key ", K(ret));
@@ -900,17 +893,14 @@ int ObPLPackageState::check_version(const ObPackageStateVersion &state_version,
 }
 
 
-int ObPLPackageState::check_package_state_valid(ObExecContext &exec_ctx, ObPLResolveCtx &resolve_ctx, bool &valid)
+int ObPLPackageState::check_package_state_valid(ObPLResolveCtx &resolve_ctx, bool &valid)
 {
   int ret = OB_SUCCESS;
   valid = false;
-  ObSQLSessionInfo *sql_session = exec_ctx.get_my_session();
-  if (OB_ISNULL(sql_session) || OB_ISNULL(sql_session->get_pl_engine())) {
+  ObSQLSessionInfo *sql_session = &resolve_ctx.session_info_;
+  if (OB_ISNULL(sql_session->get_pl_engine())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql session is null.", K(ret));
-  } else if (OB_ISNULL(exec_ctx.get_sql_ctx())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("sql ctx or schema guard is null.", K(ret));
   } else {
     ObPLPackage* package_spec = nullptr;
     ObPLPackage* package_body = nullptr;

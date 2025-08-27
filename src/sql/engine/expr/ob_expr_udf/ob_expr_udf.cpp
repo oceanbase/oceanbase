@@ -621,13 +621,15 @@ int ObExprUDF::eval_udf_single(const ObExpr &expr, ObEvalCtx &eval_ctx, ObExprUD
                                                   *udf_ctx.get_param_store(),
                                                   udf_ctx.get_info()->nocopy_params_,
                                                   tmp_result,
-                                                  udf_ctx.get_cacheobj_guard(),
+                                                  udf_ctx.get_pl_execute_arg(),
                                                   nullptr,
                                                   false,
                                                   true,
                                                   udf_ctx.get_info()->loc_,
                                                   udf_ctx.get_info()->is_called_in_sql_,
-                                                  udf_ctx.get_info()->dblink_id_))) {
+                                                  udf_ctx.get_info()->dblink_id_,
+                                                  nullptr,
+                                                  udf_ctx.is_first_execute()))) {
         LOG_WARN("failed to eval udf use pl engine", K(ret));
       }
       env_guard.restore_exec_ctx();

@@ -1331,7 +1331,8 @@ int ObRecordType::add_record_member(const ObRecordMember &record)
 int ObRecordType::add_record_member(const ObString &record_name,
                                     const ObPLDataType &record_type,
                                     int64_t default_idx,
-                                    sql::ObRawExpr *default_raw_expr)
+                                    sql::ObRawExpr *default_raw_expr,
+                                    bool need_check_dup)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(record_members_.count() >= MAX_RECORD_COUNT)) {
@@ -1341,7 +1342,7 @@ int ObRecordType::add_record_member(const ObString &record_name,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("record member with not null modifier must hava default value", K(ret));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < record_members_.count(); ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && need_check_dup && i < record_members_.count(); ++i) {
       if (common::ObCharset::case_compat_mode_equal(
         record_members_.at(i).member_name_, record_name)) {
         ret = OB_ENTRY_EXIST;
@@ -1370,14 +1371,6 @@ int ObRecordType::add_record_member(ObPLEnumSetCtx &enum_set_ctx,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("record member with not null modifier must hava default value", K(ret));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < record_members_.count(); ++i) {
-      if (common::ObCharset::case_compat_mode_equal(
-        record_members_.at(i).member_name_, record_name)) {
-        ret = OB_ENTRY_EXIST;
-        LOG_WARN("dup record member found", K(ret), K(record_name), K(i));
-        break;
-      }
-    }
     ObPLDataType member_type;
     OZ (member_type.deep_copy(enum_set_ctx, record_type));
     OZ (record_members_.push_back(ObRecordMember(
@@ -1805,15 +1798,13 @@ int ObRecordType::generate_default_value(ObPLCodeGenerator &generator,
       OZ (generator.get_helper().get_int8(false, notnull_value));
       OZ (generator.extract_notnull_ptr_from_record(value, i, notnull_ptr));
       OZ (generator.get_helper().create_store(notnull_value, notnull_ptr));
-      OZ (generator.extract_meta_ptr_from_record(value, get_record_member_count(), i, meta_ptr));
-      OZ (generator.store_data_type(meta, meta_ptr));
+      OZ (generator.store_datatype_of_record(meta, get_record_member_count() + RECORD_META_OFFSET + i, value));
     }
-
-    OZ (buffer_guard.get_objparam_buffer(result));
 
     //设置数据
     if (OB_SUCC(ret)) {
       if (OB_INVALID_INDEX != member->get_default()) {
+        OZ (buffer_guard.get_objparam_buffer(result));
         if (OB_NOT_NULL(member->get_default_expr())) {
           OZ (generator.generate_expr(member->get_default(), *stmt, result_idx, result));
         } else {

@@ -417,7 +417,7 @@ public:
 
   int add_record_member(
     const common::ObString &record_name, const ObPLDataType &record_type,
-    int64_t default_idx = OB_INVALID_INDEX, sql::ObRawExpr *default_raw_expr = NULL);
+    int64_t default_idx = OB_INVALID_INDEX, sql::ObRawExpr *default_raw_expr = NULL, bool need_check_dup = false);
   int add_record_member(
     ObPLEnumSetCtx &enum_set_ctx, const common::ObString &record_name, const ObPLDataType &record_type,
     int64_t default_idx = OB_INVALID_INDEX, sql::ObRawExpr *default_raw_expr = NULL);

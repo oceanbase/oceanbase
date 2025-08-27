@@ -34,6 +34,7 @@ int ObExecuteExecutor::execute(ObExecContext &ctx, ObExecuteStmt &stmt)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("it must be call procedure stmt", K(ret), K(stmt));
   } else {
+    ObAuditRecordData &audit_record = ctx.get_my_session()->get_raw_audit_record();
     ObObjParam result;
     ParamStore params_array( (ObWrapperAllocator(ctx.get_allocator())) );
     if (OB_FAIL(params_array.reserve(stmt.get_params().count()))) {
@@ -123,6 +124,11 @@ int ObExecuteExecutor::execute(ObExecContext &ctx, ObExecuteStmt &stmt)
                   LOG_WARN("get stmt info is null", K(ret));
                 } else {
                   const ObIArray<int64_t> &fixed_params_idx = ps_info->get_raw_params_idx();
+                  ObString exec_sql;
+                  OZ (ob_write_string(ctx.get_allocator(), ps_info->get_ps_sql(), exec_sql));
+                  OX (audit_record.sql_ = const_cast<char *>(exec_sql.ptr()));
+                  OX (audit_record.sql_len_ = exec_sql.length());
+                  OX (audit_record.sql_cs_type_ = ctx.get_my_session()->get_local_collation_connection());
                   for (int64_t i = 0; OB_SUCC(ret) && i < call_proc_info->get_expressions().count(); ++i) {
                     if (call_proc_info->is_out_param(i)) {
                       const ObSqlExpression *call_param_expr = call_proc_info->get_expressions().at(i);
@@ -202,7 +208,6 @@ int ObExecuteExecutor::execute(ObExecContext &ctx, ObExecuteStmt &stmt)
                                                              &params_array,
                                                              tmp_ptr,
                                                              tmp_len));
-    ObAuditRecordData &audit_record = ctx.get_my_session()->get_raw_audit_record();
     OX (audit_record.params_value_ = tmp_ptr);
     OX (audit_record.params_value_len_ = tmp_len);
   }

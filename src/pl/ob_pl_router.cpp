@@ -182,7 +182,6 @@ int ObPLRouter::simple_resolve(ObPLFunctionAST &func_ast)
     OZ (pl::ObPLDataType::transform_from_iparam(param,
                                                 schema_guard_,
                                                 session_info_,
-                                                inner_allocator_,
                                                 sql_proxy_,
                                                 param_type,
                                                 &deps));

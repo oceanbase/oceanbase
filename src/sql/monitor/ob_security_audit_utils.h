@@ -204,6 +204,7 @@ public:
   static int handle_security_audit(ObResultSet &result,
                                    share::schema::ObSchemaGetterGuard *schema_guard,
                                    const sql::ObStmt *stmt,
+                                   const common::ObString &current_sql,
                                    const common::ObString &comment_text,
                                                                  const int return_code);
   static int check_allow_audit(ObSQLSessionInfo &session, bool &allow_audit);
@@ -246,7 +247,7 @@ public:
                                           const bool need_record_sql);
 
   static int get_action_sql(const stmt::StmtType stmt_type, const sql::ObStmt *stmt,
-      ObSQLSessionInfo &session, common::ObString &action_sql);
+    const common::ObString &current_sql, common::ObString &action_sql);
   static int get_audit_units(const stmt::StmtType stmt_type,
                              const sql::ObStmt *basic_stmt,
                              common::ObIArray<ObAuditUnit> &audit_units);

@@ -1841,7 +1841,8 @@ int ObPLResolver::resolve_declare_record_type(const ParseNode *type_node,
                 if (OB_FAIL(record_type->add_record_member(member_name,
                                                           data_type,
                                                           default_expr_idx,
-                                                          default_expr))) {
+                                                          default_expr,
+                                                          true))) {
                   LOG_WARN("add record member failed", K(ret));
                 } else {
                   record_type->set_not_null(record_type->get_not_null());
@@ -7497,8 +7498,9 @@ int ObPLResolver::check_in_param_type_legal(const ObIRoutineParam *param_info,
 
   if (OB_SUCC(ret)) {
     // Step: get real parameter type
+    ObArenaAllocator tmp_alloc;
     ObPLDataType expected_type, actually_type;
-    pl::ObPLEnumSetCtx enum_set_ctx(resolve_ctx_.allocator_);
+    pl::ObPLEnumSetCtx enum_set_ctx(tmp_alloc);
     bool is_anonymous_array_type = false;
     if (param->is_obj_access_expr()) {
       const ObObjAccessRawExpr *obj_access = NULL;
@@ -7540,7 +7542,6 @@ int ObPLResolver::check_in_param_type_legal(const ObIRoutineParam *param_info,
           OZ (pl::ObPLDataType::transform_from_iparam(iparam,
                                                       resolve_ctx_.schema_guard_,
                                                       resolve_ctx_.session_info_,
-                                                      resolve_ctx_.allocator_,
                                                       resolve_ctx_.sql_proxy_,
                                                       expected_type));
         }
@@ -7827,14 +7828,14 @@ int ObPLResolver::resolve_cparams(ObIArray<ObRawExpr*> &exprs,
           OZ (resolve_inout_param(params.at(i), param_mode, out_idx), K(i), K(params), K(exprs));
           if (OB_SUCC(ret) && is_question_mark_value(params.at(i), &(current_block_->get_namespace()))) {
             ObPLDataType data_type;
-            pl::ObPLEnumSetCtx enum_set_ctx(resolve_ctx_.allocator_);
+            ObArenaAllocator tmp_alloc;
+            pl::ObPLEnumSetCtx enum_set_ctx(tmp_alloc);
             if (param_info->is_schema_routine_param()) {
               const ObRoutineParam* iparam = static_cast<const ObRoutineParam*>(param_info);
               OX (data_type.set_enum_set_ctx(&enum_set_ctx));
               OZ (pl::ObPLDataType::transform_from_iparam(iparam,
                                                           resolve_ctx_.schema_guard_,
                                                           resolve_ctx_.session_info_,
-                                                          resolve_ctx_.allocator_,
                                                           resolve_ctx_.sql_proxy_,
                                                           data_type));
               const ObUserDefinedType *user_type = NULL;
@@ -8816,14 +8817,14 @@ int ObPLResolver::resolve_open_for(
       LOG_WARN("for clause is NULL", K(parse_tree->num_child_), K(ret));
     } else {
       if (T_SQL_STMT == for_node->type_) {
-        ObPLInto dummy_into(resolve_ctx_.allocator_);
+        ObArenaAllocator allocator;
+        ObPLInto dummy_into(allocator);
         if (OB_FAIL(resolve_static_sql(for_node, stmt->get_static_sql(), dummy_into, true/*is cursor*/, func))) {
           LOG_WARN("failed to resolve static sql",  K(ret));
         } else { //检查sql语句的结果集类型和Cursor的return类型是否兼容
           const ObPLCursor *cursor = stmt->get_cursor();
           CK (OB_NOT_NULL(cursor));
           if (OB_SUCC(ret) && cursor->get_cursor_type().is_valid_type()) {
-            ObArenaAllocator allocator;
             const ObUserDefinedType *cursor_type = NULL;
             if (OB_FAIL(current_block_->get_namespace().get_user_type(cursor->get_cursor_type().get_user_type_id(),
                   cursor_type, &allocator))) {
@@ -10366,8 +10367,7 @@ int ObPLResolver::analyze_expr_type(ObRawExpr *&expr,
   if (OB_FAIL(ret)) {
   } else if (T_OP_GET_PACKAGE_VAR == expr->get_expr_type()) {
     OX (unit_ast.set_rps());
-  } else if (T_FUN_UDF == expr->get_expr_type() ||
-             T_OP_GET_SYS_VAR == expr->get_expr_type() ||
+  } else if (T_OP_GET_SYS_VAR == expr->get_expr_type() ||
              T_OP_GET_USER_VAR == expr->get_expr_type() ||
              (T_FUN_SUBQUERY == expr->get_expr_type() && lib::is_mysql_mode())) { // user var expr has been rewrite to subquery expr in mysql mode
     OX (unit_ast.set_external_state());
@@ -11369,7 +11369,6 @@ int ObPLResolver::resolve_inner_call(
       } else if (access_idxs.at(idx_cnt - 1).is_procedure()) {
         ObPLCallStmt *call_stmt = NULL;
         const ObIRoutineInfo *iroutine_info = access_idxs.at(idx_cnt - 1).routine_info_;
-        func.set_external_state();
         if (OB_ISNULL(iroutine_info)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected null routine pointer", K(ret), K(idx_cnt), K(access_idxs));
@@ -11385,6 +11384,7 @@ int ObPLResolver::resolve_inner_call(
           LOG_WARN("failed to cast stmt", K(ret));
         } else if (access_idxs.at(idx_cnt - 1).is_internal_procedure()) {
           ObSEArray<ObRawExpr*, 4> params;
+          func.set_external_state();
           const ObPLRoutineInfo *package_routine_info = static_cast<const ObPLRoutineInfo *>(access_idxs.at(idx_cnt - 1).routine_info_);
           CK (OB_NOT_NULL(package_routine_info));
           OX (call_stmt->set_proc_id(package_routine_info->get_id()));
@@ -11412,6 +11412,7 @@ int ObPLResolver::resolve_inner_call(
           }
         } else if (access_idxs.at(idx_cnt - 1).is_external_procedure()) {
           ObSEArray<ObRawExpr*, 4> params;
+          func.set_external_state();
           const share::schema::ObRoutineInfo *schema_routine_info = static_cast<const ObRoutineInfo *>(access_idxs.at(idx_cnt - 1).routine_info_);
           CK (OB_NOT_NULL(schema_routine_info));
           OX (call_stmt->set_package_id(schema_routine_info->get_package_id()));
@@ -11447,6 +11448,15 @@ int ObPLResolver::resolve_inner_call(
           ObArray<ObRawExpr*> params;
           const ObPLRoutineInfo *root_routine_info = static_cast<const ObPLRoutineInfo *>(access_idxs.at(idx_cnt - 1).routine_info_);
           CK (OB_NOT_NULL(root_routine_info));
+          if (OB_SUCC(ret) &&
+            (root_routine_info->is_modifies_sql_data() ||
+            root_routine_info->is_reads_sql_data() ||
+            root_routine_info->is_wps() ||
+            root_routine_info->is_rps() ||
+            root_routine_info->is_has_sequence() ||
+            root_routine_info->is_external_state())) {
+            func.set_external_state();
+          }
           OX (call_stmt->set_package_id(func.get_package_id()));
           OX (call_stmt->set_proc_id(root_routine_info->get_parent_id()));
           OX (call_stmt->set_route_sql(root_routine_info->get_route_sql()));
@@ -12120,7 +12130,6 @@ int ObPLResolver::resolve_dblink_udf(sql::ObQualifiedName &q_name,
     OZ (ObRawExprUtils::resolve_udf_param_types(sch_routine_info,
                                                 resolve_ctx_.schema_guard_,
                                                 resolve_ctx_.session_info_,
-                                                resolve_ctx_.allocator_,
                                                 resolve_ctx_.sql_proxy_,
                                                 udf_info,
                                                 resolve_ctx_.package_guard_.dblink_guard_,
@@ -12956,7 +12965,6 @@ int ObPLResolver::resolve_udf_info(
 
   CK (OB_NOT_NULL(udf_info.ref_expr_));
   CK (OB_NOT_NULL(current_block_));
-  OX (func.set_external_state());
   OZ (schema_checker.init(resolve_ctx_.schema_guard_, resolve_ctx_.session_info_.get_server_sid()));
   OZ (ObRawExprUtils::rebuild_expr_params(udf_info, &expr_factory_, expr_params), K(udf_info), K(access_idxs));
   {
@@ -13026,6 +13034,7 @@ int ObPLResolver::resolve_udf_info(
         || UDT_PROCEDURE == routine_type
         || UDT_FUNCTION == routine_type) {
 
+      func.set_external_state();
       const ObPLRoutineInfo *package_routine_info = static_cast<const ObPLRoutineInfo *>(routine_info);
 
       CK (OB_NOT_NULL(package_routine_info));
@@ -13105,7 +13114,6 @@ int ObPLResolver::resolve_udf_info(
       OZ (ObRawExprUtils::resolve_udf_param_types(package_routine_info,
                                                   resolve_ctx_.schema_guard_,
                                                   resolve_ctx_.session_info_,
-                                                  resolve_ctx_.allocator_,
                                                   resolve_ctx_.sql_proxy_,
                                                   udf_info,
                                                   resolve_ctx_.package_guard_.dblink_guard_,
@@ -13132,6 +13140,7 @@ int ObPLResolver::resolve_udf_info(
       const ObUDTTypeInfo *udt_info = NULL;
       int64_t schema_version = OB_INVALID_VERSION;
       uint64_t routine_id = OB_INVALID_ID;
+      func.set_external_state();
 
       CK (OB_NOT_NULL(schema_routine_info));
 
@@ -13193,7 +13202,6 @@ int ObPLResolver::resolve_udf_info(
       OZ (ObRawExprUtils::resolve_udf_param_types(schema_routine_info,
                                                   resolve_ctx_.schema_guard_,
                                                   resolve_ctx_.session_info_,
-                                                  resolve_ctx_.allocator_,
                                                   resolve_ctx_.sql_proxy_,
                                                   udf_info,
                                                   resolve_ctx_.package_guard_.dblink_guard_,
@@ -13216,7 +13224,15 @@ int ObPLResolver::resolve_udf_info(
       const ObPLRoutineInfo *sub_routine_info = static_cast<const ObPLRoutineInfo *>(routine_info);
 
       CK (OB_NOT_NULL(sub_routine_info));
-
+      if (OB_SUCC(ret) &&
+        (sub_routine_info->is_modifies_sql_data() ||
+        sub_routine_info->is_reads_sql_data() ||
+        sub_routine_info->is_wps() ||
+        sub_routine_info->is_rps() ||
+        sub_routine_info->is_has_sequence() ||
+        sub_routine_info->is_external_state())) {
+        func.set_external_state();
+      }
       OZ (ObRawExprUtils::resolve_udf_common_info(db_name,
                                                   package_name,
                                                   sub_routine_info->get_parent_id(),
@@ -13237,7 +13253,6 @@ int ObPLResolver::resolve_udf_info(
       OZ (ObRawExprUtils::resolve_udf_param_types(sub_routine_info,
                                                   resolve_ctx_.schema_guard_,
                                                   resolve_ctx_.session_info_,
-                                                  resolve_ctx_.allocator_,
                                                   resolve_ctx_.sql_proxy_,
                                                   udf_info,
                                                   resolve_ctx_.package_guard_.dblink_guard_,
@@ -13569,7 +13584,6 @@ int ObPLResolver::restriction_on_result_cache(ObPLINS &ctx,
           OZ (pl::ObPLDataType::transform_from_iparam(iparam,
                                                 resolve_ctx->schema_guard_,
                                                 resolve_ctx->session_info_,
-                                                resolve_ctx->allocator_,
                                                 resolve_ctx->sql_proxy_,
                                                 arg_type,
                                                 NULL,
@@ -13675,8 +13689,9 @@ int ObPLResolver::check_package_accessible(
   AccessorItem &caller, const ObString &package_body)
 {
   int ret = OB_SUCCESS;
+  ObArenaAllocator allocator;
   ObSEArray<AccessorItem, 4> accessors;
-  OZ (resolve_package_accessible_by(package_body, accessors));
+  OZ (resolve_package_accessible_by(package_body, allocator, accessors));
   OZ (check_common_accessible(caller, accessors));
   return ret;
 }
@@ -13685,8 +13700,9 @@ int ObPLResolver::check_routine_accessible(
   AccessorItem &caller, const ObString &routine_body)
 {
   int ret = OB_SUCCESS;
+  ObArenaAllocator allocator;
   ObSEArray<AccessorItem, 4> accessors;
-  OZ (resolve_routine_accessible_by(routine_body, accessors));
+  OZ (resolve_routine_accessible_by(routine_body, allocator, accessors));
   OZ (check_common_accessible(caller, accessors));
   return ret;
 }
@@ -13714,7 +13730,7 @@ int ObPLResolver::check_common_accessible(
 }
 
 int ObPLResolver::resolve_accessible_by(
-  const ObStmtNodeTree *accessor_list, ObIArray<AccessorItem> &result)
+  const ObStmtNodeTree *accessor_list, ObIAllocator &alloc, ObIArray<AccessorItem> &result)
 {
   int ret = OB_SUCCESS;
   CK (OB_NOT_NULL(accessor_list));
@@ -13732,11 +13748,11 @@ int ObPLResolver::resolve_accessible_by(
     if (OB_SUCC(ret)) {
       ObString schema_name;
       ObString item_name;
-      OZ (ob_write_string(resolve_ctx_.allocator_,
+      OZ (ob_write_string(alloc,
                           ObString(name->children_[1]->str_len_, name->children_[1]->str_value_),
                           item_name));
       if (OB_NOT_NULL(name->children_[0])) {
-        OZ (ob_write_string(resolve_ctx_.allocator_,
+        OZ (ob_write_string(alloc,
                           ObString(name->children_[0]->str_len_, name->children_[0]->str_value_),
                           schema_name));
       } else {
@@ -13782,10 +13798,9 @@ int ObPLResolver::resolve_accessible_by(
 }
 
 int ObPLResolver::resolve_package_accessible_by(
-  const ObString source, ObIArray<AccessorItem> &result)
+  const ObString source, ObIAllocator &allocator, ObIArray<AccessorItem> &result)
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator allocator;
   ObPLParser parser(allocator, ObCharsets4Parser(), resolve_ctx_.session_info_.get_sql_mode());
   ObStmtNodeTree *parse_tree = NULL;
   const ObStmtNodeTree *package_node = NULL;
@@ -13798,7 +13813,7 @@ int ObPLResolver::resolve_package_accessible_by(
   CK (OB_NOT_NULL(package_node = parse_tree->children_[0]));
   if (OB_SUCC(ret) && T_SP_PRE_STMTS == parse_tree->type_) {
     OZ (ObPLResolver::resolve_condition_compile(
-      resolve_ctx_.allocator_,
+      allocator,
       &(resolve_ctx_.session_info_),
       &(resolve_ctx_.schema_guard_),
       &(resolve_ctx_.package_guard_),
@@ -13821,17 +13836,16 @@ int ObPLResolver::resolve_package_accessible_by(
       OX (accessor_list = child->children_[0]);
       CK (OB_NOT_NULL(accessor_list));
       CK (T_SP_ACCESSOR_LIST == accessor_list->type_);
-      OZ (resolve_accessible_by(accessor_list, result));
+      OZ (resolve_accessible_by(accessor_list, allocator, result));
     }
   }
   return ret;
 }
 
 int ObPLResolver::resolve_routine_accessible_by(
-  const ObString source, ObIArray<AccessorItem> &result)
+  const ObString source, ObIAllocator &allocator, ObIArray<AccessorItem> &result)
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator allocator;
   ObPLParser parser(allocator, ObCharsets4Parser(), resolve_ctx_.session_info_.get_sql_mode());
   ObStmtNodeTree *parse_tree = NULL;
   const ObStmtNodeTree *routine_node = NULL;
@@ -13844,7 +13858,7 @@ int ObPLResolver::resolve_routine_accessible_by(
   OX (routine_node = parse_tree->children_[0]);
   if (OB_SUCC(ret) && T_SP_PRE_STMTS == routine_node->type_) {
     OZ (ObPLResolver::resolve_condition_compile(
-      resolve_ctx_.allocator_,
+      allocator,
       &(resolve_ctx_.session_info_),
       &(resolve_ctx_.schema_guard_),
       &(resolve_ctx_.package_guard_),
@@ -13872,7 +13886,7 @@ int ObPLResolver::resolve_routine_accessible_by(
       OX (accessor_list = child->children_[0]);
       CK (OB_NOT_NULL(accessor_list));
       CK (T_SP_ACCESSOR_LIST == accessor_list->type_);
-      OZ (resolve_accessible_by(accessor_list, result));
+      OZ (resolve_accessible_by(accessor_list, allocator, result));
     }
   }
   return ret;
@@ -15033,7 +15047,6 @@ int ObPLResolver::resolve_function(ObObjAccessIdent &access_ident,
     OZ (pl::ObPLDataType::transform_from_iparam(iparam,
                                                 resolve_ctx_.schema_guard_,
                                                 resolve_ctx_.session_info_,
-                                                resolve_ctx_.allocator_,
                                                 resolve_ctx_.sql_proxy_,
                                                 return_type,
                                                 NULL,
@@ -17978,7 +17991,7 @@ int ObPLResolver::resolve_routine_decl(const ObStmtNodeTree *parse_tree,
           OX (accessor_list = child->children_[0]);
           CK (OB_NOT_NULL(accessor_list));
           CK (T_SP_ACCESSOR_LIST == accessor_list->type_);
-          OZ (resolve_accessible_by(accessor_list, routine_info->get_accessors()));
+          OZ (resolve_accessible_by(accessor_list, resolve_ctx_.allocator_, routine_info->get_accessors()));
         }
       }
     }

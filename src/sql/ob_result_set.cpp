@@ -1166,6 +1166,7 @@ OB_INLINE int ObResultSet::auto_end_plan_trans(ObPhysicalPlan& plan,
             ObSecurityAuditUtils::handle_security_audit(*this,
                                                         sql_ctx->schema_guard_,
                                                         sql_ctx->cur_stmt_,
+                                                        sql_ctx->cur_sql_,
                                                         ObString::make_empty_string(),
                                                         ret);
           }

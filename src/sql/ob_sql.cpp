@@ -1654,10 +1654,12 @@ int ObSql::handle_pl_prepare(const ObString &sql,
               normalized_sql = basic_stmt->get_query_ctx()->get_sql_stmt();
             }
           }
+          ObIAllocator *alloc = pl_prepare_result.parent_allocator_ != nullptr ? pl_prepare_result.parent_allocator_
+                                                                                : &allocator;
 
           if (OB_FAIL(ret)) {
             // do nothing
-          } else if (OB_FAIL(ob_write_string(allocator, normalized_sql, result.get_stmt_ps_sql(), true))) {
+          } else if (OB_FAIL(ob_write_string(*alloc, normalized_sql, result.get_stmt_ps_sql(), true))) {
             LOG_WARN("failed to write string", K(trimed_stmt), K(ret));
           }
           int tmp_ret = OB_SUCCESS;
@@ -1857,6 +1859,7 @@ int ObSql::handle_pl_execute(const ObString &sql,
   (void)ObSecurityAuditUtils::handle_security_audit(result,
                                                     context.schema_guard_,
                                                     context.cur_stmt_,
+                                                    context.cur_sql_,
                                                     ObString::make_string("pl/sql"),
                                                     ret);
 

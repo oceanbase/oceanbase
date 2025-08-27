@@ -994,9 +994,10 @@ int ObExprUDFUtils::process_singal_out_param(int64_t i,
                                         iparams.at(i),
                                         params_type.at(i),
                                         tmp));
+    CK (OB_NOT_NULL(ctx));
     OZ (ObSPIService::spi_set_package_variable(
       &exec_ctx,
-      NULL,
+      ctx->guard_,
       params_desc.at(i).get_package_id(),
       params_desc.at(i).get_index(),
       tmp));
@@ -1095,6 +1096,7 @@ int ObExprUDFUtils::process_package_out_param(int64_t idx,
   ObObj origin_value = objs_stack[idx];
   ObIAllocator *allocator = NULL;
   pl::ObPLExecCtx plctx(nullptr, &exec_ctx, nullptr,nullptr,nullptr,nullptr);
+  plctx.guard_ = exec_ctx.get_package_guard();
   ObIAllocator *composite_allocator = nullptr;
   OZ (extract_allocator_and_restore_obj(origin_value, origin_value, composite_allocator));
   if (OB_SUCC(ret)) {

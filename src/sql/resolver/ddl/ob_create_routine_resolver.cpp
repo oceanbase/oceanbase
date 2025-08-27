@@ -777,7 +777,6 @@ int ObCreateRoutineResolver::resolve_param_list(const ParseNode *param_list, obr
             OZ (pl::ObPLDataType::transform_from_iparam(&(routine_param),
                                                         *(schema_checker_->get_schema_guard()),
                                                         *(session_info_),
-                                                        *(allocator_),
                                                         *(params_.sql_proxy_),
                                                         pl_type));
             // 默认值在CreateRoutine阶段不需要计算,执行时计算,但是这里要resolve下,避免用户使用非法变量
@@ -843,7 +842,6 @@ int ObCreateRoutineResolver::resolve_clause_list(
       OZ (pl::ObPLDataType::transform_from_iparam(routine_param,
                                                   *schema_checker_->get_schema_guard(),
                                                   *session_info_,
-                                                  *allocator_,
                                                   *params_.sql_proxy_,
                                                   ret_type));
     }

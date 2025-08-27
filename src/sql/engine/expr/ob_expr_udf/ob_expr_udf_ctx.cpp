@@ -149,6 +149,20 @@ int ObExprUDFCtx::init(const ObExpr &expr, ObExecContext &exec_ctx)
       }
     }
   }
+  if (OB_SUCC(ret)) {
+    if (is_valid_id(get_info()->dblink_id_)) {
+    } else if (OB_FAIL(pl_execute_arg_.obtain_routine(exec_ctx,
+                                               package_id_,
+                                               info_->udf_id_,
+                                               info_->subprogram_path_))) {
+      LOG_WARN("failed to obtain routine", K(ret));
+    } else if (OB_ISNULL(pl_execute_arg_.get_routine())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected routine", K(ret));
+    } else if (OB_FAIL(calc_current_function())) {
+      LOG_WARN("failed to cacl current function", K(ret));
+    }
+  }
   return ret;
 }
 
@@ -195,6 +209,8 @@ int ObExprUDFCtx::reuse(const ObExpr &expr)
       phy_plan_ctx_->get_param_store_for_update().reuse();
     }
     allocator_.reuse();
+    is_first_execute_ = false;
+    pl_execute_arg_.reuse();
   }
   return ret;
 }
@@ -311,8 +327,6 @@ int ObExprUDFCtx::calc_result_cache_enabled()
   int ret = OB_SUCCESS;
   if (!is_result_cache_enabled()) {
     // do nothing ...
-  } else if (OB_FAIL(calc_current_function())) {
-    LOG_WARN("failed to cacl current function", K(ret));
   } else if (OB_ISNULL(current_function_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected current function", K(ret));
@@ -328,7 +342,8 @@ int ObExprUDFCtx::calc_result_cache_enabled()
 int ObExprUDFCtx::calc_current_function()
 {
   int ret = OB_SUCCESS;
-  if (OB_NOT_NULL(current_function_)) {
+  if (!is_result_cache_enabled()) {
+  } else if (OB_NOT_NULL(current_function_)) {
     // do nothing ...
   } else {
     ObCacheObjGuard *cacheobj_guard = NULL;
@@ -376,7 +391,7 @@ int ObExprUDFCtx::calc_current_function()
         CK (OB_NOT_NULL(current_function_));
       }
     } else {
-      CK (OB_NOT_NULL(current_function_ = static_cast<pl::ObPLFunction *>(cacheobj_guard_.get_cache_obj())));
+      CK (OB_NOT_NULL(current_function_ = static_cast<pl::ObPLFunction *>(pl_execute_arg_.get_cacheobj_guard().get_cache_obj())));
       OX (current_compile_unit_ = current_function_);
     }
   }
@@ -629,7 +644,7 @@ int ObExprUDFCtx::get_result_from_result_cache(ObObj &result, bool &found)
   pl::ObPLUDFResultCacheCtx rc_ctx;
   pl::ObPLUDFResultCacheObject *udf_result = nullptr;
   found = false;
-  if (OB_ISNULL(current_function_)) {
+  if (is_first_execute_) {
     // first execute, do not try to get cache for permission check
   } else if (OB_FAIL(construct_cache_ctx_for_get(rc_ctx))) {
     LOG_WARN("failed to construct cache ctx for get", K(ret));
@@ -686,9 +701,7 @@ int ObExprUDFCtx::construct_cache_ctx_for_get(pl::ObPLUDFResultCacheCtx &rc_ctx)
 int ObExprUDFCtx::construct_cache_ctx_for_add(pl::ObPLUDFResultCacheCtx &rc_ctx)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(calc_current_function())) {
-    LOG_WARN("failed to calc current function", K(ret));
-  } else if (OB_ISNULL(current_function_) || OB_ISNULL(current_compile_unit_)) {
+  if (OB_ISNULL(current_function_) || OB_ISNULL(current_compile_unit_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected current function", K(ret), KP(current_function_), KP(current_compile_unit_));
   } else {

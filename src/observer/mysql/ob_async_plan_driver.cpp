@@ -57,6 +57,7 @@ int ObAsyncPlanDriver::response_result(ObMySQLResultSet &result)
     // open 成功，允许异步回包
     result.set_end_trans_async(true);
   }
+  OX (session_.reset_top_query_string());
 
   if (OB_SUCCESS != ret) {
     // 如果try_again为true，说明这条SQL需要重做。考虑到重做之前我们需要回滚整个事务，会调用EndTransCb

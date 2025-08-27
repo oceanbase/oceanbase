@@ -695,6 +695,9 @@ public:
 
 public:
   int store_obj(const ObObj &object, jit::ObLLVMValue &p_obj);
+  int store_datatype_of_record(const ObDataType &object,
+                                int64_t idx,
+                                jit::ObLLVMValue &record);
   int store_data_type(const ObDataType &object, jit::ObLLVMValue &result);
   int store_elem_desc(const ObElemDesc &object, jit::ObLLVMValue &result);
   int generate_debug(const ObString &name, int64_t value);

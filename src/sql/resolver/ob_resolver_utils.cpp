@@ -1408,12 +1408,13 @@ int ObResolverUtils::check_match(const pl::ObPLResolveCtx &resolve_ctx,
   // 解析参数表达式数组
   bool has_assign_param = false;
   int arg_cnt = routine_info->get_param_count();
+  ObArenaAllocator tmp_alloc;
   for (int64_t i = 0; OB_SUCC(ret) && offset < arg_cnt && i < expr_params.count(); ++i) {
     int64_t position = OB_INVALID_ID;
     ObObjType src_type;
     uint64_t src_type_id;
     ObPLDataType dst_pl_type;
-    pl::ObPLEnumSetCtx enum_set_ctx(resolve_ctx.allocator_);
+    pl::ObPLEnumSetCtx enum_set_ctx(tmp_alloc);
     ObRawExpr* expr = NULL;
     CK (OB_NOT_NULL(expr_params.at(i)));
     if (OB_FAIL(ret)) {
@@ -1462,7 +1463,6 @@ int ObResolverUtils::check_match(const pl::ObPLResolveCtx &resolve_ctx,
       OZ (pl::ObPLDataType::transform_from_iparam(param,
                                                   resolve_ctx.schema_guard_,
                                                   resolve_ctx.session_info_,
-                                                  resolve_ctx.allocator_,
                                                   resolve_ctx.sql_proxy_,
                                                   dst_pl_type,
                                                   NULL,

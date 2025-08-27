@@ -100,7 +100,9 @@ public:
     ctx_allocator_("UDFCtxAlloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
     arg_count_(0),
     result_cache_max_result_(0),
-    result_cache_max_size_(0) {}
+    result_cache_max_size_(0),
+    is_first_execute_(true),
+    pl_execute_arg_() {}
 
   ~ObExprUDFCtx();
 
@@ -132,6 +134,10 @@ public:
     cacheobj_guard_.~ObCacheObjGuard();
     new (&cacheobj_guard_) ObCacheObjGuard(PL_ROUTINE_HANDLE);
   }
+
+  bool is_first_execute() { return is_first_execute_; }
+
+  pl::ObPLExecuteArg &get_pl_execute_arg() { return pl_execute_arg_; }
 
 private:
   int check_types(const ObExpr &expr);
@@ -192,6 +198,8 @@ private:
   int64_t arg_count_;
   int64_t result_cache_max_result_;
   int64_t result_cache_max_size_;
+  bool is_first_execute_;
+  pl::ObPLExecuteArg pl_execute_arg_;
 };
 
 }

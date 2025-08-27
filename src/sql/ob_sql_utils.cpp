@@ -4763,10 +4763,12 @@ int64_t ObSqlFatalErrExtraInfoGuard::to_string(char *buf, const int64_t buf_len)
   J_KV(K_(cur_sql));
   const ObIArray<ObSchemaObjVersion> *dep_tables = nullptr;
   ObString sys_var_values;
+  common::ObCollationType collation_connection;
 
   if (OB_NOT_NULL(plan_)) { //plan非空，处于执行期
     dep_tables = &(plan_->get_dependency_table());
     sys_var_values = plan_->stat_.sys_vars_str_;
+    collation_connection = plan_->stat_.collation_connection_;
   } else if (OB_NOT_NULL(exec_ctx_)) {
     ObStmtFactory *stmt_factory = nullptr;
     ObQueryCtx *query_ctx = nullptr;
@@ -4779,6 +4781,7 @@ int64_t ObSqlFatalErrExtraInfoGuard::to_string(char *buf, const int64_t buf_len)
     }
     if (OB_NOT_NULL(exec_ctx_->get_my_session())) {
       sys_var_values = exec_ctx_->get_my_session()->get_sys_var_in_pc_str();
+      OZ (exec_ctx_->get_my_session()->get_collation_connection(collation_connection));
     }
   }
 
@@ -4802,7 +4805,10 @@ int64_t ObSqlFatalErrExtraInfoGuard::to_string(char *buf, const int64_t buf_len)
 
   //打印计划执行系统变量环境信息
   if (!sys_var_values.empty()) {
+    ObSqlString str;
+    OZ (str.assign_fmt("%u,", collation_connection));
     OZ (databuff_printf(buf, buf_len, pos, ",\nsys_vars:{"));
+    OZ (databuff_printf(buf, buf_len, pos, "\"collation_database\":\"%.*s\"", static_cast<int>(str.length()), str.ptr()));
     for (int i = 0; i < ObSysVarFactory::ALL_SYS_VARS_COUNT; ++i) {
       if (!!(ObSysVariables::get_flags(i) & ObSysVarFlag::INFLUENCE_PLAN)) {
         ObString cur_var_value = sys_var_values.split_on(',');

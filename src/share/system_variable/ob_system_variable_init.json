@@ -156,7 +156,7 @@
     "base_value": "45",
     "data_type": "int",
     "info": "The collation which the server should translate to after receiving the statement",
-    "flags": "GLOBAL | SESSION | NULL | INFLUENCE_PLAN | NEED_SERIALIZE",
+    "flags": "GLOBAL | SESSION | NULL | NEED_SERIALIZE",
     "on_check_and_convert_func": "ObSysVarOnCheckFuncs::check_and_convert_collation_not_null",
     "get_meta_type_func": "ObSysVarGetMetaTypeFuncs::get_meta_type_varchar",
     "to_select_obj_func": "ObSysVarToObjFuncs::to_obj_collation",

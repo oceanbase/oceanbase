@@ -70,6 +70,8 @@ class ObPLAllocator1;
 
 class ObPLProfilerTimeStack;
 
+class ObPLExecuteArg;
+
 enum ObPLObjectType
 {
   INVALID_OBJECT_TYPE = -1,
@@ -439,7 +441,9 @@ public:
     name_debuginfo_(),
     function_name_(),
     has_parallel_affect_factor_(false),
-    trigger_ref_cols_(allocator_) { }
+    trigger_ref_cols_(allocator_),
+    definer_user_id_(OB_INVALID_ID),
+    is_special_pkg_invoke_right_(false) { }
   virtual ~ObPLFunction();
 
   inline const common::ObIArray<ObPLDataType> &get_variables() const { return variables_; }
@@ -503,6 +507,8 @@ public:
   {
     return ob_write_string(get_allocator(), priv_user, priv_user_);
   }
+  inline uint64_t get_definer_user_id() const { return definer_user_id_; }
+  inline void set_definer_user_id(uint64_t definer_user_id) { definer_user_id_ = definer_user_id; }
 
   inline bool need_register_debug_info()
   {
@@ -521,7 +527,8 @@ public:
   * we hacked it using name compared, for the interface funtion can't get the origin db name and id
   * test -> oceanbase, we see oceanbase in interface but can't see test.
   */
-  int is_special_pkg_invoke_right(ObSchemaGetterGuard &guard, bool &flag);
+  int set_special_pkg_invoke_right(ObSchemaGetterGuard &guard);
+  inline bool is_special_pkg_invoke_right() const { return is_special_pkg_invoke_right_; }
 
   int gen_action_from_precompiled(const ObString &name, size_t length, const char *ptr);
 
@@ -568,6 +575,8 @@ private:
   common::ObString priv_user_;
   bool has_parallel_affect_factor_;
   TriggerRefColsTable trigger_ref_cols_;
+  uint64_t definer_user_id_;
+  bool is_special_pkg_invoke_right_;
 
   DISALLOW_COPY_AND_ASSIGN(ObPLFunction);
 };
@@ -595,7 +604,7 @@ private:
 struct ObPLSqlCodeInfo
 {
 public:
-  ObPLSqlCodeInfo() : sqlcode_(OB_SUCCESS), sqlmsg_() {}
+  ObPLSqlCodeInfo() : sqlcode_(OB_SUCCESS), sqlmsg_(), stakced_warning_buff_() {}
   inline void set_sqlcode(int sqlcode, const ObString &sqlmsg = ObString(""))
   {
     sqlcode_ = sqlcode;
@@ -777,7 +786,7 @@ public:
   static int convert_composite(ObPLExecCtx &ctx, ObObjParam &param, int64_t dest_type_id);
   int init_params_simple(const ParamStore *params = NULL, bool is_anonymous = false);
   int init_params(const ParamStore *params = NULL, bool is_anonymous = false);
-  int execute();
+  int execute(bool is_first_execute = true);
   int final(int ret);
   int deep_copy_result_if_need(common::ObIAllocator &allocator);
   int init_complex_obj(common::ObIAllocator &allocator, const ObPLDataType &pl_type, common::ObObjParam &obj, bool set_null = true);
@@ -890,12 +899,19 @@ class ObPLContext
 {
   friend class LinkPLStackGuard;
 public:
-  ObPLContext()
+  ObPLContext() :
+    saved_session_(nullptr),
+    session_info_(nullptr),
 #ifdef OB_BUILD_ORACLE_PL
-      : call_stack_trace_(nullptr),
-        alloc_("PlCallStack", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
+    call_stack_trace_(nullptr),
 #endif
-      { reset(); }
+    alloc_("PlCallStack", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+    parent_stack_ctx_(nullptr),
+    top_stack_ctx_(nullptr),
+    my_exec_ctx_(nullptr)
+  {
+    reset();
+  }
   virtual ~ObPLContext() { reset(); }
   void reset()
   {
@@ -907,8 +923,14 @@ public:
     is_top_stack_ = false;
     exception_handler_illegal_ = false;
     need_reset_exec_env_ = false;
+    if (!database_name_.empty()) {
+      database_name_.reset();
+    }
     is_autonomous_ = false;
-    saved_session_.reset();
+    if (saved_session_ != nullptr) {
+      saved_session_->~TransSavedValue();
+      saved_session_ = nullptr;
+    }
     saved_has_implicit_savepoint_ = false;
     database_id_ = OB_INVALID_ID;
     need_reset_default_database_ = false;
@@ -930,7 +952,6 @@ public:
     parent_stack_ctx_ = nullptr;
     top_stack_ctx_ = nullptr;
     my_exec_ctx_ = nullptr;
-    cur_query_.reset();
     is_function_or_trigger_ = false;
     last_insert_id_ = 0;
     trace_id_.reset();
@@ -1087,7 +1108,7 @@ private:
   bool has_inner_dml_write_;
   bool is_top_stack_;
   bool is_autonomous_;
-  sql::ObBasicSessionInfo::TransSavedValue saved_session_;
+  sql::ObBasicSessionInfo::TransSavedValue *saved_session_;
   bool saved_has_implicit_savepoint_;
   bool exception_handler_illegal_;
 
@@ -1109,8 +1130,6 @@ private:
   int64_t old_phy_plan_timeout_ts_;
 
   sql::ObSQLSessionInfo *session_info_;
-
-  common::ObString cur_query_;
 
   common::ObSEArray<ObPLExecState*, 4> exec_stack_;
 #ifdef OB_BUILD_ORACLE_PL
@@ -1206,27 +1225,29 @@ public:
               ParamStore &params,
               const ObIArray<int64_t> &nocopy_params,
               common::ObObj &result,
-              ObCacheObjGuard &cacheobj_guard,
+              ObPLExecuteArg &pl_execute_arg,
               int *status = NULL,
               bool inner_call = false,
               bool in_function = false,
               uint64_t loc = 0,
               bool is_called_from_sql = false,
               uint64_t dblink_id = OB_INVALID_ID,
-              const ObRoutineInfo *dblink_routine_info = NULL);
+              const ObRoutineInfo *dblink_routine_info = NULL,
+              bool is_first_execute = true);
   int check_exec_priv(sql::ObExecContext &ctx,
                       const ObString &database_name,
                       ObPLFunction *routine);
 
-private:
   // for normal routine
   int get_pl_function(sql::ObExecContext &ctx,
-                      ObPLPackageGuard &package_guard,
-                      int64_t package_id,
-                      int64_t routine_id,
-                      const ObIArray<int64_t> &subprogram_path,
-                      ObCacheObjGuard& cacheobj_guard,
-                      ObPLFunction *&local_routine);
+    ObPLPackageGuard &package_guard,
+    int64_t package_id,
+    int64_t routine_id,
+    const ObIArray<int64_t> &subprogram_path,
+    ObCacheObjGuard& cacheobj_guard,
+    ObPLFunction *&local_routine);
+
+private:
 
   // for anonymous + ps
   int get_pl_function(sql::ObExecContext &ctx,
@@ -1258,7 +1279,8 @@ private:
               bool is_in_function = false,
               bool is_anonymous = false,
               uint64_t loc = 0,
-              bool is_called_from_sql = false);
+              bool is_called_from_sql = false,
+              bool is_first_execute = true);
 
 public:
   // for normal routine
@@ -1376,6 +1398,30 @@ public:
 private:
   ObPLCacheObject* inner_obj_;
   int64_t save_ret_;
+};
+
+class ObPLExecuteArg
+{
+public:
+  ObPLExecuteArg() :
+  cacheobj_guard_(PL_ROUTINE_HANDLE),
+  routine_(NULL)
+  {}
+
+  void reuse() { pl_ctx_.reset(); }
+  int obtain_routine(ObExecContext &ctx,
+                      uint64_t package_id,
+                      uint64_t routine_id,
+                      const ObIArray<int64_t> &subprogram_path);
+  ~ObPLExecuteArg() { routine_ = NULL; }
+
+  ObCacheObjGuard &get_cacheobj_guard() { return cacheobj_guard_; }
+  ObPLFunction *get_routine() const { return routine_; }
+  ObPLContext &get_pl_ctx() { return pl_ctx_; }
+private:
+  ObCacheObjGuard cacheobj_guard_;
+  ObPLFunction *routine_;
+  ObPLContext pl_ctx_;
 };
 
 class ObPLASHGuard

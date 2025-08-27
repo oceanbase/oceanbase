@@ -1032,6 +1032,7 @@ int ObInnerSQLConnection::query(sqlclient::ObIExecutor &executor,
           (void)ObSecurityAuditUtils::handle_security_audit(res.result_set(),
                                                             res.sql_ctx().schema_guard_,
                                                             res.sql_ctx().cur_stmt_,
+                                                            res.sql_ctx().cur_sql_,
                                                             ObString::make_string("inner sql"),
                                                             ret);
 

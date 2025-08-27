@@ -1292,7 +1292,7 @@ public:
   int reset_all_serially_package_state();
   bool is_package_state_changed() const;
   bool get_changed_package_state_num() const;
-  int add_changed_package_info(ObExecContext &exec_ctx);
+  int add_changed_package_info();
 
   // 当前 session 上发生的 sequence.nextval 读取 sequence 值，
   // 都会由 ObSequence 算子将读取结果保存在当前 session 上

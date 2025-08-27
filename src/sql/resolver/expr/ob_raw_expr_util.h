@@ -975,7 +975,6 @@ public:
   static int resolve_udf_param_types(const share::schema::ObIRoutineInfo* func_info,
                                      share::schema::ObSchemaGetterGuard &schema_guard,
                                      sql::ObSQLSessionInfo &session_info,
-                                     common::ObIAllocator &allocator,
                                      common::ObMySQLProxy &sql_proxy,
                                      ObUDFInfo &udf_info,
                                      pl::ObPLDbLinkGuard &dblink_guard,

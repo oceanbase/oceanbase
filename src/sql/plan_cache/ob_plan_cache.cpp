@@ -2312,6 +2312,7 @@ OB_INLINE int ObPlanCache::construct_plan_cache_key(ObSQLSessionInfo &session,
   pc_key.sys_var_config_hash_val_ = session.get_sys_var_config_hash_val();
   pc_key.is_weak_read_ = is_weak;
   pc_key.enable_mysql_compatible_dates_ = session.enable_mysql_compatible_dates();
+  OZ (session.get_collation_connection(pc_key.collation_connection_));
   return ret;
 }
 

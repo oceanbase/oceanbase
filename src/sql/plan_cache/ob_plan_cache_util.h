@@ -710,6 +710,7 @@ struct ObPlanStat
   ObVecIndexExecCtx vec_index_exec_ctx_;
   ObPlanExecutingStat executing_stat_;
   uint64_t gen_plan_usec_;  // plan generation time cost
+  ObCollationType collation_connection_;
 
   ObPlanStat()
     : plan_id_(0),
@@ -792,7 +793,8 @@ struct ObPlanStat
       adaptive_pc_info_(),
       vec_index_exec_ctx_(),
       executing_stat_(),
-      gen_plan_usec_(0)
+      gen_plan_usec_(0),
+      collation_connection_(CS_TYPE_INVALID)
 {
   exact_mode_sql_id_[0] = '\0';
 }
@@ -877,7 +879,8 @@ struct ObPlanStat
       adaptive_pc_info_(rhs.adaptive_pc_info_),
       vec_index_exec_ctx_(rhs.vec_index_exec_ctx_),
       executing_stat_(rhs.executing_stat_),
-      gen_plan_usec_(rhs.gen_plan_usec_)
+      gen_plan_usec_(rhs.gen_plan_usec_),
+      collation_connection_(rhs.collation_connection_)
   {
     exact_mode_sql_id_[0] = '\0';
     MEMCPY(plan_sel_info_str_, rhs.plan_sel_info_str_, rhs.plan_sel_info_str_len_);

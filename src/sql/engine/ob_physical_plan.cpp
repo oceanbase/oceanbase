@@ -1374,6 +1374,7 @@ int ObPhysicalPlan::update_cache_obj_stat(ObILibCacheCtx &ctx)
       SQL_PC_LOG(DEBUG, "fail to copy raw sql", "plan_id", get_plan_id(), K(ret));
     } else {
       stat_.sql_cs_type_ = pc_ctx.sql_ctx_.session_info_->get_local_collation_connection();
+      stat_.collation_connection_ = pc_ctx.fp_result_.pc_key_.collation_connection_;
     }
 
     if (OB_FAIL(ret)) {

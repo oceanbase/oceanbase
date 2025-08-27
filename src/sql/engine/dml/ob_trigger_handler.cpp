@@ -505,16 +505,17 @@ int TriggerHandle::calc_trigger_routine(
   int ret = OB_SUCCESS;
   ObArray<int64_t> path;
   ObArray<int64_t> nocopy_params;
-  ObCacheObjGuard cacheobj_guard(PL_ROUTINE_HANDLE);
   trigger_id = ObTriggerInfo::get_trigger_spec_package_id(trigger_id);
   bool old_flag = false;
   common::ObArenaAllocator tmp_allocator(common::ObMemAttr(MTL_ID(), "TriggerExec"));
+  pl::ObPLExecuteArg pl_execute_arg;
   CK (OB_NOT_NULL(exec_ctx.get_my_session()));
   OX (old_flag = exec_ctx.get_my_session()->is_for_trigger_package());
   OX (exec_ctx.get_my_session()->set_for_trigger_package(true));
   OV (OB_NOT_NULL(exec_ctx.get_pl_engine()));
+  OZ (pl_execute_arg.obtain_routine(exec_ctx, trigger_id, routine_id, path));
   OZ (exec_ctx.get_pl_engine()->execute(
-    exec_ctx, tmp_allocator, trigger_id, routine_id, path, params, nocopy_params, result, cacheobj_guard),
+    exec_ctx, tmp_allocator, trigger_id, routine_id, path, params, nocopy_params, result, pl_execute_arg),
       trigger_id, routine_id, params);
   CK (OB_NOT_NULL(exec_ctx.get_my_session()));
   OZ (exec_ctx.get_my_session()->reset_all_package_state_by_dbms_session(true));

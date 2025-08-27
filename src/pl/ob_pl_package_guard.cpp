@@ -19,6 +19,21 @@ namespace oceanbase
 {
 namespace pl
 {
+
+int ObPLPakcageUdfKey::hash(uint64_t &hash_val) const
+{
+  hash_val = murmurhash(&package_id_, sizeof(uint64_t), 0);
+  hash_val = murmurhash(&func_id_, sizeof(uint64_t), hash_val);
+  return OB_SUCCESS;
+}
+
+bool ObPLPakcageUdfKey::operator==(const ObPLPakcageUdfKey &other) const
+{
+  bool cmp_ret = package_id_ == other.package_id_ &&
+                 func_id_ == other.func_id_;
+  return cmp_ret;
+}
+
 ObPLPackageGuard::~ObPLPackageGuard()
 {
   if (map_.created()) {
@@ -30,6 +45,9 @@ ObPLPackageGuard::~ObPLPackageGuard()
     }
     map_.destroy();
   }
+  if (package_udf_map_.created()) {
+    package_udf_map_.destroy();
+  }
 }
 
 int ObPLPackageGuard::init()
@@ -40,6 +58,11 @@ int ObPLPackageGuard::init()
         common::ObModIds::OB_HASH_BUCKET,
         common::ObModIds::OB_HASH_NODE))) {
     LOG_WARN("failed to create package guard map!", K(ret));
+  } else if (OB_FAIL(package_udf_map_.create(
+        common::hash::cal_next_prime(256),
+        common::ObModIds::OB_HASH_BUCKET,
+        common::ObModIds::OB_HASH_NODE))) {
+    LOG_WARN("failed to create package udf map!", K(ret));
   }
   return ret;
 }

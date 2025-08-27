@@ -154,7 +154,8 @@ ObBasicSessionInfo::ObBasicSessionInfo(const uint64_t tenant_id)
       config_use_rich_format_(true),
       sys_var_config_hash_val_(0),
       is_real_inner_session_(false),
-      sql_mem_used_(0)
+      sql_mem_used_(0),
+      shadow_top_query_string_(false)
 {
   thread_data_.reset();
   MEMSET(sys_vars_, 0, sizeof(sys_vars_));
@@ -6355,6 +6356,7 @@ void ObBasicSessionInfo::reset_top_query_string()
   if (thread_data_.top_query_ != nullptr) {
     thread_data_.top_query_[0] = '\0';
     thread_data_.top_query_len_ = 0;
+    shadow_top_query_string_ = false;
   }
 }
 

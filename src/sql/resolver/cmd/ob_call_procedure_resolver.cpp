@@ -477,7 +477,6 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
           OZ (pl::ObPLDataType::transform_from_iparam(param_info,
                                                       *(schema_checker_->get_schema_mgr()),
                                                       *(session_info_),
-                                                      *(params_.allocator_),
                                                       *(params_.sql_proxy_),
                                                       pl_type,
                                                       NULL,

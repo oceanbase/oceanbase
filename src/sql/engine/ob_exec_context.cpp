@@ -1118,7 +1118,7 @@ DEFINE_SERIALIZE(ObExecContext)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("exec context is invalid", K_(phy_op_size), K_(phy_op_ctx_store),
              K_(phy_op_input_store), K_(phy_plan_ctx), K_(my_session), K(ret));
-  } else if (OB_FAIL(my_session_->add_changed_package_info(*const_cast<ObExecContext *>(this)))) {
+  } else if (OB_FAIL(my_session_->add_changed_package_info())) {
     LOG_WARN("add changed package info failed", K(ret));
   } else {
     my_session_->reset_all_package_changed_info();
@@ -1152,7 +1152,7 @@ DEFINE_GET_SERIALIZE_SIZE(ObExecContext)
   int64_t len = 0;
   uint64_t ser_version = get_ser_version();
 
-  if (is_valid() && OB_SUCCESS == my_session_->add_changed_package_info(*const_cast<ObExecContext *>(this))) {
+  if (is_valid() && OB_SUCCESS == my_session_->add_changed_package_info()) {
     my_session_->reset_all_package_changed_info();
     phy_plan_ctx_->set_expr_op_size(expr_op_size_);
     if (ser_version == SER_VERSION_1) {
