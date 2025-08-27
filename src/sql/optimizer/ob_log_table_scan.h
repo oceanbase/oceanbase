@@ -127,7 +127,8 @@ enum ObVectorSPIVColumnIdx
   // for SPIV
   SPIV_AUX_DOCID_COL = 0, // docid col in dim_docid_value table
   SPIV_AUX_VALUE_COL = 1, // value col in dim_docid_value table
-  SPIV_MAX_COL_CNT = 2
+  SPIV_AUX_DIM_COL = 2,
+  SPIV_MAX_COL_CNT = 3
 };
 
 enum ObVectorHNSWColumnIdx
