@@ -375,6 +375,8 @@ public:
   int merge();
   TO_STRING_KV(K(skip_sample_cnt_arr_), K(cg_skip_rate_arr_));
 
+  uint64_t count() {return count_;}
+
 private:
   uint64_t count_; //increment when add
   ObArray<uint64_t> skip_sample_cnt_arr_;

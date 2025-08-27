@@ -4144,12 +4144,12 @@ PARTITION_POSITION	decimal(10,0)	NO
 SUBPARTITION_NAME	varchar(128)	NO			
 SUBPARTITION_POSITION	decimal(10,0)	NO			
 OBJECT_TYPE	varchar(12)	NO			
-NUM_ROWS	decimal(20,0)	NO		NULL	
+NUM_ROWS	decimal(20,0)	NO			
 BLOCKS	decimal(10,0)	NO			
 EMPTY_BLOCKS	decimal(10,0)	NO			
 AVG_SPACE	decimal(10,0)	NO			
 CHAIN_CNT	decimal(10,0)	NO			
-AVG_ROW_LEN	decimal(10,0)	NO		NULL	
+AVG_ROW_LEN	decimal(10,0)	NO			
 AVG_SPACE_FREELIST_BLOCKS	decimal(10,0)	NO			
 NUM_FREELIST_BLOCKS	decimal(10,0)	NO			
 AVG_CACHED_BLOCKS	decimal(10,0)	NO			
@@ -4158,8 +4158,8 @@ IM_IMCU_COUNT	decimal(10,0)	NO
 IM_BLOCK_COUNT	decimal(10,0)	NO			
 IM_STAT_UPDATE_TIME	datetime	NO			
 SCAN_RATE	decimal(10,0)	NO			
-SAMPLE_SIZE	decimal(20,0)	YES		NULL	
-LAST_ANALYZED	datetime(6)	NO		NULL	
+SAMPLE_SIZE	decimal(20,0)	NO			
+LAST_ANALYZED	datetime(6)	NO			
 GLOBAL_STATS	varchar(3)	NO			
 USER_STATS	varchar(3)	NO			
 STATTYPE_LOCKED	varchar(5)	NO			

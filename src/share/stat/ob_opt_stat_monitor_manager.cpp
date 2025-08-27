@@ -855,7 +855,7 @@ int ObOptStatMonitorManager::check_opt_stats_expired(ObIArray<ObOptDmlStat> &dml
                                                global_async_stale_max_table_size))) {
       LOG_WARN("failed to get async stale max table size", K(ret));
     } else if (OB_UNLIKELY(global_async_stale_max_table_size <= 0)) {
-      LOG_INFO("skip to check opt stats expired", K(global_async_stale_max_table_size));
+      LOG_WARN("skip to check opt stats expired", K(global_async_stale_max_table_size));
     } else if (OB_FAIL(get_opt_stats_expired_table_info(dml_stats, stale_infos, is_from_direct_load))) {
       LOG_WARN("failed to get opt stats expired table info", K(ret));
     } else {
@@ -869,7 +869,7 @@ int ObOptStatMonitorManager::check_opt_stats_expired(ObIArray<ObOptDmlStat> &dml
       }
     }
     if (ObTimeUtility::current_time() - begin_ts > ObOptStatMonitorCheckTask::CHECK_INTERVAL) {
-      LOG_INFO("check opt stats expired cost too much time", K(begin_ts), K(ObTimeUtility::current_time() - begin_ts), K(dml_stats));
+      LOG_WARN("check opt stats expired cost too much time", K(begin_ts), K(ObTimeUtility::current_time() - begin_ts), K(dml_stats));
     }
   }
   return ret;
@@ -1206,7 +1206,7 @@ int ObOptStatMonitorManager::get_need_check_opt_stat_partition_ids(const OptStat
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret));
   }
-  LOG_INFO("get need check opt stat partition ids", K(expired_table_info), K(part_infos),
+  LOG_TRACE("get need check opt stat partition ids", K(expired_table_info), K(part_infos),
                                                      K(subpart_infos), K(partition_ids));
   return ret;
 }
@@ -1313,7 +1313,7 @@ int ObOptStatMonitorManager::get_need_mark_opt_stats_expired(const ObIArray<ObOp
       no_table_stats.reset();
     }
   }
-  LOG_INFO("get need mark opt stats expired", K(expired_table_stats), K(no_table_stats));
+  LOG_TRACE("get need mark opt stats expired", K(expired_table_stats), K(no_table_stats));
   return ret;
 }
 
@@ -1424,7 +1424,7 @@ int ObOptStatMonitorManager::do_mark_the_opt_stat_missing(const uint64_t tenant_
           LOG_WARN("fail to exec sql", K(insert_sql), K(ret));
         } else {
           begin_idx = end_idx;
-          LOG_INFO("Succeed to do mark the opt stat expired", K(insert_sql), K(no_table_stats), K(affected_rows));
+          LOG_TRACE("Succeed to do mark the opt stat expired", K(insert_sql), K(no_table_stats), K(affected_rows));
         }
       }
       //end gather trans
@@ -1475,7 +1475,7 @@ int ObOptStatMonitorManager::do_mark_the_opt_stat_expired(const uint64_t tenant_
       LOG_WARN("fail to exec sql", K(update_sql), K(ret));
     } else {
       begin_idx = end_idx;
-      LOG_INFO("Succeed to do mark the opt stat expired", K(update_sql), K(expired_table_stats), K(affected_rows));
+      LOG_TRACE("Succeed to do mark the opt stat expired", K(update_sql), K(expired_table_stats), K(affected_rows));
     }
   }
   return ret;

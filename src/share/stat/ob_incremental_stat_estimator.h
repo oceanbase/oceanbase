@@ -184,6 +184,9 @@ private:
                                                   int64_t &micro_block_num,
                                                   bool &sstable_rows_more);
 
+  static int mark_internal_stat(const int64_t global_part_id,
+                                ObIArray<ObOptTableStat *> &all_tstats,
+                                ObIArray<ObOptColumnStat *> &all_cstats);
 };
 
 } // namespace common

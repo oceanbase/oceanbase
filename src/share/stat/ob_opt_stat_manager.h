@@ -188,6 +188,11 @@ public:
 
   int handle_refresh_system_stat_task(const obrpc::ObUpdateStatCacheArg &arg);
 
+  int update_stats_internal_stat(const uint64_t tenant_id,
+                                sqlclient::ObISQLConnection *conn,
+                                uint64_t table_id,
+                                int64_t global_partition_id);
+
   int get_table_rowcnt(const uint64_t tenant_id,
                        const uint64_t table_id,
                        const ObIArray<ObTabletID> &all_tablet_ids,

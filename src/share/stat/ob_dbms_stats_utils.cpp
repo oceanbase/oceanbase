@@ -19,6 +19,7 @@
 #include "observer/ob_sql_client_decorator.h"
 #include "share/stat/ob_dbms_stats_executor.h"
 #include "sql/optimizer/ob_optimizer_util.h"
+#include "observer/omt/ob_tenant.h"
 
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/sys_package/ob_json_pl_utils.h"
@@ -28,6 +29,26 @@ namespace oceanbase
 {
 namespace common
 {
+
+int ObDbmsStatsUtils::init_table_stats(ObIAllocator &allocator,
+                                     int64_t cnt,
+                                     ObIArray<ObOptTableStat*> &table_stats)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < cnt; ++i) {
+    ObOptTableStat *opt_stat = NULL;
+    void *p = NULL;
+    if (OB_ISNULL(p = allocator.alloc(sizeof(ObOptTableStat)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory for T", K(ret));
+    } else if (OB_FALSE_IT(opt_stat = new (p) ObOptTableStat())) {
+    } else if (OB_FAIL(table_stats.push_back(opt_stat))) {
+      LOG_WARN("failed to push back ObOptTableStat", K(ret));
+    }
+  }
+
+  return ret;
+}
 
 int ObDbmsStatsUtils::init_col_stats(ObIAllocator &allocator,
                                      int64_t col_cnt,
@@ -47,6 +68,37 @@ int ObDbmsStatsUtils::init_col_stats(ObIAllocator &allocator,
       }
     }
   }
+  return ret;
+}
+
+int ObDbmsStatsUtils::assign_col_param(const ObIArray<ObColumnStatParam> *src_col_params,
+                                       int64_t start,
+                                       int64_t end,
+                                       ObIArray<ObColumnStatParam> &target_col_params)
+{
+  int ret = OB_SUCCESS;
+  if (start < 0 || end < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument start or end index must be great than 0", K(start), K(end));
+  } else if (OB_ISNULL(src_col_params)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexepected null", K(ret));
+  } else if (start > end) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument start larger thran end index", K(start), K(end));
+  } else if (start >= src_col_params->count() || end > src_col_params->count()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument start larger thran end index", K(start), K(end), K(src_col_params->count()));
+  } else {
+    target_col_params.reset();
+    target_col_params.reserve(end - start);
+    for (int i = start; OB_SUCC(ret) && i < end; i++) {
+      if (OB_FAIL(target_col_params.push_back(src_col_params->at(i)))) {
+        LOG_WARN("fail to push back", K(ret));
+      }
+    }
+  }
+
   return ret;
 }
 
@@ -419,12 +471,17 @@ int ObDbmsStatsUtils::split_batch_write(share::schema::ObSchemaGetterGuard *sche
 
 int ObDbmsStatsUtils::split_batch_write(sql::ObExecContext &ctx,
                                         sqlclient::ObISQLConnection *conn,
-                                        ObIArray<ObOptTableStat*> &table_stats,
-                                        ObIArray<ObOptColumnStat*> &column_stats,
-                                        const bool is_index_stat/*default false*/,
+                                        ObIArray<ObOptTableStat *> &table_stats,
+                                        ObIArray<ObOptColumnStat *> &column_stats,
+                                        const bool is_index_stat /*default false*/,
                                         const bool is_online_stat /*default false*/)
 {
   int ret = OB_SUCCESS;
+  sql::ObSQLSessionInfo *origin_session = THIS_WORKER.get_session();
+  int64_t origin_timeout = THIS_WORKER.get_timeout_ts();
+  // THIS_WORKER.set_session(NULL);
+  const int64_t EXTRA_OPT_GATHER_STAT_TIMEOUT = 2000000;  // default 2 seconds
+  THIS_WORKER.set_timeout_ts(EXTRA_OPT_GATHER_STAT_TIMEOUT + origin_timeout);
   if (OB_FAIL(split_batch_write(conn,
                                 ctx.get_virtual_table_ctx().schema_guard_,
                                 ctx.get_my_session(),
@@ -434,6 +491,8 @@ int ObDbmsStatsUtils::split_batch_write(sql::ObExecContext &ctx,
                                 is_online_stat))) {
     LOG_WARN("failed to split batch write", K(ret));
   }
+  THIS_WORKER.set_session(origin_session);
+  THIS_WORKER.set_timeout_ts(origin_timeout);
   return ret;
 }
 
@@ -522,6 +581,59 @@ bool ObDbmsStatsUtils::is_subpart_id(const ObIArray<PartInfo> &partition_infos,
     }
   }
   return is_true;
+}
+
+int ObDbmsStatsUtils::get_subpart_ids(const ObIArray<PartInfo> &partition_infos,
+                                      const int64_t partition_id,
+                                      ObIArray<int64_t> &sub_part_ids)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < partition_infos.count(); ++i) {
+    if (partition_id == partition_infos.at(i).first_part_id_) {
+      if (OB_FAIL(sub_part_ids.push_back(partition_infos.at(i).part_id_))) {
+        LOG_WARN("failed to push_back sub_part_id", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDbmsStatsUtils::get_no_need_collect_part_ids(const ObTableStatParam &param,
+                                                   const int64_t partition_id,
+                                                   ObIArray<int64_t> &no_collect_subpart_ids)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<int64_t, 4> part_or_subpart_ids; //
+  if (OB_FAIL(ObDbmsStatsUtils::get_subpart_ids(param.all_subpart_infos_, partition_id, part_or_subpart_ids))) {
+    LOG_WARN("failed to push back", K(ret));
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < part_or_subpart_ids.count(); ++i) {
+    bool found = false;
+    for (int64_t j = 0; OB_SUCC(ret) && j < param.subpart_infos_.count(); ++j) {
+      if (part_or_subpart_ids.at(i) == param.subpart_infos_.at(j).part_id_) {
+        found = true;
+        break;
+      }
+    }
+    for (int64_t j = 0; OB_SUCC(ret) && j < param.approx_part_infos_.count(); ++j) {
+      if (part_or_subpart_ids.at(i) == param.approx_part_infos_.at(j).part_id_) {
+        found = true;
+        break;
+      }
+    }
+    for (int64_t j = 0; OB_SUCC(ret) && j < param.part_infos_.count(); ++j) {
+      if (part_or_subpart_ids.at(i) == param.part_infos_.at(j).part_id_) {
+        found = true;
+        break;
+      }
+    }
+
+    if (OB_SUCC(ret) && !found && OB_FAIL(no_collect_subpart_ids.push_back(part_or_subpart_ids.at(i)))) {
+      LOG_WARN("failed to push back", K(ret));
+    }
+  }
+  return ret;
 }
 
 int ObDbmsStatsUtils::get_valid_duration_time(const int64_t start_time,
@@ -1127,9 +1239,11 @@ int ObDbmsStatsUtils::prepare_gather_stat_param(const ObTableStatParam &param,
   gather_param.data_table_id_ = param.data_table_id_;
   gather_param.part_level_ = param.part_level_;
   gather_param.consumer_group_id_ = param.consumer_group_id_;
-  ret = gather_param.column_group_params_.assign(param.column_group_params_);
-  if (OB_SUCC(ret)) {
-    ret = gather_param.all_column_params_.assign(param.column_params_);
+  gather_param.use_part_derive_global_ = param.use_part_derive_global_;
+  if (OB_FAIL(gather_param.column_group_params_.assign(param.column_group_params_))) {
+    LOG_WARN("failed to assign", K(ret));
+  } else if (OB_FAIL(gather_param.all_column_params_.assign(param.column_params_))) {
+    LOG_WARN("failed to assign", K(ret));
   }
   return ret;
 }
@@ -1200,7 +1314,8 @@ int ObDbmsStatsUtils::get_current_opt_stats(ObIAllocator &allocator,
                                                                                              allocator,
                                                                                              key_column_stats,
                                                                                              false,
-                                                                                             conn))) {
+                                                                                             conn,
+                                                                                             param.use_part_derive_global_/*fetch_column_stat*/))) {
         LOG_WARN("failed to fetch table stats", K(ret));
       } else {
         for (int64_t i = 0; i < table_stats.count(); ++i) {
@@ -1943,6 +2058,50 @@ int ObDbmsStatsUtils::copy_prefix_column_stat_to_text(ObIAllocator &allocator,
     meta.set_has_lob_header();
     text_col_stat->get_max_value().set_meta_type(meta);
     text_col_stat->get_min_value().set_meta_type(meta);
+  }
+  return ret;
+}
+
+int ObDbmsStatsUtils::get_max_work_area_size(uint64_t tenant_id, int64_t &max_wa_memory_size)
+{
+  int ret = OB_SUCCESS;
+  max_wa_memory_size = 0;
+  const ObTenantBase *tenant = NULL;
+  if (OB_ISNULL(tenant = MTL_CTX())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else {
+    int64_t worker_cnt = std::max(static_cast<const omt::ObTenant *>(tenant)->min_worker_cnt(), 4L);
+    max_wa_memory_size = lib::get_tenant_memory_limit(tenant_id) / worker_cnt;
+    if (lib::ObMallocAllocator::get_instance() != NULL) {
+      ObTenantCtxAllocatorGuard ta = lib::ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(tenant_id, common::ObCtxIds::WORK_AREA);
+      max_wa_memory_size = ta->get_limit() / worker_cnt;
+    }
+    max_wa_memory_size = std::max(MIN_GATHER_WORK_ARANA_SIZE, max_wa_memory_size);
+  }
+  return ret;
+}
+
+int ObDbmsStatsUtils::get_table_index_infos(share::schema::ObSchemaGetterGuard *schema_guard,
+                                       const uint64_t tenant_id,
+                                       const uint64_t table_id,
+                                       uint64_t *index_tid_arr,
+                                       int64_t &index_count)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(schema_guard)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(schema_guard));
+  } else if (share::is_oracle_mapping_real_virtual_table(table_id)) {
+    // do not gather stat for oracle inner table index
+  } else if (OB_FAIL(schema_guard->get_can_read_index_array(tenant_id,
+                                                            table_id,
+                                                            index_tid_arr,
+                                                            index_count,
+                                                            false, /*with_mv*/
+                                                            true, /*with_global_index*/
+                                                            false /*domain index*/))) {
+    LOG_WARN("failed to get can read index", K(ret));
   }
   return ret;
 }

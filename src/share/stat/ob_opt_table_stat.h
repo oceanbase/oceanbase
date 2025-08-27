@@ -138,7 +138,8 @@ public:
       sample_size_(0),
       tablet_id_(ObTabletID::INVALID_TABLET_ID),
       stat_expired_time_(-1),
-      stale_stats_(0) {}
+      stale_stats_(0),
+      is_internal_(0) {}
   ObOptTableStat(uint64_t table_id,
                  int64_t partition_id,
                  int64_t object_type,
@@ -171,7 +172,8 @@ public:
       sample_size_(0),
       tablet_id_(ObTabletID::INVALID_TABLET_ID),
       stat_expired_time_(-1),
-      stale_stats_(false) {}
+      stale_stats_(false),
+      is_internal_(false) {}
 
   virtual ~ObOptTableStat() {}
 
@@ -241,6 +243,9 @@ public:
 
   bool is_stat_expired() const { return stale_stats_; }
   void set_stale_stats(int64_t stale_stats) { stale_stats_ = stale_stats > 0; }
+
+  bool is_internal() const { return is_internal_; }
+  void set_is_interal() { is_internal_ = true; }
   void add_sample_size(int64_t rc) { sample_size_ += rc; }
   bool is_locked() const { return stattype_locked_ > 0; }
 
@@ -322,6 +327,7 @@ public:
     tablet_id_ = ObTabletID::INVALID_TABLET_ID;
     stat_expired_time_ = -1;
     stale_stats_ = false;
+    is_internal_ = false;
   }
 
   TO_STRING_KV(K(table_id_),
@@ -343,7 +349,9 @@ public:
                K(sample_size_),
                K(tablet_id_),
                K(stat_expired_time_),
-               K(stale_stats_));
+               K(stale_stats_),
+               K(is_internal_)
+               );
 
 private:
   uint64_t table_id_;
@@ -368,6 +376,8 @@ private:
   uint64_t tablet_id_;//now only use estimate table rowcnt by meta table.
   int64_t stat_expired_time_;//mark the stat in cache is arrived expired time, if arrived at expired time need reload, -1 meanings no expire forever.
   bool stale_stats_;//mark the stat is expired or not.
+
+  bool is_internal_;// mark the stat is internal stat used by statstics
 };
 
 }

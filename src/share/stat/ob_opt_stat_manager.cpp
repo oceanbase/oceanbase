@@ -297,10 +297,8 @@ int ObOptStatManager::update_table_stat(const uint64_t tenant_id,
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
-  } else if (OB_FAIL(stat_service_.get_sql_service().update_table_stat(tenant_id,
-                                                                       conn,
-                                                                       table_stats,
-                                                                       is_index_stat))) {
+  } else if (OB_FAIL(stat_service_.get_sql_service().update_table_stat(
+                 tenant_id, conn, table_stats, is_index_stat))) {
     LOG_WARN("failed to update table stats", K(ret));
   }
   return ret;
@@ -316,11 +314,8 @@ int ObOptStatManager::update_table_stat(const uint64_t tenant_id,
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
-  } else if (OB_FAIL(stat_service_.get_sql_service().update_table_stat(tenant_id,
-                                                                       conn,
-                                                                       table_stats,
-                                                                       current_time,
-                                                                       is_index_stat))) {
+  } else if (OB_FAIL(stat_service_.get_sql_service().update_table_stat(
+                 tenant_id, conn, table_stats, current_time, is_index_stat))) {
     LOG_WARN("failed to update table stats", K(ret));
   }
   return ret;
@@ -419,13 +414,8 @@ int ObOptStatManager::batch_write(share::schema::ObSchemaGetterGuard *schema_gua
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("optimizer statistics manager has not been initialized.", K(ret));
-  } else if (!table_stats.empty() &&
-             OB_FAIL(stat_service_.get_sql_service().update_table_stat(
-                                                    tenant_id,
-                                                    conn,
-                                                    table_stats,
-                                                    current_time,
-                                                    is_index_stat))) {
+  } else if (!table_stats.empty() && OB_FAIL(stat_service_.get_sql_service().update_table_stat(
+                                         tenant_id, conn, table_stats, current_time, is_index_stat))) {
     LOG_WARN("failed to update table stats", K(ret));
   } else if (!column_stats.empty() &&
              OB_FAIL(stat_service_.get_sql_service().update_column_stat(schema_guard,
@@ -441,6 +431,23 @@ int ObOptStatManager::batch_write(share::schema::ObSchemaGetterGuard *schema_gua
   return ret;
 }
 
+int ObOptStatManager::update_stats_internal_stat(const uint64_t tenant_id,
+                                                sqlclient::ObISQLConnection  *conn,
+                                                uint64_t table_id,
+                                                int64_t global_partition_id)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("optimizer statistics manager has not been initialized.", K(ret));
+  } else if (OB_FAIL(stat_service_.get_sql_service().update_stats_internal_stat(
+                     tenant_id, conn, table_id, global_partition_id))) {
+    LOG_WARN("failed to update stats internal stat", K(ret), K(tenant_id), K(table_id), K(global_partition_id));
+  }
+
+  return ret;
+}
 
 int ObOptStatManager::handle_refresh_stat_task(const obrpc::ObUpdateStatCacheArg &arg)
 {

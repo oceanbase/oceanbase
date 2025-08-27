@@ -43,6 +43,8 @@ int init_rb_and_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
                           ObIAllocator &allocator, IAggregate *&agg);
 int init_count_sum_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
                              ObIAllocator &allocator, IAggregate *&agg);
+int init_string_prefix_max_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
+                                     ObIAllocator &allocator, IAggregate *&agg);
 }
 }
 }
@@ -135,7 +137,9 @@ int ObAggCellVec::init_aggregate()
   switch (agg_type_) {
     INIT_AGGREGATE_CASE(PD_COUNT, count)
     INIT_AGGREGATE_CASE(PD_MIN, min)
+    INIT_AGGREGATE_CASE(PD_STR_PREFIX_MIN, min)
     INIT_AGGREGATE_CASE(PD_MAX, max)
+    INIT_AGGREGATE_CASE(PD_STR_PREFIX_MAX, max)
     INIT_AGGREGATE_CASE(PD_HLL, approx_count_distinct_synopsis)
     INIT_AGGREGATE_CASE(PD_SUM_OP_SIZE, sum_opnsize)
     INIT_AGGREGATE_CASE(PD_SUM, sum)
@@ -357,7 +361,7 @@ int ObAggCellVec::eval_index_info(
     if (!is_cg && (!index_info.can_blockscan() || index_info.is_left_border() || index_info.is_right_border())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected, the micro index info must can blockscan and not border", K(ret), K(is_lob_col()), K(index_info));
-    } else if (OB_UNLIKELY(skip_index_datum_.is_null() ||  skip_index_datum_is_prefix_)) {
+    } else if (OB_UNLIKELY(!is_skip_index_valid())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected skip index datum", K(ret), K(index_info), K_(skip_index_datum), K_(skip_index_datum_is_prefix));
     } else if (OB_FAIL(eval(skip_index_datum_, 1/*row_count*/, agg_row_idx, 1/*agg_batch_size*/))) {
@@ -655,6 +659,7 @@ int ObAggCellVec::read_agg_datum(
         meta.col_type_ = blocksstable::SK_IDX_NULL_COUNT;
         break;
       }
+      case PD_STR_PREFIX_MIN:
       case PD_MIN: {
         if (is_monotonic_asc()) {
           meta.col_type_ = blocksstable::SK_IDX_MIN;
@@ -663,6 +668,7 @@ int ObAggCellVec::read_agg_datum(
         }
         break;
       }
+      case PD_STR_PREFIX_MAX:
       case PD_MAX: {
         if (is_monotonic_asc()) {
           meta.col_type_ = blocksstable::SK_IDX_MAX;
@@ -1461,6 +1467,68 @@ ObRbAggCellVec::ObRbAggCellVec(
   agg_type_ = agg_type;
 }
 
+ObStrPrefixMinAggCellVec::ObStrPrefixMinAggCellVec(const int64_t agg_idx,
+                                                   const ObAggCellVecBasicInfo &basic_info,
+                                                   const share::ObAggrParamProperty &param_prop,
+                                                   common::ObIAllocator &allocator)
+    : ObAggCellVec(agg_idx, basic_info, param_prop, allocator)
+{
+  agg_type_ = PD_STR_PREFIX_MIN;
+}
+
+int ObStrPrefixMinAggCellVec::can_use_index_info(const blocksstable::ObMicroIndexInfo &index_info,
+                                                 const int32_t col_index,
+                                                 bool &can_agg)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObAggCellVec not inited", K(ret));
+  } else {
+    if (index_info.has_agg_data() && can_use_index_info()) {
+      if (OB_FAIL(read_agg_datum(index_info, col_index))) {
+        LOG_WARN("Failed to read agg datum", K(ret), K_(basic_info), K(col_index), K(index_info));
+      } else {
+        can_agg = !skip_index_datum_.is_null();
+      }
+    } else {
+      can_agg = false;
+    }
+  }
+  return ret;
+}
+
+ObStrPrefixMaxAggCellVec::ObStrPrefixMaxAggCellVec(const int64_t agg_idx,
+                                                   const ObAggCellVecBasicInfo &basic_info,
+                                                   const share::ObAggrParamProperty &param_prop,
+                                                   common::ObIAllocator &allocator)
+    : ObAggCellVec(agg_idx, basic_info, param_prop, allocator)
+{
+  agg_type_ = PD_STR_PREFIX_MAX;
+}
+
+int ObStrPrefixMaxAggCellVec::can_use_index_info(const blocksstable::ObMicroIndexInfo &index_info,
+                                                 const int32_t col_index,
+                                                 bool &can_agg)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObAggCellVec not inited", K(ret));
+  } else {
+    if (index_info.has_agg_data() && can_use_index_info()) {
+      if (OB_FAIL(read_agg_datum(index_info, col_index))) {
+        LOG_WARN("Failed to read agg datum", K(ret), K_(basic_info), K(col_index), K(index_info));
+      } else {
+        can_agg = !skip_index_datum_.is_null();
+      }
+    } else {
+      can_agg = false;
+    }
+  }
+  return ret;
+}
+
 #define INIT_AGG_CELL(agg_type, cell_type, ...)                                                                                   \
   case agg_type: {                                                                                                                \
     if (OB_ISNULL(buf = allocator_.alloc(sizeof(Ob##cell_type##AggCellVec))) ||                                                   \
@@ -1493,13 +1561,13 @@ int ObPDAggVecFactory::alloc_cell(
     switch (type) {
       INIT_AGG_CELL(T_FUN_COUNT, Count, exclude_null)
       INIT_AGG_CELL(T_FUN_MAX, Max)
-      INIT_AGG_CELL(T_FUN_INNER_PREFIX_MAX, Max)
       INIT_AGG_CELL(T_FUN_MIN, Min)
-      INIT_AGG_CELL(T_FUN_INNER_PREFIX_MIN, Min)
       INIT_AGG_CELL(T_FUN_SUM, Sum)
       INIT_AGG_CELL(T_FUN_COUNT_SUM, CountSum)
       INIT_AGG_CELL(T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS, HyperLogLog)
       INIT_AGG_CELL(T_FUN_SUM_OPNSIZE, SumOpNSize, exclude_null)
+      INIT_AGG_CELL(T_FUN_INNER_PREFIX_MIN, StrPrefixMin)
+      INIT_AGG_CELL(T_FUN_INNER_PREFIX_MAX, StrPrefixMax)
       INIT_AGG_CELL(T_FUN_SYS_RB_BUILD_AGG, Rb, PD_RB_BUILD)
       INIT_AGG_CELL(T_FUN_SYS_RB_AND_AGG, Rb, PD_RB_AND)
       INIT_AGG_CELL(T_FUN_SYS_RB_OR_AGG, Rb, PD_RB_OR)

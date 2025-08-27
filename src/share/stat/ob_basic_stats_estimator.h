@@ -58,6 +58,20 @@ struct EstimateSkipRateRes
   TO_STRING_KV(K(part_id_), K(cg_skip_rate_arr_), K(skip_sample_cnt_arr_));
 };
 
+class BlockNumStatComparer {
+public:
+  BlockNumStatComparer(PartitionIdBlockMap &id_block_map, int &ret_code)
+      : id_block_map_(id_block_map), ret_code_(ret_code)
+  {}
+
+  bool operator()(const int64_t &l, const int64_t &r);
+
+
+private:
+  PartitionIdBlockMap &id_block_map_;
+  int &ret_code_;
+};
+
 class ObBasicStatsEstimator : public ObStatsEstimator
 {
 public:
@@ -66,8 +80,7 @@ public:
   static int estimate_block_count(ObExecContext &ctx,
                                   const ObTableStatParam &param,
                                   PartitionIdBlockMap &id_block_map,
-                                  bool &use_column_store,
-                                  bool &use_split_part);
+                                  bool &use_column_store);
 
   static int estimate_modified_count(ObExecContext &ctx,
                                      const uint64_t tenant_id,
@@ -142,6 +155,17 @@ public:
                                                         const obrpc::ObEstBlockArg &arg,
                                                         obrpc::ObEstBlockRes &result);
 
+  static int get_topn_tablet_id_and_object_id(const ObTableStatParam &param,
+                                              PartitionIdBlockMap &id_block_map,
+                                              ObIArray<ObTabletID> &tablet_ids,
+                                              ObIArray<ObObjectID> &partition_ids);
+
+  static int get_sstable_rowcnt_topn_partition(const ObIArray<ObObjectID> &all_part_ids,
+                                               const ObIArray<PartInfo> &part_infos,
+                                               int64_t max_table_cnt,
+                                               ObIArray<ObTabletID> &tablet_ids,
+                                               ObIArray<ObObjectID> &partition_ids);
+
   static int get_all_tablet_id_and_object_id(const ObTableStatParam &param,
                                              ObIArray<ObTabletID> &tablet_ids,
                                              ObIArray<ObObjectID> &partition_ids);
@@ -155,6 +179,8 @@ public:
   static int get_async_gather_stats_tables(ObExecContext &ctx,
                                            const int64_t tenant_id,
                                            const int64_t max_table_cnt,
+                                           int64_t &last_table_id,
+                                           int64_t &last_tablet_id,
                                            int64_t &total_part_cnt,
                                            ObIArray<AsyncStatTable> &stat_tables);
 
@@ -248,13 +274,12 @@ private:
                                  ObIArray<uint64_t> &sample_counts,
                                  ObIArray<uint64_t> &column_ids);
 
-  static int check_can_use_column_store_and_split_part_gather(const int64_t sstable_row_cnt,
-                                                              const int64_t memtable_row_cnt,
-                                                              const int64_t cg_cnt,
-                                                              const int64_t part_cnt,
-                                                              const int64_t degree,
-                                                              bool &use_column_store,
-                                                              bool &use_split_part);
+  static int check_can_use_column_store(const int64_t sstable_row_cnt,
+                                        const int64_t memtable_row_cnt,
+                                        const int64_t cg_cnt,
+                                        const int64_t part_cnt,
+                                        const int64_t degree,
+                                        bool &use_column_store);
 
   static int get_gather_table_type_list(ObSqlString &gather_table_type_list);
 

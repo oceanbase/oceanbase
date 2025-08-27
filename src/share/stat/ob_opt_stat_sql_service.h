@@ -119,7 +119,8 @@ public:
                         ObIAllocator &allocator,
                         ObIArray<ObOptKeyColumnStat> &key_col_stats,
                         bool is_accross_tenant_query = false,
-                        sqlclient::ObISQLConnection *conn = NULL);
+                        sqlclient::ObISQLConnection *conn = NULL,
+                        bool fetch_internal_stat = false);
 
   int update_table_stat(const uint64_t tenant_id,
                         sqlclient::ObISQLConnection *conn,
@@ -148,6 +149,11 @@ public:
                          const int64_t current_time,
                          bool only_update_col_stat = false,
                          const ObObjPrintParams &print_params = ObObjPrintParams());
+
+  int update_stats_internal_stat(const uint64_t tenant_id,
+                                sqlclient::ObISQLConnection *conn,
+                                uint64_t table_id,
+                                int64_t global_partition_id);
 
   int delete_table_stat(const uint64_t exec_tenant_id,
                         const uint64_t table_id,

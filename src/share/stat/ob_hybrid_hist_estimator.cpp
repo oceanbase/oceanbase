@@ -388,14 +388,14 @@ int ObHybridHistEstimator::compute_estimate_percent(int64_t total_row_count,
         est_percent = (MAGIC_SAMPLE_SIZE * 100.0) / total_row_count;
       }
     }
-  } else if (total_row_count >= MAGIC_MAX_AUTO_SAMPLE_SIZE) {
+  } else if (total_row_count > MAGIC_MAX_AUTO_SAMPLE_SIZE) {
     if (micro_block_num > MAXIMUM_BLOCK_CNT_OF_ROW_SAMPLE_GATHER_HYBRID_HIST ||
         total_row_count > MAXIMUM_ROWS_OF_ROW_SAMPLE_GATHER_HYBRID_HIST) {
       is_block_sample = true;
     }
     if (max_num_bkts <= ObColumnStatParam::DEFAULT_HISTOGRAM_BUCKET_NUM) {
       need_sample = true;
-      est_percent = (MAGIC_SAMPLE_SIZE * 100.0) / total_row_count;
+      est_percent = (MAGIC_MAX_AUTO_SAMPLE_SIZE * 100.0) / total_row_count;
     } else {
       int64_t num_bound_bkts = static_cast<int64_t>(std::round(total_row_count * MAGIC_SAMPLE_CUT_RATIO));
       if (max_num_bkts >= num_bound_bkts) {

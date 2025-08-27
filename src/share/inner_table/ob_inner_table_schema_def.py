@@ -28273,7 +28273,10 @@ def_table_schema(
         AND DB.DATABASE_ID = V.DATABASE_ID
         AND V.TENANT_ID = 0
     LEFT JOIN
-        oceanbase.__all_table_stat STAT
+        (
+          SELECT * FROM oceanbase.__all_table_stat
+          WHERE INTERNAL_STAT = 0 OR INTERNAL_STAT IS NULL
+        ) STAT
         ON V.TENANT_ID = STAT.TENANT_ID
         AND V.TABLE_ID = STAT.TABLE_ID
         AND (V.PARTITION_ID = STAT.PARTITION_ID OR V.PARTITION_ID = -2)
@@ -28351,6 +28354,7 @@ def_table_schema(
     ON tc.table_id = stat.table_id
     AND tc.column_id = stat.column_id
     AND stat.object_type = 1
+    AND (stat.INTERNAL_STAT = 0 or stat.internal_stat is null)
 WHERE
   tc.is_hidden = 0
 """.replace("\n", " ")
@@ -28407,6 +28411,7 @@ def_table_schema(
     AND c.column_id = stat.column_id
     AND part.part_id = stat.partition_id
     AND stat.object_type = 2
+    AND (stat.INTERNAL_STAT = 0 or stat.internal_stat is null)
 WHERE
   c.is_hidden = 0
   AND t.table_type in (0,3,6,14)
@@ -68260,6 +68265,7 @@ FROM
     ON TC.table_id = stat.table_id
     AND TC.column_id = stat.column_id
     AND stat.object_type = 1
+    AND (stat.INTERNAL_STAT = 0 or stat.internal_stat is null)
 WHERE
   TC.is_hidden = 0;
 """.replace("\n", " ")
@@ -68337,6 +68343,7 @@ FROM
     ON TC.table_id = stat.table_id
     AND TC.column_id = stat.column_id
     AND stat.object_type = 1
+    AND (stat.INTERNAL_STAT = 0 or stat.internal_stat is null)
 WHERE
   TC.is_hidden = 0;
 """.replace("\n", " ")
@@ -68404,6 +68411,7 @@ FROM
     ON c.table_id = stat.table_id
     AND c.column_id = stat.column_id
     AND stat.object_type = 1
+    AND (stat.INTERNAL_STAT = 0 or stat.internal_stat is null)
 WHERE
   c.is_hidden = 0;
 """.replace("\n", " ")
@@ -68466,6 +68474,7 @@ FROM
     AND c.column_id = stat.column_id
     AND part.part_id = stat.partition_id
     AND stat.object_type = 2
+    AND (stat.INTERNAL_STAT = 0 OR stat.internal_stat is null)
 WHERE
   c.is_hidden = 0
   AND t.table_type in (0,2,3,8,9,14)
@@ -68531,6 +68540,7 @@ FROM
     AND c.column_id = stat.column_id
     AND part.part_id = stat.partition_id
     AND stat.object_type = 2
+    AND (stat.INTERNAL_STAT = 0 OR stat.INTERNAL_STAT IS NULL)
 WHERE
   c.is_hidden = 0
   AND t.table_type in (0,2,3,8,9,14)
@@ -68590,6 +68600,7 @@ FROM
     AND c.column_id = stat.column_id
     AND part.part_id = stat.partition_id
     AND stat.object_type = 2
+    AND (stat.INTERNAL_STAT = 0 OR stat.INTERNAL_STAT IS NULL)
 WHERE
   c.is_hidden = 0
   AND t.table_type in (0,2,3,8,9,14)
@@ -68658,6 +68669,7 @@ FROM
     AND c.column_id = stat.column_id
     AND stat.partition_id = subpart.sub_part_id
     AND stat.object_type = 3
+    AND (stat.INTERNAL_STAT = 0 OR stat.INTERNAL_STAT IS NULL)
 WHERE
   c.is_hidden = 0
   AND t.table_type in (0,2,3,8,9,14)
@@ -68723,6 +68735,7 @@ FROM
     AND c.column_id = stat.column_id
     AND stat.partition_id = subpart.sub_part_id
     AND stat.object_type = 3
+    AND (stat.INTERNAL_STAT = 0 OR stat.internal_stat is null)
 WHERE
   c.is_hidden = 0
   AND t.table_type in (0,2,3,8,9,14)
@@ -68782,6 +68795,7 @@ FROM
     AND c.column_id = stat.column_id
     AND stat.partition_id = subpart.sub_part_id
     AND stat.object_type = 3
+    AND (stat.INTERNAL_STAT = 0 OR stat.INTERNAL_STAT IS NULL)
 WHERE
   c.is_hidden = 0
   AND t.table_type in (0,2,3,8,9,14)
@@ -69403,6 +69417,7 @@ def_table_schema(
         ON V.TENANT_ID = STAT.TENANT_ID
         AND V.TABLE_ID = STAT.TABLE_ID
         AND V.PARTITION_ID = STAT.PARTITION_ID
+        AND (STAT.INTERNAL_STAT  =  0 OR STAT.INTERNAL_STAT IS NULL)
 """.replace("\n", " ")
 )
 
@@ -69540,6 +69555,7 @@ def_table_schema(
         ON V.TENANT_ID = STAT.TENANT_ID
         AND V.TABLE_ID = STAT.TABLE_ID
         AND V.PARTITION_ID = STAT.PARTITION_ID
+        AND (STAT.INTERNAL_STAT = 0 OR STAT.INTERNAL_STAT IS NULL)
 """.replace("\n", " ")
 )
 
@@ -69659,6 +69675,7 @@ def_table_schema(
         ON V.TENANT_ID = STAT.TENANT_ID
         AND V.TABLE_ID = STAT.TABLE_ID
         AND V.PARTITION_ID = STAT.PARTITION_ID
+        AND (STAT.INTERNAL_STAT  =  0 OR STAT.INTERNAL_STAT IS NULL)
 """.replace("\n", " ")
 )
 

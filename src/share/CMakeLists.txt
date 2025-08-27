@@ -34,6 +34,7 @@ ob_set_subtarget(ob_share_extra ALONE
   aggregate/approx_count_distinct_synopsis.cpp
   aggregate/top_fre_hist.cpp
   aggregate/hybrid_hist.cpp
+  aggregate/str_prefix_max.cpp
 
   vector/expr_cmp_func.cpp
   vector/expr_cmp_func_parts/expr_cmp_func_part_0.cpp

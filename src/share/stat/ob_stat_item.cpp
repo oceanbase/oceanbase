@@ -770,6 +770,8 @@ void ObGlobalMaxEval::add(const ObObj &obj)
 {
   if (global_max_.is_null()) {
     global_max_ = obj;
+  } else if (obj.is_null()) {
+    //do nothing
   } else if (obj > global_max_) {
     global_max_ = obj;
   }
@@ -791,6 +793,8 @@ void ObGlobalMinEval::add(const ObObj &obj)
 {
   if (global_min_.is_null()) {
     global_min_ = obj;
+  } else if (obj.is_null()) {
+    //do nothing
   } else if (global_min_ > obj) {
     global_min_ = obj;
   }

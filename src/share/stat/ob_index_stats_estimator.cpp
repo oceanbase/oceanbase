@@ -273,8 +273,8 @@ int ObIndexStatsEstimator::fast_gather_index_stats(ObExecContext &ctx,
   } else if (index_param.need_estimate_block_ &&
              OB_FAIL(ObBasicStatsEstimator::estimate_block_count(ctx, index_param,
                                                                  partition_id_block_map,
-                                                                 use_column_store,
-                                                                 use_split_part))) {
+                                                                 use_column_store
+                                                                 ))) {
     LOG_WARN("failed to estimate block count", K(ret));
   } else {
     bool is_continued = true;
