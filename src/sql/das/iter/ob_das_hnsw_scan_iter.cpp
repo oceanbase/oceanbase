@@ -30,17 +30,29 @@ using namespace share;
 namespace sql
 {
 
+int ObDASHNSWScanIter::reuse_pre_filter_by_type()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(pre_scan_param_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("pre-filter scan_param is null", K(ret));
+  } else {
+    pre_scan_param_->need_switch_param_ = false;
+  }
+  return ret;
+}
+
 int ObDASHNSWScanIter::do_table_scan()
 {
   int ret = OB_SUCCESS;
 
   if (!is_primary_pre_with_rowkey_with_filter_) {
     if (is_pre_filter() || is_in_filter()) {
-      ObDASScanIter *idx_scan_iter = static_cast<ObDASScanIter *>(inv_idx_scan_iter_);
       if (OB_ISNULL(inv_idx_scan_iter_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("inv idx scan iter is null", K(ret));
-      } else if (OB_FALSE_IT(idx_scan_iter->get_scan_param().need_switch_param_ = false)) {
+      } else if (OB_FAIL(reuse_pre_filter_by_type())) {
+        LOG_WARN("failed to reuse pre filter by type", K(ret));
       } else if (OB_FAIL(inv_idx_scan_iter_->do_table_scan())) {
         LOG_WARN("failed to do inv idx table scan.", K(ret));
       } else {
@@ -177,6 +189,7 @@ int ObDASHNSWScanIter::inner_init(ObDASIterParam &param)
     adaptive_ctx_.is_primary_index_ = hnsw_scan_param.is_primary_index_;
     adaptive_ctx_.with_extra_info_ = extra_column_count_ > 0;
     adaptive_ctx_.only_rowkey_filter_ = is_primary_pre_with_rowkey_with_filter_;
+    pre_scan_param_ = hnsw_scan_param.pre_scan_param_;
 
     if (OB_ISNULL(mem_context_)) {
       lib::ContextParam param;
