@@ -807,7 +807,7 @@ int ObInnerTableSchema::dba_ob_access_point_ora_schema(ObTableSchema &table_sche
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT a.TENANT_ID,         TENANT_NAME,         SVR_IP,         SQL_PORT   FROM SYS.ALL_VIRTUAL_LS_META_TABLE a, SYS.DBA_OB_TENANTS b    WHERE LS_ID=1 and a.TENANT_ID = b.TENANT_ID;   )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT a.TENANT_ID,         TENANT_NAME,         SVR_IP,         SQL_PORT   FROM SYS.ALL_VIRTUAL_LS_META_TABLE a, SYS.DBA_OB_TENANTS b   WHERE LS_ID=1 and a.TENANT_ID = b.TENANT_ID;   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1607,7 +1607,7 @@ int ObInnerTableSchema::v_ob_session_ora_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT                           id ID,                          "USER",                          tenant TENANT,                          host HOST,                          db DB,                          command COMMAND,                          sql_id SQL_ID,                          CAST(time AS INT) TIME,                          state STATE,                          info INFO,                          svr_ip SVR_IP,                          svr_port SVR_PORT,                          sql_port SQL_PORT,                          proxy_sessid PROXY_SESSID,                          user_client_ip as USER_CLIENT_IP,                          user_host as USER_HOST,                          trans_id as TRANS_ID,                          thread_id as THREAD_ID,                          trace_id as TRACE_ID,                          ref_count as REF_COUNT,                          backtrace as BACKTRACE,                          trans_state as TRANS_STATE,                          CAST(total_cpu_time AS INT) as TOTAL_CPU_TIME                      FROM SYS.GV$OB_SESSION WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT                          id ID,                          "USER",                          tenant TENANT,                          host HOST,                          db DB,                          command COMMAND,                          sql_id SQL_ID,                          CAST(time AS INT) TIME,                          state STATE,                          info INFO,                          svr_ip SVR_IP,                          svr_port SVR_PORT,                          sql_port SQL_PORT,                          proxy_sessid PROXY_SESSID,                          user_client_ip as USER_CLIENT_IP,                          user_host as USER_HOST,                          trans_id as TRANS_ID,                          thread_id as THREAD_ID,                          trace_id as TRACE_ID,                          ref_count as REF_COUNT,                          backtrace as BACKTRACE,                          trans_state as TRANS_STATE,                          CAST(total_cpu_time AS INT) as TOTAL_CPU_TIME                      FROM SYS.GV$OB_SESSION WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
