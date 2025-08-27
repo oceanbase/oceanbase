@@ -1964,11 +1964,20 @@ int ObPxTreeSerializer::serialize_expr_frame_info(char *buf,
     }
   }
   // frames
-  OB_UNIS_ENCODE(ctx.get_frame_cnt());
-  OZ(serialize_frame_info<SERIALIZE_PLAN_PART>(buf, buf_len, pos, expr_frame_info.const_frame_, ctx.get_frames(), ctx.get_frame_cnt()));
-  OZ(serialize_frame_info<SERIALIZE_PLAN_PART>(buf, buf_len, pos, expr_frame_info.param_frame_, ctx.get_frames(), ctx.get_frame_cnt()));
-  OZ(serialize_frame_info<SERIALIZE_PLAN_PART>(buf, buf_len, pos, expr_frame_info.dynamic_frame_, ctx.get_frames(), ctx.get_frame_cnt()));
-  OZ(serialize_frame_info<SERIALIZE_PLAN_PART>(buf, buf_len, pos, expr_frame_info.datum_frame_, ctx.get_frames(), ctx.get_frame_cnt(), true));
+  int64_t frame_count = 0;
+  char **frames = nullptr;
+  if (ctx.get_ori_frame_cnt() != 0 && ctx.get_ori_frames() != nullptr) {
+    frame_count = ctx.get_ori_frame_cnt();
+    frames = ctx.get_ori_frames();
+  } else {
+    frame_count = ctx.get_frame_cnt();
+    frames = ctx.get_frames();
+  }
+  OB_UNIS_ENCODE(frame_count);
+  OZ(serialize_frame_info<SERIALIZE_PLAN_PART>(buf, buf_len, pos, expr_frame_info.const_frame_, frames, frame_count));
+  OZ(serialize_frame_info<SERIALIZE_PLAN_PART>(buf, buf_len, pos, expr_frame_info.param_frame_, frames, frame_count));
+  OZ(serialize_frame_info<SERIALIZE_PLAN_PART>(buf, buf_len, pos, expr_frame_info.dynamic_frame_, frames, frame_count));
+  OZ(serialize_frame_info<SERIALIZE_PLAN_PART>(buf, buf_len, pos, expr_frame_info.datum_frame_, frames, frame_count, true));
   LOG_DEBUG("trace end ser expr frame info", K(ret), K(buf_len), K(pos));
   return ret;
 }
@@ -2157,6 +2166,8 @@ int ObPxTreeSerializer::deserialize_expr_frame_info(const char *buf,
   } else {
     ctx.set_frames(frames);
     ctx.set_frame_cnt(frame_cnt);
+    ctx.set_ori_frames(frames);
+    ctx.set_ori_frame_cnt(frame_cnt);
     // init const vector
     ObEvalCtx eval_ctx(ctx);
     const ObIArray<ObExpr> &exprs = expr_frame_info.rt_exprs_;
@@ -2276,11 +2287,20 @@ int64_t ObPxTreeSerializer::get_serialize_expr_frame_info_size(
       }
     }
   }
-  OB_UNIS_ADD_LEN(ctx.get_frame_cnt());
-  len += get_serialize_frame_info_size<SERIALIZE_PLAN_PART>(expr_frame_info.const_frame_, ctx.get_frames(), ctx.get_frame_cnt());
-  len += get_serialize_frame_info_size<SERIALIZE_PLAN_PART>(expr_frame_info.param_frame_, ctx.get_frames(), ctx.get_frame_cnt());
-  len += get_serialize_frame_info_size<SERIALIZE_PLAN_PART>(expr_frame_info.dynamic_frame_, ctx.get_frames(), ctx.get_frame_cnt());
-  len += get_serialize_frame_info_size<SERIALIZE_PLAN_PART>(expr_frame_info.datum_frame_, ctx.get_frames(), ctx.get_frame_cnt(), true);
+  int64_t frame_count = 0;
+  char **frames = nullptr;
+  if (ctx.get_ori_frame_cnt() != 0 && ctx.get_ori_frames() != nullptr) {
+    frame_count = ctx.get_ori_frame_cnt();
+    frames = ctx.get_ori_frames();
+  } else {
+    frame_count = ctx.get_frame_cnt();
+    frames = ctx.get_frames();
+  }
+  OB_UNIS_ADD_LEN(frame_count);
+  len += get_serialize_frame_info_size<SERIALIZE_PLAN_PART>(expr_frame_info.const_frame_, frames, frame_count);
+  len += get_serialize_frame_info_size<SERIALIZE_PLAN_PART>(expr_frame_info.param_frame_, frames, frame_count);
+  len += get_serialize_frame_info_size<SERIALIZE_PLAN_PART>(expr_frame_info.dynamic_frame_, frames, frame_count);
+  len += get_serialize_frame_info_size<SERIALIZE_PLAN_PART>(expr_frame_info.datum_frame_, frames, frame_count, true);
   LOG_DEBUG("trace end get ser expr frame info size", K(ret), K(len));
   return len;
 }
