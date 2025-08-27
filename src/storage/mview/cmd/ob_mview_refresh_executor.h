@@ -122,8 +122,8 @@ private:
                                      hash::ObHashSet<uint64_t> &mv_sets);
   int generate_database_table_name_(const ObTableSchema *table_schema,
                                     ObSqlString &table_name);
-  int set_collation_connection_var_(const uint64_t mview_id,
-                                    ObMViewTransaction &trans);
+  int set_session_vars_(const uint64_t mview_id,
+                        ObMViewTransaction &trans);
 private:
   sql::ObExecContext *ctx_;
   const ObMViewRefreshArg *arg_;

@@ -210,7 +210,7 @@ int ObMViewRefreshExecutor::do_refresh()
                                        database_schema->get_database_name_str()))) {
           LOG_WARN("fail to start trans", KR(ret), K(database_schema->get_database_id()),
               K(database_schema->get_database_name_str()));
-        } else if (OB_FAIL(set_collation_connection_var_(mview_id, trans))) {
+        } else if (OB_FAIL(set_session_vars_(mview_id, trans))) {
           LOG_WARN("fail to set collation var", K(ret), K(mview_id));
         } else if (FALSE_IT(refresh_ctx.trans_ = &trans)) {
         } else if (OB_FAIL(
@@ -770,7 +770,7 @@ int ObMViewRefreshExecutor::generate_database_table_name_(
   return ret;
 }
 
-int ObMViewRefreshExecutor::set_collation_connection_var_(
+int ObMViewRefreshExecutor::set_session_vars_(
                             const uint64_t mview_id,
                             ObMViewTransaction &trans)
 {
@@ -778,11 +778,15 @@ int ObMViewRefreshExecutor::set_collation_connection_var_(
   const uint64_t tenant_id = tenant_id_;
   const ObTableSchema *mv_schema = nullptr;
   sql::ObSessionSysVar *collation_connection_var = nullptr;
+  sql::ObSessionSysVar *compatibility_version_var = nullptr;
   if (OB_FAIL(schema_checker_.get_table_schema(tenant_id, mview_id, mv_schema))) {
     LOG_WARN("fail to get table schema", K(ret), K(mview_id));
   } else if (OB_ISNULL(mv_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("mv schema is null", K(ret), KP(mv_schema));
+  } else if (OB_ISNULL(trans.get_session_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session info is null", KP(trans.get_session_info()));
   } else {
     const sql::ObLocalSessionVar &session_vars = mv_schema->get_local_session_var();
     if (OB_FAIL(session_vars.get_local_var(ObSysVarClassType::SYS_VAR_COLLATION_CONNECTION,
@@ -790,16 +794,21 @@ int ObMViewRefreshExecutor::set_collation_connection_var_(
       LOG_WARN("fail to get local session var", K(ret));
     } else if (OB_ISNULL(collation_connection_var)) {
       LOG_INFO("no collation connection var, skip", K(ret), KP(collation_connection_var));
-    } else if (OB_ISNULL(trans.get_session_info())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("session info is null", KP(trans.get_session_info()));
     } else if (OB_FAIL(trans.get_session_info()->update_sys_variable(
                        collation_connection_var->type_, collation_connection_var->val_))) {
       LOG_WARN("fail to update sys var", K(ret));
     }
-    // if (OB_NOT_NULL(collation_connection_var)) {
-    //   LOG_INFO("print collation connection var", KPC(collation_connection_var));
-    // }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(session_vars.get_local_var(ObSysVarClassType::SYS_VAR_OB_COMPATIBILITY_VERSION,
+                       compatibility_version_var))) {
+      LOG_WARN("fail to get local session var", K(ret));
+    } else if (OB_ISNULL(compatibility_version_var)) {
+      LOG_INFO("no compatibility version var, skip", K(ret), KP(compatibility_version_var));
+    } else if (OB_FAIL(trans.get_session_info()->update_sys_variable(
+                       compatibility_version_var->type_, compatibility_version_var->val_))) {
+      LOG_WARN("fail to update sys var", K(ret));
+    }
   }
   return ret;
 }

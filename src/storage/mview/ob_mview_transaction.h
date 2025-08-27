@@ -73,6 +73,7 @@ protected:
     uint64_t database_id_;
     char *database_name_;
     ObObj collation_connection_var_;
+    ObObj compatibility_version_var_;
   };
 
   class ObSessionSavedForInner
