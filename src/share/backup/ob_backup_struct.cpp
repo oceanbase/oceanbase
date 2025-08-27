@@ -2626,8 +2626,13 @@ int ObBackupUtils::get_tenant_alive_servers_in_zone_(
   } else if (OB_ISNULL(locality_manager)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("locality manager is null", K(ret));
+  } else if (OB_FAIL(SVR_TRACER.renew_tenant_servers_cache_by_id(tenant_id))) {
+    LOG_WARN("fail to renew tenant servers cache by tenant id", K(ret), K(tenant_id));
   } else if (OB_FAIL(SVR_TRACER.get_alive_tenant_servers(tenant_id, alive_servers, renew_time))) {
     LOG_WARN("fail to get tenant alive servers", K(ret), K(tenant_id));
+  } else if (alive_servers.empty()) {
+    ret = OB_EMPTY_RESULT;
+    LOG_WARN("tenant does not have any alive server after refreshing", K(ret), K(tenant_id));
   } else if (OB_FAIL(locality_manager->get_server_locality_array(all_server_locality, has_read_only_zone))) {
     LOG_WARN("fail to get server locality array", K(ret));
   } else {

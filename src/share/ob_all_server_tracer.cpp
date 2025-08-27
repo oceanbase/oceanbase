@@ -896,6 +896,7 @@ int ObTenantServersCacheMap::clear_expired_tenent_servers_cache_()
   return ret;
 }
 
+ERRSIM_POINT_DEF(EN_TIMER_RENEW_TENANT_SERVERS_CACHE_FAIL)
 int ObTenantServersCacheMap::renew_tenant_map()
 {
   int ret = OB_SUCCESS;
@@ -916,6 +917,13 @@ int ObTenantServersCacheMap::renew_tenant_map()
     LOG_WARN("the tenant_servers should be greater than 0", KR(ret));
   } else {
     ARRAY_FOREACH(all_tenant_servers, idx) {
+#ifdef ERRSIM
+      if (GCONF.errsim_tenant_id == all_tenant_servers.at(idx).get_tenant_id()
+          && OB_SUCCESS != EN_TIMER_RENEW_TENANT_SERVERS_CACHE_FAIL) {
+        ret = EN_TIMER_RENEW_TENANT_SERVERS_CACHE_FAIL;
+        LOG_ERROR("errsim renew tenant servers cache");
+      } else
+#endif
       if (OB_FAIL(set_tenant_servers_cache_(all_tenant_servers.at(idx)))) {
         LOG_WARN("set_tenant_location failed", KR(ret),
             "tenant_servers", all_tenant_servers.at(idx),
