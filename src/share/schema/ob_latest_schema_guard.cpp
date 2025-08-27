@@ -13,6 +13,7 @@
 
 #include "share/schema/ob_latest_schema_guard.h"
 #include "share/schema/ob_multi_version_schema_service.h"
+#include "share/schema/ob_schema_utils.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -493,43 +494,6 @@ int ObLatestSchemaGuard::check_udt_exist(
   return ret;
 }
 
-int ObLatestSchemaGuard::get_table_schema_versions(
-    const common::ObIArray<uint64_t> &table_ids,
-    common::ObIArray<ObSchemaIdVersion> &versions)
-{
-  int ret = OB_SUCCESS;
-  ObSchemaService *schema_service_impl = NULL;
-  ObISQLClient *sql_client = NULL;
-  if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_client))) {
-    LOG_WARN("fail to check and get service", KR(ret));
-  } else if (OB_UNLIKELY(table_ids.count() <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("table_ids is empty", KR(ret));
-  } else if (OB_FAIL(schema_service_impl->get_table_schema_versions(
-             *sql_client, tenant_id_, table_ids, versions))) {
-    LOG_WARN("fail to get table schema versions", KR(ret), K_(tenant_id), K(table_ids));
-  }
-  return ret;
-}
-
-int ObLatestSchemaGuard::get_mock_fk_parent_table_schema_versions(
-    const common::ObIArray<uint64_t> &table_ids,
-    common::ObIArray<ObSchemaIdVersion> &versions)
-{
-  int ret = OB_SUCCESS;
-  ObSchemaService *schema_service_impl = NULL;
-  ObISQLClient *sql_client = NULL;
-  if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_client))) {
-    LOG_WARN("fail to check and get service", KR(ret));
-  } else if (OB_UNLIKELY(table_ids.count() <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("table_ids is empty", KR(ret));
-  } else if (OB_FAIL(schema_service_impl->get_mock_fk_parent_table_schema_versions(
-             *sql_client, tenant_id_, table_ids, versions))) {
-    LOG_WARN("fail to get mock fk parent table schema versions", KR(ret), K_(tenant_id), K(table_ids));
-  }
-  return ret;
-}
 
 int ObLatestSchemaGuard::get_default_audit_schemas(
     common::ObIArray<ObSAuditSchema> &audit_schemas)
@@ -915,6 +879,36 @@ int ObLatestSchemaGuard::get_coded_index_name_info_mysql(
   return ret;
 }
 
+#ifndef GET_OBJ_SCHEMA_VERSIONS
+#define GET_OBJ_SCHEMA_VERSIONS(OBJECT_NAME) \
+  int ObLatestSchemaGuard::get_##OBJECT_NAME##_schema_versions(const common::ObIArray<uint64_t> &obj_ids, \
+                                                               common::ObIArray<ObSchemaIdVersion> &versions) \
+    { \
+      int ret = OB_SUCCESS; \
+      ObISQLClient *sql_client = nullptr; \
+      ObSchemaService *schema_service_impl = nullptr; \
+      if (OB_FAIL(check_inner_stat_())) { \
+        LOG_WARN("fail to check inner stat", KR(ret)); \
+      } else if (OB_UNLIKELY(obj_ids.count() <= 0)) { \
+        ret = OB_INVALID_ARGUMENT; \
+        LOG_WARN("obj_ids is empty", KR(ret)); \
+      } else if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_client))) { \
+        LOG_WARN("fail to check and get service", KR(ret)); \
+      } else if (OB_FAIL(schema_service_impl->get_##OBJECT_NAME##_schema_versions(*sql_client, tenant_id_, obj_ids, versions))) { \
+        LOG_WARN("fail to get obj schema versions", KR(ret), K_(tenant_id), K(obj_ids)); \
+      } \
+      return ret; \
+    }
+
+  GET_OBJ_SCHEMA_VERSIONS(table);
+  GET_OBJ_SCHEMA_VERSIONS(mock_fk_parent_table);
+  GET_OBJ_SCHEMA_VERSIONS(routine);
+  GET_OBJ_SCHEMA_VERSIONS(synonym);
+  GET_OBJ_SCHEMA_VERSIONS(package);
+  GET_OBJ_SCHEMA_VERSIONS(type);
+  GET_OBJ_SCHEMA_VERSIONS(sequence);
+#undef GET_OBJ_SCHEMA_VERSIONS
+#endif
 int ObLatestSchemaGuard::get_obj_privs(const uint64_t obj_id,
                                        const ObObjectType obj_type,
                                        common::ObIArray<ObObjPriv> &obj_privs)
@@ -935,6 +929,7 @@ int ObLatestSchemaGuard::get_obj_privs(const uint64_t obj_id,
   }
   return ret;
 }
+
 
 #ifndef GET_RLS_SCHEMA
 #define GET_RLS_SCHEMA(SCHEMA, SCHEMA_TYPE) \

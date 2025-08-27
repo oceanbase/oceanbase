@@ -1400,18 +1400,6 @@ public:
               const ObString &udt_name,
               uint64_t &udt_id) = 0;
 
-  virtual int get_table_schema_versions(
-              common::ObISQLClient &sql_client,
-              const uint64_t tenant_id,
-              const common::ObIArray<uint64_t> &table_ids,
-              common::ObIArray<ObSchemaIdVersion> &versions) = 0;
-
-  virtual int get_mock_fk_parent_table_schema_versions(
-              common::ObISQLClient &sql_client,
-              const uint64_t tenant_id,
-              const common::ObIArray<uint64_t> &table_ids,
-              common::ObIArray<ObSchemaIdVersion> &versions) = 0;
-
   virtual int get_table_index_infos(
               common::ObIAllocator &allocator,
               common::ObISQLClient &sql_client,
@@ -1424,6 +1412,22 @@ public:
                const ObString &dst,
                const bool case_compare,
                const bool compare_with_collation) = 0;
+#ifndef GET_OBJ_SCHEMA_VERSIONS
+#define GET_OBJ_SCHEMA_VERSIONS(OBJECT_NAME) \
+  virtual int get_##OBJECT_NAME##_schema_versions(common::ObISQLClient &sql_client, \
+                                                  const uint64_t tenant_id, \
+                                                  const common::ObIArray<uint64_t> &object_ids, \
+                                                  common::ObIArray<ObSchemaIdVersion> &versions) = 0;
+
+  GET_OBJ_SCHEMA_VERSIONS(table);
+  GET_OBJ_SCHEMA_VERSIONS(mock_fk_parent_table);
+  GET_OBJ_SCHEMA_VERSIONS(routine);
+  GET_OBJ_SCHEMA_VERSIONS(synonym);
+  GET_OBJ_SCHEMA_VERSIONS(package);
+  GET_OBJ_SCHEMA_VERSIONS(type);
+  GET_OBJ_SCHEMA_VERSIONS(sequence);
+#undef GET_OBJ_SCHEMA_VERSIONS
+#endif
 
   virtual int get_obj_priv_with_obj_id(
               common::ObISQLClient &sql_client,
