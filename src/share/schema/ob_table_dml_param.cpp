@@ -49,6 +49,8 @@ ObTableSchemaParam::ObTableSchemaParam(ObIAllocator &allocator)
     multivalue_arr_col_id_(OB_INVALID_ID),
     data_table_rowkey_column_num_(0),
     vec_id_col_id_(OB_INVALID_ID),
+    vec_chunk_col_id_(OB_INVALID_ID),
+    vec_embedded_col_id_(OB_INVALID_ID),
     vec_index_param_(),
     vec_dim_(0),
     vec_vector_col_id_(OB_INVALID_ID),
@@ -91,6 +93,8 @@ void ObTableSchemaParam::reset()
   multivalue_arr_col_id_ = OB_INVALID_ID;
   data_table_rowkey_column_num_ =0 ;
   vec_id_col_id_ = OB_INVALID_ID;
+  vec_chunk_col_id_ = OB_INVALID_ID;
+  vec_embedded_col_id_ = OB_INVALID_ID;
   vec_index_param_.reset();
   vec_dim_ = 0;
   vec_vector_col_id_ = OB_INVALID_ID;
