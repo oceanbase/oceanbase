@@ -79,7 +79,7 @@ int ObRestoreLogFunction::handle_group_entry(
     const share::ObLSID &id,
     const int64_t proposal_id,
     const palf::LSN &group_start_lsn,
-    const palf::LogGroupEntry &group_entry,
+    const ipalf::IGroupEntry &group_entry,
     const char *buffer,
     void *ls_fetch_ctx,
     logfetcher::KickOutInfo &kick_out_info,
@@ -88,14 +88,14 @@ int ObRestoreLogFunction::handle_group_entry(
 {
   UNUSED(tenant_id);
   int ret = OB_SUCCESS;
-  const int64_t size = group_entry.get_serialize_size();
+  const int64_t size = group_entry.get_serialize_size(group_start_lsn);
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     CLOG_LOG(ERROR, "ObRestoreLogFunction not initv", K(inited_));
   } else if (OB_UNLIKELY(!id.is_valid()
         || proposal_id <= 0
         || !group_start_lsn.is_valid()
-        || !group_entry.check_integrity()
+        || !group_entry.check_integrity(group_start_lsn)
         || NULL == buffer)) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "invalid argument", K(id), K(proposal_id), K(group_start_lsn), K(group_entry), K(buffer));
@@ -105,7 +105,7 @@ int ObRestoreLogFunction::handle_group_entry(
       LOG_ERROR("data version is not new enough to recover clog", KR(ret));
     }
   } else if (OB_FAIL(process_(id, proposal_id, group_start_lsn, group_entry.get_scn(),
-          buffer, group_entry.get_serialize_size(), stop_flag))) {
+          buffer, group_entry.get_serialize_size(group_start_lsn), stop_flag))) {
     CLOG_LOG(WARN, "process failed", K(id), K(group_start_lsn), K(group_entry), K(buffer));
   }
   return ret;

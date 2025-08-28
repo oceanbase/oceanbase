@@ -100,6 +100,7 @@ int ObLogFetcher::init(
   int ret = OB_SUCCESS;
   int64_t max_cached_ls_fetch_ctx_count = cfg.active_ls_count;
   LogFetcherErrHandler *fake_err_handler = NULL; // TODO: CDC need to process error handler
+  logservice::ObLogserviceModelInfo logservice_model_info;
 
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
@@ -139,6 +140,10 @@ int ObLogFetcher::init(
         TCTX.tenant_id_,
         OB_SERVER_TENANT_ID))) {
       LOG_ERROR("ObLogRouterService init failer", KR(ret), K(prefer_region), K(cluster_id));
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+    } else if (is_integrated_fetching_mode(fetching_mode) && OB_SUCC(log_route_service_.get_logservice_model_info(logservice_model_info)) && OB_FAIL(TCTX.init_max_syslog_file_count_with_libpalf(logservice_model_info))) {
+      LOG_ERROR("init_max_syslog_file_count_with_libpalf fail", KR(ret));
+#endif
     } else if (OB_FAIL(progress_controller_.init(cfg.ls_count_upper_limit))) {
       LOG_ERROR("init progress controller fail", KR(ret));
     } else if (OB_FAIL(cluster_id_filter_.init(cfg.cluster_id_black_list.str(),
@@ -425,6 +430,8 @@ int ObLogFetcher::add_ls(
   FetchStreamType type = FETCH_STREAM_TYPE_UNKNOWN;
   const int64_t start_tstamp_ns = start_parameters.get_start_tstamp_ns();
   const palf::LSN &start_lsn = start_parameters.get_start_lsn();
+  logservice::ObLogserviceModelInfo logservice_model_info;
+  const uint64_t tenant_id = tls_id.get_tenant_id();
 
   if (tls_id.is_sys_log_stream()) {
     type = FETCH_STREAM_TYPE_SYS_LS;
@@ -443,10 +450,12 @@ int ObLogFetcher::add_ls(
   } else if (is_integrated_fetching_mode(fetching_mode_)
       && OB_FAIL(log_route_service_.registered(tls_id.get_tenant_id(), tls_id.get_ls_id()))) {
     LOG_ERROR("ObLogRouteService registered fail", KR(ret), K(start_tstamp_ns), K(tls_id), K(start_lsn));
+  } else if (!is_direct_fetching_mode(fetching_mode_) && OB_FAIL(log_route_service_.get_logservice_model_info(logservice_model_info))) {
+    LOG_ERROR("get_logservice_model_info failed", KR(ret), K(tenant_id));
   }
   // Push LS into ObLogLSFetchMgr
   else if (OB_FAIL(ls_fetch_mgr_.add_ls(tls_id, start_parameters, is_loading_data_dict_baseline_data_,
-      enable_direct_load_inc_, fetching_mode_, archive_dest_))) {
+      enable_direct_load_inc_, fetching_mode_, archive_dest_, logservice_model_info))) {
     LOG_ERROR("add partition by part fetch mgr fail", KR(ret), K(tls_id), K(start_parameters),
         K(is_loading_data_dict_baseline_data_));
   } else if (OB_FAIL(ls_fetch_mgr_.get_ls_fetch_ctx(tls_id, ls_fetch_ctx))) {
@@ -462,7 +471,7 @@ int ObLogFetcher::add_ls(
     LOG_ERROR("push task into idle pool fail", KR(ret), K(ls_fetch_ctx));
   } else {
     LOG_INFO("Fetcher add ls succ", K(tls_id), K(is_loading_data_dict_baseline_data_),
-        K(start_parameters));
+        K(start_parameters), K(logservice_model_info));
   }
 
   return ret;

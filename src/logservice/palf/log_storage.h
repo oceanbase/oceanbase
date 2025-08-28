@@ -101,6 +101,9 @@ public:
                               int64_t &out_read_size,
                               LogIOContext &io_ctx);
 
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  inline const libpalf::LibPalfIteratorMemoryStorageFFI * get_memory_storage() { return nullptr; }
+#endif
   int truncate(const LSN &lsn);
   int truncate_prefix_blocks(const LSN &lsn);
 

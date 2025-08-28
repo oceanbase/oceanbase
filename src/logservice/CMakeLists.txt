@@ -97,8 +97,8 @@ ob_set_subtarget(ob_logservice logrouteservice
 
 ob_set_subtarget(ob_logservice ipalf
   ipalf/ipalf_env.cpp
-  ipalf/ipalf_iterator.cpp
   ipalf/ipalf_log_entry.cpp
+  ipalf/ipalf_log_group_entry.cpp
 )
 
 ob_set_subtarget(ob_logservice palf

@@ -17,6 +17,7 @@
 #include "logservice/palf/log_define.h"
 #include "logservice/palf/log_entry.h"
 #ifdef OB_BUILD_SHARED_LOG_SERVICE
+#include "logservice/libpalf/libpalf_common_define.h"
 #include "palf_ffi.h"
 #endif
 
@@ -30,7 +31,7 @@ class LogEntry;
 }
 namespace ipalf
 {
-class IPalfLogIterator;
+template <class LogEntryType> class IPalfIterator;
 class ILogEntry;
 class ILogEntryHeader
 {
@@ -38,6 +39,7 @@ public:
   friend class ILogEntry;
 public:
   ILogEntryHeader();
+  ILogEntryHeader(bool enable_logservice);
   ~ILogEntryHeader();
 public:
   // TODO by qingxia: finish
@@ -55,8 +57,8 @@ private:
 private:
   bool is_inited_;
   const palf::LogEntryHeader *palf_log_header_;
-#ifdef OB_BUILD_SHARED_LOG_SERVICE
   bool enable_logservice_;
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
   const libpalf::LibPalfLogEntryHeader *libpalf_log_header_;
 #endif
 };
@@ -64,9 +66,11 @@ private:
 class ILogEntry
 {
 public:
-  friend class IPalfLogIterator;
+  template <class LogEntryType>
+  friend class IPalfIterator;
 public:
   ILogEntry();
+  ILogEntry(bool enable_logservice);
   ~ILogEntry();
 
 public:
@@ -80,7 +84,9 @@ public:
   const share::SCN get_scn() const;
   const char *get_data_buf() const;
   const ILogEntryHeader &get_header();
-
+  int64_t get_serialize_size(const palf::LSN &lsn) const;
+  int serialize(const palf::LSN &lsn, char * buf, int64_t size, int64_t &pos) const;
+  int deserialize(const palf::LSN &lsn, const char *buf, int64_t size, int64_t &pos);
 #ifdef OB_BUILD_SHARED_LOG_SERVICE
   TO_STRING_KV(K(enable_logservice_),
                K(header_),
@@ -96,7 +102,7 @@ public:
   TO_STRING_KV(K(header_),
                K(palf_log_entry_));
 #endif
-  NEED_SERIALIZE_AND_DESERIALIZE;
+  // NEED_SERIALIZE_AND_DESERIALIZE;
   static const int64_t BLOCK_SIZE = palf::PALF_BLOCK_SIZE;
   using LogEntryHeaderType=ILogEntryHeader;
 private:
@@ -105,14 +111,16 @@ private:
 #ifdef OB_BUILD_SHARED_LOG_SERVICE
   int init(libpalf::LibPalfLogEntry &libpalf_log_entry);
 #endif
+
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+public:
+  libpalf::LibPalfLogEntry libpalf_log_entry_;
+#endif
 private:
   bool is_inited_;
   ILogEntryHeader header_;
   palf::LogEntry palf_log_entry_;
-#ifdef OB_BUILD_SHARED_LOG_SERVICE
   bool enable_logservice_;
-  libpalf::LibPalfLogEntry libpalf_log_entry_;
-#endif
 };
 
 } // end namespace ipalf

@@ -907,7 +907,7 @@ private:
   template <class StartPoint>
   int seek_log_iterator_dispatch_(const StartPoint &start_point,
                                   const int64_t suggested_read_buf_size,
-                                  ipalf::IPalfLogIterator &iterator);
+                                  ipalf::IPalfIterator<ipalf::ILogEntry> &iterator);
   int advance_base_lsn_impl_(const palf::LSN &lsn);
   DISALLOW_COPY_AND_ASSIGN(ObLogHandler);
 private:
@@ -1046,7 +1046,7 @@ int ObLogHandler::seek_log_iterator_dispatch_(const StartPoint &start_point,
 template <class StartPoint>
 int ObLogHandler::seek_log_iterator_dispatch_(const StartPoint &start_point,
                                               const int64_t suggested_read_buf_size,
-                                              ipalf::IPalfLogIterator &iterator)
+                                              ipalf::IPalfIterator<ipalf::ILogEntry> &iterator)
 {
   int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
@@ -1106,7 +1106,7 @@ template<typename StartPoint, typename IteratorType>
 int seek_log_iterator_for_cdc(const share::ObLSID &ls_id,
                               const StartPoint &start_point,
                               const int64_t suggested_read_buf_size,
-                              palf::PalfIterator<IteratorType> &iterator)
+                              ipalf::IPalfIterator<IteratorType> &iterator)
 {
   return init_log_iterator_(ls_id, start_point, suggested_read_buf_size, iterator);
 }

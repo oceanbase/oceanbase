@@ -254,7 +254,7 @@ int QueryTenantStatusStrategy::build_sql_statement(
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid argument", KR(ret), K(sql_buf), K(mul_statement_buf_len));
   } else if (OB_FAIL(databuff_printf(sql_buf, mul_statement_buf_len, pos,
-      "SELECT IS_DELETE FROM %s WHERE TENANT_ID = %lu ORDER BY SCHEMA_VERSION DESC LIMIT 1",
+      "SELECT IS_DELETED FROM %s WHERE TENANT_ID = %lu ORDER BY SCHEMA_VERSION DESC LIMIT 1",
       OB_ALL_TENANT_HISTORY_TNAME, tenant_id_))) {
     LOG_ERROR("build_sql_statement failed for query all_server_info", KR(ret), K(pos), KCSTRING(sql_buf));
   }

@@ -14,6 +14,9 @@
 #define OCEANBASE_LOGSERVICE_I_LOG_STORAGE_
 #include <cstdint>
 #include "lib/utility/ob_print_utils.h"                 // VIRTUAL_TO_STRING_KV
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+#include "palf_ffi.h"
+#endif
 namespace oceanbase
 {
 namespace palf
@@ -43,6 +46,11 @@ public:
                     ReadBuf &read_buf,
                     int64_t &out_read_size,
                     LogIOContext &io_ctx) = 0;
+
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  virtual const libpalf::LibPalfIteratorMemoryStorageFFI * get_memory_storage() = 0;
+#endif
+
   ILogStorageType get_log_storage_type()
   { return type_; }
   const char *get_log_storage_type_str()

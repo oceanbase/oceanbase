@@ -14,9 +14,11 @@
 #include "ob_cdc_start_lsn_locator.h"
 #include "ob_cdc_util.h"
 #include "logservice/ob_log_service.h"          // ObLogService
+#include "logservice/ipalf/ipalf_log_group_entry.h"
 
 namespace oceanbase
 {
+using namespace ipalf;
 namespace cdc
 {
 ObCdcStartLsnLocator::ObCdcStartLsnLocator()
@@ -171,9 +173,9 @@ int ObCdcStartLsnLocator::do_locate_ls_(const bool fetch_archive_only,
     ObLocateLSNByTsResp &resp)
 {
   int ret = OB_SUCCESS;
-  palf::PalfGroupBufferIterator group_iter;
+  IPalfIterator<IGroupEntry> group_iter;
   share::SCN start_scn;
-  LogGroupEntry log_group_entry;
+  IGroupEntry log_group_entry;
   ObLocateLSNByTsResp::LocateResult locate_res;
   const ObLSID &ls_id = locate_param.ls_id_;
   const int64_t start_ts_ns = locate_param.start_ts_ns_;
@@ -233,7 +235,7 @@ int ObCdcStartLsnLocator::do_locate_ls_(const bool fetch_archive_only,
       int64_t version = 0;
       ObCdcGetSourceFunctor get_source_func(ctx, version);
       ObCdcUpdateSourceFunctor update_source_func(ctx, version);
-      logservice::ObRemoteLogGroupEntryIterator remote_group_iter(get_source_func, update_source_func);
+      logservice::ObRemoteIGroupEntryIterator remote_group_iter(get_source_func, update_source_func);
       constexpr int64_t MAX_RETRY_COUNT = 5;
       // for RemoteLogIterator::next
       int64_t next_buf_size = 0;
@@ -244,10 +246,11 @@ int ObCdcStartLsnLocator::do_locate_ls_(const bool fetch_archive_only,
       do {
         const bool iter_inited = remote_group_iter.is_init();
         iterate_log_fail = false;
+        const bool enable_logservice = GCONF.enable_logservice;
         if (OB_FAIL(host_->init_archive_source_if_needed(ls_id, ctx))) {
           LOG_WARN("failed to init archive source", K(ctx), K(ls_id));
         } else if (! iter_inited && OB_FAIL(remote_group_iter.init(tenant_id_, ls_id, start_scn,
-                result_lsn, LSN(palf::LOG_MAX_LSN_VAL), large_buffer_pool_, log_ext_handler_))) {
+                result_lsn, LSN(palf::LOG_MAX_LSN_VAL), large_buffer_pool_, log_ext_handler_, logservice::ObRemoteIGroupEntryIterator::DEFAULT_SINGLE_READ_SIZE, enable_logservice))) {
           LOG_WARN("init remote group iter failed when retriving log group entry in start lsn locator", KR(ret), K(ls_id), K(tenant_id_));
         } else if (! iter_inited && OB_FAIL(remote_group_iter.set_io_context(palf::LogIOContext(tenant_id_, ls_id.id(), palf::LogIOUser::CDC)))) {
           LOG_WARN("set_io_context failed", KR(ret), K(ls_id), K(tenant_id_));

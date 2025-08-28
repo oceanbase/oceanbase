@@ -57,6 +57,7 @@
 #include "ob_log_rocksdb_store_service.h" // RocksDbStoreService
 #include "ob_cdc_auto_config_mgr.h"       // CDC_CFG_MGR
 #include "ob_cdc_malloc_sample_info.h"    // ObCDCMallocSampleInfo
+#include "share/ls/ob_ls_log_stat_info.h"          // ObLogserviceModelInfo
 
 #include "ob_log_trace_id.h"
 #include "share/ob_simple_mem_limit_getter.h"
@@ -408,19 +409,18 @@ int ObLogInstance::set_start_global_trans_version(const int64_t start_global_tra
 }
 
 #ifdef OB_BUILD_SHARED_LOG_SERVICE
-// TODO by qingxia: impl config item for log service in cdc
-int init_max_syslog_file_count_with_libpalf_()
+int ObLogInstance::init_max_syslog_file_count_with_libpalf(logservice::ObLogserviceModelInfo &logservice_model_info)
 {
   int ret = OB_SUCCESS;
-  const bool enable_logservice = false;
+  const bool enable_logservice = logservice_model_info.get_model();
   int64_t libpalf_max_syslog_file_count = 0;
   int64_t max_log_file_count = 0;
   int64_t max_syslog_disk_size = 0;
   if (enable_logservice && OB_FAIL(libpalf::LibPalfLogger::cal_libpalf_shared_syslog_capacity(
     TCONF.max_log_file_count, 0, libpalf::LibPalfLogger::LIBPALF_SHARED_MAX_SYSLOG_CAPACITY_PERCENTAGE,
-    OB_LOGGER.DEFAULT_MAX_FILE_SIZE, libpalf_max_syslog_file_count, max_log_file_count, max_syslog_disk_size))) {
+    MAX_LOG_FILE_SIZE, libpalf_max_syslog_file_count, max_log_file_count, max_syslog_disk_size))) {
     LOG_ERROR("cal_libpalf_shared_syslog_capacity fail", KR(ret), K(TCONF.max_log_file_count.get()),
-      K(libpalf::LibPalfLogger::LIBPALF_SHARED_MAX_SYSLOG_CAPACITY_PERCENTAGE), K(OB_LOGGER.DEFAULT_MAX_FILE_SIZE));
+      K(libpalf::LibPalfLogger::LIBPALF_SHARED_MAX_SYSLOG_CAPACITY_PERCENTAGE), K(MAX_LOG_FILE_SIZE));
   } else if (enable_logservice && OB_FAIL(libpalf::LibPalfLogger::set_max_syslog_file_count(libpalf_max_syslog_file_count))) {
     LOG_ERROR("set libpalf_max_syslog_file_count fail", KR(ret), KR(libpalf_max_syslog_file_count));
   } else if (!enable_logservice && FALSE_IT(max_log_file_count = TCONF.max_log_file_count)) { // do nothing

@@ -1221,7 +1221,7 @@ int ObSimpleLogClusterTestEnv::read_log_from_memory(PalfHandleImplGuard &leader)
     auto func = [&leader](){return leader.palf_handle_impl_->get_end_lsn();};
     if (OB_FAIL(ping_buf(min_block_id, max_block_id, buf, log_engine))) {
       PALF_LOG(ERROR, "ping_buf failed", K(ret));
-    } else if (OB_FAIL(mem_storage.init(LSN(min_block_id * PALF_BLOCK_SIZE)))) {
+    } else if (OB_FAIL(mem_storage.init(LSN(min_block_id * PALF_BLOCK_SIZE), GCONF.enable_logservice))) {
       PALF_LOG(ERROR, "mem_storage init failed", K(ret));
     } else if (OB_FAIL(mem_storage.append(buf, PALF_BLOCK_SIZE))) {
       PALF_LOG(ERROR, "append failed", K(ret), KP(buf), K(max_block_id), K(min_block_id));

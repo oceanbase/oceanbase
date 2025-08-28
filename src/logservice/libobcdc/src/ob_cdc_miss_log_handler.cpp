@@ -238,13 +238,14 @@ int ObCDCMissLogHandler::handle_miss_record_or_state_log_(
             LOG_ERROR("fetched log not match miss_log_lsn", KR(ret), K(misslog_lsn), K(resp));
           } else {
             misslog_task.missing_info_.reset_miss_record_or_state_log_lsn();
-            palf::LogEntry miss_log_entry;
+            bool enable_logservice = misslog_task.ls_fetch_ctx_.get_logservice_model();
+            ipalf::ILogEntry miss_log_entry(enable_logservice);
             miss_log_entry.reset();
             const char *buf = resp.get_log_entry_buf();
             const int64_t len = resp.get_pos();
             int64_t pos = 0;
 
-            if (OB_FAIL(miss_log_entry.deserialize(buf, len, pos))) {
+            if (OB_FAIL(miss_log_entry.deserialize(misslog_lsn, buf, len, pos))) {
               LOG_ERROR("deserialize log_entry of miss_record_or_state_log failed", KR(ret), K(misslog_lsn), KP(buf), K(len), K(pos));
             } else if (OB_FAIL(misslog_task.ls_fetch_ctx_.read_miss_tx_log(miss_log_entry, misslog_lsn, misslog_task.tsi_, misslog_task.missing_info_))) {
               if (OB_ITEM_NOT_SETTED == ret) {
@@ -437,7 +438,8 @@ int ObCDCMissLogHandler::read_batch_misslog_(
             K(fetched_missing_log_cnt), K(missing_info), K(idx), K(resp));
       } else {
         palf::LSN misslog_lsn;
-        palf::LogEntry miss_log_entry;
+        bool enable_logservice = ls_fetch_ctx.get_logservice_model();
+        ipalf::ILogEntry miss_log_entry(enable_logservice);
         misslog_lsn.reset();
         miss_log_entry.reset();
         IObCDCPartTransResolver::MissingLogInfo tmp_miss_info;
@@ -459,7 +461,7 @@ int ObCDCMissLogHandler::read_batch_misslog_(
               K(idx), K(org_misslog_arr), K(resp));
         }
 
-        if (FAILEDx(miss_log_entry.deserialize(buf, len, pos))) {
+        if (FAILEDx(miss_log_entry.deserialize(misslog_lsn, buf, len, pos))) {
           LOG_ERROR("deserialize miss_log_entry fail", KR(ret), K(len), K(pos));
         } else if (OB_FAIL(ls_fetch_ctx.read_miss_tx_log(miss_log_entry, misslog_lsn, tsi, tmp_miss_info))) {
           LOG_ERROR("read_miss_log fail", KR(ret), K(miss_log_entry),
@@ -712,15 +714,16 @@ int ObCDCMissLogHandler::fetch_miss_log_direct_(
         const LSN &missing_lsn = param.miss_lsn_;
         const char *buf;
         int64_t buf_size = 0;
-        palf::LogEntry log_entry;
+        const bool enable_logservice = ls_fetch_ctx.get_logservice_model();
+        ipalf::ILogEntry log_entry(enable_logservice);
         palf::LSN lsn;
-        logservice::ObRemoteLogpEntryIterator entry_iter(get_source_func, update_source_func);
+        logservice::ObRemoteILogEntryIterator entry_iter(get_source_func, update_source_func);
         resp->set_next_miss_lsn(missing_lsn);
 
         if (get_timestamp() > time_upper_limit) {
           is_timeout = true;
         } else if (OB_FAIL(entry_iter.init(tenant_id, ls_id, cur_scn, missing_lsn,
-            LSN(palf::LOG_MAX_LSN_VAL), buffer_pool, log_ext_handler, archive::ARCHIVE_FILE_DATA_BUF_SIZE))) {
+            LSN(palf::LOG_MAX_LSN_VAL), buffer_pool, log_ext_handler, archive::ARCHIVE_FILE_DATA_BUF_SIZE, enable_logservice))) {
           LOG_WARN("remote entry iter init failed", KR(ret));
         } else if (OB_FAIL(entry_iter.next(log_entry, lsn, buf, buf_size))) {
           retry_on_err =true;
@@ -731,7 +734,7 @@ int ObCDCMissLogHandler::fetch_miss_log_direct_(
             LOG_WARN("direct fetch missing_lsn not match", KR(ret), K(tenant_id), K(ls_id),
                 K(missing_lsn), K(lsn));
           } else {
-            const int64_t entry_size = log_entry.get_serialize_size();
+            const int64_t entry_size = log_entry.get_serialize_size(lsn);
             int64_t pos = 0;
             resp->inc_log_fetch_time(get_timestamp() - start_fetch_entry_ts);
 
@@ -744,7 +747,7 @@ int ObCDCMissLogHandler::fetch_miss_log_direct_(
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("remain buffer is null", KR(ret));
               }
-              else if (OB_FAIL(log_entry.serialize(remain_buf, remain_size, pos))) {
+              else if (OB_FAIL(log_entry.serialize(lsn, remain_buf, remain_size, pos))) {
                 LOG_WARN("missing LogEntry serialize failed", KR(ret), K(remain_size),
                     K(pos), K(missing_lsn), K(log_entry));
               }

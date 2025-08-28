@@ -44,7 +44,8 @@ public:
       const bool is_loading_data_dict_baseline_data,
       const ClientFetchingMode fetching_mode,
       const ObBackupPathString &archive_dest_str,
-      IObLogErrHandler &err_handler) = 0;
+      IObLogErrHandler &err_handler,
+      logservice::ObLogserviceModelInfo &logservice_model_info) = 0;
 
   /// recycle a LS
   /// mark LS deleted and begin recycle resource
@@ -99,7 +100,8 @@ public:
       const bool is_loading_data_dict_baseline_data,
       const ClientFetchingMode fetching_mode,
       const ObBackupPathString &archive_dest_str,
-      IObLogErrHandler &err_handler);
+      IObLogErrHandler &err_handler,
+      logservice::ObLogserviceModelInfo &logservice_model_info);
   virtual int recycle_ls(const logservice::TenantLSID &tls_id);
   virtual int remove_ls(const logservice::TenantLSID &tls_id);
   virtual int get_ls_fetch_ctx(const logservice::TenantLSID &tls_id, LSFetchCtx *&ctx);

@@ -3260,7 +3260,7 @@ int PalfHandleImpl::receive_batch_log(const common::ObAddr &server,
   auto get_file_end_lsn = [curr_lsn, buf_len] () { return curr_lsn + buf_len; };
   if (OB_FAIL(iterator.init(curr_lsn, get_file_end_lsn, &storage))) {
     PALF_LOG(ERROR, "init iterator failed", K(ret), KPC(this));
-  } else if (OB_FAIL(storage.init(curr_lsn))) {
+  } else if (OB_FAIL(storage.init(curr_lsn, false))) {
     PALF_LOG(ERROR, "init storage failed", K(ret), KPC(this));
   } else if (OB_FAIL(storage.append(buf, buf_len))) {
     PALF_LOG(ERROR, "storage append failed", K(ret), KPC(this));

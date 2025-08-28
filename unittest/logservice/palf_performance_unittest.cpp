@@ -401,7 +401,7 @@ TEST_F(TestPalfPerformance, append_log_random_size)
       max_block_id = min_block_id + 50;
       if (OB_FAIL(unittest_.ping_buf(min_block_id, max_block_id, buf))) {
         PALF_LOG(ERROR, "ping_buf failed", K(ret));
-      } else if (OB_FAIL(mem_storage.init(LSN(min_block_id * PALF_BLOCK_SIZE)))) {
+      } else if (OB_FAIL(mem_storage.init(LSN(min_block_id * PALF_BLOCK_SIZE), false))) {
         PALF_LOG(ERROR, "mem_storage init failed", K(ret));
       } else if (OB_FAIL(mem_storage.append(buf, PALF_BLOCK_SIZE * (max_block_id - min_block_id)))) {
         PALF_LOG(ERROR, "append failed", K(ret));

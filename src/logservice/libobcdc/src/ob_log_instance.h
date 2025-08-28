@@ -36,10 +36,14 @@
 #include "ob_cdc_global_info.h"                           // ObCDCGlobalInfo
 #include "ob_log_fetcher_dispatcher.h"                    // ObLogFetcherDispatcher
 #include "ob_log_meta_data_service.h"                     // ObLogMetaDataService
+#include "share/ls/ob_ls_log_stat_info.h"                 // ObLogserviceModelInfo
 
 namespace oceanbase
 {
-
+namespace logservice
+{
+class ObLogserviceModelInfo;
+}
 namespace common
 {
 namespace sqlclient
@@ -193,15 +197,16 @@ public:
   OB_INLINE const RefreshMode& get_refresh_mode() const { return refresh_mode_; }
   OB_INLINE bool is_tenant_sync_mode() const { return is_tenant_sync_mode_; }
 
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  int init_max_syslog_file_count_with_libpalf(logservice::ObLogserviceModelInfo &logservice_model_info);
+#endif
+
 public:
   friend class ObLogGlobalContext;
 
 private:
   void do_stop_(const char *stop_reason);
   int init_logger_();
-#ifdef OB_BUILD_SHARED_LOG_SERVICE
-  int init_max_syslog_file_count_with_libpalf_();
-#endif
   int dump_config_();
   int check_sync_mode_();
   int init_sys_var_for_generate_column_schema_();
