@@ -1409,8 +1409,8 @@ int PalfEnvImpl::init_log_io_worker_config_(const int log_writer_parallelism,
   config.io_worker_num_ = real_log_writer_parallelism;
   config.io_queue_capcity_ = MAX(default_min_io_queue_cap,
                                  tmp_upper_align_div(default_io_queue_cap, real_log_writer_parallelism));
-  config.batch_width_ = MAX(default_min_batch_width,
-                            tmp_upper_align_div(default_io_batch_width, real_log_writer_parallelism));
+  // for sys tenant, batch_width is 1                                 
+  config.batch_width_ = is_user_tenant(tenant_id) ? default_io_batch_width : 1;
   config.batch_depth_ = PALF_SLIDING_WINDOW_SIZE;
   PALF_LOG(INFO, "init_log_io_worker_config_ success", K(config), K(tenant_id), K(log_writer_parallelism));
   return ret;
