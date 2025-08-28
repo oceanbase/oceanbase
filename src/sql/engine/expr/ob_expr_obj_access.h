@@ -36,6 +36,7 @@ public:
   inline int init_param_idxs(int64_t param_idx_cnt) { return info_.param_idxs_.init(param_idx_cnt); }
 
   ExtraInfo &get_info() { return info_; }
+  virtual bool need_rt_ctx() const override { return true; }
 
   int calc_result(common::ObObj &result, common::ObIAllocator &alloc,
                   const common::ObObj *objs_stack, int64_t param_num,
@@ -55,6 +56,20 @@ public:
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprObjAccess);
 public:
+  class ObjAccessExprAllocatorCtx: public ObExprOperatorCtx
+  {
+  public:
+    ObjAccessExprAllocatorCtx()
+    : ObExprOperatorCtx(),
+      allocator_("ObjAccessAlloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
+      {}
+
+    ~ObjAccessExprAllocatorCtx();
+    common::ObIAllocator &get_allocator() { return allocator_; }
+    void reuse() { allocator_.reuse(); };
+  private:
+    ObArenaAllocator allocator_; // row level allocator
+  };
   struct ExtraInfo : public ObIExprExtraInfo
   {
     OB_UNIS_VERSION(1);
@@ -104,7 +119,8 @@ public:
              const ParamStore &param_store,
              const common::ObObj *params,
              int64_t param_num,
-             ObEvalCtx *ctx) const;
+             ObEvalCtx *ctx,
+             ObjAccessExprAllocatorCtx *obj_access_ctx = NULL) const;
 
     TO_STRING_KV(K_(get_attr_func),
                  K_(param_idxs),
@@ -125,6 +141,9 @@ public:
     common::ObFixedArray<pl::ObObjAccessIdx, common::ObIAllocator> access_idxs_;
   };
 private:
+  static int build_obj_access_ctx(const ObExpr &expr,
+                           ObExecContext &exec_ctx,
+                           ObjAccessExprAllocatorCtx *&obj_access_ctx);
   ExtraInfo info_;
 };
 
