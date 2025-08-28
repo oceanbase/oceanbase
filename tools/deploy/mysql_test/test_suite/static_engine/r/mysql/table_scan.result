@@ -322,14 +322,14 @@ Query Plan
 =======================================================================
 |ID|OPERATOR                           |NAME    |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------------
-|0 |PX COORDINATOR                     |        |1       |25          |
-|1 |└─EXCHANGE OUT DISTR               |:EX10001|1       |25          |
-|2 |  └─NESTED-LOOP OUTER JOIN         |        |1       |24          |
+|0 |PX COORDINATOR                     |        |1       |14          |
+|1 |└─EXCHANGE OUT DISTR               |:EX10001|1       |13          |
+|2 |  └─NESTED-LOOP OUTER JOIN         |        |1       |13          |
 |3 |    ├─EXCHANGE IN DISTR            |        |1       |3           |
 |4 |    │ └─EXCHANGE OUT DISTR (RANDOM)|:EX10000|1       |3           |
 |5 |    │   └─PX BLOCK ITERATOR        |        |1       |2           |
 |6 |    │     └─TABLE FULL SCAN        |t1      |1       |2           |
-|7 |    └─DISTRIBUTED TABLE RANGE SCAN |t2(idx1)|1       |21          |
+|7 |    └─DISTRIBUTED TABLE RANGE SCAN |t2(idx1)|1       |20          |
 =======================================================================
 Outputs & filters:
 -------------------------------------

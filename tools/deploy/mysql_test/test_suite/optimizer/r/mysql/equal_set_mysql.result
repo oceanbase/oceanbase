@@ -7,7 +7,7 @@ Query Plan
 ==================================================
 |ID|OPERATOR        |NAME  |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------
-|0 |TABLE RANGE SCAN|t1(k1)|1       |7           |
+|0 |TABLE RANGE SCAN|t1(k1)|1       |4           |
 ==================================================
 Outputs & filters:
 -------------------------------------
@@ -23,8 +23,8 @@ Query Plan
 ====================================================
 |ID|OPERATOR          |NAME  |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |MERGE GROUP BY    |      |1       |7           |
-|1 |└─TABLE RANGE SCAN|t1(k1)|1       |7           |
+|0 |MERGE GROUP BY    |      |1       |4           |
+|1 |└─TABLE RANGE SCAN|t1(k1)|1       |4           |
 ====================================================
 Outputs & filters:
 -------------------------------------
@@ -40,7 +40,7 @@ Query Plan
 ==================================================
 |ID|OPERATOR        |NAME  |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------
-|0 |TABLE RANGE SCAN|t1(k1)|1       |7           |
+|0 |TABLE RANGE SCAN|t1(k1)|1       |4           |
 ==================================================
 Outputs & filters:
 -------------------------------------
@@ -54,8 +54,8 @@ Query Plan
 ====================================================
 |ID|OPERATOR          |NAME  |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |MERGE GROUP BY    |      |1       |7           |
-|1 |└─TABLE RANGE SCAN|t1(k1)|1       |7           |
+|0 |MERGE GROUP BY    |      |1       |4           |
+|1 |└─TABLE RANGE SCAN|t1(k1)|1       |4           |
 ====================================================
 Outputs & filters:
 -------------------------------------
@@ -6273,20 +6273,23 @@ Outputs & filters:
       range_key([t1.a], [t1.b], [t1.c]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain select * from t1 where (t1.a, t1.b) in (select t2.a, t2.b from t2) and (t1.a, t1.b) in (select t3.a, t3.b from t3);
 Query Plan
-=================================================================
-|ID|OPERATOR                     |NAME    |EST.ROWS|EST.TIME(us)|
------------------------------------------------------------------
-|0 |PX COORDINATOR               |        |1       |136         |
-|1 |└─EXCHANGE OUT DISTR         |:EX10000|1       |135         |
-|2 |  └─PX PARTITION ITERATOR    |        |1       |134         |
-|3 |    └─NESTED-LOOP SEMI JOIN  |        |1       |134         |
-|4 |      ├─NESTED-LOOP JOIN     |        |1       |113         |
-|5 |      │ ├─SUBPLAN SCAN       |VIEW3   |1       |95          |
-|6 |      │ │ └─MERGE DISTINCT   |        |1       |95          |
-|7 |      │ │   └─TABLE FULL SCAN|t2      |1       |95          |
-|8 |      │ └─TABLE RANGE SCAN   |t1      |1       |436         |
-|9 |      └─TABLE RANGE SCAN     |t3      |1       |501         |
-=================================================================
+=====================================================================
+|ID|OPERATOR                         |NAME    |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------
+|0 |PX COORDINATOR                   |        |1       |136         |
+|1 |└─EXCHANGE OUT DISTR             |:EX10000|1       |135         |
+|2 |  └─PX PARTITION ITERATOR        |        |1       |134         |
+|3 |    └─NESTED-LOOP SEMI JOIN      |        |1       |134         |
+|4 |      ├─HASH JOIN                |        |1       |113         |
+|5 |      │ ├─NESTED-LOOP JOIN       |        |1       |113         |
+|6 |      │ │ ├─STATISTICS COLLECTOR |        |1       |95          |
+|7 |      │ │ │ └─SUBPLAN SCAN       |VIEW3   |1       |95          |
+|8 |      │ │ │   └─MERGE DISTINCT   |        |1       |95          |
+|9 |      │ │ │     └─TABLE FULL SCAN|t2      |1       |95          |
+|10|      │ │ └─TABLE RANGE SCAN     |t1_alias|1       |436         |
+|11|      │ └─TABLE FULL SCAN        |t1      |1       |95          |
+|12|      └─TABLE RANGE SCAN         |t3      |1       |501         |
+=====================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t1.d)]), filter(nil), rowset=16
@@ -6297,42 +6300,48 @@ Outputs & filters:
   3 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
       conds(nil), nl_params_([t1.a(:2)], [t1.b(:3)]), use_batch=false
   4 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
+      equal_conds([t1.a = VIEW3.VIEW1.a], [t1.b = VIEW3.VIEW1.b]), other_conds(nil)
+  5 - output([t1_alias.a], [t1_alias.b], [t1_alias.c], [t1_alias.d], [VIEW3.VIEW1.a], [VIEW3.VIEW1.b]), filter(nil), rowset=16
       conds(nil), nl_params_([VIEW3.VIEW1.a(:0)], [VIEW3.VIEW1.b(:1)]), use_batch=true
-  5 - output([VIEW3.VIEW1.a], [VIEW3.VIEW1.b]), filter(nil), rowset=16
+  6 - output([VIEW3.VIEW1.a], [VIEW3.VIEW1.b]), filter(nil), rowset=16
+      threshold: 0
+  7 - output([VIEW3.VIEW1.a], [VIEW3.VIEW1.b]), filter(nil), rowset=16
       access([VIEW3.VIEW1.a], [VIEW3.VIEW1.b])
-  6 - output([t2.a], [t2.b]), filter(nil), rowset=16
+  8 - output([t2.a], [t2.b]), filter(nil), rowset=16
       distinct([t2.a], [t2.b])
-  7 - output([t2.a], [t2.b]), filter(nil), rowset=16
+  9 - output([t2.a], [t2.b]), filter(nil), rowset=16
       access([t2.a], [t2.b]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t2.a], [t2.b], [t2.c]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
-  8 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
-      access([GROUP_ID], [t1.a], [t1.b], [t1.c], [t1.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
+ 10 - output([t1_alias.a], [t1_alias.b], [t1_alias.c], [t1_alias.d]), filter(nil), rowset=16
+      access([GROUP_ID], [t1_alias.a], [t1_alias.b], [t1_alias.c], [t1_alias.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false, 
-      range_key([t1.a], [t1.b], [t1.c]), range(MIN ; MAX), 
-      range_cond([t1.a = :0], [t1.b = :1])
-  9 - output(nil), filter(nil), rowset=16
+      range_key([t1_alias.a], [t1_alias.b], [t1_alias.c]), range(MIN ; MAX), 
+      range_cond([t1_alias.a = :0], [t1_alias.b = :1])
+ 11 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
+      access([t1.a], [t1.b], [t1.c], [t1.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.a], [t1.b], [t1.c]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+ 12 - output(nil), filter(nil), rowset=16
       access(nil), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t3.a], [t3.b], [t3.c]), range(MIN ; MAX), 
       range_cond([:2 = t3.a], [:3 = t3.b])
 explain select * from t1 where (t1.a, t1.b) in (select t2.a, t2.b from t2 where (t2.a, t2.b) in (select t3.a, t3.b from t3));
 Query Plan
-===================================================================
-|ID|OPERATOR                       |NAME    |EST.ROWS|EST.TIME(us)|
--------------------------------------------------------------------
-|0 |PX COORDINATOR                 |        |1       |119         |
-|1 |└─EXCHANGE OUT DISTR           |:EX10000|1       |118         |
-|2 |  └─PX PARTITION ITERATOR      |        |1       |117         |
-|3 |    └─NESTED-LOOP SEMI JOIN    |        |1       |117         |
-|4 |      ├─TABLE FULL SCAN        |t1      |1       |95          |
-|5 |      └─SUBPLAN SCAN           |VIEW2   |1       |522         |
-|6 |        └─NESTED-LOOP JOIN     |        |1       |522         |
-|7 |          ├─SUBPLAN SCAN       |VIEW3   |1       |501         |
-|8 |          │ └─MERGE DISTINCT   |        |1       |501         |
-|9 |          │   └─TABLE FULL SCAN|t3      |1       |501         |
-|10|          └─TABLE RANGE SCAN   |t2      |1       |501         |
-===================================================================
+====================================================================
+|ID|OPERATOR                        |NAME    |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------------
+|0 |PX COORDINATOR                  |        |1       |118         |
+|1 |└─EXCHANGE OUT DISTR            |:EX10000|1       |117         |
+|2 |  └─PX PARTITION ITERATOR       |        |1       |116         |
+|3 |    └─NESTED-LOOP SEMI JOIN     |        |1       |116         |
+|4 |      ├─TABLE FULL SCAN         |t1      |1       |95          |
+|5 |      └─SUBPLAN SCAN            |VIEW2   |1       |501         |
+|6 |        └─NESTED-LOOP SEMI JOIN |        |1       |501         |
+|7 |          ├─TABLE RANGE SCAN    |t2      |1       |501         |
+|8 |          └─TABLE RANGE SCAN    |t3      |1       |501         |
+====================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t1.d)]), filter(nil), rowset=16
@@ -6349,20 +6358,17 @@ Outputs & filters:
   5 - output(nil), filter(nil), rowset=16
       access(nil)
   6 - output([t2.a], [t2.b]), filter(nil), rowset=16
-      conds(nil), nl_params_([VIEW3.VIEW1.a(:4)], [VIEW3.VIEW1.b(:5)]), use_batch=false
-  7 - output([VIEW3.VIEW1.a], [VIEW3.VIEW1.b]), filter(nil), rowset=16
-      access([VIEW3.VIEW1.a], [VIEW3.VIEW1.b])
-  8 - output([t3.a], [t3.b]), filter(nil), rowset=16
-      distinct([t3.a], [t3.b])
-  9 - output([t3.a], [t3.b]), filter(nil), rowset=16
-      access([t3.a], [t3.b]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
-      is_index_back=false, is_global_index=false, 
-      range_key([t3.a], [t3.b], [t3.c]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
- 10 - output([t2.a], [t2.b]), filter(nil), rowset=16
+      conds(nil), nl_params_([t2.a(:4)], [t2.b(:5)]), use_batch=false
+  7 - output([t2.a], [t2.b]), filter(nil), rowset=16
       access([t2.a], [t2.b]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false, 
-      range_key([t2.a], [t2.b], [t2.c]), range(MIN ; MAX), 
-      range_cond([:2 = t2.a], [:3 = t2.b], [t2.a = :4], [t2.b = :5])
+      range_key([t2.a], [t2.b], [t2.c]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true, 
+      range_cond([:2 = t2.a], [:3 = t2.b])
+  8 - output(nil), filter(nil), rowset=16
+      access(nil), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
+      is_index_back=false, is_global_index=false, 
+      range_key([t3.a], [t3.b], [t3.c]), range(MIN ; MAX), 
+      range_cond([:4 = t3.a], [:5 = t3.b])
 drop table if exists t1, t2, t3;
 create table t1(a int, b int) partition by hash(a+1) partitions 5;
 create table t2(a int, b int) partition by hash(a+1) partitions 5;
@@ -6662,11 +6668,11 @@ Query Plan
 =====================================================================
 |ID|OPERATOR                         |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------------
-|0 |PX COORDINATOR                   |        |2       |25          |
-|1 |└─EXCHANGE OUT DISTR             |:EX10001|2       |25          |
-|2 |  └─HASH UNION DISTINCT          |        |2       |24          |
-|3 |    ├─EXCHANGE IN DISTR          |        |1       |5           |
-|4 |    │ └─EXCHANGE OUT DISTR (PKEY)|:EX10000|1       |5           |
+|0 |PX COORDINATOR                   |        |2       |24          |
+|1 |└─EXCHANGE OUT DISTR             |:EX10001|2       |24          |
+|2 |  └─HASH UNION DISTINCT          |        |2       |23          |
+|3 |    ├─EXCHANGE IN DISTR          |        |1       |4           |
+|4 |    │ └─EXCHANGE OUT DISTR (PKEY)|:EX10000|1       |4           |
 |5 |    │   └─TABLE FULL SCAN        |t1      |1       |4           |
 |6 |    └─PX PARTITION ITERATOR      |        |1       |19          |
 |7 |      └─TABLE FULL SCAN          |t2      |1       |19          |
@@ -6695,13 +6701,13 @@ Query Plan
 =====================================================================
 |ID|OPERATOR                         |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------------
-|0 |PX COORDINATOR                   |        |2       |25          |
-|1 |└─EXCHANGE OUT DISTR             |:EX10001|2       |25          |
-|2 |  └─HASH UNION DISTINCT          |        |2       |24          |
+|0 |PX COORDINATOR                   |        |2       |24          |
+|1 |└─EXCHANGE OUT DISTR             |:EX10001|2       |24          |
+|2 |  └─HASH UNION DISTINCT          |        |2       |23          |
 |3 |    ├─PX PARTITION ITERATOR      |        |1       |19          |
 |4 |    │ └─TABLE FULL SCAN          |t1      |1       |19          |
-|5 |    └─EXCHANGE IN DISTR          |        |1       |5           |
-|6 |      └─EXCHANGE OUT DISTR (PKEY)|:EX10000|1       |5           |
+|5 |    └─EXCHANGE IN DISTR          |        |1       |4           |
+|6 |      └─EXCHANGE OUT DISTR (PKEY)|:EX10000|1       |4           |
 |7 |        └─TABLE FULL SCAN        |t2      |1       |4           |
 =====================================================================
 Outputs & filters:
@@ -6728,7 +6734,7 @@ Query Plan
 ====================================================
 |ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |MERGE UNION DISTINCT|    |2       |8           |
+|0 |MERGE UNION DISTINCT|    |1       |8           |
 |1 |├─TABLE FULL SCAN   |t1  |1       |4           |
 |2 |└─TABLE FULL SCAN   |t2  |1       |4           |
 ====================================================
@@ -6886,8 +6892,8 @@ Query Plan
 =================================================================
 |ID|OPERATOR                     |NAME    |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------
-|0 |HASH DISTINCT                |        |3       |28          |
-|1 |└─UNION ALL                  |        |3       |28          |
+|0 |HASH DISTINCT                |        |2       |28          |
+|1 |└─UNION ALL                  |        |2       |28          |
 |2 |  ├─TABLE FULL SCAN          |t1      |1       |4           |
 |3 |  ├─TABLE FULL SCAN          |t2      |1       |4           |
 |4 |  └─PX COORDINATOR           |        |1       |20          |
@@ -7548,7 +7554,7 @@ Query Plan
 =================================================
 |ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |UNION ALL        |    |2       |8           |
+|0 |UNION ALL        |    |1       |8           |
 |1 |├─TABLE FULL SCAN|t1  |1       |4           |
 |2 |└─TABLE FULL SCAN|t2  |1       |4           |
 =================================================
@@ -7689,7 +7695,7 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                   |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |UNION ALL                  |        |3       |28          |
+|0 |UNION ALL                  |        |2       |28          |
 |1 |├─TABLE FULL SCAN          |t1      |1       |4           |
 |2 |├─TABLE FULL SCAN          |t2      |1       |4           |
 |3 |└─PX COORDINATOR           |        |1       |20          |
@@ -8373,12 +8379,12 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                   |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |HASH INTERSECT DISTINCT    |        |1       |28          |
+|0 |HASH INTERSECT DISTINCT    |        |1       |27          |
 |1 |├─MERGE INTERSECT DISTINCT |        |1       |8           |
 |2 |│ ├─TABLE FULL SCAN        |t1      |1       |4           |
 |3 |│ └─TABLE FULL SCAN        |t2      |1       |4           |
-|4 |└─PX COORDINATOR           |        |1       |20          |
-|5 |  └─EXCHANGE OUT DISTR     |:EX10000|1       |20          |
+|4 |└─PX COORDINATOR           |        |1       |19          |
+|5 |  └─EXCHANGE OUT DISTR     |:EX10000|1       |19          |
 |6 |    └─PX PARTITION ITERATOR|        |1       |19          |
 |7 |      └─TABLE FULL SCAN    |t3      |1       |19          |
 ===============================================================
@@ -8408,12 +8414,12 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                   |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |HASH INTERSECT DISTINCT    |        |1       |28          |
+|0 |HASH INTERSECT DISTINCT    |        |1       |27          |
 |1 |├─MERGE INTERSECT DISTINCT |        |1       |8           |
 |2 |│ ├─TABLE FULL SCAN        |t1      |1       |4           |
 |3 |│ └─TABLE FULL SCAN        |t2      |1       |4           |
-|4 |└─PX COORDINATOR           |        |1       |20          |
-|5 |  └─EXCHANGE OUT DISTR     |:EX10000|1       |20          |
+|4 |└─PX COORDINATOR           |        |1       |19          |
+|5 |  └─EXCHANGE OUT DISTR     |:EX10000|1       |19          |
 |6 |    └─PX PARTITION ITERATOR|        |1       |19          |
 |7 |      └─TABLE FULL SCAN    |t3      |1       |19          |
 ===============================================================
@@ -8443,12 +8449,12 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                   |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |HASH INTERSECT DISTINCT    |        |1       |28          |
+|0 |HASH INTERSECT DISTINCT    |        |1       |27          |
 |1 |├─MERGE INTERSECT DISTINCT |        |1       |8           |
 |2 |│ ├─TABLE FULL SCAN        |t1      |1       |4           |
 |3 |│ └─TABLE FULL SCAN        |t2      |1       |4           |
-|4 |└─PX COORDINATOR           |        |1       |20          |
-|5 |  └─EXCHANGE OUT DISTR     |:EX10000|1       |20          |
+|4 |└─PX COORDINATOR           |        |1       |19          |
+|5 |  └─EXCHANGE OUT DISTR     |:EX10000|1       |19          |
 |6 |    └─PX PARTITION ITERATOR|        |1       |19          |
 |7 |      └─TABLE FULL SCAN    |t3      |1       |19          |
 ===============================================================
@@ -8697,14 +8703,14 @@ Query Plan
 ===================================================================
 |ID|OPERATOR                       |NAME    |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------
-|0 |NESTED-LOOP JOIN CARTESIAN     |        |1       |29          |
-|1 |├─SUBPLAN SCAN                 |t4      |1       |24          |
-|2 |│ └─HASH INTERSECT DISTINCT    |        |1       |24          |
+|0 |NESTED-LOOP JOIN CARTESIAN     |        |1       |23          |
+|1 |├─SUBPLAN SCAN                 |t4      |1       |23          |
+|2 |│ └─HASH INTERSECT DISTINCT    |        |1       |23          |
 |3 |│   ├─MERGE INTERSECT DISTINCT |        |1       |4           |
 |4 |│   │ ├─TABLE FULL SCAN        |t1      |1       |4           |
 |5 |│   │ └─EXPRESSION             |        |1       |1           |
-|6 |│   └─PX COORDINATOR           |        |1       |20          |
-|7 |│     └─EXCHANGE OUT DISTR     |:EX10000|1       |20          |
+|6 |│   └─PX COORDINATOR           |        |1       |19          |
+|7 |│     └─EXCHANGE OUT DISTR     |:EX10000|1       |19          |
 |8 |│       └─PX PARTITION ITERATOR|        |1       |19          |
 |9 |│         └─TABLE FULL SCAN    |t3      |1       |19          |
 |10|└─TABLE FULL SCAN              |t5      |1       |4           |
@@ -8741,14 +8747,14 @@ Query Plan
 ===================================================================
 |ID|OPERATOR                       |NAME    |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------
-|0 |NESTED-LOOP JOIN CARTESIAN     |        |1       |29          |
-|1 |├─SUBPLAN SCAN                 |t3      |1       |24          |
-|2 |│ └─HASH INTERSECT DISTINCT    |        |1       |24          |
+|0 |NESTED-LOOP JOIN CARTESIAN     |        |1       |23          |
+|1 |├─SUBPLAN SCAN                 |t3      |1       |23          |
+|2 |│ └─HASH INTERSECT DISTINCT    |        |1       |23          |
 |3 |│   ├─MERGE INTERSECT DISTINCT |        |1       |4           |
 |4 |│   │ ├─TABLE FULL SCAN        |t1      |1       |4           |
 |5 |│   │ └─EXPRESSION             |        |1       |1           |
-|6 |│   └─PX COORDINATOR           |        |1       |20          |
-|7 |│     └─EXCHANGE OUT DISTR     |:EX10000|1       |20          |
+|6 |│   └─PX COORDINATOR           |        |1       |19          |
+|7 |│     └─EXCHANGE OUT DISTR     |:EX10000|1       |19          |
 |8 |│       └─PX PARTITION ITERATOR|        |1       |19          |
 |9 |│         └─TABLE FULL SCAN    |t2      |1       |19          |
 |10|└─TABLE FULL SCAN              |t4      |1       |4           |
@@ -8785,7 +8791,7 @@ Query Plan
 ==============================================================
 |ID|OPERATOR                      |NAME|EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------
-|0 |NESTED-LOOP JOIN CARTESIAN    |    |1       |13          |
+|0 |NESTED-LOOP JOIN CARTESIAN    |    |1       |8           |
 |1 |├─SUBPLAN SCAN                |t3  |1       |8           |
 |2 |│ └─MERGE INTERSECT DISTINCT  |    |1       |8           |
 |3 |│   ├─MERGE INTERSECT DISTINCT|    |1       |8           |
@@ -8916,13 +8922,13 @@ Query Plan
 =====================================================================
 |ID|OPERATOR                         |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------------
-|0 |PX COORDINATOR                   |        |1       |25          |
+|0 |PX COORDINATOR                   |        |1       |24          |
 |1 |└─EXCHANGE OUT DISTR             |:EX10001|1       |24          |
-|2 |  └─HASH EXCEPT DISTINCT         |        |1       |24          |
+|2 |  └─HASH EXCEPT DISTINCT         |        |1       |23          |
 |3 |    ├─PX PARTITION ITERATOR      |        |1       |19          |
 |4 |    │ └─TABLE FULL SCAN          |t1      |1       |19          |
-|5 |    └─EXCHANGE IN DISTR          |        |1       |5           |
-|6 |      └─EXCHANGE OUT DISTR (PKEY)|:EX10000|1       |5           |
+|5 |    └─EXCHANGE IN DISTR          |        |1       |4           |
+|6 |      └─EXCHANGE OUT DISTR (PKEY)|:EX10000|1       |4           |
 |7 |        └─TABLE FULL SCAN        |t2      |1       |4           |
 =====================================================================
 Outputs & filters:
@@ -9014,12 +9020,12 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                   |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |HASH EXCEPT DISTINCT       |        |1       |28          |
+|0 |HASH EXCEPT DISTINCT       |        |1       |27          |
 |1 |├─MERGE EXCEPT DISTINCT    |        |1       |8           |
 |2 |│ ├─TABLE FULL SCAN        |t1      |1       |4           |
 |3 |│ └─TABLE FULL SCAN        |t2      |1       |4           |
-|4 |└─PX COORDINATOR           |        |1       |20          |
-|5 |  └─EXCHANGE OUT DISTR     |:EX10000|1       |20          |
+|4 |└─PX COORDINATOR           |        |1       |19          |
+|5 |  └─EXCHANGE OUT DISTR     |:EX10000|1       |19          |
 |6 |    └─PX PARTITION ITERATOR|        |1       |19          |
 |7 |      └─TABLE FULL SCAN    |t3      |1       |19          |
 ===============================================================
@@ -9051,12 +9057,12 @@ Query Plan
 -----------------------------------------------------------------------
 |0 |PX COORDINATOR                     |        |1       |44          |
 |1 |└─EXCHANGE OUT DISTR               |:EX10002|1       |44          |
-|2 |  └─HASH EXCEPT DISTINCT           |        |1       |44          |
-|3 |    ├─HASH EXCEPT DISTINCT         |        |1       |24          |
+|2 |  └─HASH EXCEPT DISTINCT           |        |1       |43          |
+|3 |    ├─HASH EXCEPT DISTINCT         |        |1       |23          |
 |4 |    │ ├─PX PARTITION ITERATOR      |        |1       |19          |
 |5 |    │ │ └─TABLE FULL SCAN          |t1      |1       |19          |
-|6 |    │ └─EXCHANGE IN DISTR          |        |1       |5           |
-|7 |    │   └─EXCHANGE OUT DISTR (PKEY)|:EX10000|1       |5           |
+|6 |    │ └─EXCHANGE IN DISTR          |        |1       |4           |
+|7 |    │   └─EXCHANGE OUT DISTR (PKEY)|:EX10000|1       |4           |
 |8 |    │     └─TABLE FULL SCAN        |t2      |1       |4           |
 |9 |    └─EXCHANGE IN DISTR            |        |1       |20          |
 |10|      └─EXCHANGE OUT DISTR (PKEY)  |:EX10001|1       |20          |
@@ -9097,12 +9103,12 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                   |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |HASH EXCEPT DISTINCT       |        |1       |28          |
+|0 |HASH EXCEPT DISTINCT       |        |1       |27          |
 |1 |├─MERGE EXCEPT DISTINCT    |        |1       |8           |
 |2 |│ ├─TABLE FULL SCAN        |t1      |1       |4           |
 |3 |│ └─TABLE FULL SCAN        |t2      |1       |4           |
-|4 |└─PX COORDINATOR           |        |1       |20          |
-|5 |  └─EXCHANGE OUT DISTR     |:EX10000|1       |20          |
+|4 |└─PX COORDINATOR           |        |1       |19          |
+|5 |  └─EXCHANGE OUT DISTR     |:EX10000|1       |19          |
 |6 |    └─PX PARTITION ITERATOR|        |1       |19          |
 |7 |      └─TABLE FULL SCAN    |t3      |1       |19          |
 ===============================================================
@@ -9440,14 +9446,14 @@ Query Plan
 ===================================================================
 |ID|OPERATOR                       |NAME    |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------
-|0 |NESTED-LOOP JOIN CARTESIAN     |        |1       |29          |
+|0 |NESTED-LOOP JOIN CARTESIAN     |        |1       |28          |
 |1 |├─SUBPLAN SCAN                 |t3      |1       |24          |
 |2 |│ └─HASH EXCEPT DISTINCT       |        |1       |24          |
 |3 |│   ├─MERGE EXCEPT DISTINCT    |        |1       |4           |
 |4 |│   │ ├─EXPRESSION             |        |1       |1           |
 |5 |│   │ └─TABLE FULL SCAN        |t1      |1       |4           |
-|6 |│   └─PX COORDINATOR           |        |1       |20          |
-|7 |│     └─EXCHANGE OUT DISTR     |:EX10000|1       |20          |
+|6 |│   └─PX COORDINATOR           |        |1       |19          |
+|7 |│     └─EXCHANGE OUT DISTR     |:EX10000|1       |19          |
 |8 |│       └─PX PARTITION ITERATOR|        |1       |19          |
 |9 |│         └─TABLE FULL SCAN    |t2      |1       |19          |
 |10|└─TABLE FULL SCAN              |t4      |1       |4           |
