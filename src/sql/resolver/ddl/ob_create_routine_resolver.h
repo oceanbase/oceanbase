@@ -57,7 +57,7 @@ public:
   
   virtual int resolve(const ParseNode &parse_tree);
   virtual int resolve_impl(const ParseNode &parse_tree, obrpc::ObCreateRoutineArg *crt_routine_arg) = 0;
-  static int check_external_udf_version(uint64_t tenant_id, bool is_py);
+  static int check_external_udf_version(uint64_t tenant_id, bool is_py, bool is_af_or_tf = false);
 protected:
   int resolve_sp_body(const ParseNode *parse_node, share::schema::ObRoutineInfo &routine_info);
   int resolve_external_udf(const ParseNode &parse_tree, obrpc::ObCreateRoutineArg &crt_routine_arg);
@@ -85,6 +85,8 @@ private:
   int set_routine_param(const ObIArray<pl::ObObjAccessIdx> &access_idxs,
                         share::schema::ObRoutineParam &routine_param);
   int resolve_aggregate_body(const ParseNode *parse_node, share::schema::ObRoutineInfo &routine_info);
+
+  int resolve_external_routine_type(const ObString &udf_type, const ObString &file, share::schema::ObRoutineInfo &routine_info);
 };
 
 class ObCreateProcedureResolver: public ObCreateRoutineResolver

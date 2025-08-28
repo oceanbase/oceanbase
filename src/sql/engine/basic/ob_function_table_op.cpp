@@ -15,6 +15,7 @@
 #include "sql/engine/basic/ob_function_table_op.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "sql/engine/expr/ob_expr_udf/ob_expr_udf.h"
 
 
 namespace oceanbase
@@ -35,6 +36,8 @@ int ObFunctionTableOp::inner_open()
     LOG_WARN("value expr is not init", K(ret));
   } else if (ObExtendType == MY_SPEC.value_expr_->datum_meta_.type_) {
     next_row_func_ = &ObFunctionTableOp::inner_get_next_row_udf;
+  } else if (OB_FAIL(reset_udtf_ctx())) {
+    LOG_WARN("failed to reset udtf ctx", K(ret));
   } else {
     next_row_func_ = &ObFunctionTableOp::inner_get_next_row_sys_func;
   }
@@ -46,6 +49,8 @@ int ObFunctionTableOp::inner_rescan()
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObOperator::inner_rescan())) {
     LOG_WARN("failed to inner rescan", K(ret));
+  } else if (OB_FAIL(reset_udtf_ctx())) {
+    LOG_WARN("failed to reset udtf ctx", K(ret));
   } else {
     node_idx_ = 0;
     if (MY_SPEC.has_correlated_expr_) {
@@ -241,6 +246,40 @@ int ObFunctionTableOp::inner_get_next_row_sys_func()
     MY_SPEC.column_exprs_.at(0)->locate_datum_for_write(eval_ctx_).set_datum(*value);
     MY_SPEC.column_exprs_.at(0)->set_evaluated_projected(eval_ctx_);
   }
+  return ret;
+}
+
+int ObFunctionTableOp::reset_udtf_ctx()
+{
+  int ret = OB_SUCCESS;
+
+  ObIExprExtraInfo *extra_info = nullptr;
+
+  CK (OB_NOT_NULL(MY_SPEC.value_expr_));
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (FALSE_IT(extra_info = MY_SPEC.value_expr_->extra_info_)) {
+    // unreachable
+  } else if (OB_NOT_NULL(extra_info)
+        && T_FUN_UDF == extra_info->type_
+        && static_cast<ObExprUDFInfo*>(extra_info)->is_mysql_udtf_) {
+    ObExprUDTFCtx *udtf_ctx = nullptr;
+
+    if (OB_ISNULL(udtf_ctx = static_cast<ObExprUDTFCtx *>(get_exec_ctx().get_expr_op_ctx(MY_SPEC.value_expr_->expr_ctx_id_)))) {
+      if (OB_FAIL(get_exec_ctx().create_expr_op_ctx(MY_SPEC.value_expr_->expr_ctx_id_, udtf_ctx))) {
+        LOG_WARN("failed to create expr op ctx", K(ret), K(MY_SPEC.value_expr_->expr_ctx_id_));
+      } else if (OB_ISNULL(udtf_ctx)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected NULL udtf_ctx", K(ret), K(MY_SPEC.value_expr_->expr_ctx_id_));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      udtf_ctx->reset();
+    }
+  }
+
   return ret;
 }
 

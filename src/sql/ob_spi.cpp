@@ -9820,8 +9820,8 @@ int ObSPIService::spi_pl_profiler_before_record(pl::ObPLExecCtx *ctx, int64_t li
   CK (OB_NOT_NULL(ctx->exec_ctx_));
   CK (OB_NOT_NULL(session = ctx->exec_ctx_->get_my_session()));
 
-  CK (ctx->pl_ctx_);
-  CK (curr_state = ctx->pl_ctx_->get_current_state());
+  CK (OB_NOT_NULL(ctx->pl_ctx_));
+  CK (OB_NOT_NULL(curr_state = ctx->pl_ctx_->get_current_state()));
 
   CK (OB_LIKELY(line > 0));
   CK (OB_LIKELY(level >= 0));

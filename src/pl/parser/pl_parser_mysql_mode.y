@@ -1360,6 +1360,14 @@ create_function_stmt:
       merge_nodes(property_list, parse_ctx->mem_pool_, T_UDF_PROPERTY_LIST, $13);
       check_ptr(property_list);
 
+      if (NULL != $7) {
+        const char *param_str = parse_ctx->stmt_str_ + @6.first_column + 1;
+        int32_t param_len = @8.last_column - @6.last_column - 1;
+        $7->str_value_ = parse_strndup(param_str, param_len, parse_ctx->mem_pool_);
+        check_ptr($7->str_value_);
+        $7->str_len_ = param_len;
+      }
+
       malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SF_CREATE, 7, $2, $5, $7, $10, NULL, body_node, property_list);
       $$->value_ = $4;
     }

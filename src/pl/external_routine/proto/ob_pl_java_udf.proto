@@ -1,0 +1,65 @@
+syntax = "proto3";
+
+package ob_pl.java_udf;
+
+option optimize_for = SPEED;
+
+option java_package = "com.oceanbase.internal";
+option java_outer_classname = "ObJavaUDFArg";
+
+message BatchedArgs {
+  fixed64 batch_size = 1;
+  repeated Values args = 2;
+}
+
+message Values {
+  bytes null_map = 1;
+
+  oneof values {
+    ByteValues byte_values = 2;
+    ShortValues short_values = 3;
+    IntValues int_values = 4;
+    LongValues long_values = 5;
+    FloatValues float_values = 6;
+    DoubleValues double_values = 7;
+    BigDecimalValues big_decimal_values = 8;
+    StringValues string_values = 9;
+    ByteBufferValues byte_buffer_values = 10;
+  }
+}
+
+message ByteValues {
+  bytes value = 1;
+}
+
+message ShortValues {
+  repeated sfixed32 value = 1;
+}
+
+message IntValues {
+  repeated sfixed32 value = 1;
+}
+
+message LongValues {
+  repeated sfixed64 value = 1;
+}
+
+message FloatValues {
+  repeated float value = 1;
+}
+
+message DoubleValues {
+  repeated double value = 1;
+}
+
+message BigDecimalValues {
+  repeated bytes value = 1;
+}
+
+message StringValues {
+  repeated bytes value = 1;
+}
+
+message ByteBufferValues {
+  repeated bytes value = 1;
+}

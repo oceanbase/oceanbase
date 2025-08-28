@@ -87,68 +87,73 @@ int ObResolverUtils::get_all_function_table_column_names(const TableItem &table_
   CK (OB_NOT_NULL(package_guard));
   CK (OB_LIKELY(table_item.is_function_table()));
   CK (OB_NOT_NULL(table_expr = table_item.function_table_expr_));
-  CK (table_expr->get_udt_id() != OB_INVALID_ID);
 
-  CK (OB_NOT_NULL(params.schema_checker_));
-  OZ (ObResolverUtils::get_user_type(
-    params.allocator_, params.session_info_, params.sql_proxy_,
-    params.schema_checker_->get_schema_guard(),
-    *package_guard,
-    table_expr->get_udt_id(), user_type));
-  CK (OB_NOT_NULL(user_type));
-  if (OB_SUCC(ret) && !user_type->is_collection_type()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("function table get udf with return type not table type",
-             K(ret), K(user_type->is_collection_type()));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "user define type is not collation type in function table");
-  }
-  const ObCollectionType *coll_type = NULL;
-  CK (OB_NOT_NULL(coll_type = static_cast<const ObCollectionType*>(user_type)));
-  if (OB_SUCC(ret)
-      && !coll_type->get_element_type().is_obj_type()
-      && !coll_type->get_element_type().is_record_type()
-      && !coll_type->get_element_type().is_collection_type()
-      && !(coll_type->get_element_type().is_opaque_type()
-            && coll_type->get_element_type().get_user_type_id() == T_OBJ_XML)) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("not suppoert type in table function", K(ret), KPC(coll_type));
-    ObString err;
-    err.write(coll_type->get_name().ptr(), coll_type->get_name().length());
-    err.write(" collation type in table function\0", sizeof(" collation type in table function\0"));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, err.ptr());
-  }
-  if (OB_SUCC(ret) && (coll_type->get_element_type().is_obj_type()
-                      || coll_type->get_element_type().is_opaque_type()
-                      || coll_type->get_element_type().is_collection_type())) {
-    OZ (column_names.push_back(ObString("COLUMN_VALUE")));
-  }
-  if (OB_SUCC(ret) && coll_type->get_element_type().is_record_type()) {
-    const ObRecordType *record_type = NULL;
-    const ObUserDefinedType *user_type = NULL;
+  if (OB_SUCC(ret) && table_expr->get_result_type().is_ext()) {
+    CK (table_expr->get_udt_id() != OB_INVALID_ID);
+
     CK (OB_NOT_NULL(params.schema_checker_));
     OZ (ObResolverUtils::get_user_type(
       params.allocator_, params.session_info_, params.sql_proxy_,
       params.schema_checker_->get_schema_guard(),
       *package_guard,
-      coll_type->get_element_type().get_user_type_id(), user_type));
+      table_expr->get_udt_id(), user_type));
     CK (OB_NOT_NULL(user_type));
-    CK (user_type->is_record_type());
-    CK (OB_NOT_NULL(record_type = static_cast<const ObRecordType *>(user_type)));
-    for (int64_t i = 0; OB_SUCC(ret) && i < record_type->get_member_count(); ++i) {
-      ObString name;
-      const ObString *member_name = record_type->get_record_member_name(i);
-      CK (OB_NOT_NULL(member_name));
-
-      if (OB_FAIL(ret)) {
-        // do nothing
-      } else if (PL_TYPE_PACKAGE == user_type->get_type_from()) {
-        OZ (ob_write_string(*params.allocator_, *member_name, name));
-      } else {
-        name = *member_name;
-      }
-
-      OZ (column_names.push_back(name));
+    if (OB_SUCC(ret) && !user_type->is_collection_type()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("function table get udf with return type not table type",
+              K(ret), K(user_type->is_collection_type()));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "user define type is not collation type in function table");
     }
+    const ObCollectionType *coll_type = NULL;
+    CK (OB_NOT_NULL(coll_type = static_cast<const ObCollectionType*>(user_type)));
+    if (OB_SUCC(ret)
+        && !coll_type->get_element_type().is_obj_type()
+        && !coll_type->get_element_type().is_record_type()
+        && !coll_type->get_element_type().is_collection_type()
+        && !(coll_type->get_element_type().is_opaque_type()
+              && coll_type->get_element_type().get_user_type_id() == T_OBJ_XML)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not suppoert type in table function", K(ret), KPC(coll_type));
+      ObString err;
+      err.write(coll_type->get_name().ptr(), coll_type->get_name().length());
+      err.write(" collation type in table function\0", sizeof(" collation type in table function\0"));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, err.ptr());
+    }
+    if (OB_SUCC(ret) && (coll_type->get_element_type().is_obj_type()
+                        || coll_type->get_element_type().is_opaque_type()
+                        || coll_type->get_element_type().is_collection_type())) {
+      OZ (column_names.push_back(ObString("COLUMN_VALUE")));
+    }
+    if (OB_SUCC(ret) && coll_type->get_element_type().is_record_type()) {
+      const ObRecordType *record_type = NULL;
+      const ObUserDefinedType *user_type = NULL;
+      CK (OB_NOT_NULL(params.schema_checker_));
+      OZ (ObResolverUtils::get_user_type(
+        params.allocator_, params.session_info_, params.sql_proxy_,
+        params.schema_checker_->get_schema_guard(),
+        *package_guard,
+        coll_type->get_element_type().get_user_type_id(), user_type));
+      CK (OB_NOT_NULL(user_type));
+      CK (user_type->is_record_type());
+      CK (OB_NOT_NULL(record_type = static_cast<const ObRecordType *>(user_type)));
+      for (int64_t i = 0; OB_SUCC(ret) && i < record_type->get_member_count(); ++i) {
+        ObString name;
+        const ObString *member_name = record_type->get_record_member_name(i);
+        CK (OB_NOT_NULL(member_name));
+
+        if (OB_FAIL(ret)) {
+          // do nothing
+        } else if (PL_TYPE_PACKAGE == user_type->get_type_from()) {
+          OZ (ob_write_string(*params.allocator_, *member_name, name));
+        } else {
+          name = *member_name;
+        }
+
+        OZ (column_names.push_back(name));
+      }
+    }
+  } else {
+    OZ (column_names.push_back(ObString("COLUMN_VALUE")));
   }
   return ret;
 }
@@ -3911,7 +3916,11 @@ bool ObResolverUtils::is_expr_can_be_used_in_table_function(const ObRawExpr &exp
   } else if (T_FUN_SYS_GENERATOR == expr.get_expr_type()) {
     // for generator(N) stream function
     bret = true;
+  } else if (ObRawExpr::EXPR_UDF == expr.get_expr_class()) {
+    const ObUDFRawExpr *udf = static_cast<const ObUDFRawExpr*>(&expr);
+    bret = udf->is_mysql_udtf();
   }
+
   return bret;
 }
 

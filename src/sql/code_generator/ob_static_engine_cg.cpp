@@ -8033,8 +8033,49 @@ int ObStaticEngineCG::fill_aggr_info(ObAggFunRawExpr &raw_expr,
         LOG_WARN("failed to init pl_agg_udf_params_type_", K(ret));
       } else {
         ObUDFRawExpr *udf_expr = static_cast<ObUDFRawExpr *>(raw_expr.get_pl_agg_udf_expr());
-        aggr_info.pl_agg_udf_type_id_ = udf_expr->get_type_id();
+        aggr_info.external_routine_type_ = udf_expr->get_external_routine_type();
         aggr_info.pl_result_type_ = raw_expr.get_result_type();
+
+        if (ObExternalRoutineType::INTERNAL_ROUTINE == aggr_info.external_routine_type_) {
+          aggr_info.pl_agg_udf_type_id_ = udf_expr->get_type_id();
+        } else {  // External UDAF
+          ObSchemaGetterGuard *schema_guard = nullptr;
+          const ObRoutineInfo *routine_info = nullptr;
+          uint64_t tenant_id = OB_INVALID_TENANT_ID;
+
+          // UDAF must be standalone udf
+          CK (udf_expr->is_standalone_udf());
+
+          CK (OB_NOT_NULL(aggr_info.alloc_));
+          CK (OB_NOT_NULL(opt_ctx_));
+          CK (OB_NOT_NULL(schema_guard = opt_ctx_->get_schema_guard()));
+
+          if (OB_FAIL(ret)) {
+            // do nothing
+          } else if (FALSE_IT(tenant_id = pl::get_tenant_id_by_object_id(udf_expr->get_udf_id()))) {
+            // unreachable
+          } else if (OB_FAIL(schema_guard->get_routine_info(tenant_id, udf_expr->get_udf_id(), routine_info))) {
+            LOG_WARN("failed to get routine info", K(ret));
+          } else if (OB_ISNULL(routine_info)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected NULL routine info", K(ret));
+          } else if (OB_FAIL(ob_write_string(*aggr_info.alloc_,
+                                             routine_info->get_external_routine_entry(),
+                                             aggr_info.external_routine_entry_))) {
+            LOG_WARN("failed to write external routine entry", K(ret));
+          } else if (OB_FAIL(ob_write_string(*aggr_info.alloc_,
+                                             routine_info->get_external_routine_url(),
+                                             aggr_info.external_routine_url_))) {
+            LOG_WARN("failed to write external routine url", K(ret));
+          } else if (OB_FAIL(ob_write_string(*aggr_info.alloc_,
+                                             routine_info->get_external_routine_resource(),
+                                             aggr_info.external_routine_resource_))) {
+            LOG_WARN("failed to write external routine resource", K(ret));
+          } else {
+            // reuse pl_agg_udf_type_id_ to store udf_id
+            aggr_info.pl_agg_udf_type_id_ = udf_expr->get_udf_id();
+          }
+        }
       }
     }
 

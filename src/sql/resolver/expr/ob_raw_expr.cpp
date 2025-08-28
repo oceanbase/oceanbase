@@ -5585,6 +5585,7 @@ int ObUDFRawExpr::assign(const ObRawExpr &other)
       dblink_name_ = tmp.dblink_name_;
       dblink_id_ = tmp.dblink_id_;
       external_routine_type_ = tmp.external_routine_type_;
+      is_mysql_udtf_ = tmp.is_mysql_udtf_;
     }
   }
   return ret;
@@ -5682,7 +5683,8 @@ bool ObUDFRawExpr::inner_same_as(const ObRawExpr &expr,
                 params_type_.count() == other->get_params_type().count() &&
                 nocopy_params_.count() == other->get_nocopy_params().count() &&
                 params_name_.count() == other->get_params_name().count() &&
-                params_desc_v2_.count() == other->get_params_desc().count();
+                params_desc_v2_.count() == other->get_params_desc().count() &&
+                is_mysql_udtf_ == other->is_mysql_udtf();
     for (int64_t i = 0; bool_ret && i < subprogram_path_.count(); ++i) {
       bool_ret = subprogram_path_.at(i) == other->get_subprogram_path().at(i);
     }
@@ -5733,6 +5735,7 @@ void ObUDFRawExpr::inner_calc_hash()
   for (int64_t i = 0; i < params_name_.count(); ++i) {
     expr_hash_ = common::do_hash(params_name_.at(i), expr_hash_);
   }
+  expr_hash_ = common::do_hash(is_mysql_udtf_, expr_hash_);
 }
 
 int ObUDFRawExpr::get_schema_object_version(share::schema::ObSchemaGetterGuard &schema_guard,

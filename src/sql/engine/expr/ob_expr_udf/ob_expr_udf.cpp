@@ -229,10 +229,13 @@ int ObExprUDF::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr, ObEx
       LOG_WARN("failed to ob_write_string", K(ret), KPC(info), KPC(routine_info));
     } else if (OB_FAIL(ob_write_string(alloc, routine_info->get_external_routine_resource(), info->external_routine_resource_, true))) {
       LOG_WARN("failed to ob_write_string", K(ret), KPC(info), KPC(routine_info));
+    } else if (FALSE_IT(info->external_routine_type_ = fun_sys.get_external_routine_type())) {
+      // unreachable
+    } else if (fun_sys.is_mysql_udtf()) {
+      rt_expr.eval_func_ = eval_mysql_udtf;
     } else {
-      info->external_routine_type_ = fun_sys.get_external_routine_type();
       rt_expr.eval_func_ = eval_external_udf;
-      // rt_expr.eval_vector_func_ = eval_external_udf_vector;
+      rt_expr.eval_vector_func_ = eval_external_udf_vector;
     }
   } else {
     rt_expr.eval_func_ = eval_udf;
@@ -283,6 +286,7 @@ int ObExprUDFInfo::deep_copy(common::ObIAllocator &allocator,
     other->is_result_cache_ = is_result_cache_;
     other->is_deterministic_ = is_deterministic_;
     other->external_routine_type_ = external_routine_type_;
+    other->is_mysql_udtf_ = is_mysql_udtf_;
     OZ(ob_write_string(allocator, external_routine_entry_, other->external_routine_entry_, true));
     OZ(ob_write_string(allocator, external_routine_url_, other->external_routine_url_, true));
     OZ(ob_write_string(allocator, external_routine_resource_, other->external_routine_resource_, true));
@@ -311,7 +315,8 @@ OB_DEF_SERIALIZE(ObExprUDFInfo)
               external_routine_entry_,
               external_routine_url_,
               external_routine_resource_,
-              dblink_id_);
+              dblink_id_,
+              is_mysql_udtf_);
   return ret;
 }
 
@@ -336,7 +341,8 @@ OB_DEF_DESERIALIZE(ObExprUDFInfo)
               external_routine_entry_,
               external_routine_url_,
               external_routine_resource_,
-              dblink_id_);
+              dblink_id_,
+              is_mysql_udtf_);
   return ret;
 }
 
@@ -361,7 +367,8 @@ OB_DEF_SERIALIZE_SIZE(ObExprUDFInfo)
               external_routine_entry_,
               external_routine_url_,
               external_routine_resource_,
-              dblink_id_);
+              dblink_id_,
+              is_mysql_udtf_);
   return len;
 }
 
@@ -388,6 +395,7 @@ int ObExprUDFInfo::from_raw_expr(RE &raw_expr)
   OX (dblink_id_ = udf_expr.get_dblink_id());
   OX (is_result_cache_ = udf_expr.is_result_cache());
   OX (is_deterministic_ = udf_expr.is_deterministic());
+  OX (is_mysql_udtf_ = udf_expr.is_mysql_udtf());
   return ret;
 }
 
@@ -534,26 +542,28 @@ int ObExprUDF::eval_external_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &re
     }
 
     if (OB_SUCC(ret)) {
-      ObIAllocator &result_allocator = udf_info.is_called_in_sql_ ? memory_guard.get_allocator() : ctx.exec_ctx_.get_allocator();
       ObSEArray<ObObj, 1> res_array;
-
-#define EXTERNAL_EXEC \
-  do {  \
-    if (OB_FAIL(executor.init())) { \
-      LOG_WARN("failed to init external udf executor", K(ret)); \
-    } else if (OB_FAIL(executor.execute(1, arg_types, args, result_allocator, res_array))) {  \
-      LOG_WARN("failed to execute udf", K(ret));  \
-    } \
-  } while (0)
 
       if (udf_info.is_py_udf()) {
         pl::ObPyUDFExecutor executor(ctx.exec_ctx_, udf_info);
-        EXTERNAL_EXEC;
-      } else {
-        pl::ObJavaUDFExecutor executor(ctx.exec_ctx_, udf_info);
-        EXTERNAL_EXEC;
-      }
 
+        if (OB_FAIL(executor.init())) {
+          LOG_WARN("failed to init python udf executor", K(ret));
+        } else if (OB_FAIL(executor.execute(1, arg_types, args, alloc, res_array))) {
+          LOG_WARN("failed to execute udf", K(ret));
+        }
+      } else {
+        pl::ObJavaUDFExecutor executor(ctx.exec_ctx_, udf_info.external_routine_entry_);
+
+        if (OB_FAIL(executor.init(udf_info.udf_id_,
+                                  udf_info.external_routine_type_,
+                                  udf_info.external_routine_url_,
+                                  udf_info.external_routine_resource_))) {
+          LOG_WARN("failed to init java udf executor", K(ret));
+        } else if (OB_FAIL(executor.execute(1, "evaluate", arg_types, args, udf_info.result_type_, alloc, res_array))) {
+          LOG_WARN("failed to execute udf", K(ret));
+        }
+      }
 
       if (OB_FAIL(ret)) {
       } else if (1 != res_array.count()) {
@@ -566,7 +576,15 @@ int ObExprUDF::eval_external_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &re
       }
     }
   }
-#undef EXTERNAL_EXEC
+
+  for (int64_t i = 0; i < args.count(); ++i) {
+    if (OB_NOT_NULL(args.at(i))) {
+      args.at(i)->~ObIArray();
+      args.at(i) = nullptr;
+    }
+  }
+  args.reset();
+
   return ret;
 }
 
@@ -577,22 +595,130 @@ int ObExprUDF::eval_external_udf_vector(const ObExpr &expr,
 {
   int ret = OB_SUCCESS;
 
-  ObVectorBase *res_vec = static_cast<ObVectorBase*>(expr.get_vector(ctx));
+  ObArenaAllocator alloc(ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(pl::OB_PL_ARENA)));
+
+  ObIVector *res_vec = expr.get_vector(ctx);
   ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
 
-  for (int64_t i = 0; OB_SUCC(ret) && i < expr.arg_cnt_; ++i) {
-    if (OB_FAIL(expr.args_[i]->eval_vector(ctx, skip, bound))) {
-      LOG_WARN("failed to eval udf args", K(ret), K(i), K(expr));
+  ObSEArray<ObObjMeta, 8> arg_types;
+  using ColumnType = ObSEArray<ObObj, 256>;
+  ObSEArray<ObIArray<ObObj>*, 8> args;
+  ObArray<int64_t> vec_indices;
+  ObIVector **arg_vec = nullptr;
+  ObObj *row = nullptr;
+
+  ObEvalCtx::BatchInfoScopeGuard batch_info_guard(ctx);
+  batch_info_guard.set_batch_size(bound.end() - bound.start());
+
+  if (OB_ISNULL(expr.extra_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected NULL expr.extra_info_", K(ret), K(expr));
+  } else if (OB_FAIL(vec_indices.reserve(bound.end() - bound.start()))) {
+    LOG_WARN("failed to reserve space for indices", K(ret), K(bound));
+  } else {
+    ObExprUDFInfo &udf_info = *static_cast<ObExprUDFInfo *>(expr.extra_info_);
+
+    if (0 == expr.arg_cnt_) {
+      // do nothing
+    } else if (OB_ISNULL(arg_vec = static_cast<ObIVector**>(alloc.alloc(sizeof(ObIVector*) * expr.arg_cnt_)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory", K(ret), K(expr));
+    } else if (FALSE_IT(memset(static_cast<void*>(arg_vec), 0, sizeof(ObIVector*) * expr.arg_cnt_))) {
+      // unreachable
+    } else if (OB_ISNULL(row = static_cast<ObObj*>(alloc.alloc(sizeof(ObObj) * expr.arg_cnt_)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory", K(ret), K(expr));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < expr.arg_cnt_; ++i) {
+        ColumnType *column = nullptr;
+
+        if (OB_ISNULL(new (row + i) ObObj())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("failed to construct ObObj");
+        } else if (arg_types.push_back(udf_info.params_type_.at(i))) {
+          LOG_WARN("failed to push_back", K(ret), K(i), K(udf_info));
+        } else if (OB_ISNULL(column = static_cast<ColumnType*>(alloc.alloc(sizeof(ColumnType))))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to alloc memory for column", K(ret), K(i));
+        } else if (OB_ISNULL(column = new(column)ColumnType())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("failed to construct column", K(ret));
+        } else if (OB_FAIL(args.push_back(column))) {
+          LOG_WARN("failed to push_back column to args", K(ret), K(i), KPC(column));
+        } else if (OB_FAIL(SMART_CALL(expr.args_[i]->eval_vector(ctx, skip, bound)))) {
+          LOG_WARN("failed to eval_vector", K(ret), K(i), K(expr));
+        } else {
+          arg_vec[i] = expr.args_[i]->get_vector(ctx);
+        }
+      }
+    }
+
+    for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
+      if (skip.at(idx) || eval_flags.at(idx)) {
+        continue;
+      }
+
+      if (OB_FAIL(vec_indices.push_back(idx))) {
+        LOG_WARN("failed to push_back idx", K(ret), K(vec_indices), K(idx));
+      } else if (OB_FAIL(transfer_vec_to_obj(row, arg_vec, expr, idx))) {
+        LOG_WARN("failed to transfer_vec_to_obj", K(ret), K(idx));
+      }
+
+      for (int64_t i = 0; OB_SUCC(ret) && i < expr.arg_cnt_; ++i) {
+        ObIArray<ObObj> *curr = args.at(i);
+
+        if (OB_ISNULL(curr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected NULL column", K(ret), K(args), K(i));
+        } else if (OB_FAIL(curr->push_back(row[i]))) {
+          LOG_WARN("failed to push_back row[i]", K(args), KPC(curr), K(row[i]), K(i), K(idx));
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      ObArray<ObObj> res_array;
+
+      pl::ObJavaUDFExecutor executor(ctx.exec_ctx_, udf_info.external_routine_entry_);
+
+      int64_t batch_size = vec_indices.count();
+
+      if (OB_FAIL(res_array.reserve(batch_size))) {
+        LOG_WARN("failed to reserve space for results", K(ret), K(batch_size));
+      } else if (OB_FAIL(executor.init(udf_info.udf_id_,
+                                       udf_info.external_routine_type_,
+                                       udf_info.external_routine_url_,
+                                       udf_info.external_routine_resource_))) {
+        LOG_WARN("failed to init java udf executor", K(ret));
+      } else if (OB_FAIL(executor.execute(batch_size, "evaluate", arg_types, args, udf_info.result_type_, alloc, res_array))) {
+        LOG_WARN("failed to execute udf", K(ret), K(batch_size), K(res_array));
+      } else if (batch_size != res_array.count()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected res_array count", K(ret), K(res_array), K(batch_size));
+      }
+
+      for (int64_t i = 0; OB_SUCC(ret) && i < batch_size; ++i) {
+        int64_t idx = vec_indices.at(i);
+        ObObj buf = res_array.at(i);
+
+        batch_info_guard.set_batch_idx(idx);
+
+        if (OB_FAIL(transfer_obj_to_vec(buf, res_vec, idx, expr, ctx))) {
+          LOG_WARN("failed to transfer_obj_to_vec", K(ret), K(buf), K(res_vec), K(idx));
+        } else {
+          eval_flags.set(idx);
+        }
+      }
     }
   }
 
-  for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
-    if (!skip.at(idx) && !eval_flags.at(idx)) {
-      // to do
-      ret = OB_NOT_IMPLEMENT;
-      LOG_WARN("vectorized external udf is not implemented yet", K(ret), K(lbt()));
+  for (int64_t i = 0; i < args.count(); ++i) {
+    if (OB_NOT_NULL(args.at(i))) {
+      args.at(i)->~ObIArray();
+      args.at(i) = nullptr;
     }
   }
+  args.reset();
 
   return ret;
 }
@@ -731,6 +857,122 @@ int ObExprUDF::eval_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
   OZ (eval_udf_single(expr, ctx, *udf_ctx, result));
   OZ (res.from_obj(result, expr.obj_datum_map_));
   OZ (expr.deep_copy_datum(ctx, res));
+  return ret;
+}
+
+int ObExprUDF::eval_mysql_udtf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
+{
+  int ret = OB_SUCCESS;
+
+  ObExprUDTFCtx *udtf_ctx = nullptr;
+
+  if (OB_ISNULL(udtf_ctx = static_cast<ObExprUDTFCtx *>(ctx.exec_ctx_.get_expr_op_ctx(expr.expr_ctx_id_)))) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("use UDTF without table function is not supported", K(ret), K(expr));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "use UDTF without table function is");
+  }
+
+  if (OB_SUCC(ret) && 0 > udtf_ctx->curr_) {
+    if (OB_ISNULL(expr.extra_info_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected NULL expr.extra_info_", K(ret), K(expr));
+    } else if (OB_FAIL(SMART_CALL(expr.eval_param_value(ctx)))) {
+      LOG_WARN("failed to eval param value", K(ret), K(expr));
+    } else {
+      ObExprUDFInfo &udf_info = *static_cast<ObExprUDFInfo*>(expr.extra_info_);
+
+      ObSEArray<ObObjMeta, 8> arg_types;
+      using ColumnType = ObSEArray<ObObj, 1>;
+      ObSEArray<ObIArray<ObObj>*, 8> args;
+      ObArenaAllocator alloc;
+
+      for (int64_t i = 0; OB_SUCC(ret) && i < expr.arg_cnt_; ++i) {
+        if (OB_ISNULL(expr.args_[i])) {
+          ret = OB_ERR_UNEXPECTED;
+        } else if (OB_FAIL(arg_types.push_back(udf_info.params_type_.at(i)))) {
+            LOG_WARN("failed to push_back arg datum meta", K(ret), K(i), K(expr));
+        } else {
+          const ObDatum &datum = expr.args_[i]->locate_expr_datum(ctx);
+          ObObj obj;
+          ColumnType *column = nullptr;
+
+          if (OB_ISNULL(column = static_cast<ColumnType*>(alloc.alloc(sizeof(ColumnType))))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("failed to alloc memory for column", K(ret), K(i));
+          } else if (OB_ISNULL(column = new(column)ColumnType())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("failed to construct column", K(ret));
+          } else if (OB_FAIL(datum.to_obj(obj, expr.args_[i]->obj_meta_, expr.args_[i]->obj_datum_map_))) {
+            LOG_WARN("failed to convert datum to obj", K(ret), K(datum), K(obj), K(i), K(expr.args_[i]->obj_meta_), K(expr.args_[i]->obj_datum_map_));
+          } else if (OB_FAIL(column->push_back(obj))) {
+            LOG_WARN("failed to push_back to column", K(ret), K(datum), K(obj), K(i));
+          } else if (OB_FAIL(args.push_back(column))) {
+            LOG_WARN("failed to push_back column to args", K(ret), K(i), KPC(column));
+          }
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        ObSEArray<ObObj, 8> res_array;
+
+        pl::ObJavaUDFExecutor executor(ctx.exec_ctx_, udf_info.external_routine_entry_);
+
+        executor.set_need_infer_result_size(true);
+
+        if (OB_FAIL(executor.init(udf_info.udf_id_,
+                                  udf_info.external_routine_type_,
+                                  udf_info.external_routine_url_,
+                                  udf_info.external_routine_resource_))) {
+          LOG_WARN("failed to init java udf executor", K(ret));
+        } else if (OB_FAIL(executor.execute(1, "process", arg_types, args, udf_info.result_type_, alloc, res_array))) {
+          LOG_WARN("failed to execute udf", K(ret));
+        } else {
+          for (int64_t i = 0; OB_SUCC(ret) && i < res_array.count(); ++i) {
+            ObObj buf;
+
+            if (OB_FAIL(deep_copy_obj(udtf_ctx->allocator_, res_array.at(i), buf))) {
+              LOG_WARN("failed to deep_copy_obj", K(ret), K(res_array), K(i), K(buf));
+            } else if (OB_FAIL(udtf_ctx->buffer_.push_back(buf))) {
+              LOG_WARN("failed to push_back to UDTF buffer", K(ret), K(buf));
+            }
+          }
+
+          if (OB_SUCC(ret)) {
+            udtf_ctx->curr_ = 0;
+          }
+        }
+      }
+
+      for (int64_t i = 0; i < args.count(); ++i) {
+        if (OB_NOT_NULL(args.at(i))) {
+          args.at(i)->~ObIArray();
+          args.at(i) = nullptr;
+        }
+      }
+      args.reset();
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    ObObj obj;
+
+    if (0 > udtf_ctx->curr_) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("UDTF buffer is not initialized", K(ret), KPC(udtf_ctx), K(lbt()));
+    } else if (udtf_ctx->curr_ >= udtf_ctx->buffer_.count()) {
+      ret = OB_ITER_END;
+      LOG_TRACE("finished to iterate UDTF", K(ret), KPC(udtf_ctx));
+    } else if (OB_FAIL(udtf_ctx->buffer_.at(udtf_ctx->curr_, obj))) {
+      LOG_WARN("failed to get obj from udtf_ctx", K(ret), KPC(udtf_ctx));
+    } else if (OB_FAIL(res.from_obj(obj, expr.obj_datum_map_))) {
+      LOG_WARN("failed to from obj", K(ret), K(obj));
+    } else if (OB_FAIL(expr.deep_copy_datum(ctx, res))) {
+      LOG_WARN("failed to deep copy datum", K(ret));
+    } else {
+      udtf_ctx->curr_ += 1;
+    }
+  }
+
   return ret;
 }
 

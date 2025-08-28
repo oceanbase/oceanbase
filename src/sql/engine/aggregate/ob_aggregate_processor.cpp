@@ -26,6 +26,7 @@
 #include "sql/engine/expr/ob_expr_xml_func_helper.h"
 #include "sql/engine/expr/ob_expr_rb_func_helper.h"
 #include "pl/ob_pl.h"
+#include "pl/external_routine/ob_java_udaf.h"
 
 namespace oceanbase
 {
@@ -7602,6 +7603,20 @@ int ObAggregateProcessor::get_pl_agg_udf_result(const ObAggrInfo &aggr_info,
     LOG_WARN("rewind failed", KPC(extra), K(ret));
   } else if (!extra->is_iterated() && OB_FAIL(extra->finish_add_row())) {
     LOG_WARN("finish_add_row failed", KPC(extra), K(ret));
+  } else if (ObExternalRoutineType::INTERNAL_ROUTINE != aggr_info.external_routine_type_) {  // external UDAF
+    if (is_java_external_routine(aggr_info.external_routine_type_)) {
+      pl::ObJavaUDAFExecutor executor(aggr_info, eval_ctx_, *extra);
+
+      if (OB_FAIL(executor.init())) {
+        LOG_WARN("failed to init java udaf executor", K(ret), K(aggr_info));
+      } else if (OB_FAIL(executor.execute(result))) {
+        LOG_WARN("failed to execute java UDAF", K(ret));
+      }
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not supported external UDAF", K(ret), K(aggr_info.external_routine_type_));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "not supported external UDAF");
+    }
   } else if (OB_FAIL(pl_agg_udf_func.init(eval_ctx_.exec_ctx_.get_my_session(),
                                           &(eval_ctx_.exec_ctx_.get_allocator()),
                                           &eval_ctx_.exec_ctx_,

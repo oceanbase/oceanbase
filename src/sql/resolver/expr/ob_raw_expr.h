@@ -4494,7 +4494,8 @@ public:
       params_desc_v2_(),
       dblink_name_(),
       dblink_id_(common::OB_INVALID_ID),
-      external_routine_type_(ObExternalRoutineType::INTERNAL_ROUTINE) {
+      external_routine_type_(ObExternalRoutineType::INTERNAL_ROUTINE),
+      is_mysql_udtf_(false) {
     set_expr_class(EXPR_UDF);
     is_deterministic_ = false;
   }
@@ -4525,7 +4526,8 @@ public:
       params_desc_v2_(),
       dblink_name_(),
       dblink_id_(common::OB_INVALID_ID),
-      external_routine_type_(ObExternalRoutineType::INTERNAL_ROUTINE) {
+      external_routine_type_(ObExternalRoutineType::INTERNAL_ROUTINE),
+      is_mysql_udtf_(false) {
     set_expr_class(EXPR_UDF);
     is_deterministic_ = false;
   }
@@ -4676,6 +4678,9 @@ public:
   inline ObExternalRoutineType get_external_routine_type() const { return external_routine_type_; }
   inline void set_external_routine_type(ObExternalRoutineType type) { external_routine_type_ = type; }
 
+  inline void set_mysql_udtf(bool is_mysql_udtf) { is_mysql_udtf_ = is_mysql_udtf; }
+  inline bool is_mysql_udtf() const { return is_mysql_udtf_; }
+
   VIRTUAL_TO_STRING_KV_CHECK_STACK_OVERFLOW(N_ITEM_TYPE, type_,
                                             N_RESULT_TYPE, result_type_,
                                             N_EXPR_INFO, info_,
@@ -4706,7 +4711,8 @@ public:
                                             K_(dblink_id),
                                             N_CHILDREN, exprs_,
                                             K_(expr_hash),
-                                            K_(external_routine_type));
+                                            K_(external_routine_type),
+                                            K_(is_mysql_udtf));
 
 private:
   uint64_t udf_id_;
@@ -4734,6 +4740,7 @@ private:
   common::ObString dblink_name_;
   uint64_t dblink_id_;
   ObExternalRoutineType external_routine_type_;
+  bool is_mysql_udtf_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObUDFRawExpr);
 };

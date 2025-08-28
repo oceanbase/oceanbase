@@ -1428,7 +1428,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprAIEmbed::eval_ai_embed,                                       /* 858 */
   ObExprAIRerank::eval_ai_rerank,                                     /* 859 */
   NULL,//ObExprMd5ConcatWs::calc_md5_concat_ws_expr                   /* 860 */
-  NULL,//ObExprUDF::eval_mysql_udtf,                                  /* 861 */
+  ObExprUDF::eval_mysql_udtf,                                         /* 861 */
   NULL,//ObExprHiddenClusteringKey::eval_hidden_clustering_key,       /* 862 */
   ObExprFormatProfile::format_profile,                                /* 863 */
   ObExprLocalDynamicFilter::eval_local_dynamic_filter,                /* 864 */
