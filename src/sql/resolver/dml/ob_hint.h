@@ -232,6 +232,7 @@ struct ObOptParamHint
     DEF(ENABLE_PARTIAL_GROUP_BY_PUSHDOWN,)          \
     DEF(ENABLE_PARTIAL_DISTINCT_PUSHDOWN,)          \
     DEF(ENABLE_RUNTIME_FILTER_ADAPTIVE_APPLY, )     \
+    DEF(ENABLE_GROUPING_SETS_EXPANSION,)            \
     DEF(EXTENDED_SQL_PLAN_MONITOR_METRICS, )        \
     DEF(APPROX_COUNT_DISTINCT_PRECISION,)           \
 
@@ -255,6 +256,7 @@ struct ObOptParamHint
   int get_hash_rollup_param(ObObj &val, bool &has_opt_param) const;
   int get_enum_opt_param(const OptParamType param_type, int64_t &val) const;
   int has_opt_param(const OptParamType param_type, bool &has_hint) const;
+  int get_disable_op_rich_format_flags(int64_t &disable_op_flags) const;
 
   template<typename T>
   using GET_PARAM_FUNC = int (ObOptParamHint::*)(const OptParamType, T&) const;
@@ -329,6 +331,26 @@ struct ObPxNodeHint {
   ObPxNodePolicy px_node_policy_;
   common::ObSArray<common::ObAddr> px_node_addrs_;
   int64_t px_node_count_;
+};
+
+struct DisableOpRichFormatHint
+{
+  DisableOpRichFormatHint(): op_list_(), op_flags_(0) {}
+  int merge_op_list(const common::ObIArray<common::ObString> &op_list);
+  int merge_hint(const DisableOpRichFormatHint &other_hint)
+  {
+    return merge_op_list(other_hint.op_list_);
+  }
+  int print(PlanText &plan_text) const;
+  int64_t get_op_flags() const { return op_flags_; }
+  void reset()
+  {
+    op_list_.reset();
+    op_flags_ = 0;
+  }
+  TO_STRING_KV(K_(op_list), K_(op_flags));
+  common::ObSEArray<common::ObString, 8> op_list_;
+  int64_t op_flags_;
 };
 
 struct ObGlobalHint {
@@ -500,7 +522,8 @@ struct ObGlobalHint {
                K_(dynamic_sampling),
                K_(alloc_op_hints),
                K_(dblink_hints),
-               K_(px_node_hint));
+               K_(px_node_hint),
+               K_(disable_op_rich_format_hint));
 
   int64_t frozen_version_;
   int64_t topk_precision_;
@@ -534,6 +557,7 @@ struct ObGlobalHint {
   ObDBLinkHit dblink_hints_;
   common::ObString resource_group_;
   ObPxNodeHint px_node_hint_;
+  DisableOpRichFormatHint disable_op_rich_format_hint_;
 };
 
 // used in physical plan

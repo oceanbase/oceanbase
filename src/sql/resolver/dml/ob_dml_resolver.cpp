@@ -16278,7 +16278,15 @@ int ObDMLResolver::resolve_global_hint(const ParseNode &hint_node,
       }
       break;
     }
-
+    case T_DISABLE_OP_RICH_FORMAT: {
+      sql::ObTMArray<ObString> op_list;
+      if (OB_FAIL(resolve_disable_rich_format_op_list(hint_node, op_list))) {
+        LOG_WARN("resolve op list hint failed", K(ret));
+      } else if (OB_FAIL(global_hint.disable_op_rich_format_hint_.merge_op_list(op_list))) {
+        LOG_WARN("merge op list failed", K(ret));
+      }
+      break;
+    }
     default: {
       resolved_hint = false;
       break;
@@ -16348,6 +16356,26 @@ int ObDMLResolver::resolve_px_node_addrs(const ParseNode &hint_node, ObIArray<Ob
   }
   (void)addr_set.destroy();
   (void)tenant_addr_set.destroy();
+  return ret;
+}
+
+int ObDMLResolver::resolve_disable_rich_format_op_list(const ParseNode &hint_node, ObIArray<common::ObString> &op_list)
+{
+  int ret = OB_SUCCESS;
+  const ParseNode *op_node = NULL;
+  ObString op_name;
+  for (int i = 0; OB_SUCC(ret) && i < hint_node.num_child_; i++) {
+    if (OB_ISNULL(op_node = hint_node.children_[i])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid null child", K(ret));
+    } else if (OB_NOT_NULL(op_node->str_value_)) {
+      op_name.assign_ptr(op_node->str_value_, static_cast<int32_t>(op_node->str_len_));
+      if (OB_FAIL(op_list.push_back(op_name))) {
+        LOG_WARN("push back element failed", K(ret));
+      }
+    }
+  }
+  LOG_DEBUG("resolve disable op rich format list", K(op_list));
   return ret;
 }
 

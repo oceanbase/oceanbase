@@ -865,7 +865,9 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
       case T_FUN_SYS_RB_AND_AGG:
       case T_FUNC_SYS_ARRAY_AGG:
       case T_FUN_SYS_RB_OR_CARDINALITY_AGG:
-      case T_FUN_SYS_RB_AND_CARDINALITY_AGG: {
+      case T_FUN_SYS_RB_AND_CARDINALITY_AGG:
+      case T_FUN_ARG_MAX:
+      case T_FUN_ARG_MIN: {
         if (OB_FAIL(process_agg_node(node, expr))) {
           LOG_WARN("fail to process agg node", K(ret), K(node));
         }
@@ -4266,7 +4268,7 @@ int ObRawExprResolverImpl::process_operator_node(const ParseNode *node, ObRawExp
   } else if (T_OP_DIV == node->type_
             || T_OP_MINUS == node->type_
             || T_OP_ADD == node->type_
-            || T_OP_DIV == node->type_) {
+            || T_OP_MUL == node->type_) {
     formalize_const_int_prec = true;
   }
   if (OB_FAIL(ret)) {
@@ -5446,6 +5448,26 @@ int ObRawExprResolverImpl::process_agg_node(const ParseNode *node, ObRawExpr *&e
               }
             }
           }
+        }
+      }
+    } else if (T_FUN_ARG_MAX == node->type_ || T_FUN_ARG_MIN == node->type_) {
+      if (OB_UNLIKELY(3 != node->num_child_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected error, node expected 2 arguments", K(ret), K(node->num_child_));
+      } else if (NULL != node->children_[0] && T_DISTINCT == node->children_[0]->type_) {
+        agg_expr->set_param_distinct(true);
+      }
+      if (OB_SUCC(ret)) {
+        sub_expr = NULL;
+        ObRawExpr *sub_expr2 = NULL;
+        if (OB_FAIL(SMART_CALL(recursive_resolve(node->children_[1], sub_expr)))) {
+          LOG_WARN("fail to recursive resolve node child", K(ret));
+        } else if (OB_FAIL(agg_expr->add_real_param_expr(sub_expr))) {
+          LOG_WARN("fail to add param expr", K(ret));
+        } else if (OB_FAIL(SMART_CALL(recursive_resolve(node->children_[2], sub_expr2)))) {
+          LOG_WARN("fail to recursive resolve node child", K(ret));
+        } else if (OB_FAIL(agg_expr->add_real_param_expr(sub_expr2))) {
+          LOG_WARN("fail to add param expr", K(ret));
         }
       }
     } else if (T_FUN_COUNT != node->type_
@@ -8057,7 +8079,9 @@ int ObRawExprResolverImpl::process_window_function_node(const ParseNode *node, O
         || T_FUN_SYS_BIT_OR == func_type
         || T_FUN_SYS_BIT_XOR == func_type
         || T_FUN_JSON_ARRAYAGG == func_type
-        || T_FUN_JSON_OBJECTAGG == func_type) {
+        || T_FUN_JSON_OBJECTAGG == func_type
+        || T_FUN_ARG_MIN == func_type
+        || T_FUN_ARG_MAX == func_type) {
       ctx_.is_win_agg_ = true;
       if (T_FUN_PL_AGG_UDF == func_type) {
         ParseNode *agg_udf_node = NULL;

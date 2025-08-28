@@ -709,7 +709,11 @@ int ObStmtComparer::check_stmt_containment(const ObDMLStmt *first,
       int64_t first_rollup_count = first_sel->get_rollup_exprs().count();
       int64_t second_rollup_count = second_sel->get_rollup_exprs().count();
       QueryRelation this_relation;
-      if (second_count == 0 && first_rollup_count == 0 && second_rollup_count == 0
+      if (first_sel->has_grouping_sets() || second_sel->has_grouping_sets()) {
+        // TODO: support temp table extraction with grouping sets
+        relation = QueryRelation::QUERY_UNCOMPARABLE;
+        LOG_TRACE("succeed to check group by map", K(relation), K(map_info));
+      } else if (second_count == 0 && first_rollup_count == 0 && second_rollup_count == 0
             && (relation == QueryRelation::QUERY_LEFT_SUBSET || relation == QueryRelation::QUERY_EQUAL)
             && !need_check_select_items) {
         // for mv rewrite

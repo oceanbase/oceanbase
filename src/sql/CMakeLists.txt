@@ -6,6 +6,7 @@ ob_set_subtarget(ob_sql code_generator
   code_generator/ob_static_engine_cg.cpp
   code_generator/ob_static_engine_expr_cg.cpp
   code_generator/ob_tsc_cg_service.cpp
+  code_generator/ob_enable_rich_format_flags.cpp
 )
 
 ob_set_subtarget(ob_sql common

@@ -363,7 +363,7 @@ int ObOrderPerservingEncoder::encode_from_string_varlen(
     if (OB_FAIL(encode_tails(to, max_buf_len, to_len, param.is_memcmp_, cs, str.length()==1 && *str.ptr()=='\0'))) {
       LOG_WARN("failed to encode tails", K(ret));
     }
-  } else if (cs == CS_TYPE_COLLATION_FREE || cs == CS_TYPE_BINARY) {
+  } else if (cs == CS_TYPE_COLLATION_FREE || cs == CS_TYPE_BINARY || cs == CS_TYPE_UTF8MB4_0900_BIN) {
 #if OB_USE_MULTITARGET_CODE
     if (param.is_simdopt_ && common::is_arch_supported(ObTargetArch::AVX2)
       && specific::avx2::check_terminator_simd((unsigned char *)str.ptr(), str.length(), 0x00)) {

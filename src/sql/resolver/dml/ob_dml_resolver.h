@@ -1112,6 +1112,7 @@ private:
   int compute_values_table_row_count(ObValuesTableDef &table_def);
   bool is_update_for_mv_fast_refresh(const ObDMLStmt &stmt);
   int resolve_px_node_addrs(const ParseNode &hint_node, ObIArray<ObAddr> &addrs);
+  int resolve_disable_rich_format_op_list(const ParseNode &hint_node, ObIArray<common::ObString> &op_list);
   int build_column_schemas_for_orc(const orc::Type* type,
                                   const ColumnIndexType column_index_type,
                                   ObTableSchema& table_schema);

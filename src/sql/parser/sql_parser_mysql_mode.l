@@ -1206,6 +1206,7 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>PX_NODE_POLICY {return PX_NODE_POLICY; }
 <hint>PX_NODE_ADDRS {return PX_NODE_ADDRS; }
 <hint>PX_NODE_COUNT {return PX_NODE_COUNT; }
+<hint>DISABLE_OP_RICH_FORMAT { return DISABLE_OP_RICH_FORMAT; }
 <hint>{identifier} {
   if (!(IS_FAST_PARAMETERIZE)) {
     check_value(yylval);

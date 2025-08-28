@@ -425,6 +425,7 @@ int ObSortVecOp::init_sort(int64_t tenant_id, int64_t row_count, int64_t topn_cn
   }
   int aqs_head =
     MY_SPEC.enable_encode_sortkey_opt_ ? sizeof(oceanbase::sql::ObSortOpImpl::AQSItem) : 0;
+  context.est_rows_ = row_count;
   if (OB_FAIL(sort_op_provider_.init(context))) {
     LOG_WARN("failed to init sort operator provider", K(ret));
   } else {

@@ -1293,6 +1293,20 @@ int ObTransformSimplifyExpr::remove_dummy_nvl(ObDMLStmt *stmt,
         } else if (OB_FAIL(append(ignore_exprs, sel_stmt->get_rollup_exprs()))) {
           LOG_WARN("failed to append exprs", K(ret));
         }
+      } else if (sel_stmt->has_grouping_sets()) {
+        if (OB_UNLIKELY(sel_stmt->get_grouping_sets_items_size() != 1)) {
+          // grouping sets is rewrite to `group by union group by`, no grouping set exists
+          // or group by with expansion, just contains 1 grouping set
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected grouping set item size", K(ret));
+        } else {
+          ObGroupingSetsItem &grouping_set_item = sel_stmt->get_grouping_sets_items().at(0);
+          for (int i = 0; OB_SUCC(ret) && i < grouping_set_item.grouping_sets_exprs_.count(); i++) {
+            if (OB_FAIL(append(ignore_exprs, grouping_set_item.grouping_sets_exprs_.at(i).groupby_exprs_))) {
+              LOG_WARN("append array failed", K(ret));
+            }
+          }
+        }
       } else {
         not_null_ctx.reset();
         if (OB_FAIL(not_null_ctx.generate_stmt_context(NULLABLE_SCOPE::NS_GROUPBY))){

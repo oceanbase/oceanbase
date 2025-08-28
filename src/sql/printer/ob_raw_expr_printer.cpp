@@ -1216,6 +1216,10 @@ int ObRawExprPrinter::print(ObAggFunRawExpr *expr)
       SET_SYMBOL_IF_EMPTY("json_arrayagg");
     case T_FUN_JSON_OBJECTAGG:
       SET_SYMBOL_IF_EMPTY("json_objectagg");
+    case T_FUN_ARG_MIN:
+      SET_SYMBOL_IF_EMPTY("arg_min");
+    case T_FUN_ARG_MAX:
+      SET_SYMBOL_IF_EMPTY("arg_max");
     case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS:
       SET_SYMBOL_IF_EMPTY("approx_count_distinct_synopsis");
     case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE:
@@ -3922,6 +3926,10 @@ int ObRawExprPrinter::print(ObWinFunRawExpr *expr)
         SET_SYMBOL_IF_EMPTY("json_arrayagg");
       case T_FUN_JSON_OBJECTAGG:
         SET_SYMBOL_IF_EMPTY("json_objectagg");
+      case T_FUN_ARG_MAX:
+        SET_SYMBOL_IF_EMPTY("arg_max");
+      case T_FUN_ARG_MIN:
+        SET_SYMBOL_IF_EMPTY("arg_min");
       case T_FUN_PL_AGG_UDF: {
         ObString database;
         if (OB_ISNULL(expr->get_agg_expr())) {

@@ -346,7 +346,7 @@ int ObExprFindInSet::calc_find_in_set_vector_dispatch(
     std::function<int(const ObString &, const ObString &,
                       const ObCollationType &, uint64_t &)>
         search_func =
-            CS_TYPE_UTF8MB4_BIN == cs_type ? bin_collation_search : search;
+            (CS_TYPE_UTF8MB4_BIN == cs_type || CS_TYPE_UTF8MB4_0900_BIN == cs_type) ? bin_collation_search : search;
     for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end();
          ++idx) {
       if (skip.at(idx) || eval_flags.at(idx)) {

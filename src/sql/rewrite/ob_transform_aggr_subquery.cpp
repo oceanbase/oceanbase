@@ -225,7 +225,7 @@ int ObTransformAggrSubquery::check_need_spj(ObDMLStmt *stmt, bool &is_valid)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is null", K(ret));
   } else if (sel_stmt->get_having_exprs().count() == 0 ||
-             sel_stmt->has_rollup()) {
+             sel_stmt->has_rollup() || sel_stmt->has_grouping_sets()) {
     is_valid = false;
   } else if (OB_FAIL(sel_stmt->is_query_deterministic(is_deterministic))) {
     LOG_WARN("sel stmt has rand failed", K(ret));
@@ -540,6 +540,7 @@ int ObTransformAggrSubquery::check_aggr_first_validity(ObDMLStmt &stmt,
   } else if (!exists_to_aggr && is_exists_op(parent_expr.get_expr_type())) {
     is_valid = false;
   } else if (subquery->has_rollup() ||
+             subquery->has_grouping_sets() ||
              subquery->has_having() ||
              NULL != subquery->get_limit_percent_expr() ||
              NULL != subquery->get_offset_expr() ||
@@ -1530,6 +1531,7 @@ int ObTransformAggrSubquery::check_join_first_validity(ObQueryRefRawExpr &query_
     // 1. check stmt components
   } else if (subquery->get_group_expr_size() > 0 ||
              subquery->has_rollup() ||
+             subquery->has_grouping_sets() ||
              subquery->has_window_function() ||
              subquery->has_sequence() ||
              subquery->is_set_stmt() ||
@@ -2460,7 +2462,8 @@ int ObTransformAggrSubquery::is_valid_group_by(const ObSelectStmt &subquery, boo
   if (subquery.is_scala_group_by()) {
     is_valid = true;
   } else if (subquery.get_group_expr_size() > 0 &&
-             subquery.get_rollup_expr_size() == 0) {
+             subquery.get_rollup_expr_size() == 0 &&
+             subquery.get_grouping_sets_items_size() == 0) {
     // check is group by const
     is_valid = true;
     ObSEArray<ObRawExpr *, 4> const_exprs;

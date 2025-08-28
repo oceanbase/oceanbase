@@ -3924,6 +3924,7 @@ public:
     udf_meta_(),
     expr_in_inner_stmt_(false),
     is_need_deserialize_row_(false),
+    keep_sum_precision_(false),
     pl_agg_udf_expr_(NULL)
   {
     set_expr_class(EXPR_AGGR);
@@ -3938,6 +3939,7 @@ public:
     udf_meta_(),
     expr_in_inner_stmt_(false),
     is_need_deserialize_row_(false),
+    keep_sum_precision_(false),
     pl_agg_udf_expr_(NULL)
   {
     set_expr_class(EXPR_AGGR);
@@ -3953,6 +3955,7 @@ public:
     udf_meta_(),
     expr_in_inner_stmt_(false),
     is_need_deserialize_row_(false),
+    keep_sum_precision_(false),
     pl_agg_udf_expr_(NULL)
   {
     set_expr_class(EXPR_AGGR);
@@ -4021,6 +4024,8 @@ public:
 
   int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos, ExplainType type) const;
   const char *get_name_dblink(ObItemType expr_type) const;
+  void set_is_keep_sum_precision(bool v) { keep_sum_precision_ = v; }
+  bool get_is_keep_sum_precision() const { return keep_sum_precision_; }
   VIRTUAL_TO_STRING_KV_CHECK_STACK_OVERFLOW(N_ITEM_TYPE, type_,
                                             N_RESULT_TYPE, result_type_,
                                             N_EXPR_INFO, info_,
@@ -4045,6 +4050,7 @@ private:
   share::schema::ObUDFMeta udf_meta_;
   bool expr_in_inner_stmt_;
   bool is_need_deserialize_row_;// for topk histogram and hybrid histogram computation
+  bool keep_sum_precision_; // wether sum aggr should increase precision
   ObRawExpr *pl_agg_udf_expr_;//for pl agg udf expr
 };
 

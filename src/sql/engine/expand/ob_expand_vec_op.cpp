@@ -27,8 +27,47 @@ OB_SERIALIZE_MEMBER((ObExpandVecSpec, ObOpSpec), expand_exprs_, gby_exprs_, grou
 int ObExpandVecOp::inner_open()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(init())) {
-    LOG_WARN("init operator failed", K(ret));
+  if (OB_UNLIKELY(!is_dup_for_hash_rollup() && !is_dup_for_grouping_sets())) {
+    // do nothing
+    LOG_TRACE("no need to repeat");
+  } else {
+    if (OB_FAIL(init())) {
+      LOG_WARN("init operator failed", K(ret));
+    } else if (is_dup_for_grouping_sets()) {
+      ObSEArray<ObExpr *, 8> group_exprs;
+      void *tmp_buf = nullptr;
+      void *hold_buf = nullptr;
+      for (int i = 0; OB_SUCC(ret) && i < MY_SPEC.group_set_exprs_.count(); i++) {
+        if (OB_FAIL(append_array_no_dup(group_exprs, MY_SPEC.group_set_exprs_.at(i)))) {
+          LOG_WARN("append array no dup failed", K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(all_group_exprs_.assign(group_exprs))) {
+        LOG_WARN("assign array failed", K(ret));
+      } else if (all_group_exprs_.count() <= 0) {
+        // select count(a) from t group by ((1), ());
+        // no group by exprs, do nothing
+      } else if (MY_SPEC.use_rich_format_) {
+        hold_buf = allocator_.alloc(sizeof(ObVectorsResultHolder));
+        if (OB_ISNULL(hold_buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("allocate memory failed", K(ret));
+        } else if (FALSE_IT(group_vec_holder_ = new (hold_buf) ObVectorsResultHolder())) {
+        } else if (OB_FAIL(group_vec_holder_->init(all_group_exprs_, eval_ctx_))) {
+          LOG_WARN("init vectors result holder failed", K(ret));
+        }
+      } else {
+        hold_buf = allocator_.alloc(sizeof(ObBatchResultHolder));
+        if (OB_ISNULL(hold_buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("allocate memory failed", K(ret));
+        } else if (FALSE_IT(group_datum_holder_ = new (hold_buf) ObBatchResultHolder())) {
+        } else if (OB_FAIL(group_datum_holder_->init(all_group_exprs_, eval_ctx_))) {
+          LOG_WARN("init batch result holder failed", K(ret));
+        }
+      }
+    }
   }
   return ret;
 }
@@ -63,7 +102,8 @@ int ObExpandVecOp::init()
   if (OB_FAIL(ret)) {
   } else {
     reset_status();
-    LOG_TRACE("expand open", K(MY_SPEC.expand_exprs_), K(MY_SPEC.gby_exprs_));
+    LOG_TRACE("expand open", K(MY_SPEC.expand_exprs_), K(MY_SPEC.gby_exprs_),
+              K(MY_SPEC.group_set_exprs_), K(MY_SPEC.pruned_groupby_exprs_));
   }
   return ret;
 }
@@ -82,9 +122,19 @@ int ObExpandVecOp::inner_rescan()
     LOG_WARN("inner rescan failed", K(ret));
   }
   if (MY_SPEC.use_rich_format_) {
-    vec_holder_->reset();
+    if (vec_holder_ != nullptr) {
+      vec_holder_->reset();
+    }
+    if (group_vec_holder_ != nullptr) {
+      group_vec_holder_->reset();
+    }
   } else {
-    datum_holder_->reset();
+    if (datum_holder_ != nullptr) {
+      datum_holder_->reset();
+    }
+    if (group_datum_holder_ != nullptr) {
+      group_datum_holder_->reset();
+    }
   }
   if (OB_SUCC(ret)) {
     reset_status();
@@ -96,60 +146,84 @@ int ObExpandVecOp::inner_get_next_batch(const int64_t max_row_cnt)
 {
   int ret = OB_SUCCESS;
   bool do_output = false;
-  while (OB_SUCC(ret) && !do_output) {
-    switch (dup_status_) {
-    case (DupStatus::END): {
-      brs_.end_ = true;
-      brs_.size_ = 0;
-      do_output = true;
-      break;
-    }
-    case DupStatus::Init: {
-      const ObBatchRows *child_brs = nullptr;
-      if (OB_FAIL(get_next_batch_from_child(MIN(MY_SPEC.max_batch_size_, max_row_cnt), child_brs))) {
-        LOG_WARN("get next batch from child failed", K(ret));
-      } else if (child_brs->end_
-                 && (0 == child_brs->size_
-                     || child_brs->size_ == child_brs->skip_->accumulate_bit_cnt(child_brs->size_))) {
-        dup_status_ = DupStatus::END;
+  if (!is_dup_for_hash_rollup() && !is_dup_for_grouping_sets()) {
+    // no output
+    brs_.size_ = 0;
+    brs_.end_ = true;
+  } else {
+    while (OB_SUCC(ret) && !do_output) {
+      switch (dup_status_) {
+      case (DupStatus::END): {
         brs_.end_ = true;
         brs_.size_ = 0;
         do_output = true;
-      } else if (OB_FAIL(backup_child_input(child_brs))) {
-        LOG_WARN("backup child input nulls failed", K(ret));
-      } else if (OB_FAIL(duplicate_rollup_exprs())) {
-        LOG_WARN("duplicate rollup exprs failed", K(ret));
+        break;
       }
-      break;
-    }
-    case DupStatus::ORIG_ALL: {
-      if (OB_FAIL(setup_grouping_id())) {
-        LOG_WARN("setup grouping id failed", K(ret));
-      } else {
-        copy_child_brs();
-        do_output = true;
+      case DupStatus::Init: {
+        const ObBatchRows *child_brs = nullptr;
+        if (OB_FAIL(
+              get_next_batch_from_child(MIN(MY_SPEC.max_batch_size_, max_row_cnt), child_brs))) {
+          LOG_WARN("get next batch from child failed", K(ret));
+        } else if (child_brs->end_
+                   && (0 == child_brs->size_
+                       || child_brs->size_
+                            == child_brs->skip_->accumulate_bit_cnt(child_brs->size_))) {
+          dup_status_ = DupStatus::END;
+          brs_.end_ = true;
+          brs_.size_ = 0;
+          do_output = true;
+        } else if (OB_FAIL(backup_child_input(child_brs))) {
+          LOG_WARN("backup child input nulls failed", K(ret));
+        } else if (OB_FAIL(duplicate_rollup_exprs())) {
+          LOG_WARN("duplicate rollup exprs failed", K(ret));
+        } else if (is_dup_for_grouping_sets()) {
+          if (OB_FAIL(backup_group_exprs())) {
+            LOG_WARN("backup group exprs failed", K(ret));
+          } else if (OB_FAIL(setup_pruned_gby_exprs())) {
+            LOG_WARN("setup pruned gby exprs failed", K(ret));
+          }
+        }
+        break;
       }
-      break;
-    }
-    case DupStatus::DUP_PARTIAL: {
-      if (OB_FAIL(do_dup_partial())) {
-        LOG_WARN("duplicate partial input failed", K(ret));
-      } else if (OB_FAIL(setup_grouping_id())) {
-        LOG_WARN("set grouping id failed", K(ret));
-      } else {
-        do_output = true;
+      case DupStatus::ORIG_ALL: {
+        if (OB_FAIL(setup_grouping_id())) {
+          LOG_WARN("setup grouping id failed", K(ret));
+        } else {
+          copy_child_brs();
+          do_output = true;
+        }
+        break;
       }
-      break;
+      case DupStatus::DUP_PARTIAL: {
+        if (is_dup_for_hash_rollup()) {
+          if (OB_FAIL(do_dup_partial())) {
+            LOG_WARN("duplicate partial input failed", K(ret));
+          } else if (OB_FAIL(setup_grouping_id())) {
+            LOG_WARN("set grouping id failed", K(ret));
+          } else {
+            do_output = true;
+          }
+        } else if (is_dup_for_grouping_sets()) {
+          if (OB_FAIL(dup_for_grouping_sets())) {
+            LOG_WARN("duplicate data for grouping sets failed", K(ret));
+          } else if (OB_FAIL(setup_grouping_id())) {
+            LOG_WARN("setup grouping id failed", K(ret));
+          } else {
+            copy_child_brs();
+            do_output = true;
+          }
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid status", K(ret));
+        }
+        break;
+      }
+      }
+      next_status();
     }
-    }
-    next_status();
-  }
-  if (OB_SUCC(ret)) {
-    clear_evaluated_flags();
-  }
-  if (OB_SUCC(ret) && dup_status_ == DupStatus::END) {
-    if (OB_FAIL(restore_child_input())) {
-      LOG_WARN("restore child input failed", K(ret));
+    if (OB_SUCC(ret)) { clear_evaluated_flags(); }
+    if (OB_SUCC(ret) && dup_status_ == DupStatus::END) {
+      if (OB_FAIL(restore_child_input())) { LOG_WARN("restore child input failed", K(ret)); }
     }
   }
   return ret;
@@ -170,15 +244,15 @@ int ObExpandVecOp::do_dup_partial()
   // in oracle group by roll(c1, c1, c2), rollup result of last c1 is same as group by (c1, c1, NULL)
   // rollup result of first c1 is same as group by (NULL, NULL, NULL)
   bool is_real_static_const =
-    MY_SPEC.expand_exprs_.at(expr_iter_idx_)->type_ == T_FUN_SYS_REMOVE_CONST
-    && MY_SPEC.expand_exprs_.at(expr_iter_idx_)->args_[0]->is_static_const_;
+    MY_SPEC.expand_exprs_.at(dup_iter_idx_)->type_ == T_FUN_SYS_REMOVE_CONST
+    && MY_SPEC.expand_exprs_.at(dup_iter_idx_)->args_[0]->is_static_const_;
   if ((lib::is_oracle_mode() && is_real_static_const)
-      || MY_SPEC.expand_exprs_.at(expr_iter_idx_)->is_const_expr()
-      || has_exist_in_array(MY_SPEC.gby_exprs_, MY_SPEC.expand_exprs_.at(expr_iter_idx_))
-      || exists_dup_expr(expr_iter_idx_)) {
+      || MY_SPEC.expand_exprs_.at(dup_iter_idx_)->is_const_expr()
+      || has_exist_in_array(MY_SPEC.gby_exprs_, MY_SPEC.expand_exprs_.at(dup_iter_idx_))
+      || exists_dup_expr(dup_iter_idx_)) {
     // do nothing
   } else if (MY_SPEC.use_rich_format_) {
-    ObExpr *null_expr = MY_SPEC.expand_exprs_.at(expr_iter_idx_);
+    ObExpr *null_expr = MY_SPEC.expand_exprs_.at(dup_iter_idx_);
     if (OB_FAIL(null_expr->init_vector_for_write(eval_ctx_, null_expr->get_default_res_format(),
                                                  child_input_size_))) {
       LOG_WARN("init vector failed", K(ret));
@@ -187,7 +261,7 @@ int ObExpandVecOp::do_dup_partial()
       null_expr->get_vector(eval_ctx_)->set_has_null();
     }
   } else {
-    ObExpr *null_expr = MY_SPEC.expand_exprs_.at(expr_iter_idx_);
+    ObExpr *null_expr = MY_SPEC.expand_exprs_.at(dup_iter_idx_);
     ObDatumVector null_vec = null_expr->locate_expr_datumvector(eval_ctx_);
     for (int i = 0; i < child_input_size_; i++) {
       if (child_input_skip_->at(i)) {
@@ -266,7 +340,7 @@ int ObExpandVecOp::setup_grouping_id()
   using id_vec_type = ObFixedLengthFormat<int64_t>;
   int ret = OB_SUCCESS;
   ObExpr *grouping_id = MY_SPEC.grouping_id_expr_;
-  int64_t seq = MY_SPEC.expand_exprs_.count() - expr_iter_idx_;
+  int64_t seq = is_dup_for_hash_rollup() ? MY_SPEC.expand_exprs_.count() - dup_iter_idx_ : dup_iter_idx_;
   if (OB_UNLIKELY(child_input_size_ <= 0)) {
   } else if (MY_SPEC.use_rich_format_) {
     if (OB_UNLIKELY(grouping_id->get_vec_value_tc() != VEC_TC_INTEGER)) {
@@ -502,20 +576,31 @@ int ObExpandVecOp::duplicate_rollup_exprs()
 
 void ObExpandVecOp::destroy()
 {
-  expr_iter_idx_ = -1;
+  dup_iter_idx_ = -1;
   dup_status_ = DupStatus::Init;
   if (MY_SPEC.use_rich_format_) {
     if (vec_holder_ != nullptr) {
       vec_holder_->reset();
       vec_holder_ = nullptr;
     }
-  } else if (datum_holder_ != nullptr) {
-    datum_holder_->reset();
-    datum_holder_ = nullptr;
+    if (group_vec_holder_ != nullptr) {
+      group_vec_holder_->reset();
+      group_vec_holder_ = nullptr;
+    }
+  } else {
+    if (datum_holder_ != nullptr) {
+      datum_holder_->reset();
+      datum_holder_ = nullptr;
+    }
+    if (group_datum_holder_ != nullptr) {
+      group_datum_holder_->reset();
+      group_datum_holder_ = nullptr;
+    }
   }
   child_input_size_ = 0;
   child_input_skip_ = nullptr;
   child_all_rows_active_ = false;
+  all_group_exprs_.reset();
   allocator_.reset();
 }
 
@@ -523,18 +608,18 @@ void ObExpandVecOp::next_status()
 {
   switch(dup_status_) {
   case DupStatus::Init: {
-    dup_status_ = DupStatus::ORIG_ALL;
-    expr_iter_idx_ = MY_SPEC.expand_exprs_.count();
+    dup_status_ = is_dup_for_hash_rollup() ? DupStatus::ORIG_ALL : DupStatus::DUP_PARTIAL;
+    dup_iter_idx_ = is_dup_for_hash_rollup() ? MY_SPEC.expand_exprs_.count() : MY_SPEC.group_set_exprs_.count() - 1;
     break;
   }
   case DupStatus::ORIG_ALL: {
     dup_status_ = DupStatus::DUP_PARTIAL;
-    expr_iter_idx_--;
+    dup_iter_idx_--;
     break;
   }
   case DupStatus::DUP_PARTIAL: {
-    expr_iter_idx_--;
-    if (expr_iter_idx_ < 0) {
+    dup_iter_idx_--;
+    if (dup_iter_idx_ < 0) {
       dup_status_ = DupStatus::Init;
     }
     break;
@@ -550,7 +635,7 @@ void ObExpandVecOp::clear_evaluated_flags()
   // we don't clear evaluated flags of expand exprs and duplicate exprs
   // expand exprs do not need re-calculation, just set null flags
   // duplicate exprs are copied once, and do not changed ever since
-  for (int i = 0; i < eval_infos_.count(); i++) {
+  for (int i = 0; i < eval_infos_.count() && is_dup_for_hash_rollup(); i++) {
     bool is_expand_eval_info = false;
     bool is_dup_expr_eval_info = false;
     for (int j = 0; !is_expand_eval_info && j < MY_SPEC.expand_exprs_.count(); j++) {
@@ -564,6 +649,139 @@ void ObExpandVecOp::clear_evaluated_flags()
       eval_infos_.at(i)->clear_evaluated_flag();
     }
   }
+
+  for (int i = 0; i < eval_infos_.count() && is_dup_for_grouping_sets(); i++) {
+    bool is_group_expr_info = false;
+    bool is_dup_expr_eval_info = false;
+    bool is_pruned_gby = false;
+    for (int j = 0; !is_group_expr_info && j < all_group_exprs_.count(); j++) {
+      is_group_expr_info = (eval_infos_.at(i) == &(all_group_exprs_.at(j)->get_eval_info(eval_ctx_)));
+    }
+    for (int j = 0; !is_dup_expr_eval_info && j < MY_SPEC.dup_expr_pairs_.count(); j++) {
+      is_dup_expr_eval_info =
+        (eval_infos_.at(i) == &(MY_SPEC.dup_expr_pairs_.at(j).dup_expr_->get_eval_info(eval_ctx_)));
+    }
+    for (int j = 0; !is_pruned_gby && j < MY_SPEC.pruned_groupby_exprs_.count(); j++) {
+      is_pruned_gby = (eval_infos_.at(i) == &(MY_SPEC.pruned_groupby_exprs_.at(j)->get_eval_info(eval_ctx_)));
+    }
+    if (!is_group_expr_info && !is_dup_expr_eval_info && !is_pruned_gby) {
+      eval_infos_.at(i)->clear_evaluated_flag();
+    }
+  }
+}
+
+int ObExpandVecOp::dup_for_grouping_sets()
+{
+  int ret = OB_SUCCESS;
+  const ExprFixedArray &group_exprs = MY_SPEC.group_set_exprs_.at(dup_iter_idx_);
+  ObSEArray<int64_t, 8> null_expr_ids;
+  ObBatchRows tmp_brs(*child_input_skip_, child_input_size_, child_all_rows_active_);
+  for (int i = 0; OB_SUCC(ret) && i < all_group_exprs_.count(); i++) {
+    if (has_exist_in_array(group_exprs, all_group_exprs_.at(i))) { continue; }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(null_expr_ids.push_back(i))) {
+      LOG_WARN("push back element failed", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (all_group_exprs_.count() <= 0) {
+  } else if (need_restore_group_exprs() && OB_FAIL(restore_group_exprs())) {
+    LOG_WARN("restore group exprs failed", K(ret));
+  } else {
+    for (int i = 0; OB_SUCC(ret) && i < null_expr_ids.count(); i++) {
+      ObExpr *expr = all_group_exprs_.at(null_expr_ids.at(i));
+      if (expr->is_const_expr()) { continue; }
+      if (MY_SPEC.use_rich_format_ && expr->datum_meta_.type_ != ObNullType) {
+        if (OB_FAIL(expr->init_vector_for_write(eval_ctx_, expr->get_default_res_format(), child_input_size_))) {
+          LOG_WARN("init vector for write failed", K(ret));
+        } else {
+          expr->get_nulls(eval_ctx_).set_all(child_input_size_);
+          expr->get_vector(eval_ctx_)->set_has_null();
+        }
+      } else {
+        ObDatumVector null_vec = expr->locate_expr_datumvector(eval_ctx_);
+        for (int i = 0; i < child_input_size_; i++) {
+          if (child_input_skip_->at(i)) {
+          } else {
+            null_vec.at(i)->set_null();
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObExpandVecOp::backup_group_exprs()
+{
+  int ret = OB_SUCCESS;
+  if (child_input_size_ > 0 && all_group_exprs_.count() > 0) {
+    ObBatchRows tmp_brs(*child_input_skip_, child_input_size_, child_all_rows_active_);
+    for (int i = 0; OB_SUCC(ret) && i < all_group_exprs_.count(); i++) {
+      ObExpr *expr = all_group_exprs_.at(i);
+      if (MY_SPEC.use_rich_format_ && OB_FAIL(expr->eval_vector(eval_ctx_, tmp_brs))) {
+        LOG_WARN("eval vector failed", K(ret));
+      } else if (!MY_SPEC.use_rich_format_
+                 && OB_FAIL(expr->eval_batch(eval_ctx_, *child_input_skip_, child_input_size_))) {
+        LOG_WARN("eval batch failed", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (MY_SPEC.use_rich_format_) {
+      ret = group_vec_holder_->save(child_input_size_);
+    } else {
+      ret = group_datum_holder_->save(child_input_size_);
+    }
+  }
+  return ret;
+}
+
+int ObExpandVecOp::setup_pruned_gby_exprs()
+{
+  int ret = OB_SUCCESS;
+  if (child_input_size_ > 0 && MY_SPEC.pruned_groupby_exprs_.count() > 0) {
+    for (int i = 0; OB_SUCC(ret) && i < MY_SPEC.pruned_groupby_exprs_.count(); i++) {
+      ObExpr *expr = MY_SPEC.pruned_groupby_exprs_.at(i);
+      if (expr->is_const_expr()) { continue; }
+      if (MY_SPEC.use_rich_format_ && expr->datum_meta_.type_ != ObNullType) {
+        // SELECT A FROM ZCT1_PAR_RA_HA PARTITION(sp1) GROUP BY GROUPING SETS(A,NULL) HAVING A LIKE '1' AND A IS NOT NULL ORDER BY 1 ASC;
+        // `NULL` will be replaced as remove_const(NULL)
+        // it's default result format is ObUniformFormat, which does not contain nulls bitmap!!!
+        if (OB_FAIL(expr->init_vector_for_write(eval_ctx_, expr->get_default_res_format(),
+                                                child_input_size_))) {
+          LOG_WARN("init for write failed", K(ret));
+        } else {
+          expr->get_nulls(eval_ctx_).set_all(child_input_size_);
+          expr->get_vector(eval_ctx_)->set_has_null();
+        }
+      } else {
+        ObDatum *datums = expr->locate_datums_for_update(eval_ctx_, child_input_size_);
+        for (int i = 0; i < child_input_size_; i++) {
+          if (child_input_skip_->at(i)) {
+          } else {
+            datums[i].set_null();
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        expr->set_evaluated_projected(eval_ctx_);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObExpandVecOp::restore_group_exprs()
+{
+  int ret = OB_SUCCESS;
+  if (child_input_size_ > 0 && all_group_exprs_.count()) {
+    if (MY_SPEC.use_rich_format_) {
+      ret = group_vec_holder_->restore();
+    } else {
+      ret = group_datum_holder_->restore();
+    }
+  }
+  return ret;
 }
 } // end sql
 } // end oceanbase

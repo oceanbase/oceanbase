@@ -376,8 +376,8 @@ NULL	NULL	3,2,1
 1	1	1
 1	NULL	3,2,1
 2	1	2
-2	NULL	3,2
 1	2	3,2
+2	NULL	3,2
 2	3	3,2
 drop table t1, t2, t3, t4, t5;
 drop table if exists t1, t2;

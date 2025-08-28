@@ -51,6 +51,39 @@ int ObRollupAdaptiveInfo::assign(const ObRollupAdaptiveInfo &info)
   return ret;
 }
 
+int ObHashRollupInfo::assign(const ObHashRollupInfo &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(expand_exprs_.assign(other.expand_exprs_))) {
+    LOG_WARN("assign array failed", K(ret));
+  } else if (OB_FAIL(gby_exprs_.assign(other.gby_exprs_))) {
+    LOG_WARN("assign array failed", K(ret));
+  } else if (OB_FAIL(dup_expr_pairs_.assign(other.dup_expr_pairs_))) {
+    LOG_WARN("assign array failed", K(ret));
+  } else if (OB_FAIL(replaced_agg_pairs_.assign(other.replaced_agg_pairs_))) {
+    LOG_WARN("assign array failed", K(ret));
+  } else {
+    rollup_grouping_id_ = other.rollup_grouping_id_;
+  }
+  return ret;
+}
+int ObGroupingSetInfo::assign(const ObGroupingSetInfo &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(common_group_exprs_.assign(other.common_group_exprs_))
+      || OB_FAIL(group_exprs_.assign(other.group_exprs_))
+      || OB_FAIL(group_dirs_.assign(other.group_dirs_))
+      || OB_FAIL(groupset_exprs_.assign(other.groupset_exprs_))
+      || OB_FAIL(pruned_groupset_exprs_.assign(other.pruned_groupset_exprs_))
+      || OB_FAIL(dup_expr_pairs_.assign(other.dup_expr_pairs_))
+      || OB_FAIL(replaced_agg_pairs_.assign(other.replaced_agg_pairs_))) {
+    LOG_WARN("assign array failed", K(ret));
+  } else {
+    grouping_set_id_ = other.grouping_set_id_;
+  }
+  return ret;
+}
+
 int ObLogGroupBy::get_explain_name_internal(char *buf,
                                             const int64_t buf_len,
                                             int64_t &pos)

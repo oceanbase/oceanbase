@@ -126,7 +126,7 @@ private:
   int set_agg_json_array_result_type(ObAggFunRawExpr &expr, ObExprResType &result_type);
 
   int set_agg_min_max_result_type(ObAggFunRawExpr &expr, ObExprResType &result_type,
-                                  bool &need_add_cast);
+                                  bool &need_add_cast, bool is_arg_min_max = false);
   int set_agg_regr_result_type(ObAggFunRawExpr &expr, ObExprResType &result_type);
   int set_xmlagg_result_type(ObAggFunRawExpr &expr, ObExprResType& result_type);
 

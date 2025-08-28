@@ -381,7 +381,9 @@ int ObTransformPredicateMoveAround::pullup_predicates(ObDMLStmt *stmt,
     LOG_WARN("stmt is null", K(ret), K(stmt));
   } else if (stmt->is_hierarchical_query()) {
     OPT_TRACE("can not pullup predicates for hierarchical query");
-  } else if (stmt->is_select_stmt() && static_cast<ObSelectStmt *>(stmt)->get_rollup_expr_size() != 0) {
+  } else if (stmt->is_select_stmt()
+             && (static_cast<ObSelectStmt *>(stmt)->get_rollup_expr_size() != 0
+                 || static_cast<ObSelectStmt *>(stmt)->has_grouping_sets())) {
     OPT_TRACE("can not pullup predicates for select stmt if stmt has rollup exprs");
   } else if (OB_FAIL(check_stack_overflow(is_overflow))) {
     LOG_WARN("failed to check stack overflow", K(ret));

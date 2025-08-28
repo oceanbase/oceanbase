@@ -55,6 +55,7 @@ struct ObAuditRecordData;
 class ObOpSpec;
 class ObEvolutionPlan;
 class ObSqlSchemaGuard;
+class EnableOpRichFormat;
 
 //class ObPhysicalPlan: public common::ObDLinkBase<ObPhysicalPlan>
 typedef common::ObFixedArray<common::ObFixedArray<int64_t, common::ObIAllocator>, common::ObIAllocator> PhyRowParamMap;
@@ -179,7 +180,7 @@ public:
     const ObPhyOperatorType type, const int64_t child_cnt, ObOpSpec *&op, const uint64_t op_id);
   int alloc_op_spec_for_cg(ObLogicalOperator *op, ObSqlSchemaGuard *schema_guard,
                            const ObPhyOperatorType type, const int64_t child_cnt, ObOpSpec *&spec,
-                           const uint64_t op_id);
+                           const uint64_t op_id, const EnableOpRichFormat &enable_rich_format);
 
   void set_location_type(ObPhyPlanType type) { location_type_ = type; }
   bool has_uncertain_local_operator() const { return OB_PHY_PLAN_UNCERTAIN == location_type_; }

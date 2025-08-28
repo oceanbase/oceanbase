@@ -162,7 +162,7 @@ int GeneralCompare<Store_Row, has_addon>::compare(const Store_Row *r, ObEvalCtx 
   const char *l_data = nullptr;
   const char *r_data = nullptr;
   const int64_t batch_idx = eval_ctx.get_batch_idx();
-  for (int64_t i = 0; 0 == cmp && i < cnt_ && OB_SUCC(ret); i++) {
+  for (int64_t i = cmp_start_; 0 == cmp && i < cmp_end_ && OB_SUCC(ret); i++) {
     const ObSortFieldCollation &sort_collation = cmp_sort_collations_->at(i);
     const ObExpr *e = cmp_sk_exprs_->at(sort_collation.field_idx_);
     l_null = sk_col_result_list_[i].is_null(batch_idx);
@@ -608,7 +608,7 @@ int FixedCompare<Store_Row, has_addon>::compare(const Store_Row *r, ObEvalCtx &e
   const char *l_data = nullptr;
   const char *r_data = nullptr;
   const int64_t batch_idx = eval_ctx.get_batch_idx();
-  for (int64_t i = 0; 0 == cmp && i < cnt_ && OB_SUCC(ret); i++) {
+  for (int64_t i = cmp_start_; 0 == cmp && i < cmp_end_ && OB_SUCC(ret); i++) {
     const ObSortFieldCollation &sort_collation = cmp_sort_collations_->at(i);
     const ObExpr *e = cmp_sk_exprs_->at(sort_collation.field_idx_);
     l_null = sk_col_result_list_[i].is_null(batch_idx);

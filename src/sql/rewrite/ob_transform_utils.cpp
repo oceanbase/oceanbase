@@ -1615,6 +1615,7 @@ int ObTransformUtils::is_aggr_query(const ObSelectStmt *stmt,
              && 0 == stmt->get_group_expr_size()
              && 0 == stmt->get_rollup_expr_size()
              && 0 == stmt->get_having_expr_size()
+             && 0 == stmt->get_grouping_sets_items_size()
              && !stmt->has_limit()) {
     is_aggr_type = true;
   }
@@ -4425,7 +4426,7 @@ int ObTransformUtils::check_stmt_unique(const ObSelectStmt *stmt,
   } else if (!ignore_distinct && stmt->is_distinct()  // distinct
              && ObOptimizerUtil::subset_exprs(select_exprs, exprs)) {
     is_unique = true;
-  } else if (!ignore_group && stmt->has_rollup()) {
+  } else if (!ignore_group && (stmt->has_rollup() || stmt->has_grouping_sets())) {
     // rollup 不忽略 group 时直接返回 false
     // 当 exprs 为 rollup exprs 子集时为 not strict unique, 但这种场景无用
     is_unique = false;
@@ -4473,7 +4474,7 @@ int ObTransformUtils::check_stmt_unique(const ObSelectStmt *stmt,
     } else {
       fd_item_factory.destory();
       expr_factory.destory();
-      LOG_TRACE("get is unique result", K(ret), K(is_unique));
+      LOG_TRACE("get is unique result", K(ret), K(is_unique), K(ignore_distinct), K(ignore_group));
     }
   }
   return ret;
@@ -4491,7 +4492,7 @@ int ObTransformUtils::compute_stmt_property(const ObSelectStmt *stmt,
   if (OB_ISNULL(stmt) || OB_ISNULL(fd_factory = check_helper.fd_factory_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
-  } else if (!ignore_group && stmt->has_rollup()) {
+  } else if (!ignore_group && (stmt->has_rollup() || stmt->has_grouping_sets())) {
     // 对于 rollup 不计算 property
     // 其实 rollup 后能产生类似于 candi_fd_sets 包含 null 的属性, 暂时不处理
   } else if (stmt->is_set_stmt()) {
@@ -8186,7 +8187,8 @@ int ObTransformUtils::can_push_down_filter_to_table(TableItem &table, bool &can_
                  ref_query->is_contains_assignment() ||
                  ref_query->has_window_function() ||
                  ref_query->has_group_by() ||
-                 ref_query->has_rollup());
+                 ref_query->has_rollup() ||
+                 ref_query->has_grouping_sets());
   }
   return ret;
 }
@@ -9892,7 +9894,7 @@ int StmtUniqueKeyProvider::check_can_set_stmt_unique(ObDMLStmt *stmt,
           can_set_unique = false;
         } else if (view_stmt->is_set_stmt() && view_stmt->is_set_distinct()) {
           //do nothing
-        } else if (view_stmt->is_hierarchical_query() || view_stmt->has_rollup()) {
+        } else if (view_stmt->is_hierarchical_query() || view_stmt->has_rollup() || view_stmt->has_grouping_sets()) {
           can_set_unique = false;
         } else if (OB_FAIL(SMART_CALL(check_can_set_stmt_unique(view_stmt,
                                                                 can_set_unique)))) {
@@ -10134,7 +10136,7 @@ int ObTransformUtils::get_post_join_exprs(ObDMLStmt *stmt,
     // do nothing
   } else if (stmt->is_select_stmt()) {
     ObSelectStmt *sel_stmt = static_cast<ObSelectStmt *>(stmt);
-    if (sel_stmt->has_rollup()) {
+    if (sel_stmt->has_rollup() || sel_stmt->has_grouping_sets()) {
       // do nothing
     } else if (sel_stmt->has_group_by()) {
       if (OB_FAIL(append(exprs, sel_stmt->get_group_exprs()))) {
@@ -10964,7 +10966,8 @@ int ObTransformUtils::replace_with_groupby_exprs(ObSelectStmt *select_stmt,
             } else if (groupby_exprs.at(k)->same_as(*expr, &check_context)) {
               expr = groupby_exprs.at(k);
               is_existed = true;
-            } else { /*do nothing.*/ }
+            } else { /*do nothing.*/
+            }
           }
         }
       }
@@ -13826,7 +13829,17 @@ int ObTransformUtils::transform_aggregation_expr(ObTransformerCtx *ctx,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("the copied aggregation expr is null", K(ret));
   } else {
+    // select a from (select /*+no_merge*/sum(col_int) from t group by grouping sets (a, b, c)); =>
+    // select a from
+    //   (select /*+no_merge*/sum(view.sum(col_int)) from
+    //     (select /*+no_merge*/sum(col_int), a, b, c from t group by a, b, c) view group by grouping sets(view.a, view.b, view.c)
+    //   )
+
+    // result precision of origin sum is 33
+    // result precision of sum(view.sum(col_int))  should be same, i.e. outter sum shouldn't increase result precision
+    // here we set param_is_inline_view_aggr to be true to avoid precision increase
     group_aggr->add_real_param_expr(view_column);
+    group_aggr->set_is_keep_sum_precision(true);
     if (OB_FAIL(group_aggr->formalize(ctx->session_info_))) {
       LOG_WARN("failed to formalize aggregation expr", K(ret));
     } else {
@@ -16793,11 +16806,12 @@ int ObTransformUtils::check_stmt_can_trans_as_exists(ObSelectStmt *stmt,
              stmt->is_hierarchical_query() ||
              stmt->has_window_function() ||
              stmt->has_rollup() ||
+             stmt->has_grouping_sets() ||
              (stmt->is_values_table_query() &&
               !ObTransformUtils::is_enable_values_table_rewrite(stmt->get_query_ctx()->optimizer_features_enable_version_))) {
     LOG_TRACE("stmt not support trans in as exists", K(stmt->is_contains_assignment()),
               K(stmt->is_hierarchical_query()), K(stmt->has_window_function()),
-              K(stmt->has_rollup()), K(stmt->is_values_table_query()));
+              K(stmt->has_rollup()), K(stmt->is_values_table_query()), K(stmt->has_grouping_sets()));
   } else if (is_correlated) {
     is_valid = true;
   } else if (stmt->has_group_by() ||

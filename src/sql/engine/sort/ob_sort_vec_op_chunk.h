@@ -45,11 +45,15 @@ struct ObSortVecOpChunk : public common::ObDLinkBase<ObSortVecOpChunk<Store_Row,
     const int64_t max_rows = 1;
     if (OB_FAIL(sk_row_iter_.get_next_batch(max_rows, read_rows,
                                             reinterpret_cast<const ObCompactRow **>(&sk_row_)))) {
-      SQL_ENG_LOG(WARN, "get next row failed", K(ret));
+      if (OB_ITER_END != ret) {
+        SQL_ENG_LOG(WARN, "get next row failed", K(ret));
+      }
     } else if (has_addon) {
       if (OB_FAIL(addon_row_iter_.get_next_batch(
             max_rows, read_rows, reinterpret_cast<const ObCompactRow **>(&addon_row_)))) {
-        SQL_ENG_LOG(WARN, "get next row failed", K(ret));
+        if (OB_ITER_END != ret) {
+          SQL_ENG_LOG(WARN, "get next row failed", K(ret));
+        }
       } else {
         const_cast<Store_Row *>(sk_row_)->set_addon_ptr(addon_row_, sk_store_.get_row_meta());
       }

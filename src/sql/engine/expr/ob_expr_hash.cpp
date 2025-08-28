@@ -102,6 +102,66 @@ int ObExprHash::calc_hash_value_expr_batch(
   return ret;
 }
 
+template <typename ResVec>
+static int set_hash_value_vector(VECTOR_EVAL_FUNC_ARG_DECL, uint64_t *hash_vals)
+{
+  int ret = OB_SUCCESS;
+  ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
+  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+  ObBitVector &my_skip = expr.get_pvt_skip(ctx);
+  for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
+    if (my_skip.at(idx)) {
+      continue;
+    }
+    res_vec->set_uint(idx, hash_vals[idx]);
+    eval_flags.set(idx);
+  }
+  return ret;
+}
+
+int ObExprHash::calc_hash_value_expr_vector(VECTOR_EVAL_FUNC_ARG_DECL)
+{
+  int ret = OB_SUCCESS;
+  uint64_t hash_seed = HASH_SEED;
+  uint64_t *hash_vals = reinterpret_cast<uint64_t *>(expr.get_res_buf(ctx));
+  ObBitVector &my_skip = expr.get_pvt_skip(ctx);
+  my_skip.deep_copy(skip, bound.start(), bound.end());
+  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+  my_skip.bit_or(eval_flags, bound.start(), bound.end());
+  for (int64_t i = 0; OB_SUCC(ret) && i < expr.arg_cnt_; i++) {
+    if (OB_FAIL(expr.args_[i]->eval_vector(ctx, my_skip, bound))) {
+      LOG_WARN("failed to eval prarmemters", K(i), K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr.arg_cnt_; i++) {
+      ObIVector *vec = expr.args_[i]->get_vector(ctx);
+      ret = vec->murmur_hash_v3(*expr.args_[i], hash_vals, my_skip, bound, i > 0 ? hash_vals : &hash_seed, i > 0);
+    }
+    if (OB_SUCC(ret)) {
+      VectorFormat res_format = expr.get_format(ctx);
+      switch (res_format) {
+        case VEC_FIXED:
+          ret = set_hash_value_vector<ObFixedLengthFormat<uint64_t>>(VECTOR_EVAL_FUNC_ARG_LIST, hash_vals);
+          break;
+        case VEC_CONTINUOUS:
+          ret = set_hash_value_vector<ObContinuousFormat>(VECTOR_EVAL_FUNC_ARG_LIST, hash_vals);
+          break;
+        case VEC_DISCRETE:
+          ret = set_hash_value_vector<ObDiscreteFormat>(VECTOR_EVAL_FUNC_ARG_LIST, hash_vals);
+          break;
+        case VEC_UNIFORM:
+          ret = set_hash_value_vector<ObUniformBase>(VECTOR_EVAL_FUNC_ARG_LIST, hash_vals);
+          break;
+        default:
+          ret = set_hash_value_vector<ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST, hash_vals);
+      }
+    }
+  }
+  return ret;
+}
+
 int ObExprHash::cg_expr(ObExprCGCtx &expr_cg_ctx,
                         const ObRawExpr &raw_expr,
                         ObExpr &rt_expr) const
@@ -115,6 +175,9 @@ int ObExprHash::cg_expr(ObExprCGCtx &expr_cg_ctx,
   } else {
     rt_expr.eval_func_ = &calc_hash_value_expr;
     rt_expr.eval_batch_func_ = &calc_hash_value_expr_batch;
+    if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_1_0) {
+      rt_expr.eval_vector_func_ = &calc_hash_value_expr_vector;
+    }
   }
   return ret;
 }

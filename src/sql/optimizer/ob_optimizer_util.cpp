@@ -8977,6 +8977,15 @@ int ObOptimizerUtil::generate_pullup_aggr_expr(ObRawExprFactory &expr_factory,
         LOG_WARN("add param expr failed", K(ret));
       }
     }
+  } else if (T_FUN_GROUP_ID == aggr_type) {
+    if (OB_UNLIKELY(origin_expr->get_real_param_count() != 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid param cnt", K(ret));
+    } else if (OB_FAIL(expr_factory.create_raw_expr(origin_expr->get_expr_type(), pullup_aggr))) {
+      LOG_WARN("create raw expr failed", K(ret));
+    } else if (OB_FAIL(pullup_aggr->assign(*origin_expr))) {
+      LOG_WARN("assign expr failed", K(ret));
+    }
   } else if (T_FUN_TOP_FRE_HIST == aggr_type) {
     if (OB_UNLIKELY(4 != origin_expr->get_real_param_count())) {
       ret = OB_ERR_UNEXPECTED;

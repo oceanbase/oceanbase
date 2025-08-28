@@ -89,6 +89,7 @@ class ObSelectLogPlan;
 class ObThreeStageAggrInfo;
 struct ObTextRetrievalInfo;
 class ObHashRollupInfo;
+class ObGroupingSetInfo;
 class ObTablePartitionInfo;
 
 struct TableDependInfo {
@@ -633,10 +634,10 @@ public:
       rollup_id_expr_(NULL),
       group_ndv_(-1.0),
       group_distinct_ndv_(-1.0),
-      enable_hash_rollup_(true),
-      force_hash_rollup_(false),
-      hash_rollup_info_(NULL),
-      grouping_dop_(ObGlobalHint::UNSET_PARALLEL)
+      grouping_dop_(ObGlobalHint::UNSET_PARALLEL),
+      grouping_set_info_(NULL),
+      ignore_stmt_distinct_or_rollup_(false),
+      real_groupingset_agg_items_()
     {
     }
     virtual ~GroupingOpHelper() {}
@@ -712,10 +713,12 @@ public:
     // distinct of group expr and distinct expr
     double group_distinct_ndv_;
 
-    bool enable_hash_rollup_;
-    bool force_hash_rollup_;
-    ObHashRollupInfo *hash_rollup_info_;
     int64_t grouping_dop_;
+
+    ObGroupingSetInfo *grouping_set_info_;
+    bool ignore_stmt_distinct_or_rollup_;
+
+    ObSEArray<ObAggFunRawExpr *, 4> real_groupingset_agg_items_;
 
     TO_STRING_KV(K_(can_storage_pushdown),
                  K_(can_basic_pushdown),
@@ -743,9 +746,9 @@ public:
                  K_(distinct_aggr_batch),
                  K_(distinct_aggr_items),
                  K_(non_distinct_aggr_items),
-                 K_(enable_hash_rollup),
-                 K_(force_hash_rollup),
-                 K_(grouping_dop));
+                 K_(grouping_dop),
+                 K_(ignore_stmt_distinct_or_rollup),
+                 K_(real_groupingset_agg_items));
   };
 
   /**
@@ -889,8 +892,7 @@ public:
 
   /** @brief Allocating a expand operator which is response for duplicate child input as parent of a path */
   int allocate_expand_as_top(ObLogicalOperator *&old_top,
-                             ObHashRollupInfo* hash_rollup_info);
-
+                             ObGroupingSetInfo *grouping_set_info);
   /** @brief Create plan tree from an interesting order */
   int create_plan_tree_from_path(Path *path,
                                  ObLogicalOperator *&out_plan_tree);
@@ -935,6 +937,8 @@ public:
                                     ObLogicalOperator *&top);
 
   int perform_group_by_pushdown(ObLogicalOperator *op);
+  int perform_one_distinct_pushdown(ObLogicalOperator *op);
+  int perform_groupingsets_replacement(ObLogicalOperator *op);
   int perform_simplify_win_expr(ObLogicalOperator *op);
   int perform_adjust_onetime_expr(ObLogicalOperator *op);
   int init_onetime_replaced_exprs_if_needed();
@@ -981,10 +985,18 @@ public:
                           const bool is_from_povit,
                           GroupingOpHelper &groupby_helper);
 
-  int init_hash_rollup_info(const ObIArray<ObRawExpr*> &groupby_exprs,
-                            const ObIArray<ObRawExpr*> &rollup_exprs,
-                            const ObIArray<ObAggFunRawExpr*> &aggr_items,
-                            ObHashRollupInfo* &hash_rollup_info);
+  int init_grouping_set_info(const ObLogicalOperator &top,
+                             const ObIArray<ObGroupbyExpr> &groupset_exprs,
+                             const ObIArray<ObGroupbyExpr> &pruned_groupset_exprs,
+                             const ObIArray<ObAggFunRawExpr *> &aggr_items,
+                             ObIArray<ObAggFunRawExpr *> &new_agg_items,
+                             ObGroupingSetInfo *&grouping_set_info);
+
+  int extend_rollup_to_groupset(const ObIArray<ObRawExpr *> &gby_exprs,
+                                const ObIArray<ObRawExpr *> &rollup_exprs,
+                                ObLogicalOperator &top,
+                                ObIArray<ObGroupbyExpr> &groupset_exprs);
+
 
 
   int compute_groupby_dop_by_auto_dop(const ObIArray<ObRawExpr*> &group_exprs,
@@ -1042,6 +1054,7 @@ public:
                                              bool &can_push);
 
   int check_basic_groupby_pushdown(const ObIArray<ObAggFunRawExpr*> &aggr_items,
+                                   const bool use_grouping_sets_expansion,
                                    const EqualSets &equal_sets,
                                    bool &push_group);
 
@@ -1051,7 +1064,6 @@ public:
                                          ObIArray<ObAggFunRawExpr *> &distinct_aggrs,
                                          const EqualSets &equal_sets,
                                          ObIArray<ObRawExpr *> &distinct_exprs,
-                                         const bool enable_hash_rollup,
                                          bool &can_push);
 
   int check_rollup_pushdown(const ObSQLSessionInfo *info,
@@ -1182,7 +1194,7 @@ public:
                                bool force_use_scalar = false,
                                const AggregatePathType step = AggregatePathType::SINGLE,
                                const ObThreeStageAggrInfo *three_stage_info = NULL,
-                               ObHashRollupInfo *hash_rollup_info = NULL);
+                               ObGroupingSetInfo *grouping_set_info = NULL);
 
   int candi_allocate_limit(const ObIArray<OrderItem> &order_items);
 
@@ -2189,6 +2201,8 @@ protected: // member variable
   common::ObSEArray<std::pair<ObRawExpr *, ObRawExpr *>, 4, common::ModulePageAllocator, true > group_replaced_exprs_;
   common::ObSEArray<std::pair<ObRawExpr *, ObRawExpr *>, 4, common::ModulePageAllocator, true > overwrite_group_replaced_exprs_;
   ObRawExprReplacer group_replacer_;
+  ObRawExprReplacer distinct_pushdown_replacer_;
+  ObRawExprReplacer groupingset_agg_replacer_;
   ObRawExprReplacer window_function_replacer_;
   ObRawExprReplacer gen_col_replacer_;
   ObRawExprReplacer onetime_replacer_;

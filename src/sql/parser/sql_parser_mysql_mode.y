@@ -167,7 +167,7 @@ FROZEN_VERSION TOPK QUERY_TIMEOUT READ_CONSISTENCY LOG_LEVEL USE_PLAN_CACHE
 TRACE_LOG LOAD_BATCH_SIZE TRANS_PARAM OPT_PARAM OB_DDL_SCHEMA_VERSION FORCE_REFRESH_LOCATION_CACHE
 ENABLE_PARALLEL_DAS_DML DISABLE_PARALLEL_DAS_DML DISABLE_PARALLEL_DML ENABLE_PARALLEL_DML MONITOR NO_PARALLEL CURSOR_SHARING_EXACT
 MAX_CONCURRENT DOP TRACING NO_QUERY_TRANSFORMATION NO_COST_BASED_QUERY_TRANSFORMATION BLOCKING RESOURCE_GROUP
-PX_NODE_POLICY PX_NODE_ADDRS PX_NODE_COUNT DML_PARALLEL
+PX_NODE_POLICY PX_NODE_ADDRS PX_NODE_COUNT DML_PARALLEL DISABLE_OP_RICH_FORMAT
 // transform hint
 NO_REWRITE MERGE_HINT NO_MERGE_HINT NO_EXPAND USE_CONCAT NO_UNNEST
 PLACE_GROUP_BY NO_PLACE_GROUP_BY INLINE MATERIALIZE SEMI_TO_INNER NO_SEMI_TO_INNER
@@ -269,7 +269,7 @@ END_P SET_VAR DELIMITER
 //-----------------------------non_reserved keyword begin-------------------------------------------
         ACCESS ACCESS_INFO ACCESSID ACCESSKEY ACCESSTYPE ACCOUNT ACTION ACTIVE ADDDATE AFTER AGAINST AGGREGATE AI ALGORITHM ALL_META ALL_USER ALWAYS ALLOW ANALYSE ANY
         APPID APPROX_COUNT_DISTINCT APPROX_COUNT_DISTINCT_SYNOPSIS APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE
-        ARBITRATION ARRAY ASCII ASIS AT ATTRIBUTE AUTHORS AUTO AUTOEXTEND_SIZE AUTO_INCREMENT AUTO_INCREMENT_MODE AUTO_INCREMENT_CACHE_SIZE
+        ARBITRATION ARG_MAX ARG_MIN ARRAY ASCII ASIS AT ATTRIBUTE AUTHORS AUTO AUTOEXTEND_SIZE AUTO_INCREMENT AUTO_INCREMENT_MODE AUTO_INCREMENT_CACHE_SIZE
         AVG AVG_ROW_LENGTH ACTIVATE AVAILABILITY ARCHIVELOG ARCHIVELOG_PIECE ASYNCHRONOUS AUDIT ADMIN AUTO_REFRESH API_MODE APPROX APPROXIMATE ARRAY_AGG ARRAY_FILTER ARRAY_FIRST ARRAY_MAP ARRAY_SORTBY
 
         BACKUP BACKUP_COPIES BALANCE BANDWIDTH BASE BASELINE BASELINE_ID BASIC BEGI BINDING SHARDING BINARY_FORMAT BINLOG BIT BIT_AND
@@ -582,6 +582,7 @@ END_P SET_VAR DELIMITER
 %type <node> dynamic_partition_option dynamic_partition_option_list sys_view_cast_opt
 %type <node> create_location_stmt alter_location_stmt drop_location_stmt location_name location_url opt_sub_path credential_option_list credential_option opt_credential location_utils_stmt
 %type <node> flashback_standby_log_stmt
+%type <node> operator_list
 %type <node> semistruct_properties_list semistruct_properties semistruct_encoding_type_option
 
 %type <node> algorithm_opt lock_opt
@@ -657,7 +658,7 @@ stmt:
   | create_outline_stmt     { $$ = $1; question_mark_issue($$, result); }
   | alter_outline_stmt      { $$ = $1; question_mark_issue($$, result); }
   | drop_outline_stmt       { $$ = $1; check_question_mark($$, result); }
-  | show_stmt               { $$ = $1; check_question_mark($$, result); }
+  | show_stmt               { $$ = $1; question_mark_issue($$, result); }
   | prepare_stmt            { $$ = $1; question_mark_issue($$, result); }
   | variable_set_stmt       { $$ = $1; question_mark_issue($$, result); }
   | execute_stmt            { $$ = $1; check_question_mark($$, result); }
@@ -2253,6 +2254,16 @@ COUNT '(' opt_all '*' ')' OVER new_generalized_window_clause
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_MIN, 2, $3, $4);
   malloc_non_terminal_node($$, result->malloc_pool_, T_WINDOW_FUNCTION, 2, $$, $7);
 }
+| ARG_MAX '(' opt_distinct_or_all expr ',' expr ')' OVER new_generalized_window_clause
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_ARG_MAX, 3, $3, $4, $6);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_WINDOW_FUNCTION, 2, $$, $9);
+}
+| ARG_MIN '(' opt_distinct_or_all expr ',' expr ')' OVER new_generalized_window_clause
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_ARG_MIN, 3, $3, $4, $6);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_WINDOW_FUNCTION, 2, $$, $9);
+}
 | AVG '(' opt_distinct_or_all expr ')' OVER new_generalized_window_clause
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_AVG, 2, $3, $4);
@@ -2745,6 +2756,14 @@ MOD '(' expr ',' expr ')'
 | MIN '(' opt_distinct_or_all expr ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_MIN, 2, $3, $4);
+}
+| ARG_MAX '(' opt_distinct_or_all expr ',' expr ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_ARG_MAX, 3, $3, $4, $6);
+}
+| ARG_MIN '(' opt_distinct_or_all expr ',' expr ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_ARG_MIN, 3, $3, $4, $6);
 }
 | AVG '(' opt_distinct_or_all expr ')'
 {
@@ -12441,6 +12460,23 @@ READ_CONSISTENCY '(' consistency_level ')'
 | PX_NODE_COUNT '(' INTNUM ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_PX_NODE_COUNT, 1, $3);
+}
+| DISABLE_OP_RICH_FORMAT '(' operator_list ')'
+{
+  ParseNode *op_list = NULL;
+  merge_nodes(op_list, result, T_DISABLE_OP_RICH_FORMAT, $3);
+  $$=op_list;
+}
+;
+
+operator_list:
+STRING_VALUE
+{
+  $$ = $1;
+}
+| operator_list ',' STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
 }
 ;
 
@@ -26125,6 +26161,8 @@ ACCESS_INFO
 |       ARCHIVELOG
 |       ARCHIVELOG_PIECE
 |       ARBITRATION
+|       ARG_MAX
+|       ARG_MIN
 |       ARRAY
 |       ASIS
 |       ASCII

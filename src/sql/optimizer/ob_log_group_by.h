@@ -84,11 +84,28 @@ struct ObHashRollupInfo
   {
 
   }
-
+  int assign(const ObHashRollupInfo &other);
   common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> expand_exprs_;
   common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> gby_exprs_;
   common::ObSEArray<ObTuple<ObRawExpr *, ObRawExpr *>, 8, common::ModulePageAllocator, true> dup_expr_pairs_;
   ObOpPseudoColumnRawExpr *rollup_grouping_id_;
+  common::ObSEArray<ObTuple<ObRawExpr *, ObRawExpr *>, 8, common::ModulePageAllocator, true> replaced_agg_pairs_;
+};
+
+struct ObGroupingSetInfo
+{
+  ObGroupingSetInfo(): grouping_set_id_(nullptr) {}
+  common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> common_group_exprs_;
+  common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> group_exprs_;
+  common::ObSEArray<ObOrderDirection, 8, common::ModulePageAllocator, true> group_dirs_;
+  common::ObSEArray<ObGroupbyExpr, 8, common::ModulePageAllocator, true> groupset_exprs_;
+  common::ObSEArray<ObGroupbyExpr, 8, common::ModulePageAllocator, true> pruned_groupset_exprs_;
+  common::ObSEArray<ObTuple<ObRawExpr *, ObRawExpr *>, 8, common::ModulePageAllocator, true> dup_expr_pairs_;
+  common::ObSEArray<ObTuple<ObRawExpr *, ObRawExpr *>, 8, common::ModulePageAllocator, true> replaced_agg_pairs_;
+  ObOpPseudoColumnRawExpr *grouping_set_id_;
+  TO_STRING_KV(KP_(grouping_set_id), K_(group_exprs), K_(groupset_exprs), K_(pruned_groupset_exprs),
+               K_(dup_expr_pairs));
+  int assign(const ObGroupingSetInfo &other);
 };
 
 class ObLogGroupBy : public ObLogicalOperator
@@ -114,7 +131,9 @@ public:
         use_part_sort_(false),
         gby_dop_(ObGlobalHint::UNSET_PARALLEL),
         is_pushdown_scalar_aggr_(false),
-        hash_rollup_info_()
+        hash_rollup_info_(nullptr),
+        grouping_set_info_(nullptr),
+        distinct_pairs_()
   {}
   virtual ~ObLogGroupBy()
   {}
@@ -264,6 +283,7 @@ public:
   virtual int get_card_without_filter(double &card) override;
 
   void set_hash_rollup_info(ObHashRollupInfo *info) { hash_rollup_info_ = info; }
+  void set_grouping_set_info(ObGroupingSetInfo *info) { grouping_set_info_ = info; }
   const ObHashRollupInfo *get_hash_rollup_info() const
   {
     return hash_rollup_info_;
@@ -272,10 +292,27 @@ public:
   {
     return NULL != hash_rollup_info_;
   }
+  const ObGroupingSetInfo *get_grouping_set_info() const
+  {
+    return grouping_set_info_;
+  }
+  inline bool use_vec_grouping() const
+  {
+    return hash_rollup_info_ != nullptr || grouping_set_info_ != nullptr;
+  }
   int unwrap_cast_for_aggr_expr();
 
   int is_duplicate_insensitive_aggregation(bool & is_duplicate_insensitive);
 
+  int set_distinct_pairs(const ObIArray<ObTuple<ObRawExpr *, ObRawExpr *>> &distinct_pairs)
+  {
+    return distinct_pairs_.assign(distinct_pairs);
+  }
+
+  const ObIArray<ObTuple<ObRawExpr *, ObRawExpr *>> &get_distinct_pairs() const
+  {
+    return distinct_pairs_;
+  }
 private:
   virtual int inner_replace_op_exprs(ObRawExprReplacer &replacer) override;
 
@@ -311,6 +348,9 @@ private:
   // end use print outline
   bool is_pushdown_scalar_aggr_;
   ObHashRollupInfo *hash_rollup_info_;
+  ObGroupingSetInfo *grouping_set_info_;
+  // used for transform distinct agg plan
+  common::ObSEArray<ObTuple<ObRawExpr *, ObRawExpr *>, 4, common::ModulePageAllocator, true> distinct_pairs_;
 };
 } // end of namespace sql
 } // end of namespace oceanbase

@@ -204,6 +204,7 @@ int ObMaterialVecOp::inner_get_next_batch(int64_t max_row_cnt)
 
     if (OB_SUCC(ret)) {
       brs_.size_ = read_rows;
+      brs_.all_rows_active_ = true;
     } else if (OB_ITER_END == ret) {
       brs_.size_ = 0;
       brs_.end_ = true;

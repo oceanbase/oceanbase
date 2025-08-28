@@ -411,6 +411,7 @@ _enable_external_table_memory_cache
 _enable_external_table_prefetch
 _enable_filesystem_catalog
 _enable_filter_reordering
+_enable_grouping_sets_expansion
 _enable_hash_join_hasher
 _enable_hash_join_processor
 _enable_hgby_llc_ndv_adaptive

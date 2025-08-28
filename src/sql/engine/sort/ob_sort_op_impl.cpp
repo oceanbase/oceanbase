@@ -447,7 +447,7 @@ bool ObSortOpImpl::Compare::operator()(
     ObDatum *other_datum = nullptr;
     int cmp = 0;
     const int64_t cnt = sort_cmp_funs_->count();
-    for (int64_t i = 0; 0 == cmp && i < cnt && OB_SUCC(ret); i++) {
+    for (int64_t i = cmp_start_; 0 == cmp && i < cmp_end_ && OB_SUCC(ret); i++) {
       const int64_t idx = sort_collations_->at(i).field_idx_;
       if (OB_FAIL(l->at(idx)->eval(eval_ctx, other_datum))) {
         LOG_WARN("failed to eval expr", K(ret));
@@ -481,7 +481,7 @@ int ObSortOpImpl::Compare::with_ties_cmp(const common::ObIArray<ObExpr*> *l,
     const ObDatum *rcells = r->cells();
     ObDatum *other_datum = nullptr;
     const int64_t cnt = sort_cmp_funs_->count();
-    for (int64_t i = 0; 0 == cmp && i < cnt && OB_SUCC(ret); i++) {
+    for (int64_t i = cmp_start_; 0 == cmp && i < cmp_end_ && OB_SUCC(ret); i++) {
       const int64_t idx = sort_collations_->at(i).field_idx_;
       if (OB_FAIL(l->at(idx)->eval(eval_ctx, other_datum))) {
         LOG_WARN("failed to eval expr", K(ret));
@@ -509,7 +509,7 @@ int ObSortOpImpl::Compare::with_ties_cmp(const ObChunkDatumStore::StoredRow *l,
     const ObDatum *rcells = r->cells();
     const ObDatum *lcells = l->cells();
     const int64_t cnt = sort_cmp_funs_->count();
-    for (int64_t i = 0; 0 == cmp && i < cnt && OB_SUCC(ret); i++) {
+    for (int64_t i = cmp_start_; 0 == cmp && i < cmp_end_ && OB_SUCC(ret); i++) {
       const int64_t idx = sort_collations_->at(i).field_idx_;
       if (OB_FAIL(sort_cmp_funs_->at(i).cmp_func_(lcells[idx], rcells[idx], cmp))) {
         LOG_WARN("failed to compare", K(ret));

@@ -191,7 +191,10 @@ template <typename Bucket, typename Prober>
 int HashTable<Bucket, Prober>::probe_prepare(JoinTableCtx &ctx, OutputInfo &output_info)
 {
   int ret = OB_SUCCESS;
-  if (!std::is_same<Bucket, GenericBucket>::value && !std::is_same<Bucket, RobinBucket>::value) {
+  if (std::is_same<Bucket, NormalizedBucket<Int64Key>>::value
+      || std::is_same<Bucket, NormalizedBucket<Int128Key>>::value
+      || std::is_same<Bucket, NormalizedRobinBucket<Int64Key>>::value
+      || std::is_same<Bucket, NormalizedRobinBucket<Int128Key>>::value) {
     if (OB_FAIL(ctx.probe_batch_rows_->set_key_data(ctx.probe_keys_, ctx.eval_ctx_, output_info))) {
       LOG_WARN("fail to init probe keys", K(ret));
     }
@@ -912,6 +915,7 @@ int NormalizedSharedHashTable<T>::insert_batch(JoinTableCtx &ctx,
 {
   int ret = OB_SUCCESS;
   const RowMeta &row_meta = ctx.build_row_meta_;
+  OB_ASSERT(ctx.build_key_proj_->count() == 1);
   for (auto i = 0; i < size; i++) {
     __builtin_prefetch(&(this->buckets_->at(stored_rows[i]->get_hash_value(row_meta) & this->bucket_mask_)),
                         1 , 3);
@@ -936,8 +940,6 @@ inline int NormalizedSharedHashTable<T>::atomic_set(JoinTableCtx &ctx, const uin
   uint64_t pos = hash_val & this->bucket_mask_;
   Bucket *bucket;
   Bucket old_bucket, new_bucket;
-  // new_bucket.set_salt(salt);
-  // new_bucket.set_row_ptr(row_ptr);
   new_bucket.init(ctx, salt, row_ptr);
   bool equal = false;
   bool added = false;
@@ -948,20 +950,22 @@ inline int NormalizedSharedHashTable<T>::atomic_set(JoinTableCtx &ctx, const uin
       if (!old_bucket.used()) {
         row_ptr->set_next(row_meta, reinterpret_cast<ObHJStoredRow *>(END_ROW_PTR));
         if (ATOMIC_BCAS(&bucket->val_, old_bucket.val_, new_bucket.val_)) {
+          MEMCPY(&bucket->key_, &new_bucket.key_, sizeof(T));
           added = true;
-          new_bucket.init_data(ctx, row_ptr);
           used_buckets++;
         }
       } else if (salt == old_bucket.get_salt()) {
         ObHJStoredRow *left_ptr = old_bucket.get_stored_row();
         if (OB_FAIL(this->key_equal(ctx, left_ptr, row_ptr, equal))) {
           LOG_WARN("key equal error", K(ret));
-        } else if (!equal) {
-          break;
-        }
-        row_ptr->set_next(row_meta, left_ptr);
-        if (ATOMIC_BCAS(&bucket->val_, old_bucket.val_, new_bucket.val_)) {
-          added = true;
+        } else {
+          if (!equal) {
+            break;
+          }
+          row_ptr->set_next(row_meta, left_ptr);
+          if (ATOMIC_BCAS(&bucket->val_, old_bucket.val_, new_bucket.val_)) {
+            added = true;
+          }
         }
       } else {
         break;

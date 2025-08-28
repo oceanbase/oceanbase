@@ -4057,6 +4057,7 @@ int ObAggFunRawExpr::assign(const ObRawExpr &other)
         pl_agg_udf_expr_ = tmp.pl_agg_udf_expr_;
         udf_meta_.assign(tmp.udf_meta_);
         is_need_deserialize_row_ = tmp.is_need_deserialize_row_;
+        keep_sum_precision_ = tmp.keep_sum_precision_;
       }
     }
   }
@@ -4120,6 +4121,7 @@ void ObAggFunRawExpr::reset()
   expr_in_inner_stmt_ = false;
   is_need_deserialize_row_ = false;
   pl_agg_udf_expr_ = NULL;
+  keep_sum_precision_ = false;
 }
 
 bool ObAggFunRawExpr::inner_same_as(
@@ -4132,6 +4134,8 @@ bool ObAggFunRawExpr::inner_same_as(
     const ObAggFunRawExpr *a_expr = static_cast<const ObAggFunRawExpr *>(&expr);
     if (expr_in_inner_stmt_ != a_expr->expr_in_inner_stmt_) {
       //do nothing.
+    } else if (keep_sum_precision_ != a_expr->keep_sum_precision_) {
+      // do nothing
     } else if (distinct_ == a_expr->is_param_distinct()) {
       if ((NULL == separator_param_expr_ && NULL == a_expr->separator_param_expr_)
           || (NULL != separator_param_expr_ && NULL != a_expr->separator_param_expr_
@@ -4196,6 +4200,7 @@ void ObAggFunRawExpr::inner_calc_hash()
     }
   }
   expr_hash_ = common::do_hash(is_need_deserialize_row_, expr_hash_);
+  expr_hash_ = common::do_hash(keep_sum_precision_, expr_hash_);
   if (NULL != pl_agg_udf_expr_) {
     expr_hash_ = common::do_hash(pl_agg_udf_expr_->get_expr_hash(), expr_hash_);
   }

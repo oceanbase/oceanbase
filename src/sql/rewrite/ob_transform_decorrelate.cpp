@@ -761,6 +761,7 @@ int ObTransformDecorrelate::check_transform_aggr_validity(ObDMLStmt *stmt,
     is_valid = false;
     OPT_TRACE("ref query is valid group by");
   } else if (ref_query->has_rollup() ||
+             ref_query->has_grouping_sets() ||
              ref_query->has_having() ||
              NULL != ref_query->get_limit_percent_expr() ||
              NULL != ref_query->get_offset_expr() ||
@@ -1032,7 +1033,8 @@ bool ObTransformDecorrelate::is_valid_group_by(const ObSelectStmt &ref_query)
   if (ref_query.is_scala_group_by()) {
     is_valid = true;
   } else if (ref_query.get_group_expr_size() > 0 &&
-             ref_query.get_rollup_expr_size() == 0) {
+             ref_query.get_rollup_expr_size() == 0 &&
+             ref_query.get_grouping_sets_items_size() == 0) {
     is_valid = true;
   }
   return is_valid;

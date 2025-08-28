@@ -193,6 +193,7 @@ int ObTransformJoinLimitPushDown::check_stmt_validity(ObDMLStmt *stmt,
              select_stmt->has_group_by() ||
              select_stmt->has_having() ||
              select_stmt->has_rollup() ||
+             select_stmt->has_grouping_sets() ||
              select_stmt->has_window_function() ||
              select_stmt->has_sequence() ||
              select_stmt->has_distinct()) {

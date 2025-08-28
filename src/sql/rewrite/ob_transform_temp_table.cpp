@@ -728,7 +728,8 @@ int ObTransformTempTable::check_stmt_can_extract_temp_table(ObSelectStmt *first,
     is_valid = QueryRelation::QUERY_EQUAL == relation && map_info.is_order_equal_;
   } else if (second->get_table_size() < 2) {
     if (second->get_group_expr_size() > 0 ||
-        second->get_rollup_expr_size() > 0) {
+        second->get_rollup_expr_size() > 0 ||
+        second->has_grouping_sets()) {
       is_valid = map_info.is_group_equal_ && map_info.is_cond_equal_;
     } else if (second->get_aggr_item_size() > 0) {
       is_valid = map_info.is_table_equal_ && map_info.is_from_equal_ && map_info.is_semi_info_equal_ && map_info.is_cond_equal_;

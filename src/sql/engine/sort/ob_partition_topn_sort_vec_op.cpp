@@ -10,14 +10,11 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define USING_LOG_PREFIX SQL_ENG
+#include "ob_partition_topn_sort_vec_op.h"
 
-#include "sql/engine/sort/ob_sort_vec_op_impl.h"
-
-namespace oceanbase {
-using namespace common;
-namespace sql {
-
-
-} // end namespace sql
-} // end namespace oceanbase
+namespace oceanbase
+{
+namespace sql
+{
+}// namespace sql
+}// namespace oceanbase

@@ -557,8 +557,8 @@ int ObExprLike::set_instr_info(ObIAllocator *exec_allocator,
   char *pattern_buf = nullptr;
   ObIAllocator *exec_cal_buf = exec_allocator;
   InstrInfo &instr_info = like_ctx.instr_info_;
-  if (cs_type != CS_TYPE_UTF8MB4_BIN) {
-    //we optimize the case in which cs_type == CS_TYPE_UTF8MB4_BIN only
+  if (cs_type != CS_TYPE_UTF8MB4_BIN && cs_type != CS_TYPE_UTF8MB4_0900_BIN) {
+    //we optimize the case in which cs_type == CS_TYPE_UTF8MB4_BIN/CS_TYPE_UTF8MB4_0900_BIN only
     //just let it go
   } else if (OB_UNLIKELY(OB_ISNULL(cs = ObCharset::get_charset(cs_type)) ||
                   OB_ISNULL(cs->cset))) {
@@ -671,7 +671,7 @@ int ObExprLike::calc_with_instr_mode(T &result,
   const InstrInfo instr_info = like_ctx.instr_info_;
   void *string_searcher = like_ctx.string_searcher_;
   const int32_t text_len = text.length();
-  if (OB_UNLIKELY(cs_type != CS_TYPE_UTF8MB4_BIN)) {
+  if (OB_UNLIKELY(cs_type != CS_TYPE_UTF8MB4_BIN && cs_type != CS_TYPE_UTF8MB4_0900_BIN)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid argument(s)", K(ret), K(cs_type), K(text));
   } else if (OB_UNLIKELY(instr_info.empty())) {

@@ -53,7 +53,8 @@ struct AggrRowMeta
 {
   AggrRowMeta() :
     row_size_(0), col_cnt_(0), extra_cnt_(0), nullbits_offset_(0), extra_idx_offset_(0),
-    col_offsets_(nullptr), tmp_res_sizes_(nullptr), extra_idxes_(nullptr), use_var_len_(nullptr)
+    col_offsets_(nullptr), tmp_res_sizes_(nullptr), extra_idxes_(nullptr),
+    use_var_len_(nullptr)
   {}
 
   void reset()
@@ -228,7 +229,7 @@ struct RuntimeContext
     agg_rows_(ModulePageAllocator(label, tenant_id, ObCtxIds::WORK_AREA)),
     agg_extras_(ModulePageAllocator(label, tenant_id, ObCtxIds::WORK_AREA)), removal_info_(),
     win_func_agg_(false), hp_infras_mgr_(nullptr), rollup_context_(nullptr), distinct_count_(0),
-    flag_(0), rb_allocator_(nullptr)
+    flag_(0), rb_allocator_(nullptr), minmax_row_idxes_(nullptr)
   {}
 
   inline const AggrRowMeta &row_meta() const
@@ -273,6 +274,20 @@ struct RuntimeContext
                                                                 const char* agg_cell)
   {
     return get_extra_stores(agg_col_id, agg_cell)->hybrid_hist_store_;
+  }
+
+  inline int32_t get_minmax_row_idx(const int64_t agg_col_id)
+  {
+    OB_ASSERT(minmax_row_idxes_ != nullptr);
+    OB_ASSERT(agg_col_id < minmax_row_idxes_->count());
+    return minmax_row_idxes_->at(agg_col_id);
+  }
+
+  inline void set_minmax_row_idx(const int64_t agg_col_id, const int32_t row_idx)
+  {
+    OB_ASSERT(minmax_row_idxes_ != nullptr);
+    OB_ASSERT(agg_col_id < minmax_row_idxes_->count());
+    minmax_row_idxes_->at(agg_col_id) = row_idx;
   }
 
   ObAggrInfo &locate_aggr_info(const int64_t agg_col_idx)
@@ -453,6 +468,8 @@ struct RuntimeContext
     };
   };
   ObRbAggAllocator *rb_allocator_;
+  ObFixedArray<int32_t, ObIAllocator> *minmax_row_idxes_; // only for argmin/max
+  int64_t argminmax_calc_info_; // only for argmin/max
 };
 
 /*

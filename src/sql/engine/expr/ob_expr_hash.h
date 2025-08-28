@@ -32,6 +32,7 @@ public:
                                         ObEvalCtx &ctx,
                                         const ObBitVector &skip,
                                         const int64_t batch_size);
+  static int calc_hash_value_expr_vector(VECTOR_EVAL_FUNC_ARG_DECL);
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx,
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;

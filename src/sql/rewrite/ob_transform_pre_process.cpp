@@ -307,7 +307,7 @@ int ObTransformPreProcess::transform_one_stmt(common::ObIArray<ObParentDMLStmt> 
     }
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(transform_rollup_exprs(stmt, is_happened))) {
+      if (OB_FAIL(transform_rollup_groupset_exprs(stmt, is_happened))) {
         LOG_WARN("failed to transform rollup exprs", K(ret));
       } else {
         trans_happened |= is_happened;
@@ -906,12 +906,12 @@ int ObTransformPreProcess::try_convert_rollup(ObDMLStmt *&stmt, ObSelectStmt *se
   return ret;
 }
 
-int ObTransformPreProcess::create_cte_for_groupby_items(ObSelectStmt &stmt)
+int ObTransformPreProcess::create_cte_for_groupby_items(ObSelectStmt &stmt, ObSelectStmt *&view_stmt)
 {
   int ret = OB_SUCCESS;
   bool can_pre_aggregate = false;
   bool is_correlated = false;
-  ObSelectStmt *view_stmt = NULL;
+  view_stmt = NULL;
   if (OB_FAIL(check_pre_aggregate(stmt, can_pre_aggregate))) {
     LOG_WARN("failed to check pre aggregate", K(ret));
   } else if (!can_pre_aggregate) {
@@ -1031,36 +1031,167 @@ int ObTransformPreProcess::transform_groupingsets_rollup_cube(ObDMLStmt *&stmt,
   int ret = OB_SUCCESS;
   trans_happened = false;
   ObSelectStmt *select_stmt = NULL;
-  if (OB_ISNULL(stmt)) {
+  bool enable_grouping_sets_expansion = false;
+  ObSelectStmt *view_stmt = nullptr;
+  if (OB_ISNULL(stmt) || OB_ISNULL(stmt->get_query_ctx()) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->session_info_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("stmt is null.", K(ret));
+    LOG_WARN("unexpected null", K(ret), KP(stmt), KP(ctx_));
   } else if (!stmt->is_select_stmt()) {
     /* do nothing.*/
-  } else if (FALSE_IT(select_stmt = static_cast<ObSelectStmt *>(stmt))) {
-  } else if (OB_FAIL(remove_single_item_groupingsets(*select_stmt, trans_happened))) {
-    LOG_WARN("failed to transform single item grouping sets", K(ret));
-  } else if (OB_FAIL(try_convert_rollup(stmt, select_stmt))) {
-    LOG_WARN("failed to convert multi rollup", K(ret));
-  } else if (select_stmt->get_grouping_sets_items().count() == 0 &&
-             select_stmt->get_rollup_items().count() == 0 &&
-             select_stmt->get_cube_items().count() == 0) {
-    // deal select item like 'c1 - 1'
-  } else if (OB_FAIL(ObTransformUtils::replace_stmt_expr_with_groupby_exprs(select_stmt, ctx_))) {
-    LOG_WARN("replace stmt expr with groupby exprs failed", K(ret));
-  } else if (OB_FAIL(create_cte_for_groupby_items(*select_stmt))) {
-    LOG_WARN("failed to create spj view.", K(ret));
-  } else if (OB_FAIL(expand_stmt_groupby_items(*select_stmt))) {
-    LOG_WARN("failed to expand grouping_sets_items/rollup_items/cube_items", K(ret));
   } else {
-    trans_happened = true;
-  }
-  if (OB_SUCC(ret) && trans_happened) {
-    stmt = select_stmt;
-    LOG_TRACE("succeed to transform transform for grouping sets, rollup or cube", K(*stmt));
+    select_stmt = static_cast<ObSelectStmt *>(stmt);
+    const ObOptParamHint &opt_hints =  stmt->get_query_ctx()->get_global_hint().opt_params_;
+    bool enable_by_hint = false;
+    bool is_hint_exists = false;
+    bool rowsets_enabled = true;
+    bool rowsets_hint_exists = false;
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    enable_grouping_sets_expansion = false;
+    if (OB_FAIL(opt_hints.get_bool_opt_param(ObOptParamHint::ENABLE_GROUPING_SETS_EXPANSION, enable_by_hint, is_hint_exists))) {
+      LOG_WARN("get bool opt param failed", K(ret));
+    } else if (OB_FAIL(opt_hints.get_bool_opt_param(ObOptParamHint::ROWSETS_ENABLED, rowsets_hint_exists, rowsets_enabled))) {
+      LOG_WARN("get bool opt param failed", K(ret));
+    } else {
+      enable_grouping_sets_expansion =
+        is_hint_exists ? enable_by_hint :
+                         (tenant_config.is_valid() && tenant_config->_enable_grouping_sets_expansion);
+      if (!rowsets_hint_exists) {
+        // default to true, no matter config is valid or not.
+        rowsets_enabled = tenant_config.is_valid() ? tenant_config->_rowsets_enabled : true;
+      }
+      enable_grouping_sets_expansion =
+        enable_grouping_sets_expansion
+        && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_1_0
+        && stmt->get_query_ctx()->optimizer_features_enable_version_ >= COMPAT_VERSION_4_4_1
+        && rowsets_enabled;
+      LOG_TRACE("check grouping sets expansion", K(ret), K(is_hint_exists), K(enable_by_hint),
+                K(enable_grouping_sets_expansion), K(rowsets_enabled), K(rowsets_hint_exists));
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(remove_single_item_groupingsets(*select_stmt, trans_happened))) {
+      LOG_WARN("failed to transform single item grouping sets", K(ret));
+    } else if (OB_FAIL(try_convert_rollup(stmt, select_stmt))) {
+      LOG_WARN("failed to convert multi rollup", K(ret));
+    } else if (select_stmt->get_grouping_sets_items().count() == 0
+               && select_stmt->get_rollup_items().count() == 0
+               && select_stmt->get_cube_items().count() == 0) {
+      // deal select item like 'c1 - 1'
+    } else if (OB_FAIL(ObTransformUtils::replace_stmt_expr_with_groupby_exprs(select_stmt, ctx_))) {
+      LOG_WARN("replace stmt expr with groupby exprs failed", K(ret));
+    } else if (OB_FAIL(create_cte_for_groupby_items(*select_stmt, view_stmt))) {
+      LOG_WARN("failed to create spj view.", K(ret));
+    } else if (enable_grouping_sets_expansion && (select_stmt->has_grouping_sets() || select_stmt->has_cube())) {
+      ObViewMergeHint *no_merge_hint = nullptr;
+      ObSEArray<ObItemType, 4> conflict_hints;
+      // grouping sets will duplicate and set nulls of view output
+      // thus view can't be merged
+      if (OB_FAIL(ObQueryHint::create_hint(ctx_->allocator_, T_NO_MERGE_HINT, no_merge_hint))) {
+        LOG_WARN("create hint failed", K(ret));
+      } else if (OB_FAIL(view_stmt->get_stmt_hint().merge_hint(*no_merge_hint, HINT_DOMINATED_EQUAL, conflict_hints))) {
+        LOG_WARN("merge hint failed", K(ret));
+      } else if (OB_FAIL(trans_all_to_groping_sets(*select_stmt, trans_happened))) {
+        LOG_WARN("transform all to grouping sets failed", K(ret));
+      } else {
+        LOG_DEBUG("all grouping sets", K(select_stmt->get_grouping_sets_items()));
+      }
+    } else if (OB_FAIL(expand_stmt_groupby_items(*select_stmt))) {
+      LOG_WARN("failed to expand grouping_sets_items/rollup_items/cube_items", K(ret));
+    } else {
+      trans_happened = true;
+    }
+    if (OB_SUCC(ret) && trans_happened) {
+      stmt = select_stmt;
+      LOG_TRACE("succeed to transform transform for grouping sets, rollup or cube", K(*stmt),
+                K(select_stmt->get_grouping_sets_items()));
+    }
   }
   return ret;
 }
 
+int ObTransformPreProcess::trans_all_to_groping_sets(ObSelectStmt &stmt, bool &trans_happened)
+{
+  int ret = OB_SUCCESS;
+  trans_happened = false;
+  ObIArray<ObGroupingSetsItem> &grouping_sets_items = stmt.get_grouping_sets_items();
+  ObGroupingSetsItem tmp_grouping_set_item;
+  ObSEArray<ObGroupbyExpr, 8> new_group_exprs;
+  ObSEArray<ObGroupbyExpr, 8> new_rollup_exprs;
+  ObSEArray<ObGroupbyExpr, 8> all_gby_expr_list;
+  ObSEArray<ObRawExpr *, 8> tmp_rollup_exprs;
+  ObSEArray<ObRawExpr *, 8> common_group_exprs;
+
+  if (OB_FAIL(get_groupby_and_rollup_exprs_list(&stmt, new_group_exprs, new_rollup_exprs))) {
+    LOG_WARN("get groupby and rollup exprs failed", K(ret));
+  }
+  // all grouping sets are organized as
+  // [group by (...) with rollup(...), group by(...) with rollup(...), ...]
+  // following routine expand rollup to grouping sets
+  for (int i = 0; OB_SUCC(ret) && i < new_group_exprs.count(); i++) {
+    ObGroupbyExpr &group_exprs = new_group_exprs.at(i);
+    if (OB_FAIL(all_gby_expr_list.push_back(group_exprs))) {
+      LOG_WARN("push back element failed", K(ret));
+    } else if (new_rollup_exprs.count() > i
+               && new_rollup_exprs.at(i).groupby_exprs_.count() > 0) { // has rollup
+      if (OB_FAIL(tmp_rollup_exprs.assign(new_rollup_exprs.at(i).groupby_exprs_))) {
+        LOG_WARN("assign array failed", K(ret));
+      } else if (OB_FAIL(append(
+                   all_gby_expr_list.at(all_gby_expr_list.count() - 1).groupby_exprs_,
+                   tmp_rollup_exprs))) {
+        LOG_WARN("append array no dup failed", K(ret));
+      }
+      int rollup_cnt = tmp_rollup_exprs.count();
+      for (int j = 0; OB_SUCC(ret) && j < rollup_cnt; j++) {
+        tmp_rollup_exprs.pop_back();
+        if (OB_FAIL(all_gby_expr_list.push_back(group_exprs))) {
+          LOG_WARN("push back element failed", K(ret));
+        } else if (OB_FAIL(append(
+              all_gby_expr_list.at(all_gby_expr_list.count() - 1).groupby_exprs_,
+              tmp_rollup_exprs))) {
+          LOG_WARN("append array no dup failed", K(ret));
+        }
+      }
+    }
+  }
+  // extract common group exprs and add to groupby,
+  // stmt will group by as following pattern:
+  // group by a,b,c ..., grouping sets((a, b, c, d, e), (a, b, c, f, g)...)
+  // so that some group by rewrite rules can be used directly
+  if (OB_UNLIKELY(all_gby_expr_list.count() <= 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid group by exprs", K(ret));
+  } else if (all_gby_expr_list.count() == 1
+             && OB_FAIL(common_group_exprs.assign(all_gby_expr_list.at(0).groupby_exprs_))) {
+    LOG_WARN("assign array failed", K(ret));
+  } else {
+    ObIArray<ObRawExpr *> &first_group = all_gby_expr_list.at(0).groupby_exprs_;
+    for (int i = 0; OB_SUCC(ret) && i < first_group.count(); i++) {
+      bool not_found = false;
+      for (int j = 1; !not_found && j < all_gby_expr_list.count(); j++) {
+        not_found = !has_exist_in_array(all_gby_expr_list.at(j).groupby_exprs_, first_group.at(i));
+      }
+      if (!not_found && OB_FAIL(common_group_exprs.push_back(first_group.at(i)))) {
+        LOG_WARN("push back failed", K(ret));
+      }
+    }
+  }
+  LOG_DEBUG("all gby expr list", K(all_gby_expr_list), K(common_group_exprs));
+  if (OB_FAIL(ret)) {
+  } else if (FALSE_IT(grouping_sets_items.reuse())) {
+  } else if (FALSE_IT(stmt.get_cube_items().reuse())) {
+  } else if (FALSE_IT(stmt.get_group_exprs().reuse())) {
+  } else if (FALSE_IT(stmt.get_rollup_items().reuse())) {
+  } else if (FALSE_IT(stmt.get_rollup_exprs().reuse())) {
+  } else if (OB_FAIL(tmp_grouping_set_item.grouping_sets_exprs_.assign(all_gby_expr_list))) {
+    LOG_WARN("assign array failed", K(ret));
+  } else if (OB_FAIL(grouping_sets_items.push_back(tmp_grouping_set_item))) {
+    LOG_WARN("push back element failed", K(ret));
+  } else if (OB_FAIL(stmt.get_group_exprs().assign(common_group_exprs))) {
+    LOG_WARN("assign failed", K(ret));
+  } else {
+    trans_happened = true;
+  }
+  return ret;
+}
 int ObTransformPreProcess::is_subquery_correlated(const ObSelectStmt *stmt,
                                                   bool &is_correlated)
 {
@@ -9249,7 +9380,7 @@ int ObTransformPreProcess::extract_idx_from_table_items(ObDMLStmt *sub_stmt,
   return ret;
 }
 
-int ObTransformPreProcess::transform_rollup_exprs(ObDMLStmt *stmt, bool &trans_happened)
+int ObTransformPreProcess::transform_rollup_groupset_exprs(ObDMLStmt *stmt, bool &trans_happened)
 {
   int ret = OB_SUCCESS;
   trans_happened = false;
@@ -9268,9 +9399,10 @@ int ObTransformPreProcess::transform_rollup_exprs(ObDMLStmt *stmt, bool &trans_h
   } else if (!stmt->is_select_stmt()) {
     //do nothing
   } else if (OB_FALSE_IT(sel_stmt = static_cast<ObSelectStmt*>(stmt))) {
-  } else if (!sel_stmt->has_rollup()) {
+  } else if (!sel_stmt->has_rollup() && !sel_stmt->has_grouping_sets()) {
     //do nothing
-  } else if (OB_FAIL(get_rollup_const_exprs(sel_stmt,
+  } else if (sel_stmt->has_rollup()) {
+    if (OB_FAIL(get_rollup_or_grouping_const_exprs(sel_stmt->get_rollup_exprs(),
                                             static_const_exprs,
                                             static_remove_const_exprs,
                                             exec_param_exprs,
@@ -9280,11 +9412,12 @@ int ObTransformPreProcess::transform_rollup_exprs(ObDMLStmt *stmt, bool &trans_h
                                             query_ref_exprs,
                                             query_ref_remove_const_exprs,
                                             trans_happened))) {
-    LOG_WARN("failed to get rollup const exprs", K(ret));
-  } else if (static_const_exprs.empty() && exec_param_exprs.empty() && query_ref_exprs.empty()) {
-    //do nothing
-  } else if (OB_FAIL(replace_remove_const_exprs(
+      LOG_WARN("failed to get rollup const exprs", K(ret));
+    } else if (static_const_exprs.empty() && exec_param_exprs.empty() && query_ref_exprs.empty()) {
+      //do nothing
+    } else if (OB_FAIL(replace_remove_const_exprs(
                                         sel_stmt,
+                                        false,
                                         static_const_exprs,
                                         static_remove_const_exprs,
                                         exec_param_exprs,
@@ -9293,11 +9426,45 @@ int ObTransformPreProcess::transform_rollup_exprs(ObDMLStmt *stmt, bool &trans_h
                                         column_ref_remove_const_exprs,
                                         query_ref_exprs,
                                         query_ref_remove_const_exprs))) {
-    LOG_WARN("failed to replace remove const exprs", K(ret));
+      LOG_WARN("failed to replace remove const exprs", K(ret));
+    }
+  } else if (sel_stmt->has_grouping_sets()) {
+    if (OB_UNLIKELY(sel_stmt->get_grouping_sets_items_size() != 1)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid grouping set item size", K(ret));
+    }
+    for (int i = 0; OB_SUCC(ret) && i < sel_stmt->get_grouping_sets_items().at(0).grouping_sets_exprs_.count(); i++) {
+      ObIArray<ObRawExpr *> &group_exprs = sel_stmt->get_grouping_sets_items().at(0).grouping_sets_exprs_.at(i).groupby_exprs_;
+      if (OB_FAIL(get_rollup_or_grouping_const_exprs(group_exprs,
+                                                     static_const_exprs,
+                                                     static_remove_const_exprs,
+                                                     exec_param_exprs,
+                                                     exec_param_remove_const_exprs,
+                                                     column_ref_exprs,
+                                                     column_ref_remove_const_exprs,
+                                                     query_ref_exprs,
+                                                     query_ref_remove_const_exprs,
+                                                     trans_happened))) {
+        LOG_WARN("get grouping const exprs failed", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(replace_remove_const_exprs(sel_stmt,
+                                                  true,
+                                                  static_const_exprs,
+                                                  static_remove_const_exprs,
+                                                  exec_param_exprs,
+                                                  exec_param_remove_const_exprs,
+                                                  column_ref_exprs,
+                                                  column_ref_remove_const_exprs,
+                                                  query_ref_exprs,
+                                                  query_ref_remove_const_exprs))) {
+      LOG_WARN("replace remove const exprs failed", K(ret));
+    }
   }
   return ret;
 }
- int ObTransformPreProcess::get_rollup_const_exprs(ObSelectStmt *stmt,
+ int ObTransformPreProcess::get_rollup_or_grouping_const_exprs(ObIArray<ObRawExpr*> &replacing_exprs,
                                                   ObIArray<ObRawExpr*> &static_const_exprs,
                                                   ObIArray<ObRawExpr*> &static_remove_const_exprs,
                                                   ObIArray<ObRawExpr*> &exec_param_exprs,
@@ -9313,14 +9480,14 @@ int ObTransformPreProcess::transform_rollup_exprs(ObDMLStmt *stmt, bool &trans_h
   ObRawExpr *remove_const_expr = NULL;
   bool is_const = false;
   trans_happened = false;
-  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) ||
+  if (OB_ISNULL(ctx_) ||
       OB_ISNULL(ctx_->expr_factory_) ||
       OB_ISNULL(ctx_->session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null", K(ret));
   }
-  for (int i = 0; OB_SUCC(ret) && i < stmt->get_rollup_expr_size(); ++i) {
-    ObRawExpr *expr = stmt->get_rollup_exprs().at(i);
+  for (int i = 0; OB_SUCC(ret) && i < replacing_exprs.count(); ++i) {
+    ObRawExpr *expr = replacing_exprs.at(i);
     if (OB_ISNULL(expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null expr", K(ret));
@@ -9346,7 +9513,7 @@ int ObTransformPreProcess::transform_rollup_exprs(ObDMLStmt *stmt, bool &trans_h
       } else if (OB_FAIL(query_ref_remove_const_exprs.push_back(remove_const_expr))) {
         LOG_WARN("failed to push back expr", K(ret));
       } else {
-        stmt->get_rollup_exprs().at(i) = remove_const_expr;
+        replacing_exprs.at(i) = remove_const_expr;
         trans_happened = true;
       }
     } else if (expr->is_static_const_expr()) { //static const expr
@@ -9366,7 +9533,7 @@ int ObTransformPreProcess::transform_rollup_exprs(ObDMLStmt *stmt, bool &trans_h
       } else if (OB_FAIL(static_remove_const_exprs.push_back(remove_const_expr))) {
         LOG_WARN("failed to push back expr", K(ret));
       } else {
-        stmt->get_rollup_exprs().at(i) = remove_const_expr;
+        replacing_exprs.at(i) = remove_const_expr;
         trans_happened = true;
       }
     }  else if (ObOptimizerUtil::find_item(exec_param_exprs, expr)) {
@@ -9381,7 +9548,7 @@ int ObTransformPreProcess::transform_rollup_exprs(ObDMLStmt *stmt, bool &trans_h
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null expr", K(ret));
     } else {
-      stmt->get_rollup_exprs().at(i) = remove_const_expr;
+      replacing_exprs.at(i) = remove_const_expr;
       trans_happened = true;
       if (lib::is_mysql_mode() && expr->is_exec_param_expr()) {
         ObExecParamRawExpr *exec_expr = static_cast<ObExecParamRawExpr *>(expr);
@@ -9410,6 +9577,7 @@ int ObTransformPreProcess::transform_rollup_exprs(ObDMLStmt *stmt, bool &trans_h
 }
 
 int ObTransformPreProcess::replace_remove_const_exprs(ObSelectStmt *stmt,
+                                                      const bool replace_grouping_sets,
                                                       ObIArray<ObRawExpr*> &static_const_exprs,
                                                       ObIArray<ObRawExpr*> &static_remove_const_exprs,
                                                       ObIArray<ObRawExpr*> &exec_params,
@@ -9457,7 +9625,10 @@ int ObTransformPreProcess::replace_remove_const_exprs(ObSelectStmt *stmt,
       replacer.add_scope(SCOPE_ORDERBY);
       replacer.set_recursive(false);
       replacer.set_skip_bool_param_mysql(false);
-      if (OB_FAIL(replacer.add_replace_exprs(exec_params, exec_params_remove_const_exprs))) {
+      if (replace_grouping_sets
+          && OB_FAIL(replacer.add_replace_exprs(static_const_exprs, static_remove_const_exprs))) {
+        LOG_WARN("failed to add replace exprs", K(ret));
+      } else if (OB_FAIL(replacer.add_replace_exprs(exec_params, exec_params_remove_const_exprs))) {
         LOG_WARN("failed to add replace exprs", K(ret));
       } else if (OB_FAIL(replacer.add_replace_exprs(query_ref_exprs, query_ref_remove_const_exprs))) {
         LOG_WARN("failed to add replace exprs", K(ret));

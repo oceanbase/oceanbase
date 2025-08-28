@@ -241,6 +241,7 @@ int ObTransformGroupByPushdown::check_push_down_into_union_validity(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is null", K(ret), K(stmt));
   } else if (stmt->has_rollup() ||
+             stmt->has_grouping_sets() ||
              stmt->get_aggr_item_size() <= 0 ||
              stmt->is_hierarchical_query()) {
     is_valid = false;
@@ -437,7 +438,7 @@ int ObTransformGroupByPushdown::is_basic_select_stmt(ObSelectStmt *stmt, bool &i
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
   } else if (stmt->has_limit() || stmt->has_group_by() || stmt->has_order_by() ||
-      stmt->has_window_function() || stmt->has_distinct() || stmt->has_rollup() ||
+      stmt->has_window_function() || stmt->has_distinct() || stmt->has_rollup() || stmt->has_grouping_sets() ||
       stmt->is_set_stmt() || stmt->is_hierarchical_query()) {
     is_basic = false;
   } else if (0 != stmt->get_aggr_item_size()) {
@@ -1206,6 +1207,7 @@ int ObTransformGroupByPushdown::check_push_down_into_join_validity(ObSelectStmt 
     OPT_TRACE("do not rewrite inner table stmt with cost-based rule");
     // do not rewrite inner table stmt with cost-based rule
   } else if (stmt->has_rollup() ||
+             stmt->has_grouping_sets() ||
              stmt->get_semi_infos().count() > 0 ||
              stmt->get_subquery_exprs().count() > 0 ||
              stmt->get_aggr_item_size() <= 0 ||

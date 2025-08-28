@@ -101,8 +101,10 @@ private:
   int try_convert_rollup(ObDMLStmt *&stmt, ObSelectStmt *select_stmt);
   int remove_single_item_groupingsets(ObSelectStmt &stmt, bool &trans_happened);
   int create_set_view_stmt(ObSelectStmt *stmt, TableItem *view_table_item);
-  int create_cte_for_groupby_items(ObSelectStmt &select_stmt);
+  int create_cte_for_groupby_items(ObSelectStmt &select_stmt, ObSelectStmt *&view_stmt);
   int expand_stmt_groupby_items(ObSelectStmt &select_stmt);
+
+  int trans_all_to_groping_sets(ObSelectStmt &stmt, bool &trans_happened);
 
   int is_subquery_correlated(const ObSelectStmt *stmt,
                              bool &is_correlated);
@@ -622,10 +624,8 @@ private:
                                    ObSqlBitSet<> &rel_ids);
 
   int formalize_limit_expr(ObDMLStmt &stmt, bool formalize_oracle_limit);
-  int formalize_limit_expr_oracle(ObDMLStmt &stmt);
-  int formalize_limit_expr_mysql(ObDMLStmt &stmt);
-  int transform_rollup_exprs(ObDMLStmt *stmt, bool &trans_happened);
-  int get_rollup_const_exprs(ObSelectStmt *stmt,
+  int transform_rollup_groupset_exprs(ObDMLStmt *stmt, bool &trans_happened);
+  int get_rollup_or_grouping_const_exprs(ObIArray<ObRawExpr*> &replacing_exprs,
                              ObIArray<ObRawExpr*> &const_exprs,
                              ObIArray<ObRawExpr*> &const_remove_const_exprs,
                              ObIArray<ObRawExpr*> &exec_params,
@@ -635,7 +635,10 @@ private:
                              ObIArray<ObRawExpr*> &query_ref_exprs,
                              ObIArray<ObRawExpr*> &query_ref_remove_const_exprs,
                              bool &trans_happened);
+  int formalize_limit_expr_oracle(ObDMLStmt &stmt);
+  int formalize_limit_expr_mysql(ObDMLStmt &stmt);
   int replace_remove_const_exprs(ObSelectStmt *stmt,
+                                const bool replace_grouping_sets,
                                 ObIArray<ObRawExpr*> &const_exprs,
                                 ObIArray<ObRawExpr*> &const_remove_const_exprs,
                                 ObIArray<ObRawExpr*> &exec_params,

@@ -2976,9 +2976,12 @@ DEF_TIME(_session_temp_table_clean_interval, OB_TENANT_PARAMETER, "10m", "[0s,)"
         "Range: [0s, +∞). Default: 10m",
         ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_BOOL(_enable_grouping_sets_expansion, OB_TENANT_PARAMETER, "True", "enable grouping sets expansion plan",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_BOOL(_enable_data_based_sqc_dop, OB_TENANT_PARAMETER, "True",
-         "Assign sqc dop based on data size.",
-          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+        "Assign sqc dop based on data size.",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_BOOL(_enable_more_aggressive_dynamic_worker, OB_TENANT_PARAMETER, "True",
         "specifies whether worker count increases more aggressive.",

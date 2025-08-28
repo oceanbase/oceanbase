@@ -14,6 +14,7 @@
 #include "ob_hint.h"
 #include "sql/optimizer/ob_log_plan.h"
 #include "sql/resolver/expr/ob_raw_expr.h"
+#include "sql/code_generator/ob_enable_rich_format_flags.h"
 
 namespace oceanbase
 {
@@ -417,6 +418,7 @@ void ObGlobalHint::reset()
   resource_group_.reset();
   parallel_das_dml_option_ = ObParallelDASOption::NOT_SPECIFIED;
   px_node_hint_.reset();
+  disable_op_rich_format_hint_.reset();
 }
 
 int ObGlobalHint::merge_global_hint(const ObGlobalHint &other)
@@ -458,6 +460,8 @@ int ObGlobalHint::merge_global_hint(const ObGlobalHint &other)
     LOG_WARN("failed to append ddl_schema_version", K(ret));
   } else if (OB_FAIL(px_node_hint_.merge_px_node_hint(other.px_node_hint_))) {
     LOG_WARN("failed to merge px_node_addrs", K(ret));
+  } else if (OB_FAIL(disable_op_rich_format_hint_.merge_hint(other.disable_op_rich_format_hint_))) {
+    LOG_WARN("merge disable op rich format hint failed", K(ret));
   }
   return ret;
 }
@@ -656,6 +660,9 @@ int ObGlobalHint::print_global_hint(PlanText &plan_text) const
   }
   if (OB_SUCC(ret) && OB_FAIL(px_node_hint_.print_px_node_hint(plan_text))) {
     LOG_WARN("failed to print px node hint", K(ret));
+  }
+  if (OB_SUCC(ret) && OB_FAIL(disable_op_rich_format_hint_.print(plan_text))) {
+    LOG_WARN("print disable op rich format hint failed", K(ret));
   }
   return ret;
 }
@@ -878,6 +885,7 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
     case ENABLE_PARTIAL_LIMIT_PUSHDOWN:
     case ENABLE_PARTIAL_DISTINCT_PUSHDOWN:
     case ENABLE_RUNTIME_FILTER_ADAPTIVE_APPLY:
+    case ENABLE_GROUPING_SETS_EXPANSION:
     case EXTENDED_SQL_PLAN_MONITOR_METRICS:
     case PRESERVE_ORDER_FOR_GROUPBY: {
       is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
@@ -1041,16 +1049,16 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
                                       || 0 == val.get_varchar().case_compare("false"));
       break;
     }
-
     case APPROX_COUNT_DISTINCT_PRECISION: {
       is_valid = val.is_int()
                  && val.get_int() >= 4
                  && val.get_int() <= 16;
       break;
     }
-    default:
+    default: {
       LOG_TRACE("invalid opt param val", K(param_type), K(val));
       break;
+    }
   }
   return is_valid;
 }
@@ -3736,6 +3744,51 @@ int ObPxNodeHint::print_px_node_hint(PlanText &plan_text) const {
       if (OB_SUCC(ret) &&
           px_node_count_ != UNSET_PX_NODE_COUNT) {  // PX_NODE_COUNT
         PRINT_GLOBAL_HINT_NUM("PX_NODE_COUNT", px_node_count_);
+      }
+    }
+  }
+  return ret;
+}
+
+int DisableOpRichFormatHint::merge_op_list(const common::ObIArray<common::ObString> &op_list)
+{
+  int ret = OB_SUCCESS;
+  for (int op_idx = 0; OB_SUCC(ret) && op_idx < op_list.count(); op_idx++) {
+    bool found_op = false;
+    const ObString &op_name = op_list.at(op_idx).trim();
+    for (int i = 0; OB_SUCC(ret) && !found_op && i < PHY_END; i++) {
+      const EnableOpRichFormat::PhyOpInfo &phy_op = EnableOpRichFormat::PHY_OPS_[i];
+      if (op_name.case_compare(ObString(phy_op.name_)) == 0) {
+        if (OB_FAIL(op_list_.push_back(phy_op.name_))) {
+          LOG_WARN("push back element failed", K(ret));
+        } else {
+          op_flags_ |= phy_op.disable_flag_;
+          found_op = true;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int DisableOpRichFormatHint::print(PlanText &plan_text) const
+{
+  int ret = OB_SUCCESS;
+  if (!op_list_.empty()) {
+    char *buf = plan_text.buf_;
+    int64_t &buf_len = plan_text.buf_len_;
+    int64_t &pos = plan_text.pos_;
+    const char *outline_indent = ObQueryHint::get_outline_indent(plan_text.is_oneline_);
+    if (OB_FAIL(BUF_PRINTF("%sDISABLE_OP_RICH_FORMAT(", outline_indent))) {
+      LOG_WARN("buf_printf failed", K(ret));
+    }
+    for (int i = 0; OB_SUCC(ret) && i < op_list_.count(); i++) {
+      if (OB_FAIL(BUF_PRINTF("'%s'", op_list_.at(i).ptr()))) {
+        LOG_WARN("buf printf failed", K(ret));
+      } else if (i == op_list_.count() - 1 && OB_FAIL(BUF_PRINTF(")"))) {
+        LOG_WARN("buf printf failed", K(ret));
+      } else if (i < op_list_.count() - 1 && OB_FAIL(BUF_PRINTF(", "))) {
+        LOG_WARN("BUF_PRINTF failed", K(ret));
       }
     }
   }

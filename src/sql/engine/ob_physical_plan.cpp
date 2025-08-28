@@ -16,6 +16,7 @@
 #include "share/ob_truncated_string.h"
 #include "sql/code_generator/ob_static_engine_cg.h"
 #include "sql/monitor/ob_sql_plan.h"
+#include "sql/code_generator/ob_enable_rich_format_flags.h"
 
 namespace oceanbase
 {
@@ -1155,7 +1156,8 @@ int ObPhysicalPlan::alloc_op_spec(const ObPhyOperatorType type,
 
 int ObPhysicalPlan::alloc_op_spec_for_cg(ObLogicalOperator *op, ObSqlSchemaGuard *schema_guard,
                                          const ObPhyOperatorType type, const int64_t child_cnt,
-                                         ObOpSpec *&spec, const uint64_t op_id)
+                                         ObOpSpec *&spec, const uint64_t op_id,
+                                         const EnableOpRichFormat &enable_rich_format)
 {
   int ret = OB_SUCCESS;
   bool disable_vectorize = false;
@@ -1166,7 +1168,10 @@ int ObPhysicalPlan::alloc_op_spec_for_cg(ObLogicalOperator *op, ObSqlSchemaGuard
   } else if (disable_vectorize) {
     spec->max_batch_size_ = 0;
     spec->use_rich_format_ = false;
+  } else if (!enable_rich_format.check(type)) {
+    spec->use_rich_format_ = false;
   }
+
   if (OB_SUCC(ret)) {
     LOG_TRACE("alloc op spec for cg", K(disable_vectorize), K(spec->max_batch_size_),
               K(spec->use_rich_format_), K(*spec));

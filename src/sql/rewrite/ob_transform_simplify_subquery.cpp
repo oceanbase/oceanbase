@@ -462,6 +462,7 @@ int ObTransformSimplifySubquery::check_subquery_valid(ObSelectStmt &stmt,
     } else if (0 == stmt.get_group_expr_size() &&
                0 == stmt.get_rollup_expr_size() &&
                0 == stmt.get_having_expr_size() &&
+               0 == stmt.get_grouping_sets_items_size() &&
                sel_expr->has_flag(CNT_AGG)) {
       is_valid = true;
     }
@@ -1361,6 +1362,7 @@ bool ObTransformSimplifySubquery::is_subquery_not_empty(const ObSelectStmt &stmt
             && 0 == stmt.get_condition_size())
           || (0 == stmt.get_group_expr_size()
              && !stmt.has_rollup()
+             && !stmt.has_grouping_sets()
              && stmt.get_aggr_item_size() > 0
              && !stmt.has_having());
 }

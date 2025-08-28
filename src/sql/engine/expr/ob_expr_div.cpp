@@ -58,13 +58,14 @@ int ObExprDiv::calc_result_type2(ObExprResType &type,
   OC( (ObArithExprOperator::calc_result_type2)(type, type1, type2, type_ctx));
   if (OB_SUCC(ret)) {
     const ObObjTypeClass result_tc = type.get_type_class();
-    bool use_decint_as_calc_type = (type1.get_calc_meta().is_decimal_int() && type2.get_calc_meta().is_decimal_int());
+    bool use_decint_as_calc_type = (type1.get_calc_meta().is_decimal_int() && (type2.get_calc_meta().is_integer_type()
+                                                                              || type2.get_calc_meta().is_decimal_int()));
     if (ObNumberTC == result_tc || ObDecimalIntTC == result_tc) {
       if (is_oracle_mode()) {
         type.set_scale(ORA_NUMBER_SCALE_UNKNOWN_YET);
         type.set_precision(PRECISION_UNKNOWN_YET);
       } else if (type.has_result_flag(DECIMAL_INT_ADJUST_FLAG)) {
-        if (type1.is_decimal_int() && type2.is_decimal_int() && type.is_number()) {
+        if (type1.is_decimal_int() && (type2.is_decimal_int() || type2.is_integer_type()) && type.is_number()) {
           ObScale res_scale = type1.get_scale() - type2.get_precision() - extra_scale_for_decint_div;
           ObPrecision res_prec = type1.get_precision() - type2.get_precision() - extra_scale_for_decint_div;
           if (OB_UNLIKELY(res_scale < 0 || res_prec < 0 || res_prec < res_scale)) {
@@ -115,6 +116,9 @@ int ObExprDiv::calc_result_type2(ObExprResType &type,
         }
         type1.set_calc_accuracy(type1.get_accuracy());
         type2.set_calc_accuracy(type2.get_accuracy());
+        if (type2.get_calc_meta().is_integer_type() && type2.get_precision() > MAX_PRECISION_DECIMAL_INT_64) {
+          type2.set_calc_type(ObDecimalIntType);
+        }
         if (type.is_decimal_int()) {
           if (OB_UNLIKELY(PRECISION_UNKNOWN_YET == type.get_precision() ||
                           SCALE_UNKNOWN_YET == type.get_scale())) {
@@ -1323,11 +1327,18 @@ int ObExprDiv::cg_expr(ObExprCGCtx &op_cg_ctx,
     case ObNumberType: {
       bool use_decint_as_args = (rt_expr.args_[0]->obj_meta_.is_decimal_int()
                                  && rt_expr.args_[1]->obj_meta_.is_decimal_int());
+      bool use_decint_int_as_args = (rt_expr.args_[0]->obj_meta_.is_decimal_int()
+                                 && rt_expr.args_[1]->obj_meta_.is_integer_type());
       if (use_decint_as_args && rt_expr.datum_meta_.type_ == ObNumberType && lib::is_mysql_mode()) {
         int32_t l_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(
           rt_expr.args_[0]->datum_meta_.precision_);
         int32_t r_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(
           rt_expr.args_[1]->datum_meta_.precision_);
+        DISPATCH_INOUT_WIDTH_TASK(l_bytes, r_bytes, CHOOSE_MYSQL_DIV_FUNCS);
+      } else if (use_decint_int_as_args && lib::is_mysql_mode()) {
+        int32_t l_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(
+          rt_expr.args_[0]->datum_meta_.precision_);
+        int32_t r_bytes = 8;
         DISPATCH_INOUT_WIDTH_TASK(l_bytes, r_bytes, CHOOSE_MYSQL_DIV_FUNCS);
       } else {
         SET_DIV_FUNC_PTR(div_number);

@@ -6163,6 +6163,10 @@ int ObSelectResolver::mark_nested_aggr_if_required(
       if (OB_ISNULL(aggr = aggr_exprs.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("aggr item is null", K(ret));
+      } else if ((aggr->get_expr_type() == T_FUN_ARG_MAX || aggr->get_expr_type() == T_FUN_ARG_MIN)
+          && (aggr->contain_nested_aggr())) {
+          ret = OB_ERR_INVALID_GROUP_FUNC_USE;
+          LOG_WARN("arg_min/max not contain aggr param", K(ret));
       } else if (OB_FAIL(aggr_exprs.at(i)->extract_info())) {
         LOG_WARN("failed to extract info", K(ret));
       } else if (aggr->has_flag(CNT_AGG) ||

@@ -27,6 +27,8 @@ ob_set_subtarget(ob_share_extra ALONE
   aggregate/single_row_count_sum.cpp
   aggregate/min.cpp
   aggregate/max.cpp
+  aggregate/arg_min.cpp
+  aggregate/arg_max.cpp
   aggregate/approx_count_distinct_mysql.cpp
   aggregate/approx_count_distinct_oracle.cpp
   aggregate/sum_opnsize.cpp
@@ -34,6 +36,7 @@ ob_set_subtarget(ob_share_extra ALONE
   aggregate/approx_count_distinct_synopsis.cpp
   aggregate/top_fre_hist.cpp
   aggregate/hybrid_hist.cpp
+  aggregate/wm_concat.cpp
   aggregate/str_prefix_max.cpp
 
   vector/expr_cmp_func.cpp

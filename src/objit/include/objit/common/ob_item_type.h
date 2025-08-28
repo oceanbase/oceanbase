@@ -3109,7 +3109,8 @@ extern const char *get_type_name(int type);
                          (op) == T_FUNC_SYS_ARRAY_AGG ||\
                          ((op) >= T_FUN_SYS_BIT_AND && (op) <= T_FUN_SYS_BIT_XOR) || \
                          (op) == T_FUN_INNER_PREFIX_MAX || \
-                         (op) == T_FUN_INNER_PREFIX_MIN)
+                         (op) == T_FUN_INNER_PREFIX_MIN || \
+                         ((op) >= T_FUN_ARG_MIN && (op) <= T_FUN_ARG_MAX))
 #define MAYBE_ROW_OP(op) ((op) >= T_OP_EQ && (op) <= T_OP_NE)
 #define IS_PSEUDO_COLUMN_TYPE(op) \
   ((op) == T_LEVEL || (op) == T_CONNECT_BY_ISLEAF || (op) == T_CONNECT_BY_ISCYCLE || (op) == T_ORA_ROWSCN)
