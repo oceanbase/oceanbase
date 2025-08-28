@@ -5655,11 +5655,13 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
       if (!op.is_skip_scan()) {
         OZ(spec.tsc_ctdef_.pre_range_graph_.reset_skip_scan_range());
       }
+      spec.tsc_ctdef_.enable_new_false_range_ = spec.tsc_ctdef_.pre_range_graph_.enable_new_false_range();
     } else {
       OZ(spec.tsc_ctdef_.pre_query_range_.deep_copy(*op.get_pre_query_range()));
       if (!op.is_skip_scan()) {
         OZ(spec.tsc_ctdef_.pre_query_range_.reset_skip_scan_range());
       }
+      spec.tsc_ctdef_.enable_new_false_range_ = false;
     }
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(op.get_pre_graph()->is_get(spec.tsc_ctdef_.scan_ctdef_.is_get_))) {
@@ -6072,12 +6074,14 @@ int ObStaticEngineCG::generate_tsc_flags(ObLogTableScan &op, ObTableScanSpec &sp
       scan_ctdef.table_scan_opt_.io_read_batch_size_ = io_read_batch_size;
       scan_ctdef.table_scan_opt_.io_read_gap_size_ = io_read_gap_size;
       scan_ctdef.table_scan_opt_.storage_rowsets_size_ = tenant_config->storage_rowsets_size;
+      scan_ctdef.enable_new_false_range_ = spec.tsc_ctdef_.enable_new_false_range_;
       if (nullptr != lookup_ctdef) {
         lookup_ctdef->pd_expr_spec_.pd_storage_flag_.set_flags(pd_blockscan, pd_filter, enable_skip_index,
                                                               enable_column_store, enable_prefetch_limit, enable_filter_reordering);
         lookup_ctdef->table_scan_opt_.io_read_batch_size_ = io_read_batch_size;
         lookup_ctdef->table_scan_opt_.io_read_gap_size_ = io_read_gap_size;
         lookup_ctdef->table_scan_opt_.storage_rowsets_size_ = tenant_config->storage_rowsets_size;
+        lookup_ctdef->enable_new_false_range_ = spec.tsc_ctdef_.enable_new_false_range_;
       }
     }
   }

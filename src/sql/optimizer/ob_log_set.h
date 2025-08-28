@@ -27,10 +27,12 @@ public:
   ObLogSet(ObLogPlan &plan):
       ObLogicalOperator(plan),
       is_distinct_(true),
+      is_distinct_pushed_down_(false),
       is_recursive_union_(false),
       is_breadth_search_(true),
       set_algo_(INVALID_SET_ALGO),
       set_dist_algo_(DIST_INVALID_METHOD),
+      random_none_idx_(OB_INVALID_INDEX),
       set_op_(ObSelectStmt::NONE),
       set_directions_(),
       identify_seq_expr_(nullptr)
@@ -49,11 +51,13 @@ public:
   int get_my_set_exprs(ObIArray<ObRawExpr*> &set_exprs);
   const char *get_name() const;
   inline void assign_set_distinct(const bool is_distinct) { is_distinct_ = is_distinct; }
+  inline void assign_set_is_distinct_pushed_down(const bool is_distinct_pushed_down) { is_distinct_pushed_down_ = is_distinct_pushed_down; }
   inline void set_recursive_union(bool is_recursive_union) { is_recursive_union_ = is_recursive_union; }
   inline void set_is_breadth_search(bool is_breadth_search) { is_breadth_search_ = is_breadth_search; }
   inline bool is_recursive_union() { return is_recursive_union_; }
   inline bool is_breadth_search() { return is_breadth_search_; }
   inline bool is_set_distinct() const { return is_distinct_; }
+  inline bool is_distinct_pushed_down() const { return is_distinct_pushed_down_; }
   // 目前仅union支持先读完left然后读right，但merge_union的distinct不支持
   // 增加hash intersect 和hash except算子1by1的能力
   virtual bool is_consume_child_1by1() const
@@ -74,6 +78,9 @@ public:
   int add_set_direction(const ObOrderDirection direction = default_asc_direction()) { return set_directions_.push_back(direction); }
   int get_set_exprs(ObIArray<ObRawExpr *> &set_exprs);
   int get_pure_set_exprs(ObIArray<ObRawExpr *> &set_exprs);
+  int append_set_exprs(ObIArray<ObRawExpr *> &append_exprs);
+  int init_set_exprs();
+
   virtual int est_cost() override;
   virtual int est_width() override;
   virtual int do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost) override;
@@ -117,6 +124,8 @@ public:
   inline void set_algo_type(const SetAlgo type) { set_algo_ = type; }
   inline void set_distributed_algo(const DistAlgo set_dist_algo) { set_dist_algo_ = set_dist_algo; }
   inline DistAlgo get_distributed_algo() { return set_dist_algo_; }
+  inline void set_random_none_idx(const int64_t random_none_idx) { random_none_idx_ = random_none_idx; }
+  inline int64_t get_random_none_idx() { return random_none_idx_; }
   int allocate_startup_expr_post() override;
   virtual int print_outline_data(PlanText &plan_text) override;
   virtual int print_used_hint(PlanText &plan_text) override;
@@ -130,10 +139,12 @@ public:
   virtual int check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index)override;
 private:
   bool is_distinct_;
+  bool is_distinct_pushed_down_;
   bool is_recursive_union_;
   bool is_breadth_search_;
   SetAlgo set_algo_;
   DistAlgo set_dist_algo_;
+  int64_t random_none_idx_;
   ObSelectStmt::SetOperator set_op_;
   common::ObSEArray<ObOrderDirection, 8, common::ModulePageAllocator, true> set_directions_;
   common::ObSEArray<int64_t, 8, common::ModulePageAllocator, true> map_array_;
@@ -141,8 +152,14 @@ private:
   common::ObSEArray<OrderItem, 8, common::ModulePageAllocator, true>  search_ordering_;
   common::ObSEArray<ColumnItem, 8, common::ModulePageAllocator, true>  cycle_items_;
   common::ObSEArray<double, 4, common::ModulePageAllocator, true>  child_ndv_;
+
+  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> set_exprs_;
+  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> pure_set_exprs_;
   //for batch search recursive cte
   ObRawExpr *identify_seq_expr_;
+
+  int get_set_exprs_internal(ObIArray<ObRawExpr *> &set_exprs);
+  int get_pure_set_exprs_internal(ObIArray<ObRawExpr *> &set_exprs);
 };
 
 } // end of namespace sql

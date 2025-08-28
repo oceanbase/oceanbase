@@ -98,6 +98,13 @@ enum AggregateAlgo
   SCALAR_AGGREGATE
 };
 
+enum AggregatePathType
+{
+  SINGLE = 0,
+  FINAL,
+  PARTIAL
+};
+
 enum SetAlgo
 {
   INVALID_SET_ALGO = 0,

@@ -34,6 +34,7 @@
 #include "sql/das/iter/ob_das_group_fold_iter.h"
 #include "sql/das/ob_das_domain_utils.h"
 #include "share/ob_fts_index_builder_util.h"
+#include "sql/rewrite/ob_range_generator.h"
 
 namespace oceanbase
 {
@@ -255,7 +256,7 @@ struct ObTableScanRtDef
       lookup_rtdef_(nullptr),
       range_buffers_(nullptr),
       range_buffer_idx_(0),
-      fast_final_nlj_range_ctx_(),
+      fast_final_nlj_range_ctx_(allocator),
       group_size_(0),
       max_group_size_(0),
       attach_rtinfo_(nullptr),
@@ -563,7 +564,7 @@ protected:
   // NOTE: set $iter_end_ if no task found.
   int get_access_tablet_loc(ObGranuleTaskInfo &info);
   // Assign GI task ranges to INPUT
-  int reassign_task_ranges(ObGranuleTaskInfo &info);
+  int reassign_task_ranges(ObGranuleTaskInfo &info, bool &is_false_range);
 
   int local_iter_reuse();
   int set_batch_iter(int64_t group_id);

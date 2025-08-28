@@ -1921,6 +1921,7 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
                 real_child_expr = win_expr->get_agg_expr();
               }
             }
+            // todo: hack!!
             if (T_FUN_SUM == expr.get_expr_type() &&
                 (T_FUN_SUM != real_child_expr->get_expr_type()
                   || !expr.has_flag(IS_INNER_ADDED_EXPR))) {

@@ -15,6 +15,7 @@
 #include "pl/ob_pl.h"
 #include "share/ob_global_context_operator.h"
 #include "sql/monitor/flt/ob_flt_control_info_mgr.h"
+#include "sql/resolver/expr/ob_raw_expr_util.h"
 
 namespace oceanbase
 {
@@ -166,6 +167,159 @@ int ObDBMSSession::clear_identifier(sql::ObExecContext &ctx,
   return ret;
 }
 
+int ObDBMSSession::is_role_enabled(sql::ObExecContext &ctx,
+                                   sql::ParamStore &params,
+                                   common::ObObj &result)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(session_is_role_enabled(ctx, params, result))) {
+    LOG_WARN("failed to check role enabled", K(ret));
+  }
+  return ret;
+}
+
+int ObDBMSSession::session_is_role_enabled(sql::ObExecContext &ctx,
+                                           sql::ParamStore &params,
+                                           common::ObObj &result)
+{
+  int ret = OB_SUCCESS;
+  sql::ObSQLSessionInfo *session = ctx.get_my_session();
+  ObString role_name;
+  uint64_t role_id = OB_INVALID_ID;
+  share::schema::ObSchemaGetterGuard *schema_guard = NULL;
+  const ObUserInfo *user_info = NULL;
+  ObPLContext *pl_ctx = NULL;
+  ObString host_name(OB_DEFAULT_HOST_NAME);
+  ObPLExecState *target_frame = NULL;
+  if (OB_UNLIKELY(OB_ISNULL(session))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session info is nullptr", K(ret));
+  } else if (OB_ISNULL(schema_guard = ctx.get_sql_ctx()->schema_guard_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get schema guard", K(ret));
+  } else if (OB_UNLIKELY(1 != params.count())) {
+    ObString func_name("SESSION_IS_ROLE_ENABLED");
+    ret = OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE;
+    LOG_USER_ERROR(OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE, func_name.length(), func_name.ptr());
+  } else if (OB_FAIL(ObRawExprUtils::resolve_identifier(ctx.get_allocator(),
+                                                        *ctx.get_my_session(),
+                                                        params.at(0),
+                                                        "ROLE_NAME",
+                                                        role_name,
+                                                        false,
+                                                        false))) {
+    LOG_WARN("failed to resolve identifier", K(ret));
+  } else if (OB_FAIL(schema_guard->get_user_info(session->get_effective_tenant_id(),
+                                          role_name, host_name,
+                                          user_info))) {
+    LOG_WARN("failed to get user info", K(ret));
+  } else if (OB_ISNULL(user_info)) {
+    result.set_bool(false);
+  } else if (OB_FALSE_IT(role_id = user_info->get_user_id())) {
+  } else if (OB_ISNULL(pl_ctx = session->get_pl_context()) || OB_ISNULL(pl_ctx->get_session_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get pl context", K(ret));
+  } else if (OB_FAIL(find_top_definer(pl_ctx, *schema_guard, target_frame))) {
+    LOG_WARN("failed to find latest call above all definer", K(ret));
+  } else if (OB_ISNULL(target_frame) || OB_ISNULL(target_frame->get_exec_ctx().pl_ctx_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+  } else {
+    // find top definer, use roles in old_role_id_array
+    const ObIArray<uint64_t>& old_role_id_array = target_frame->get_exec_ctx().pl_ctx_->get_old_role_id_array();
+    bool find = false;
+    for (int64_t i = 0; OB_SUCC(ret) && !find && i < old_role_id_array.count(); ++i) {
+      if (old_role_id_array.at(i) == role_id) {
+        find = true;
+      }
+    }
+    result.set_bool(find);
+  }
+  return ret;
+}
+
+int ObDBMSSession::find_top_definer(ObPLContext *pl_ctx,
+                                    ObSchemaGetterGuard &schema_guard,
+                                    ObPLExecState *&exec_state)
+{
+  int ret = OB_SUCCESS;
+  uint64_t stack_cnt = pl_ctx->get_exec_stack().count();
+  ObPLExecState *frame = NULL;
+  for (int64_t i = stack_cnt - 1; OB_SUCC(ret) && i >= 0; --i) {
+    bool is_special_ir = false;
+    frame = pl_ctx->get_exec_stack().at(i);
+    if (OB_ISNULL(frame)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get frame", K(i), K(stack_cnt), K(ret));
+    } else if (OB_FAIL(frame->get_function().is_special_pkg_invoke_right())) {
+      LOG_WARN("failed to check special pkg invoke right", K(ret));
+    } else if (frame->get_function().is_invoker_right() ||
+               frame->get_function().get_proc_type() == STANDALONE_ANONYMOUS ||
+               is_special_ir) {
+      // continue
+    } else {
+      exec_state = frame;
+    }
+  }
+  if (NULL == exec_state) {
+    //if no definer exists, return current frame instead
+    exec_state = pl_ctx->get_exec_stack().at(stack_cnt - 1);
+  }
+  return ret;
+}
+
+int ObDBMSSession::current_is_role_enabled(sql::ObExecContext &ctx,
+                                           sql::ParamStore &params,
+                                           common::ObObj &result)
+{
+  int ret = OB_SUCCESS;
+  sql::ObSQLSessionInfo *session = ctx.get_my_session();
+  ObString role_name;
+  uint64_t role_id = OB_INVALID_ID;
+  share::schema::ObSchemaGetterGuard *schema_guard = NULL;
+  const ObUserInfo *user_info = NULL;
+  ObPLContext *pl_ctx = NULL;
+  ObString host_name(OB_DEFAULT_HOST_NAME);
+  if (OB_UNLIKELY(OB_ISNULL(session))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session info is nullptr", K(ret));
+  } else if (OB_ISNULL(schema_guard = ctx.get_sql_ctx()->schema_guard_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get schema guard", K(ret));
+  } else if (OB_UNLIKELY(1 != params.count())) {
+    ObString func_name("CURRENT_IS_ROLE_ENABLED");
+    ret = OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE;
+    LOG_USER_ERROR(OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE, func_name.length(), func_name.ptr());
+  } else if (OB_FAIL(ObRawExprUtils::resolve_identifier(ctx.get_allocator(),
+                                                        *ctx.get_my_session(),
+                                                        params.at(0),
+                                                        "ROLE_NAME",
+                                                        role_name,
+                                                        false,
+                                                        false))) {
+    LOG_WARN("failed to resolve identifier", K(ret));
+  } else if (OB_FAIL(schema_guard->get_user_info(session->get_effective_tenant_id(),
+                                          role_name, host_name,
+                                          user_info))) {
+    LOG_WARN("failed to get user info", K(ret));
+  } else if (OB_ISNULL(user_info)) {
+    result.set_bool(false);
+  } else if (OB_FALSE_IT(role_id = user_info->get_user_id())) {
+  } else if (OB_ISNULL(pl_ctx = session->get_pl_context())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get pl context", K(ret));
+  } else {
+    const common::ObIArray<uint64_t>& role_array = session->get_enable_role_array();
+    bool find = false;
+    for (int64_t i = 0; OB_SUCC(ret) && !find && i < role_array.count(); ++i) {
+      if (role_array.at(i) == role_id) {
+        find = true;
+      }
+    }
+    result.set_bool(find);
+  }
+  return ret;
+}
 
 int ObDBMSSession::set_context(sql::ObExecContext &ctx,
                                sql::ParamStore &params,

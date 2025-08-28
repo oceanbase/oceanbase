@@ -804,7 +804,7 @@ Outputs & filters:
        DOUBLE(-1, -1)))) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))), DOUBLE(-1, -1)), DOUBLE(-1, -1))]), filter(nil), rowset=16
       distinct([cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL_INT(20, 0)), DECIMAL(15,
        4))], [cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c2)), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2)), DECIMAL_INT(20, 0)), DECIMAL(15, 4))], [cast(T_FUN_SUM(T_FUN_SUM(cast(t1.c3,
-       DOUBLE(-1, -1)))) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))), DOUBLE(-1, -1)), DOUBLE(-1, -1))])
+       DOUBLE(-1, -1)))) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))), DOUBLE(-1, -1)), DOUBLE(-1, -1))]), partial
   8 - output([cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL_INT(20, 0)), DECIMAL(15, 4))],
        [cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c2)), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2)), DECIMAL_INT(20, 0)), DECIMAL(15, 4))], [cast(T_FUN_SUM(T_FUN_SUM(cast(t1.c3,
        DOUBLE(-1, -1)))) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))), DOUBLE(-1, -1)), DOUBLE(-1, -1))]), filter(nil), rowset=16

@@ -69,6 +69,7 @@ class ObShardingInfo;
 class ObTablePartitionInfo;
 struct SubPlanInfo;
 class OptSelectivityCtx;
+struct ObNotNullContext;
 class Path;
 class AccessPath;
 class ObSharedExprResolver;
@@ -365,8 +366,13 @@ public:
    */
   static bool find_expr(common::ObIArray<ExprProducer> *ctx, const ObRawExpr &expr);
 
-  static bool find_expr(common::ObIArray<ExprProducer> *ctx, const ObRawExpr &expr, ExprProducer *&producer);
+  static int contains_virtual_column(const ObLogicalOperator *root, bool & contains);
 
+  static int contains_group_by(const ObLogicalOperator *root, bool & contains);
+
+  static int contains_lob_type(const common::ObIArray<ObRawExpr *> &expr, bool & contains);
+
+  static bool find_expr(common::ObIArray<ExprProducer> *ctx, const ObRawExpr &expr, ExprProducer *&producer);
   static int classify_equal_conds(const common::ObIArray<ObRawExpr *> &conds,
                                   common::ObIArray<ObRawExpr *> &normal_conds,
                                   common::ObIArray<ObRawExpr *> &nullsafe_conds);
@@ -376,7 +382,13 @@ public:
                             common::ObIArray<ObRawExpr*> &left_keys,
                             common::ObIArray<ObRawExpr*> &right_keys,
                             common::ObIArray<bool> &null_safe_info);
-
+  static int get_strict_equal_keys(const common::ObIArray<ObRawExpr*> &exprs,
+                                   const ObRelIds &left_table_sets,
+                                   common::ObIArray<ObRawExpr*> &left_keys,
+                                   common::ObIArray<ObRawExpr*> &right_keys,
+                                   common::ObIArray<ObRawExpr*> &left_exprs,
+                                   common::ObIArray<ObRawExpr*> &right_exprs,
+                                   bool & has_other_conditions);
   static bool find_exec_param(const common::ObIArray<ObExecParamRawExpr *> &params,
                               const ObExecParamRawExpr *ele);
   static ObRawExpr* find_exec_param(const common::ObIArray<std::pair<int64_t, ObRawExpr*> > &params_,
@@ -699,6 +711,11 @@ public:
                              ObIArray<ObFdItem *> &fd_item_set,
                              ObIArray<ObFdItem *> &candi_fd_item_set);
 
+  static int get_subplan_scan_output_to_input_mapping(const ObSelectStmt &child_stmt,
+                                                      const ObIArray<ObRawExpr*> &output_exprs,
+                                                      ObIArray<ObRawExpr*> &mapped_input_cols,
+                                                      ObIArray<ObRawExpr*> &mapped_output_cols);
+
   static int convert_subplan_scan_equal_sets(ObIAllocator *allocator,
                                              ObRawExprFactory &expr_factory,
                                              const uint64_t table_id,
@@ -918,7 +935,6 @@ public:
                                        bool skip_invalid,
                                        const ObIArray<ObRawExpr*> &input_exprs,
                                        common::ObIArray<ObRawExpr*> &output_exprs);
-
   static int convert_subplan_scan_expr(ObRawExprCopier &copier,
                                        const EqualSets &equal_sets,
                                        const uint64_t table_id,
@@ -1159,7 +1175,24 @@ public:
                                          const ObRawExprResType &res_type,
                                          const int64_t idx,
                                          ObIArray<ObString> *rcte_col_name);
-
+  static int add_new_select_items_to_view(ObSQLSessionInfo *session_info,
+                                          ObIAllocator &allocator,
+                                          ObRawExprFactory *expr_factory,
+                                          ObPhysicalPlanCtx *plan_ctx,
+                                          TableItem &view_table_item,
+                                          ObDMLStmt &stmt,
+                                          ObIArray<ObRawExpr *> &new_select_list,
+                                          ObIArray<ObRawExpr *> &new_column_list,
+                                          bool ignore_dup_select_expr = true,
+                                          bool repeated_select = false);
+  static int create_new_column_expr(ObSQLSessionInfo *session_info,
+                                    ObRawExprFactory *expr_factory,
+                                    ObPhysicalPlanCtx *plan_ctx,
+                                    const TableItem &table_item,
+                                    const int64_t column_id,
+                                    const SelectItem &select_item,
+                                    ObDMLStmt &stmt,
+                                    ObColumnRefRawExpr *&new_expr);
   static int check_subquery_has_ref_assign_user_var(ObRawExpr *expr, bool &is_has);
 
   /**
@@ -1396,7 +1429,8 @@ public:
   static int generate_pullup_aggr_expr(ObRawExprFactory &expr_factory,
                                        ObSQLSessionInfo *session_info,
                                        ObItemType aggr_type,
-                                       ObRawExpr *origin_expr,
+                                       ObAggFunRawExpr *origin_expr,
+                                       ObRawExpr *pushdown_expr,
                                        ObAggFunRawExpr *&pullup_aggr);
 
   static int check_filter_before_indexback(const ObIArray<ObRawExpr*> &filter_exprs,

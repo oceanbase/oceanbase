@@ -1474,6 +1474,7 @@ int ObTableScanOp::prepare_single_scan_range(int64_t group_idx, bool need_sort)
               range_allocator,
               ctx_,
               plan_ctx->get_param_store(),
+              tsc_rtdef_.range_buffer_idx_,
               locate_range_buffer(),
               key_ranges,
               ObBasicSessionInfo::create_dtc_params(ctx_.get_my_session())))) {
@@ -1515,6 +1516,8 @@ int ObTableScanOp::prepare_single_scan_range(int64_t group_idx, bool need_sort)
                                                 ctx_))) {
       LOG_WARN("failed to prepare single scan range for external table", K(ret));
     }
+  } else if (MY_CTDEF.enable_new_false_range_ && key_ranges.empty()) {
+    // always false, do nothing
   } else if (OB_FAIL(MY_CTDEF.get_query_range_provider().get_ss_tablet_ranges(range_allocator,
                                 ctx_,
                                 ss_key_ranges,
@@ -1841,6 +1844,7 @@ int ObTableScanOp::inner_open()
     if (MY_CTDEF.get_query_range_provider().is_fast_nlj_range()) {
       int64_t column_count = MY_CTDEF.get_query_range_provider().get_column_count();
       size_t range_size = sizeof(ObNewRange) + sizeof(ObObj) * column_count * 2;
+      tsc_rtdef_.fast_final_nlj_range_ctx_.max_group_size_ = tsc_rtdef_.max_group_size_;
       if (!MY_SPEC.batch_scan_flag_) {
         tsc_rtdef_.range_buffers_ = ctx_.get_allocator().alloc(range_size);
       } else {
@@ -1934,9 +1938,10 @@ int ObTableScanOp::do_init_before_get_row()
     } else {
       if (MY_SPEC.gi_above_) {
         ObGranuleTaskInfo info;
+        bool is_false_range = false;
         if (OB_FAIL(get_access_tablet_loc(info))) {
           LOG_WARN("fail to get access partition failed", K(ret));
-        } else if (OB_FAIL(reassign_task_ranges(info))) {
+        } else if (OB_FAIL(reassign_task_ranges(info, is_false_range))) {
           LOG_WARN("assign task ranges failed", K(ret));
         }
       }
@@ -2198,6 +2203,7 @@ int ObTableScanOp::local_iter_rescan()
 {
   int ret = OB_SUCCESS;
   ObGranuleTaskInfo info;
+  bool is_false_range = false;
   if (OB_ISNULL(scan_iter_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected nullptr scan iter", K(ret));
@@ -2205,11 +2211,12 @@ int ObTableScanOp::local_iter_rescan()
     LOG_WARN("fail to get access partition", K(ret));
   } else if (OB_FAIL(local_iter_reuse())) {
     LOG_WARN("failed to reset query range", K(ret));
-  } else if (OB_FAIL(reassign_task_ranges(info))) {
+  } else if (OB_FAIL(reassign_task_ranges(info, is_false_range))) {
     LOG_WARN("assign task ranges failed", K(ret));
   } else if (OB_UNLIKELY(iter_end_)) {
     //do nothing
-  } else if ((MY_INPUT.key_ranges_.empty() || MY_CTDEF.use_index_merge_) &&
+  } else if (((!is_false_range && MY_INPUT.key_ranges_.empty())
+              || MY_CTDEF.use_index_merge_) &&
              OB_FAIL(prepare_scan_range())) {
     // if use index merge but key range is not empty
     // maybe use gi scheduler, need to prepare scan range
@@ -2910,16 +2917,21 @@ int ObTableScanOp::cherry_pick_range_by_tablet_id(ObDASScanOp *scan_op)
     }
   }
   if (OB_SUCC(ret) && prune_all && !input_ranges.empty()) {
-    ObNewRange false_range;
-    ObNewRange whole_range;
-    false_range.set_false_range();
-    false_range.group_idx_ = input_ranges.at(0).group_idx_;
-    false_range.index_ordered_idx_ = input_ranges.at(0).index_ordered_idx_;
-    whole_range.set_whole_range();
-    if (OB_FAIL(scan_ranges.push_back(false_range))) {
-      LOG_WARN("store false range to scan ranges failed", K(ret));
-    } else if (OB_FAIL(ss_ranges.push_back(whole_range))) {
-      LOG_WARN("store whole range to skip scan ranges failed", K(ret));
+    if (MY_CTDEF.enable_new_false_range_) {
+      scan_ranges.reuse();
+      ss_ranges.reuse();
+    } else {
+      ObNewRange false_range;
+      ObNewRange whole_range;
+      false_range.set_false_range();
+      false_range.group_idx_ = input_ranges.at(0).group_idx_;
+      false_range.index_ordered_idx_ = input_ranges.at(0).index_ordered_idx_;
+      whole_range.set_whole_range();
+      if (OB_FAIL(scan_ranges.push_back(false_range))) {
+        LOG_WARN("store false range to scan ranges failed", K(ret));
+      } else if (OB_FAIL(ss_ranges.push_back(whole_range))) {
+        LOG_WARN("store whole range to skip scan ranges failed", K(ret));
+      }
     }
   }
   if (OB_SUCC(ret)) {
@@ -3092,15 +3104,17 @@ int ObTableScanOp::construct_partition_range(ObArenaAllocator &allocator,
   return ret;
 }
 
-int ObTableScanOp::reassign_task_ranges(ObGranuleTaskInfo &info)
+int ObTableScanOp::reassign_task_ranges(ObGranuleTaskInfo &info, bool &is_false_range)
 {
   int ret = OB_SUCCESS;
+  is_false_range = false;
   if (MY_SPEC.gi_above_ && !iter_end_) {
     if (OB_UNLIKELY(MY_SPEC.get_query_range_provider().is_contain_geo_filters())) {
       MY_INPUT.key_ranges_.reuse();
       MY_INPUT.ss_key_ranges_.reuse();
       MY_INPUT.mbr_filters_.reuse();
     } else if (!MY_INPUT.get_need_extract_query_range()) {
+      is_false_range = info.ranges_.empty();
       if (OB_FAIL(MY_INPUT.key_ranges_.assign(info.ranges_)) ||
           OB_FAIL(MY_INPUT.ss_key_ranges_.assign(info.ss_ranges_))) {
         LOG_WARN("assign the range info failed", K(ret), K(info));

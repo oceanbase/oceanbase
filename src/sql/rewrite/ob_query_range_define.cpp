@@ -23,6 +23,7 @@
 namespace oceanbase {
 using namespace common;
 namespace sql {
+ERRSIM_POINT_DEF(ERRSIM_FAST_NLJ_RANGE_GENERATOR_CHECK);
 
 void ObRangeNode::reset()
 {
@@ -445,6 +446,8 @@ int ObPreRangeGraph::deep_copy(const ObPreRangeGraph &other)
     LOG_WARN("failed to assign unprecise range exprs");
   } else if (OB_FAIL(total_range_sizes_.assign(other.total_range_sizes_))) {
     LOG_WARN("failed to assign total range sizes");
+  } else if (OB_FAIL(fast_final_pos_arr_.assign(other.fast_final_pos_arr_))) {
+    LOG_WARN("failed to assign fast final pos arrary");
   } else if (OB_FAIL(deep_copy_range_graph(other.node_head_))) {
     LOG_WARN("failed to deep copy range graph");
   } else if (OB_FAIL(deep_copy_column_metas(other.column_metas_))) {
@@ -721,40 +724,162 @@ int ObPreRangeGraph::get_fast_nlj_tablet_ranges(ObFastFinalNLJRangeCtx &fast_nlj
                                                 common::ObIAllocator &allocator,
                                                 ObExecContext &exec_ctx,
                                                 const ParamStore &param_store,
+                                                int64_t range_buffer_idx,
                                                 void *range_buffer,
                                                 ObQueryRangeArray &ranges,
                                                 const common::ObDataTypeCastParams &dtc_params) const
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!fast_nlj_range_ctx.has_check_valid)) {
-    if (OB_FAIL(ObRangeGenerator::check_can_final_fast_nlj_range(*this,
-                                                                 param_store,
-                                                                 fast_nlj_range_ctx.is_valid))) {
-      LOG_WARN("failed to check can final fast nlj range", K(ret));
+  if (fast_nlj_range_) {
+    if (OB_UNLIKELY(!fast_nlj_range_ctx.has_check_valid_)) {
+      if (OB_FAIL(ObRangeGenerator::check_can_final_fast_nlj_range(*this,
+                                                                  param_store,
+                                                                  fast_nlj_range_ctx.is_valid_))) {
+        LOG_WARN("failed to check can final fast nlj range", K(ret));
+      }
+      fast_nlj_range_ctx.has_check_valid_ = true;
     }
-    fast_nlj_range_ctx.has_check_valid = true;
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_LIKELY(fast_nlj_range_ctx.is_valid)) {
-    if (OB_FAIL(ObRangeGenerator::generate_fast_nlj_range(*this,
-                                                          param_store,
-                                                          allocator,
-                                                          range_buffer))) {
-      LOG_WARN("failed to generate fast nlj range", K(ret));
-    } else if (OB_FAIL(ranges.push_back(static_cast<ObNewRange*>(range_buffer)))) {
-      LOG_WARN("failed to push back array", K(ret));
+    if (OB_FAIL(ret)) {
+    } else if (OB_LIKELY(fast_nlj_range_ctx.is_valid_)) {
+      if (OB_FAIL(ObRangeGenerator::generate_fast_nlj_range(*this,
+                                                            param_store,
+                                                            allocator,
+                                                            range_buffer,
+                                                            ranges))) {
+        LOG_WARN("failed to generate fast nlj range", K(ret));
+      }
+    } else {
+      bool dummy_all_single_value_ranges = false;
+      if (OB_FAIL(get_tablet_ranges(allocator,
+                                    exec_ctx,
+                                    ranges,
+                                    dummy_all_single_value_ranges,
+                                    dtc_params))) {
+        LOG_WARN("failed to get tablet ranges", K(ret));
+      }
     }
-  } else {
+  } else if (general_nlj_range_) {
+    ObArray<ObObj> objs;
+    bool can_fast_extract = true;
     bool dummy_all_single_value_ranges = false;
-    if (OB_FAIL(get_tablet_ranges(allocator,
-                                  exec_ctx,
-                                  ranges,
-                                  dummy_all_single_value_ranges,
-                                  dtc_params))) {
-      LOG_WARN("failed to get tablet ranges", K(ret));
+    bool always_false = false;
+    bool always_true = false;
+    bool need_check_range = false;
+    ObQueryRangeArray check_ranges;
+    if (OB_UNLIKELY(!fast_nlj_range_ctx.has_check_valid_)) {
+      if (OB_FAIL(get_tablet_ranges(allocator,
+                                    exec_ctx,
+                                    ranges,
+                                    dummy_all_single_value_ranges,
+                                    dtc_params))) {
+        LOG_WARN("failed to get tablet ranges", K(ret));
+      } else if (ranges.empty() && enable_new_false_range()) {
+        // always false
+      } else if (ranges.count() == 1 &&
+                 OB_FAIL(ObRangeGenerator::check_range_type(ranges.at(0), always_true, always_false))) {
+        LOG_WARN("failed to check false range", K(ret), K(ranges));
+      } else if (always_true) {
+        fast_nlj_range_ctx.has_check_valid_ = true;
+        fast_nlj_range_ctx.is_valid_ = false;
+      } else if (always_false) {
+        // do nothing
+      } else if (OB_FAIL(ObRangeGenerator::check_can_fast_extract_nlj_range(allocator,
+                                                                            exec_ctx,
+                                                                            dtc_params,
+                                                                            *this,
+                                                                            objs,
+                                                                            always_false,
+                                                                            can_fast_extract))) {
+        LOG_WARN("failed to check can fast extract nlj range", K(ret));
+      } else if (!can_fast_extract) {
+        fast_nlj_range_ctx.has_check_valid_ = true;
+        fast_nlj_range_ctx.is_valid_ = false;
+      } else if (OB_FAIL(fast_nlj_range_ctx.init_first_ranges(column_count_,
+                                                              range_buffer_idx,
+                                                              ranges))) {
+        LOG_WARN("failed to init first ranges", K(ret));
+      } else {
+        fast_nlj_range_ctx.has_check_valid_ = true;
+        fast_nlj_range_ctx.is_valid_ = true;
+      }
+    } else if (!fast_nlj_range_ctx.is_valid_) {
+      if (OB_FAIL(get_tablet_ranges(allocator,
+                                    exec_ctx,
+                                    ranges,
+                                    dummy_all_single_value_ranges,
+                                    dtc_params))) {
+        LOG_WARN("failed to get tablet ranges", K(ret));
+      }
+    } else if (OB_FAIL(ObRangeGenerator::check_can_fast_extract_nlj_range(allocator,
+                                                                          exec_ctx,
+                                                                          dtc_params,
+                                                                          *this,
+                                                                          objs,
+                                                                          always_false,
+                                                                          can_fast_extract))) {
+      LOG_WARN("failed to check can fast extract nlj range", K(ret));
+    } else if (!can_fast_extract) {
+      if (OB_FAIL(get_tablet_ranges(allocator,
+                                    exec_ctx,
+                                    ranges,
+                                    dummy_all_single_value_ranges,
+                                    dtc_params))) {
+        LOG_WARN("failed to get tablet ranges", K(ret));
+      } else {
+        fast_nlj_range_ctx.is_valid_ = false;
+      }
+    } else if (always_false) {
+      need_check_range = true;
+    } else if (OB_FAIL(ObRangeGenerator::fill_general_nlj_range(fast_nlj_range_ctx,
+                                                                *this,
+                                                                objs,
+                                                                range_buffer_idx,
+                                                                always_false,
+                                                                ranges))) {
+      LOG_WARN("failed to fill general nlj range", K(ret));
+    } else {
+      need_check_range = true;
+    }
+
+    if (OB_SUCC(ret) && always_false) {
+      ranges.reuse();
+      if (!enable_new_false_range()) {
+        ObNewRange *range = static_cast<ObNewRange*>(range_buffer);
+        ObObj *starts = reinterpret_cast<ObObj*>(static_cast<char*>(range_buffer) + sizeof(ObNewRange));
+        ObObj *ends = starts + column_count_;
+        for (int i = 0; OB_SUCC(ret) && i < column_count_; ++i) {
+          starts[i].set_max_value();
+          ends[i].set_min_value();
+        }
+        range->start_key_.assign(starts, column_count_);
+        range->end_key_.assign(ends, column_count_);
+        range->table_id_ = get_table_id();
+        if (OB_FAIL(ranges.push_back(range))) {
+          LOG_WARN("failed to push back ranges", K(ret));
+        }
+      }
+    }
+
+    if (OB_SUCC(ret) && ERRSIM_FAST_NLJ_RANGE_GENERATOR_CHECK && need_check_range) {
+      if (OB_FAIL(get_tablet_ranges(allocator,
+                                    exec_ctx,
+                                    check_ranges,
+                                    dummy_all_single_value_ranges,
+                                    dtc_params))) {
+        LOG_WARN("failed to get tablet ranges", K(ret));
+      } else if (check_ranges.count() != ranges.count()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("check and find error ranges", K(objs), K(ranges), K(check_ranges));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < ranges.count(); ++i) {
+          if (!ranges.at(i)->equal(*check_ranges.at(i))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("check and find error ranges", K(objs), K(ranges), K(check_ranges));
+          }
+        }
+      }
     }
   }
-
   return ret;
 }
 
@@ -1104,7 +1229,6 @@ OB_DEF_DESERIALIZE(ObPreRangeGraph)
       OB_UNIS_DECODE(fast_final_pos_arr_.at(i));
     }
   }
-
   return ret;
 }
 
@@ -1149,7 +1273,8 @@ DEF_TO_STRING(ObPreRangeGraph)
          K_(is_equal_range),
          K_(is_precise_get),
          K_(is_standard_range),
-         K_(contain_exec_param));
+         K_(contain_exec_param),
+         K_(flags));
     J_COMMA();
     J_NAME(N_RANGE_GRAPH);
     J_COLON();
@@ -1813,6 +1938,17 @@ int ObPreRangeGraph::create_op_expr(ObRawExprFactory &expr_factory,
     LOG_WARN("failed to add extra for op expr", KPC(extra_value_expr));
   } else {
     op_expr = tmp_expr;
+  }
+  return ret;
+}
+
+int ObPreRangeGraph::set_general_nlj_range_extraction(const ObIArray<ObFastFinalPos> &pos_arr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(fast_final_pos_arr_.assign(pos_arr))) {
+    LOG_WARN("failed to assign array", K(ret));
+  } else {
+    general_nlj_range_ = true;
   }
   return ret;
 }

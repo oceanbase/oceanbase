@@ -185,7 +185,7 @@ MV_REWRITE NO_MV_REWRITE TRANSFORM_DISTINCT_AGG NO_TRANSFORM_DISTINCT_AGG PUSH_S
 DECORRELATE NO_DECORRELATE
 // optimize hint
 INDEX_HINT INDEX_ASC_HINT INDEX_DESC_HINT FULL_HINT NO_INDEX_HINT USE_DAS_HINT NO_USE_DAS_HINT UNION_MERGE_HINT
-INDEX_SS_HINT INDEX_SS_ASC_HINT INDEX_SS_DESC_HINT
+INDEX_SS_HINT INDEX_SS_ASC_HINT INDEX_SS_DESC_HINT INDEX_MERGE_HINT NO_INDEX_MERGE_HINT
 USE_COLUMN_STORE_HINT NO_USE_COLUMN_STORE_HINT
 LEADING_HINT ORDERED
 USE_NL USE_MERGE USE_HASH NO_USE_HASH NO_USE_MERGE NO_USE_NL
@@ -434,7 +434,7 @@ END_P SET_VAR DELIMITER
 %type <node> relation_factor_in_hint relation_factor_in_hint_list relation_factor_in_pq_hint opt_relation_factor_in_hint_list relation_factor_in_use_join_hint_list relation_factor_in_mv_hint_list opt_relation_factor_in_mv_hint_list
 %type <node> relation_factor_in_leading_hint_list joined_table tbl_name table_subquery table_subquery_alias
 %type <node> relation_factor_with_star relation_with_star_list opt_with_star
-%type <node> index_hint_type key_or_index index_hint_scope index_element index_list opt_index_list opt_index_prefix union_merge_list
+%type <node> index_hint_type key_or_index index_hint_scope index_element index_list opt_index_list opt_index_prefix
 %type <node> add_key_or_index_opt add_key_or_index add_unique_key_opt add_unique_key add_constraint_uniq_key_opt add_constraint_uniq_key add_constraint_pri_key_opt add_constraint_pri_key add_primary_key_opt add_primary_key add_spatial_index_opt add_spatial_index
 %type <node> index_hint_definition index_hint_list
 %type <node> intnum_list
@@ -493,7 +493,7 @@ END_P SET_VAR DELIMITER
 %type <node> create_view_stmt view_name opt_column_list opt_mv_column_list mv_column_list opt_table_id opt_tablet_id view_select_stmt opt_check_option opt_tablet_id_no_empty
 %type <node> create_mview_stmt create_mview_opts mview_refresh_opt mv_refresh_on_clause mv_refresh_mode mv_refresh_interval mv_start_clause mv_next_clause
 %type <ival> mv_refresh_method mview_enable_disable
-%type <node> name_list
+%type <node> name_list opt_name_list
 %type <node> partition_role ls_role zone_desc opt_zone_desc server_or_zone opt_server_or_zone opt_partitions opt_subpartitions add_or_alter_zone_options alter_or_change_or_modify
 %type <node> ls opt_tenant_list_or_ls_or_tablet_id ls_server_or_server_or_zone_or_tenant add_or_alter_zone_option
 %type <node> opt_tenant_list_v2
@@ -12093,6 +12093,17 @@ hint_option
 }
 ;
 
+opt_name_list:
+name_list
+{
+  $$ = $1;
+}
+| /*EMPTY*/
+{
+  $$ = NULL;
+}
+;
+
 name_list:
 NAME_OB
 {
@@ -12742,18 +12753,6 @@ qb_name_list:
   }
   ;
 
-union_merge_list:
-NAME_OB
-{
-  $$ = $1;
-}
-| union_merge_list opt_comma NAME_OB
-{
-  (void) $2;
-  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
-}
-;
-
 optimize_hint:
 INDEX_HINT '(' qb_name_option relation_factor_in_hint opt_comma NAME_OB opt_index_prefix ')'
 {
@@ -12775,11 +12774,19 @@ INDEX_HINT '(' qb_name_option relation_factor_in_hint opt_comma NAME_OB opt_inde
   (void)($5);               /* unused */
   malloc_non_terminal_node($$, result->malloc_pool_, T_NO_INDEX_HINT, 3, $3, $4, $6);
 }
-| UNION_MERGE_HINT '(' qb_name_option relation_factor_in_hint union_merge_list ')'
+| INDEX_MERGE_HINT '(' qb_name_option relation_factor_in_hint opt_comma opt_name_list ')'
 {
+  (void) $5; /* unused */
   ParseNode *index_list = NULL;
-  merge_nodes(index_list, result, T_UNION_MERGE_LIST, $5);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_UNION_MERGE_HINT, 3, $3, $4, index_list);
+  merge_nodes(index_list, result, T_NAME_LIST, $6);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_INDEX_MERGE_HINT, 3, $3, $4, index_list);
+}
+| NO_INDEX_MERGE_HINT '(' qb_name_option relation_factor_in_hint opt_comma opt_name_list ')'
+{
+  (void) $5; /* unused */
+  ParseNode *index_list = NULL;
+  merge_nodes(index_list, result, T_NAME_LIST, $6);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_NO_INDEX_MERGE_HINT, 3, $3, $4, index_list);
 }
 | FULL_HINT '(' qb_name_option relation_factor_in_hint ')'
 {

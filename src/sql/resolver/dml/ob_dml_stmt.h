@@ -931,6 +931,7 @@ public:
   int assign_tables_hash(const ObDMLStmtTableHash &tables_hash);
   ColumnItem *get_column_item(uint64_t table_id, const common::ObString &col_name);
   ColumnItem *get_column_item(uint64_t table_id, uint64_t column_id);
+  const ColumnItem *get_column_item(uint64_t table_id, uint64_t column_id) const;
   int add_column_item(ColumnItem &column_item);
   int add_column_item(ObIArray<ColumnItem> &column_items);
   int remove_column_item(uint64_t table_id, uint64_t column_id);
@@ -1126,9 +1127,9 @@ public:
                                        const bool check_having = false) const;
   int get_where_scope_conditions(ObIArray<ObRawExpr *> &conditions,
                                  bool outer_semi_only = false) const;
-  static int extract_equal_condition_from_joined_table(const TableItem *table,
-                                                       ObIArray<ObRawExpr *> &equal_set_conditions,
-                                                       const bool is_strict);
+  static int extract_on_condition_from_joined_table(const TableItem *table,
+                                                    ObIArray<ObRawExpr *> &equal_set_conditions,
+                                                    const bool is_strict);
   virtual bool is_returning() const { return false; }
   virtual bool has_instead_of_trigger() const { return false; }
   int has_lob_column(int64_t table_id, bool &has_lob)const;

@@ -49,7 +49,15 @@ public:
 
   int perform_late_materialization(ObSelectStmt *stmt,
                                    ObLogicalOperator *&op);
-
+  int allocate_distinct_as_top(ObLogicalOperator *&top,
+                               const AggregateAlgo algo,
+                               const DistAlgo dist_algo,
+                               const ObIArray<ObRawExpr*> &distinct_exprs,
+                               const double total_ndv,
+                               const bool is_partition_wise = false,
+                               const bool is_pushed_down = false,
+                               const bool is_partition_gi = false,
+                               const AggregatePathType step = AggregatePathType::SINGLE);
 protected:
   virtual int generate_normal_raw_plan() override;
   virtual int generate_dblink_raw_plan() override;
@@ -210,7 +218,7 @@ private:
   int candi_allocate_distinct();
 
   // @brief Get all the distinct exprs
-
+  int set_distinct_final(ObLogicalOperator *&top);
   int get_distinct_exprs(const ObLogicalOperator *top,
                          common::ObIArray <ObRawExpr *> &reduce_exprs,
                          common::ObIArray <ObRawExpr *> &distinct_exprs);
@@ -248,14 +256,6 @@ private:
                                  ObIArray<OrderItem> &sort_keys,
                                  const DistAlgo algo);
 
-  int allocate_distinct_as_top(ObLogicalOperator *&top,
-                               const AggregateAlgo algo,
-                               const DistAlgo dist_algo,
-                               const ObIArray<ObRawExpr*> &distinct_exprs,
-                               const double total_ndv,
-                               const bool is_partition_wise = false,
-                               const bool is_pushed_down = false,
-                               const bool is_partition_gi = false);
   /**
    *  @brief  GENERATE the PLAN tree FOR "SET" operator (UNION/INTERSECT/EXCEPT)
    *  Warning:
@@ -310,7 +310,8 @@ private:
 
   int allocate_union_all_as_top(const ObIArray<ObLogicalOperator*> &child_plans,
                                 DistAlgo dist_set_method,
-                                ObLogicalOperator *&top);
+                                ObLogicalOperator *&top,
+                                bool is_distinct_pushed_down = false);
 
   int allocate_set_distinct_as_top(ObLogicalOperator *&top);
 
@@ -486,7 +487,8 @@ private:
                                    DistAlgo dist_set_method,
                                    ObLogicalOperator *&top,
                                    const ObIArray<ObOrderDirection> *order_directions = NULL,
-                                   const ObIArray<int64_t> *map_array = NULL);
+                                   const ObIArray<int64_t> *map_array = NULL,
+                                   bool is_distinct_pushed_down = false);
 
   int get_distributed_set_methods(const EqualSets &equal_sets,
                                   const ObIArray<ObRawExpr*> &left_set_keys,

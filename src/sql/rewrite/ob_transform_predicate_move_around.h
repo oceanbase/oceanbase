@@ -304,6 +304,20 @@ private:
                                        ObRawExpr *second,
                                        ObRawExpr *&new_predicate);
 
+  int inner_add_split_in_exprs(ObRawExpr *in_expr,
+                               ObIArray<ObRawExpr *> &target_exprs,
+                               ObIArray<ObRawExpr *> &new_conds);
+
+  int create_new_op_expr_without_row(ObRawExpr *left_expr,
+                                     ObRawExpr *right_expr,
+                                     int split_expr_idx,
+                                     ObRawExpr *&new_op_expr);
+
+  int create_new_op_expr_with_row(ObRawExpr *left_expr,
+                                  ObRawExpr *right_expr,
+                                  const ObSqlBitSet <> &split_expr_set,
+                                  ObRawExpr *&new_op_expr);
+
   int split_or_having_expr(ObSelectStmt &stmt,
                           ObOpRawExpr &or_qual,
                           ObRawExpr *&new_expr);
@@ -335,6 +349,10 @@ private:
                            bool &is_happened,
                            bool is_pullup = false);
   int check_need_transform_predicates(ObIArray<ObRawExpr *> &exprs, bool &is_needed);
+
+  int transform_other_predicates(ObIArray<ObRawExpr *> &input_preds,
+                                 ObIArray<ObRawExpr *> &target_exprs);
+
   int accept_outjoin_predicates(ObDMLStmt &stmt,
                                 ObIArray<ObRawExpr *> &conds,
                                 ObSqlBitSet <> &filter_table_set,

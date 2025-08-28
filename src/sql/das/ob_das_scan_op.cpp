@@ -342,6 +342,7 @@ int ObDASScanOp::init_scan_param()
   if (scan_rtdef_->sample_info_ != nullptr) {
     scan_param_.sample_info_ = *scan_rtdef_->sample_info_;
   }
+  scan_param_.enable_new_false_range_ = scan_ctdef_->enable_new_false_range_;
   if (OB_NOT_NULL(snapshot_)) {
     if (OB_FAIL(scan_param_.snapshot_.assign(*snapshot_))) {
       LOG_WARN("assign snapshot fail", K(ret));

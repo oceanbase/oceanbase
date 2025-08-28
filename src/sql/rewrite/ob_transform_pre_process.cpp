@@ -37,7 +37,8 @@ int ObTransformPreProcess::transform_one_stmt(common::ObIArray<ObParentDMLStmt> 
   trans_happened = false;
   bool is_happened = false;
   ObDMLStmt *limit_stmt = NULL;
-  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->allocator_)) {
+  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->allocator_) ||
+      OB_ISNULL(stmt->get_query_ctx())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("unexpected NULL", K(ret), K(stmt), K(ctx_));
   } else if (OB_FAIL(ObTransformUtils::right_join_to_left(stmt))) {
@@ -319,6 +320,17 @@ int ObTransformPreProcess::transform_one_stmt(common::ObIArray<ObParentDMLStmt> 
       } else {
         trans_happened |= is_happened;
         LOG_TRACE("succeed to transform for last_insert_id.",K(is_happened), K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (!stmt->get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_4_1)) {
+        // do nothing
+      } else if (OB_FAIL(transform_generated_column(stmt, is_happened))) {
+        LOG_WARN("failed to transform for generated column.", K(ret));
+      } else {
+        trans_happened |= is_happened;
+        LOG_TRACE("succeed to transform for generated column.",K(is_happened), K(ret));
+        OPT_TRACE("transform for generated column:", is_happened);
       }
     }
     if (OB_SUCC(ret)) {
@@ -11232,6 +11244,290 @@ int ObTransformPreProcess::reset_view_base_and_transpose_item(ObDMLStmt *stmt)
   return ret;
 }
 
+int ObTransformPreProcess::transform_generated_column(ObDMLStmt *stmt, bool &is_happened)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObColumnRefRawExpr*, 4> gen_cols_for_replace; // candidate generated columns for replace
+  ObSEArray<ObRawExpr*, 4> depend_exprs; // depend exprs of candidate generated columns
+  ObSEArray<ObRawExpr*, 8> relation_exprs;
+  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->exec_ctx_) ||
+      OB_ISNULL(ctx_->exec_ctx_->get_physical_plan_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_FAIL(collect_gen_cols_for_replace(stmt, gen_cols_for_replace, depend_exprs))) {
+    LOG_WARN("failed to collect gen cols for replace", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < gen_cols_for_replace.count(); ++i) {
+      relation_exprs.reuse();
+      ObStmtExprGetter expr_getter;
+      ObColumnRefRawExpr *gen_col = gen_cols_for_replace.at(i);
+      ObRawExpr *depend_expr = depend_exprs.at(i);
+      ObSEArray<DmlStmtScope, 4> replace_scopes;
+      ObSEArray<ObPCConstParamInfo, 4> constraints;
+      ObSEArray<ObRawExpr*, 4> same_depend_exprs;
+      ObExprEqualCheckContext check_context;
+      check_context.override_const_compare_ = true;
+      ObStmtExprReplacer replacer;
+      bool pass_pred_check = true;
+      if (OB_ISNULL(gen_col) || OB_ISNULL(depend_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret), KP(gen_col), KP(depend_expr));
+      } else if (OB_FAIL(collect_pullable_scopes_from_table(stmt, gen_col, depend_expr,
+                                                            replace_scopes, constraints))) {
+        LOG_WARN("failed to replace gen col", K(ret));
+      } else if (replace_scopes.empty()) {
+        // do nothing
+      } else if (OB_FALSE_IT(expr_getter.add_scope(replace_scopes))) {
+      } else if (OB_FAIL(stmt->get_relation_exprs(relation_exprs, expr_getter))) {
+        LOG_WARN("failed to get relation exprs", K(ret));
+      } else {
+        // the referenced depend expr might be parameterized and needs to be found using "same as".
+        for (int64_t j = 0; OB_SUCC(ret) && j < relation_exprs.count(); ++j) {
+          if (OB_FAIL(ObTransformUtils::find_same_expr_recursively(relation_exprs.at(j),
+                                                                  depend_expr,
+                                                                  same_depend_exprs,
+                                                                  check_context))) {
+            LOG_WARN("failed to find same expr recursively", K(ret));
+          }
+        }
+
+        if (OB_FAIL(ret)) {
+        } else if (same_depend_exprs.empty()) {
+          // no expr for replace
+        } else if (gen_col->is_virtual_generated_column() &&
+                   OB_FAIL(check_gen_col_preds(relation_exprs, gen_col, same_depend_exprs, pass_pred_check))) {
+          LOG_WARN("failed to check gen col match index", K(ret));
+        } else if (!pass_pred_check) {
+          // for virtual generated columns, they need to be included in predicates that may contribute query range.
+        } else {
+          // set replace scope and expr pairs
+          replacer.remove_all();
+          replacer.add_scope(replace_scopes);
+          for (int64_t j = 0; OB_SUCC(ret) && j < same_depend_exprs.count(); ++j) {
+            if (OB_FAIL(replacer.add_replace_expr(same_depend_exprs.at(j), gen_col))) {
+              LOG_WARN("failed to replace expr", K(ret));
+            }
+          }
+        }
+
+        // do replace
+        if (OB_FAIL(ret) || same_depend_exprs.empty() || !pass_pred_check) {
+        } else if (OB_FAIL(ObTransformUtils::add_const_param_constraints(check_context,
+                                                                         ctx_->exec_ctx_->get_physical_plan_ctx()->get_param_store(),
+                                                                         constraints))) {
+          LOG_WARN("failed to add const param constraints", K(ret));
+        } else if (OB_FAIL(stmt->iterate_stmt_expr(replacer))) {
+          LOG_WARN("failed to iterate stmt expr", K(ret));
+        } else if (OB_FAIL(append(ctx_->plan_const_param_constraints_, constraints))) {
+          LOG_WARN("failed to append const param constraints", K(ret));
+        } else {
+          is_happened = true;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformPreProcess::collect_gen_cols_for_replace(ObDMLStmt *stmt,
+                                                        ObIArray<ObColumnRefRawExpr*> &gen_cols_for_replace,
+                                                        ObIArray<ObRawExpr*> &depend_exprs)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObPCConstParamInfo, 4> constraints;
+  ObSchemaGetterGuard *schema_guard = NULL;
+  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->exec_ctx_) || OB_ISNULL(ctx_->exec_ctx_->get_sql_ctx()) ||
+      OB_ISNULL(schema_guard = ctx_->exec_ctx_->get_sql_ctx()->schema_guard_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_table_size(); ++i) {
+      TableItem *table_item = stmt->get_table_item(i);
+      ObSEArray<ColumnItem, 8> column_items;
+      bool col_is_key = false;
+      if (OB_ISNULL(table_item)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret), KP(table_item));
+      } else if (!table_item->is_basic_table()) {
+        // do nothing
+      } else if (OB_FAIL(stmt->get_column_items(table_item->table_id_, column_items))) {
+        LOG_WARN("fail to get column items", K(ret));
+      } else {
+        for (int64_t j = 0; OB_SUCC(ret) && j < column_items.count(); ++j) {
+          ObColumnRefRawExpr *col_expr = column_items.at(j).expr_;
+          ObRawExpr *depend_expr = NULL;
+          bool is_valid_gen_col = false;
+          if (OB_ISNULL(col_expr)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected null", K(ret), KP(col_expr));
+          } else if (!col_expr->is_generated_column()) {
+            // do nothing
+          } else if (!ObTransformUtils::is_safe_type_for_gen_col_replace(col_expr->get_result_type())) {
+            // do nothing
+          } else if (ObRawExprUtils::is_auxiliary_generated_column(*col_expr)) {
+            // do nothing
+          } else if (OB_FALSE_IT(depend_expr = col_expr->get_dependant_expr())) {
+          } else if (OB_FAIL(ObTransformUtils::split_lossless_convert_or_cast(depend_expr))) {
+            LOG_WARN("failed to split lossless convert or cast", K(ret));
+          } else if (OB_ISNULL(depend_expr)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected null", K(ret), KP(depend_expr));
+          } else if (depend_expr->is_static_scalar_const_expr() ||
+                     depend_expr->is_column_ref_expr()) {
+            // do nothing
+          } else if (col_expr->is_stored_generated_column()) {
+            is_valid_gen_col = true;
+          } else if (OB_FAIL(schema_guard->column_is_key(ctx_->session_info_->get_effective_tenant_id(),
+                                                         table_item->ref_id_,
+                                                         col_expr->get_column_id(),
+                                                         col_is_key))) {
+            LOG_WARN("failed to check column is key", K(ret));
+          } else if (col_expr->is_virtual_generated_column() && col_is_key) {
+            is_valid_gen_col = true;
+          }
+          if (OB_SUCC(ret) && is_valid_gen_col) {
+            if (OB_FAIL(gen_cols_for_replace.push_back(col_expr))) {
+              LOG_WARN("failed to push back gen col", K(ret));
+            } else if (OB_FAIL(depend_exprs.push_back(depend_expr))) {
+              LOG_WARN("failed to push back depend expr", K(ret));
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformPreProcess::collect_pullable_scopes_from_table(ObDMLStmt *stmt,
+                                                              ObColumnRefRawExpr *gen_col,
+                                                              ObRawExpr *depend_expr,
+                                                              ObIArray<DmlStmtScope> &replace_scopes,
+                                                              ObIArray<ObPCConstParamInfo> &constraints)
+{
+  int ret = OB_SUCCESS;
+  bool is_on_null_side = false;
+  bool is_null_propagate_expr = false;
+  bool check_next_scope = true;
+  ObSEArray<ObRawExpr*, 4> dep_cols;
+  ObExprEqualCheckContext equal_ctx;
+  equal_ctx.override_const_compare_ = true;
+  if (OB_ISNULL(stmt) || OB_ISNULL(gen_col) || OB_ISNULL(depend_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), KP(stmt), KP(gen_col), KP(depend_expr));
+  } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(depend_expr, dep_cols))) {
+    LOG_WARN("failed to extract column exprs", K(ret));
+  } else if (OB_FAIL(ObOptimizerUtil::is_table_on_null_side(stmt,
+                                                            gen_col->get_table_id(),
+                                                            is_on_null_side))) {
+    LOG_WARN("failed to is table on null side", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::is_null_propagate_expr(depend_expr,
+                                                              dep_cols,
+                                                              is_null_propagate_expr))) {
+    LOG_WARN("failed to check is null propagate expr", K(ret));
+  } else if (is_on_null_side && !is_null_propagate_expr) {
+    check_next_scope = false;
+  } else if (OB_FAIL(replace_scopes.push_back(DmlStmtScope::SCOPE_JOINED_TABLE))) {
+    LOG_WARN("failed to push back replace scope", K(ret));
+  } else if (OB_FAIL(replace_scopes.push_back(DmlStmtScope::SCOPE_WHERE))) {
+    LOG_WARN("failed to push back replace scope", K(ret));
+  }
+  if (OB_SUCC(ret) && stmt->is_select_stmt() && check_next_scope) {
+    ObSelectStmt *select_stmt = static_cast<ObSelectStmt*>(stmt);
+    // try to pullup through group by
+    if (select_stmt->has_group_by()) {
+      bool can_pullup_through_groupby = false;
+      // check groupby exprs
+      for (int64_t i = 0; OB_SUCC(ret) && !can_pullup_through_groupby && i < select_stmt->get_group_expr_size(); ++i) {
+        if (OB_ISNULL(select_stmt->get_group_exprs().at(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null", K(ret));
+        } else if (select_stmt->get_group_exprs().at(i)->same_as(*depend_expr, &equal_ctx)) {
+          can_pullup_through_groupby = true;
+        } else if (select_stmt->get_group_exprs().at(i)->same_as(*gen_col)) {
+          can_pullup_through_groupby = true;
+        }
+      }
+      // check rollup exprs
+      if (OB_SUCC(ret) && can_pullup_through_groupby && select_stmt->has_rollup()) {
+        bool has_overlap = false;
+        ObSEArray<ObRawExpr*, 4> cols_in_rollup;
+        if (OB_FAIL(ObRawExprUtils::extract_column_exprs(select_stmt->get_rollup_exprs(), cols_in_rollup))) {
+          LOG_WARN("failed to extract column exprs", K(ret));
+        } else if (ObOptimizerUtil::overlap_exprs(dep_cols, cols_in_rollup)) {
+          has_overlap = true;
+          can_pullup_through_groupby = false;
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (!can_pullup_through_groupby) {
+        check_next_scope = false;
+      } else if (OB_FAIL(replace_scopes.push_back(DmlStmtScope::SCOPE_GROUPBY))) {
+        LOG_WARN("failed to push back replace scope", K(ret));
+      } else if (OB_FAIL(replace_scopes.push_back(DmlStmtScope::SCOPE_HAVING))) {
+        LOG_WARN("failed to push back replace scope", K(ret));
+      } else if (OB_FAIL(ObTransformUtils::add_const_param_constraints(equal_ctx,
+                                                                      ctx_->exec_ctx_->get_physical_plan_ctx()->get_param_store(),
+                                                                      constraints))) {
+        LOG_WARN("failed to gather const param constraints", K(ret));
+      }
+      equal_ctx.reset();
+    }
+
+    // try to pullup through window function
+    if (select_stmt->has_window_function() && check_next_scope) {
+      ObSEArray<ObRawExpr*, 4> common_part_exprs;
+      bool can_pullup_through_win_func = false;
+      bool has_common_part = true;
+      for (int64_t i = 0; OB_SUCC(ret) && has_common_part && i < select_stmt->get_window_func_count(); ++i) {
+        ObWinFunRawExpr *win_expr = NULL;
+        if (OB_ISNULL(win_expr = select_stmt->get_window_func_expr(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("window function expr is null", K(ret));
+        } else if (i == 0) {
+          if (OB_FAIL(common_part_exprs.assign(win_expr->get_partition_exprs()))) {
+            LOG_WARN("failed to assign partition exprs", K(ret));
+          }
+        } else if (OB_FAIL(ObOptimizerUtil::intersect_exprs(common_part_exprs,
+                                                            win_expr->get_partition_exprs(),
+                                                            common_part_exprs))) {
+          LOG_WARN("failed to intersect expr array", K(ret));
+        } else if (common_part_exprs.empty()) {
+          has_common_part = false;
+        }
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && !can_pullup_through_win_func && i < common_part_exprs.count(); ++i) {
+        if (OB_ISNULL(common_part_exprs.at(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null", K(ret));
+        } else if (common_part_exprs.at(i)->same_as(*depend_expr, &equal_ctx)) {
+          can_pullup_through_win_func = true;
+        } else if (common_part_exprs.at(i)->same_as(*gen_col)) {
+          can_pullup_through_win_func = true;
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (!can_pullup_through_win_func) {
+        check_next_scope = false;
+      } else if (OB_FAIL(ObTransformUtils::add_const_param_constraints(equal_ctx,
+                                                                      ctx_->exec_ctx_->get_physical_plan_ctx()->get_param_store(),
+                                                                      constraints))) {
+        LOG_WARN("failed to gather const param constraints", K(ret));
+      }
+      equal_ctx.reset();
+    }
+
+    // try to pullup to select、oreder by scope
+    if (OB_SUCC(ret) && check_next_scope) {
+      if (OB_FAIL(replace_scopes.push_back(DmlStmtScope::SCOPE_SELECT))) {
+        LOG_WARN("failed to push back replace scope", K(ret));
+      } else if (OB_FAIL(replace_scopes.push_back(DmlStmtScope::SCOPE_ORDERBY))) {
+        LOG_WARN("failed to push back replace scope", K(ret));
+      }
+    }
+  }
+  return ret;
+}
 int ObTransformPreProcess::transform_any_all_row(ObDMLStmt *stmt, bool &trans_happened)
 {
   int ret = OB_SUCCESS;
@@ -11277,6 +11573,75 @@ int ObTransformPreProcess::transform_any_all_row(ObDMLStmt *stmt, bool &trans_ha
   return ret;
 }
 
+int ObTransformPreProcess::check_gen_col_preds(ObIArray<ObRawExpr*> &relation_exprs,
+                                               ObRawExpr *gen_col,
+                                               ObIArray<ObRawExpr*> &depend_exprs,
+                                               bool &pass_pred_check)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 4> target_exprs;
+  pass_pred_check = false;
+  if (OB_ISNULL(gen_col)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_FAIL(target_exprs.push_back(gen_col))) {
+    LOG_WARN("failed to push back target expr", K(ret));
+  } else if (OB_FAIL(append(target_exprs, depend_exprs))) {
+    LOG_WARN("failed to append exprs", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && !pass_pred_check && i < relation_exprs.count(); ++i) {
+      if (OB_FAIL(check_gen_col_pred(relation_exprs.at(i), target_exprs, pass_pred_check))) {
+        LOG_WARN("failed to check gen col preds recursively", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformPreProcess::check_gen_col_pred(ObRawExpr* root_expr,
+                                              ObIArray<ObRawExpr*> &target_exprs,
+                                              bool &pass_pred_check)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(root_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (root_expr->get_expr_type() == T_OP_AND) {
+    bool inner_pass_check = false;
+    for (int64_t i = 0; OB_SUCC(ret) && !inner_pass_check && i < root_expr->get_param_count(); ++i) {
+      if (OB_FAIL(check_gen_col_pred(root_expr->get_param_expr(i), target_exprs, inner_pass_check))) {
+        LOG_WARN("failed to check gen col preds recursively", K(ret));
+      }
+    }
+    pass_pred_check |= inner_pass_check;
+  } else if (root_expr->get_expr_type() == T_OP_OR) {
+    bool inner_pass_check = true;
+    for (int64_t i = 0; OB_SUCC(ret) && inner_pass_check && i < root_expr->get_param_count(); ++i) {
+      if (OB_FAIL(check_gen_col_pred(root_expr->get_param_expr(i), target_exprs, inner_pass_check))) {
+        LOG_WARN("failed to check gen col preds recursively", K(ret));
+      }
+    }
+    pass_pred_check |= inner_pass_check;
+  } else if (root_expr->get_expr_class() != ObRawExpr::EXPR_OPERATOR) {
+    //do nothing
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && !pass_pred_check && i < root_expr->get_param_count(); ++i) {
+      ObRawExpr *param_expr = root_expr->get_param_expr(i);
+      if (OB_ISNULL(param_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(param_expr, param_expr))) {
+        LOG_WARN("fail to get real child without lossless cast", K(ret));
+      } else if (OB_ISNULL(param_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("real child is null", K(ret));
+      } else if (ObOptimizerUtil::find_equal_expr(target_exprs, param_expr)) {
+        pass_pred_check = true;
+      }
+    }
+  }
+  return ret;
+}
 int ObTransformPreProcess::convert_any_all_row_expr(ObRawExpr *expr,
                                                    ObRawExpr *&new_expr,
                                                    bool &happened)

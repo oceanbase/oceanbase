@@ -541,6 +541,7 @@ int ObSelectLogPlan::inner_create_merge_rollup_plan(const ObIArray<ObRawExpr*> &
                                                 false,/*is_partition_gi*/
                                                 ObRollupStatus::NONE_ROLLUP,
                                                 false,/*force_use_scalar*/
+                                                SINGLE,
                                                 nullptr,/*three_stage_info*/
                                                 nullptr))) {
       LOG_WARN("failed to allocate group by as top", K(ret));
@@ -597,6 +598,7 @@ int ObSelectLogPlan::inner_create_merge_rollup_plan(const ObIArray<ObRawExpr*> &
                                                   is_partition_gi,
                                                   ObRollupStatus::NONE_ROLLUP,
                                                   false,/*force_use_scalar*/
+                                                  PARTIAL,
                                                   nullptr, /*three_stage_info*/
                                                   nullptr))) {
         LOG_WARN("failed to allocate group by as top", K(ret));
@@ -637,6 +639,7 @@ int ObSelectLogPlan::inner_create_merge_rollup_plan(const ObIArray<ObRawExpr*> &
                                                   false,/*is_partition_gi*/
                                                   NONE_ROLLUP,
                                                   false,/*force_use_scalar*/
+                                                  SINGLE,
                                                   nullptr,/*three_stage_info*/
                                                   nullptr))) {
         LOG_WARN("failed to allocate group by as top", K(ret));
@@ -645,6 +648,9 @@ int ObSelectLogPlan::inner_create_merge_rollup_plan(const ObIArray<ObRawExpr*> &
                                                                    false,
                                                                    groupby_helper.can_basic_pushdown_,
                                                                    use_part_sort);
+        if (groupby_helper.can_basic_pushdown_) {
+          static_cast<ObLogGroupBy*>(top)->set_step_final();
+        }
         OPT_TRACE("succeed to generate merge group by plan", top);
       }
     }
@@ -1061,6 +1067,7 @@ int ObSelectLogPlan::create_hash_group_plan(const ObIArray<ObRawExpr*> &reduce_e
                                          false, /*is_partition_gi*/
                                          ObRollupStatus::NONE_ROLLUP,
                                          false, /*force_use_scalar*/
+                                         SINGLE,
                                          nullptr, /*three_stage_info*/
                                          groupby_helper.hash_rollup_info_))) {
       LOG_WARN("failed to allocate group by as top", K(ret));
@@ -1093,6 +1100,7 @@ int ObSelectLogPlan::create_hash_group_plan(const ObIArray<ObRawExpr*> &reduce_e
                                           true,
                                           ObRollupStatus::NONE_ROLLUP,
                                           false, /*force_use_scalar*/
+                                          PARTIAL,
                                           nullptr, /*three_stage_info*/
                                           groupby_helper.hash_rollup_info_))) {
         LOG_WARN("failed to allocate group by as top", K(ret));
@@ -1127,11 +1135,15 @@ int ObSelectLogPlan::create_hash_group_plan(const ObIArray<ObRawExpr*> &reduce_e
                                           false,/*is_partition_gi*/
                                           ObRollupStatus::NONE_ROLLUP,
                                           false, /*force_use_scalar*/
+                                          SINGLE,
                                           nullptr, /*three_stage_info*/
                                           groupby_helper.hash_rollup_info_))) {
       LOG_WARN("failed to allocate scala group by as top", K(ret));
       } else {
         static_cast<ObLogGroupBy*>(top)->set_group_by_outline_info(algo, true, need_push_down);
+        if (need_push_down) {
+          static_cast<ObLogGroupBy*>(top)->set_step_final();
+        }
       }
     }
   } else {
@@ -1427,6 +1439,7 @@ int ObSelectLogPlan::inner_create_merge_group_plan(const ObIArray<ObRawExpr*> &r
                                                 false,/*is_partition_gi*/
                                                 ObRollupStatus::NONE_ROLLUP,
                                                 false,/*force_use_scalar*/
+                                                SINGLE,
                                                 nullptr,/*three_stage_info*/
                                                 groupby_helper.hash_rollup_info_))) {
       LOG_WARN("failed to allocate group by as top", K(ret));
@@ -1484,6 +1497,7 @@ int ObSelectLogPlan::inner_create_merge_group_plan(const ObIArray<ObRawExpr*> &r
                                                   is_partition_gi,
                                                   ObRollupStatus::NONE_ROLLUP,
                                                   false,/*force_use_scalar*/
+                                                  PARTIAL,
                                                   nullptr, /*three_stage_info*/
                                                   groupby_helper.hash_rollup_info_))) {
         LOG_WARN("failed to allocate group by as top", K(ret));
@@ -1524,11 +1538,15 @@ int ObSelectLogPlan::inner_create_merge_group_plan(const ObIArray<ObRawExpr*> &r
                                                   false,/*is_partition_gi*/
                                                   NONE_ROLLUP,
                                                   false,/*force_use_scalar*/
+                                                  SINGLE,
                                                   nullptr,/*three_stage_info*/
                                                   groupby_helper.hash_rollup_info_))) {
         LOG_WARN("failed to allocate group by as top", K(ret));
       } else {
         static_cast<ObLogGroupBy*>(top)->set_group_by_outline_info(algo, false, need_push_down, use_part_sort);
+        if (need_push_down) {
+          static_cast<ObLogGroupBy*>(top)->set_step_final();
+        }
         OPT_TRACE("succeed to generate merge group plan", top);
       }
     }
@@ -1982,7 +2000,13 @@ int ObSelectLogPlan::check_need_merge_distinct_plan(const ObLogicalOperator *top
   }
   return ret;
 }
-
+int ObSelectLogPlan::set_distinct_final(ObLogicalOperator *&top)
+{
+  int ret = OB_SUCCESS;
+  ObLogDistinct* distinct_op = static_cast<ObLogDistinct*>(top);
+  distinct_op->set_step_final();
+  return ret;
+}
 int ObSelectLogPlan::get_distinct_exprs(const ObLogicalOperator *top,
 				                                ObIArray<ObRawExpr *> &reduce_exprs,
                                         ObIArray<ObRawExpr *> &distinct_exprs)
@@ -2168,6 +2192,7 @@ int ObSelectLogPlan::create_hash_distinct_plan(ObLogicalOperator *&top,
   } else if (DistAlgo::DIST_HASH_HASH == algo ||
              DistAlgo::DIST_HASH_HASH_LOCAL == algo) {
     exch_info.slave_mapping_type_ = get_slave_mapping_type(algo);
+    bool pushed_down = distinct_helper.can_basic_pushdown_ && top->is_distributed();
     //allocate push down distinct if necessary
     if (distinct_helper.can_basic_pushdown_ &&
         top->is_distributed() &&
@@ -2192,6 +2217,10 @@ int ObSelectLogPlan::create_hash_distinct_plan(ObLogicalOperator *&top,
                                                 distinct_exprs,
                                                 distinct_helper.group_ndv_))) {
       LOG_WARN("failed to allocate distinct as top", K(ret));
+    } else if (pushed_down && OB_FAIL(set_distinct_final(top))) {
+      LOG_WARN("failed setting distinct to final", K(ret));
+    } else {
+      static_cast<ObLogDistinct*>(top)->set_distinct_outline_info(pushed_down);
     }
   } else  {
     ret = OB_ERR_UNEXPECTED;
@@ -2229,7 +2258,8 @@ int ObSelectLogPlan::create_merge_distinct_plan(ObLogicalOperator *&top,
     ObExchangeInfo exch_info;
     exch_info.slave_mapping_type_ = get_slave_mapping_type(algo);
     // allocate push down distinct if necessary
-    if (distinct_helper.can_basic_pushdown_ && top->is_distributed()) {
+    bool pushed_down = distinct_helper.can_basic_pushdown_ && top->is_distributed();
+    if (pushed_down) {
       /* If the child has not allocated exchange,
         then the down-pressed distinct operator must be full partition wise,
         and the gi operator can be allocated on the distinct operator.
@@ -2282,7 +2312,9 @@ int ObSelectLogPlan::create_merge_distinct_plan(ObLogicalOperator *&top,
                                                   distinct_exprs,
                                                   distinct_helper.group_ndv_))) {
         LOG_WARN("failed to allocate distinct as top", K(ret));
-      } else { /*do nothing*/ }
+      } else {
+        static_cast<ObLogDistinct*>(top)->set_distinct_outline_info(pushed_down);
+      }
     }
   } else {
     ret = OB_ERR_UNEXPECTED;
@@ -2298,7 +2330,8 @@ int ObSelectLogPlan::allocate_distinct_as_top(ObLogicalOperator *&top,
                                               const double total_ndv,
                                               const bool is_partition_wise,
                                               const bool is_pushed_down,
-                                              const bool is_partition_gi)
+                                              const bool is_partition_gi,
+                                              const AggregatePathType step /*= AggregatePathType::SINGLE*/)
 {
   int ret = OB_SUCCESS;
   ObLogDistinct *distinct_op = NULL;
@@ -2318,6 +2351,10 @@ int ObSelectLogPlan::allocate_distinct_as_top(ObLogicalOperator *&top,
     distinct_op->set_is_partition_wise(is_partition_wise);
     distinct_op->set_force_push_down(FORCE_GPD & get_optimizer_context().get_aggregation_optimization_settings());
     distinct_op->set_dist_method(dist_algo);
+    distinct_op->set_step_type(step);
+    if (is_pushed_down) {
+      distinct_op->set_step_partial();
+    }
     if (OB_FAIL(distinct_op->set_distinct_exprs(distinct_exprs))) {
       LOG_WARN("failed to set group by columns", K(ret));
     } else if (OB_FAIL(distinct_op->compute_property())) {
@@ -2941,7 +2978,8 @@ int ObSelectLogPlan::create_union_all_plan(const ObIArray<ObLogicalOperator*> &c
       LOG_WARN("failed to assign child ops", K(ret));
     }
   }
-
+  bool is_distinct_pushded_down = false;
+  int64_t random_none_idx = OB_INVALID_INDEX;
   if (OB_SUCC(ret) && (DistAlgo::DIST_SET_RANDOM == dist_set_method)) {
     ObExchangeInfo exch_info;
     if (OB_ISNULL(largest_op)) {
@@ -2987,11 +3025,15 @@ int ObSelectLogPlan::create_union_all_plan(const ObIArray<ObLogicalOperator*> &c
           LOG_WARN("failed to allocate exchange as top", K(ret));
         } else if (OB_FAIL(set_child_ops.push_back(child_op))) {
           LOG_WARN("failed to push back child ops", K(ret));
-        } else { /*do nothing*/ }
+        } else {
+          is_distinct_pushded_down = is_distinct_pushded_down || (child_push_distinct && need_exchange);
+          if (child_op == largest_op) {
+            random_none_idx = i;
+          }
+        }
       }
     }
   }
-
   if (OB_SUCC(ret) && (DistAlgo::DIST_PULL_TO_LOCAL == dist_set_method)) {
     ObExchangeInfo exch_info;
     for (int64_t i = 0; OB_SUCC(ret) && i < child_ops.count(); i++) {
@@ -3031,13 +3073,16 @@ int ObSelectLogPlan::create_union_all_plan(const ObIArray<ObLogicalOperator*> &c
         LOG_WARN("get unexpected null", K(child_op), K(ret));
       } else if (OB_FAIL(set_child_ops.push_back(child_op))) {
         LOG_WARN("failed to push back child ops", K(ret));
-      } else { /*do nothing*/ }
+      } else {
+        is_distinct_pushded_down = is_distinct_pushded_down || (child_push_distinct && need_exchange);
+      }
     } 
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(allocate_union_all_as_top(set_child_ops, dist_set_method, top))) {
+    if (OB_FAIL(allocate_union_all_as_top(set_child_ops, dist_set_method, top, is_distinct_pushded_down))) {
       LOG_WARN("failed to allocate union all as top", K(ret));
     } else {
+      static_cast<ObLogSet*>(top)->set_random_none_idx(random_none_idx);
       LOG_TRACE("succeed to allocate union all as top", K(dist_set_method));
     }
   }
@@ -3262,18 +3307,22 @@ int ObSelectLogPlan::get_largest_sharding_child(const ObIArray<ObLogicalOperator
 
 int ObSelectLogPlan::allocate_union_all_as_top(const ObIArray<ObLogicalOperator*> &child_ops,
                                                DistAlgo dist_set_method,
-                                               ObLogicalOperator *&top)
+                                               ObLogicalOperator *&top,
+                                               bool is_distinct_pushed_down)
 {
   int ret = OB_SUCCESS;
   ObLogSet *set_op = NULL;
   if (OB_ISNULL((set_op = static_cast<ObLogSet*>(get_log_op_factory().allocate(*this, LOG_SET))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("Allocate memory for ObLogSet failed", K(ret));
+  } else if (OB_FAIL(set_op->init_set_exprs())) {
+    LOG_WARN("failed to init set exprs for log_set");
   } else {
     set_op->assign_set_distinct(false);
     set_op->assign_set_op(ObSelectStmt::UNION);
     set_op->set_algo_type(SetAlgo::MERGE_SET);
     set_op->set_distributed_algo(dist_set_method);
+    set_op->assign_set_is_distinct_pushed_down(is_distinct_pushed_down);
     if (OB_FAIL(set_op->add_child(child_ops))) {
       LOG_WARN("failed to add child ops", K(ret));
     } else if (OB_FAIL(set_op->compute_property())) {
@@ -3515,6 +3564,8 @@ int ObSelectLogPlan::allocate_recursive_union_all_as_top(ObLogicalOperator *left
                                  get_log_op_factory().allocate(*this, LOG_SET))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("Allocate memory for ObLogSet failed", K(ret));
+  }  else if (OB_FAIL(set_op->init_set_exprs())) {
+    LOG_WARN("failed to init set exprs for log_set");
   } else {
     set_op->set_left_child(left_child);
     set_op->set_right_child(right_child);
@@ -3533,6 +3584,7 @@ int ObSelectLogPlan::allocate_recursive_union_all_as_top(ObLogicalOperator *left
     } else {
       top = set_op;
     }
+    set_op->init_set_exprs();
   }
   return ret;
 }
@@ -4713,11 +4765,13 @@ int ObSelectLogPlan::create_merge_set_plan(const EqualSets &equal_sets,
                                                     dist_set_method,
                                                     merge_plan.plan_tree_,
                                                     &order_directions,
-                                                    &map_array))) {
+                                                    &map_array,
+                                                    (left_push_distinct && left_exch_info.need_exchange())
+                                                    || (right_push_distinct && right_exch_info.need_exchange())))) {
       LOG_WARN("failed to allocate distinct set as top", K(ret));
     } else {
       LOG_TRACE("succeed to create merge set plan", K(left_sort_keys), K(right_sort_keys),
-          K(order_directions), K(map_array), K(left_need_sort), K(right_need_sort));
+                K(order_directions), K(map_array), K(left_need_sort), K(right_need_sort));
       OPT_TRACE("succeed to generate merge set plan:", merge_plan.plan_tree_);
     }
   }
@@ -4923,7 +4977,11 @@ int ObSelectLogPlan::create_hash_set_plan(const EqualSets &equal_sets,
                                                   right_child,
                                                   SetAlgo::HASH_SET,
                                                   dist_set_method,
-                                                  hash_plan.plan_tree_))) {
+                                                  hash_plan.plan_tree_,
+                                                  NULL,
+                                                  NULL,
+                                                  (left_push_distinct && left_exch_info.need_exchange())
+                                                  || (right_push_distinct && right_exch_info.need_exchange())))) {
     LOG_WARN("failed to allocate distinct set as top", K(ret));
   } else {
     LOG_TRACE("succeed to create hash set plan");
@@ -5055,7 +5113,8 @@ int ObSelectLogPlan::allocate_distinct_set_as_top(ObLogicalOperator *left_child,
                                                   DistAlgo dist_set_method,
                                                   ObLogicalOperator *&top,
                                                   const ObIArray<ObOrderDirection> *order_directions,
-                                                  const ObIArray<int64_t> *map_array)
+                                                  const ObIArray<int64_t> *map_array,
+                                                  bool is_distinct_pushed_down)
 {
   int ret = OB_SUCCESS;
   ObLogSet *set_op = NULL;
@@ -5067,6 +5126,8 @@ int ObSelectLogPlan::allocate_distinct_set_as_top(ObLogicalOperator *left_child,
                                  allocate(*this, LOG_SET))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("Allocate memory for ObLogSet failed", K(ret));
+  } else if (OB_FAIL(set_op->init_set_exprs())) {
+    LOG_WARN("failed to init set exprs for log_set");
   } else if (NULL != order_directions && OB_FAIL(set_op->set_set_directions(*order_directions))) {
     LOG_WARN("failed to set order directions", K(ret));
   } else if (NULL != map_array && OB_FAIL(set_op->set_map_array(*map_array))) {
@@ -5075,6 +5136,7 @@ int ObSelectLogPlan::allocate_distinct_set_as_top(ObLogicalOperator *left_child,
     set_op->set_left_child(left_child);
     set_op->set_right_child(right_child);
     set_op->assign_set_distinct(select_stmt->is_set_distinct());
+    set_op->assign_set_is_distinct_pushed_down(is_distinct_pushed_down);
     set_op->assign_set_op(select_stmt->get_set_op());
     set_op->set_algo_type(set_method);
     set_op->set_distributed_algo(dist_set_method);

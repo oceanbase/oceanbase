@@ -78,6 +78,7 @@ int ObDASHNSWScanIter::build_rowkey_vid_range()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("rowkey vid ctdef is null", K(ret));
     } else {
+      rowkey_vid_scan_param_.enable_new_false_range_ = inv_idx_scan_iter->get_scan_param().enable_new_false_range_;
       for (int64_t i = 0; OB_SUCC(ret) && i < key_ranges.count(); ++i) {
         ObNewRange key_range = key_ranges.at(i);
         key_range.table_id_ = rowkey_vid_ctdef->ref_table_id_;

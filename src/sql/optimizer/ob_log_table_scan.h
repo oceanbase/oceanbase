@@ -837,6 +837,8 @@ public:
   inline void set_has_index_lookup_filter(bool has_index_lookup_filter) { has_index_lookup_filter_ = has_index_lookup_filter; }
   int generate_ddl_output_column_ids();
   int replace_gen_col_op_exprs(ObRawExprReplacer &replacer);
+  int remove_access_exprs_in_replacer(ObRawExprReplacer &replacer, ObIArray<ObRawExpr*> &access_exprs);
+  int replace_filter_exprs_if_need(ObRawExprReplacer &replacer);
   int extract_pushdown_filters(ObIArray<ObRawExpr*> &nonpushdown_filters,
                                ObIArray<ObRawExpr*> &scan_pushdown_filters,
                                ObIArray<ObRawExpr*> &lookup_pushdown_filters,
@@ -1025,12 +1027,17 @@ public:
   const ObIArray<ObRawExpr*> &get_index_filters(int64_t idx) const { return index_filters_.at(idx); }
   int get_index_range_conds(int64_t idx, ObIArray<ObRawExpr *> &index_range_conds) const;
   int get_index_filters(int64_t idx, ObIArray<ObRawExpr *> &index_filters) const;
-  int get_index_tids(ObIArray<ObTableID> &index_tids) const;
-  int get_index_name_list(ObIArray<ObString> &index_name_list) const;
-  int check_match_union_merge_hint(const LogTableHint *table_hint, bool &is_match) const;
+  int get_index_merge_tids(ObIArray<ObTableID> &index_tids) const;
+  int get_index_merge_name_list(ObIArray<ObString> &index_name_list) const;
+  int check_match_index_merge_hint(const ObIndexMergeHint *index_merge_hint, bool &is_match) const;
 
   int copy_gen_col_range_exprs();
-  inline bool need_replace_gen_column() { return !(is_index_scan() && !(get_index_back())); }
+  int check_col_calculable_on_index(const ObColumnRefRawExpr *col,
+                                    bool &can_calc,
+                                    bool &gen_col_need_expand);
+  int check_expr_calculable_on_index(const ObRawExpr *expr,
+                                     bool &can_calc,
+                                     bool &gen_col_need_expand);
   int try_adjust_scan_direction(const ObIArray<OrderItem> &sort_keys);
   int set_scan_order();
   int check_is_dbms_calc_partition_expr(const ObRawExpr &expr, bool &is_true);

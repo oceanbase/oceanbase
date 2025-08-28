@@ -837,21 +837,10 @@ int ObTransformConditionalAggrCoalesce::try_share_aggr(ObIArray<ObAggFunRawExpr*
       is_sharable = true;
       cur_aggr->set_explicited_reference();
       // constraints need to be added if the same_as judgement relies on specific const value
-      for(int64_t i = 0; OB_SUCC(ret) && i < equal_ctx.param_expr_.count(); i++) {
-        ObPCConstParamInfo param_info;
-        int64_t param_idx = equal_ctx.param_expr_.at(i).param_idx_;
-        if (OB_UNLIKELY(param_idx < 0 || param_idx >= plan_ctx->get_param_store().count())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected error", K(ret), K(param_idx),
-                                            K(plan_ctx->get_param_store().count()));
-        } else if (OB_FAIL(param_info.const_idx_.push_back(param_idx))) {
-          LOG_WARN("failed to push back param idx", K(ret));
-        } else if (OB_FAIL(param_info.const_params_.push_back(
-                                                      plan_ctx->get_param_store().at(param_idx)))) {
-          LOG_WARN("failed to push back value", K(ret));
-        } else if (OB_FAIL(constraints.push_back(param_info))) {
-          LOG_WARN("failed to push back param info", K(ret));
-        } else {/*do nothing*/}
+      if (OB_FAIL(ObTransformUtils::add_const_param_constraints(equal_ctx,
+                                                                   plan_ctx->get_param_store(),
+                                                                   constraints))) {
+        LOG_WARN("failed to gather const param constraints", K(ret));
       }
     }
   }

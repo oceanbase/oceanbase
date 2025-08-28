@@ -138,23 +138,28 @@ class ObGITaskSet {
 public:
   struct ObGITaskInfo
   {
-    ObGITaskInfo() : tablet_loc_(nullptr), range_(), ss_range_(), idx_(0), hash_value_(0) {}
+    ObGITaskInfo() : tablet_loc_(nullptr), range_(), ss_range_(), idx_(0), hash_value_(0),
+                     is_false_range_(false) {}
     ObGITaskInfo(ObDASTabletLoc *tablet_loc,
                  common::ObNewRange range,
                  common::ObNewRange ss_range,
-                 int64_t idx) :
-        tablet_loc_(tablet_loc), range_(range), ss_range_(ss_range), idx_(idx), hash_value_(0) {}
+                 int64_t idx,
+                 bool is_false_range) :
+        tablet_loc_(tablet_loc), range_(range), ss_range_(ss_range), idx_(idx), hash_value_(0),
+        is_false_range_(is_false_range) {}
     TO_STRING_KV(KPC(tablet_loc_),
                  KP(tablet_loc_),
                  K(range_),
                  K(ss_range_),
                  K(idx_),
-                 K(hash_value_));
+                 K(hash_value_),
+                 K(is_false_range_));
     ObDASTabletLoc *tablet_loc_;
     common::ObNewRange range_;
     common::ObNewRange ss_range_;
     int64_t idx_;
     uint64_t hash_value_;
+    bool is_false_range_;
   };
 
   enum ObGIRandomType

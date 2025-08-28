@@ -58,36 +58,21 @@ int ObAccessPathEstimation::inner_estimate_index_merge_rowcount(common::ObIArray
                                                                 ObBaseTableEstMethod &method)
 {
   int ret = OB_SUCCESS;
-  const OptSelectivityCtx* sel_ctx = NULL;
   for (int64_t i = 0; OB_SUCC(ret) && i < paths.count(); ++i) {
-    ObSEArray<double, 4> selectivities;
+    double prefix_filter_sel = 0.0;
     double sum_child_sel = 0.0;
     double sum_child_row = 0.0;
-    const ObTableMetaInfo *table_meta_info = NULL;
-    if (OB_ISNULL(paths.at(i)) || OB_ISNULL(paths.at(i)->root_)
-        || OB_ISNULL(sel_ctx = paths.at(i)->est_cost_info_.sel_ctx_)
-        || OB_ISNULL(table_meta_info = paths.at(i)->est_cost_info_.table_meta_info_)) {
+    if (OB_ISNULL(paths.at(i))) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret), KPC(paths.at(i)), K(sel_ctx), K(table_meta_info));
+      LOG_WARN("get unexpected null", K(ret), KPC(paths.at(i)));
     } else if (OB_FAIL(ObOptEstCost::calculate_filter_selectivity(*paths.at(i)))) {
       LOG_WARN("failed to calculate filter selectivity", K(ret));
-    }
-    for (int64_t j = 0; OB_SUCC(ret) && j < paths.at(i)->root_->children_.count(); ++j) {
-      ObIndexMergeNode *child = paths.at(i)->root_->children_.at(j);
-      if (OB_ISNULL(child)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null child node", K(ret), KPC(child));
-      } else if (child->is_merge_node()) {
-        // do nothing
-      } else if (OB_ISNULL(child->ap_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null ap", K(ret));
-      } else if (OB_FAIL(selectivities.push_back(1.0 - child->ap_->est_cost_info_.prefix_filter_sel_))) {
-        LOG_WARN("failed to push back selectivity", K(ret));
-      } else {
-        sum_child_sel += child->ap_->est_cost_info_.prefix_filter_sel_;
-        sum_child_row += child->ap_->est_cost_info_.output_row_count_;
-      }
+    } else if (OB_FAIL(estimate_one_index_merge_node(paths.at(i)->root_,
+                                                     paths.at(i)->est_cost_info_.sel_ctx_,
+                                                     prefix_filter_sel,
+                                                     sum_child_sel,
+                                                     sum_child_row))) {
+      LOG_WARN("failed to estimate one index merge node", K(ret));
     }
     if (OB_FAIL(ret)) {
     } else if (sum_child_sel < OB_DOUBLE_EPSINON) {
@@ -100,12 +85,58 @@ int ObAccessPathEstimation::inner_estimate_index_merge_rowcount(common::ObIArray
       paths.at(i)->est_cost_info_.est_method_ = method;
     } else {
       paths.at(i)->est_cost_info_.batch_type_ = ObSimpleBatch::T_MULTI_SCAN;
-      paths.at(i)->est_cost_info_.prefix_filter_sel_ = 1.0 - sel_ctx->get_correlation_model().combine_filters_selectivity(selectivities);
+      paths.at(i)->est_cost_info_.prefix_filter_sel_ = prefix_filter_sel;
       paths.at(i)->est_cost_info_.index_back_row_count_ = (paths.at(i)->est_cost_info_.prefix_filter_sel_ / sum_child_sel) * sum_child_row;
       paths.at(i)->est_cost_info_.phy_query_range_row_count_ = paths.at(i)->est_cost_info_.index_back_row_count_;
       paths.at(i)->est_cost_info_.logical_query_range_row_count_ = paths.at(i)->est_cost_info_.index_back_row_count_;
-      paths.at(i)->est_cost_info_.output_row_count_ = (paths.at(i)->est_cost_info_.table_filter_sel_  / paths.at(i)->est_cost_info_.prefix_filter_sel_) * paths.at(i)->est_cost_info_.index_back_row_count_;
+      paths.at(i)->est_cost_info_.output_row_count_ = 0.0 == paths.at(i)->est_cost_info_.prefix_filter_sel_ ? 1.0
+                                                      : (paths.at(i)->est_cost_info_.table_filter_sel_ / paths.at(i)->est_cost_info_.prefix_filter_sel_) * paths.at(i)->est_cost_info_.index_back_row_count_;
       paths.at(i)->est_cost_info_.est_method_ = method;
+    }
+  }
+  return ret;
+}
+
+int ObAccessPathEstimation::estimate_one_index_merge_node(const ObIndexMergeNode *node,
+                                                          const OptSelectivityCtx *sel_ctx,
+                                                          double &selectivity,
+                                                          double &sum_child_sel,
+                                                          double &sum_child_row)
+{
+  int ret = OB_SUCCESS;
+  selectivity = 0.0;
+  if (OB_ISNULL(node) || OB_ISNULL(sel_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), KPC(node), K(sel_ctx));
+  } else if (node->is_scan_node()) {
+    if (OB_ISNULL(node->ap_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null ap", K(ret), KPC(node));
+    } else {
+      selectivity = node->ap_->est_cost_info_.prefix_filter_sel_;
+      sum_child_sel += node->ap_->est_cost_info_.prefix_filter_sel_;
+      sum_child_row += node->ap_->est_cost_info_.output_row_count_;
+    }
+  } else { // is merge node
+    ObSEArray<double, 4> child_selectivities;
+    for (int64_t i = 0; OB_SUCC(ret) && i < node->children_.count(); ++i) {
+      double child_sel = 0.0;
+      if (OB_FAIL(SMART_CALL(estimate_one_index_merge_node(node->children_.at(i),
+                                                           sel_ctx,
+                                                           child_sel,
+                                                           sum_child_sel,
+                                                           sum_child_row)))) {
+        LOG_WARN("failed to estimate one index merge node", K(ret));
+      } else if (OB_FAIL(child_selectivities.push_back(INDEX_MERGE_UNION == node->node_type_ ?
+                                                       1.0 - child_sel : child_sel))) {
+        LOG_WARN("failed to push back selectivity", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (INDEX_MERGE_UNION == node->node_type_) {
+      selectivity = 1.0 - sel_ctx->get_correlation_model().combine_filters_selectivity(child_selectivities);
+    } else {
+      selectivity = sel_ctx->get_correlation_model().combine_filters_selectivity(child_selectivities);
     }
   }
   return ret;

@@ -122,8 +122,8 @@ private:
   int64_t equal_prefix_null_count_;
   int64_t range_prefix_count_;
   int64_t index_column_count_; // index column count without adding primary key
-  common::ObArray<ColumnItem> range_columns_;
-  common::ObArray<ObExprConstraint> expr_constraints_;
+  common::ObSEArray<ColumnItem, 8, common::ModulePageAllocator, true> range_columns_;
+  common::ObSEArray<ObExprConstraint, 8, common::ModulePageAllocator, true> expr_constraints_;
   int64_t index_prefix_;
   int64_t range_count_;
   int64_t unique_range_rowcnt_;
@@ -149,8 +149,8 @@ public:
   TO_STRING_KV(K_(scan_direction), K_(index_keys));
 private:
   ObOrderDirection scan_direction_;
-  common::ObArray<ObRawExpr*> index_keys_;
-  common::ObArray<ObRawExpr*> ordering_;
+  common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> index_keys_;
+  common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> ordering_;
   DISALLOW_COPY_AND_ASSIGN(OrderingInfo);
 };
 

@@ -56,7 +56,7 @@ private:
                                      bool &trans_happened);
 
   int add_limit_for_exists_subquery(ObDMLStmt *stmt,bool &trans_happened);
-
+  static bool is_add_limit_for_exists_subquery_enabled(const uint64_t compat_version);
   int recursive_add_limit_for_exists_expr(ObRawExpr *expr, bool &trans_happened);
 
   /**

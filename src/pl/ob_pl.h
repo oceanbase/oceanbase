@@ -1084,6 +1084,8 @@ public:
   ObCurTraceId::TraceId get_trace_id() const { return trace_id_; }
   void set_is_inner_mock(bool is_inner_mock) { is_inner_mock_ = is_inner_mock; }
   bool get_is_inner_mock() const { return is_inner_mock_; }
+  const ObIArray<uint64_t> &get_old_role_id_array() const { return old_role_id_array_; }
+  const ObSQLSessionInfo *get_session_info() const { return session_info_; }
 
 #ifdef OB_BUILD_ORACLE_PL
   ObPLCallStackTrace *get_call_stack_trace();

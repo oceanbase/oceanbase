@@ -100,6 +100,7 @@ public:
         rollup_exprs_(),
         aggr_exprs_(),
         algo_(AGGREGATE_UNINITIALIZED),
+        step_(SINGLE),
         from_pivot_(false),
         is_push_down_(false),
         is_partition_gi_(false),
@@ -150,6 +151,11 @@ public:
   inline void set_hash_type() { algo_ = HASH_AGGREGATE; }
   inline void set_merge_type() { algo_ = MERGE_AGGREGATE; }
   inline void set_scalar_type() { algo_ = SCALAR_AGGREGATE; }
+  inline void set_step(AggregatePathType step) { step_ = step; }
+  inline void set_step_partial() { step_ = PARTIAL; }
+  inline void set_step_final() { step_ = FINAL; }
+  inline bool is_final() { return step_ == FINAL; }
+  inline bool is_partial() { return step_ == PARTIAL; }
   inline void set_algo_type(AggregateAlgo type) { algo_ = type; }
   inline AggregateAlgo get_algo() const { return algo_; }
 
@@ -206,6 +212,7 @@ public:
   inline bool is_second_stage() const { return ObThreeStageAggrStage::SECOND_STAGE == three_stage_info_.aggr_stage_; }
   inline bool is_third_stage() const { return ObThreeStageAggrStage::THIRD_STAGE == three_stage_info_.aggr_stage_; }
   inline bool force_push_down() const { return force_push_down_; }
+  inline bool has_push_down() const { return has_push_down_; }
   inline bool is_adaptive_aggregate() const { return HASH_AGGREGATE == get_algo()
                                                      && !force_push_down()
                                                      && (is_first_stage() || (!is_three_stage_aggr() && is_push_down())); }
@@ -265,9 +272,13 @@ public:
   {
     return NULL != hash_rollup_info_;
   }
+  int unwrap_cast_for_aggr_expr();
+
+  int is_duplicate_insensitive_aggregation(bool & is_duplicate_insensitive);
 
 private:
   virtual int inner_replace_op_exprs(ObRawExprReplacer &replacer) override;
+
   virtual int allocate_granule_post(AllocGIContext &ctx) override;
   virtual int allocate_granule_pre(AllocGIContext &ctx) override;
   int create_fd_item_from_select_list(ObFdItemSet *fd_item_set);
@@ -281,6 +292,7 @@ private:
   common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> rollup_exprs_;
   common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> aggr_exprs_;
   AggregateAlgo algo_;
+  AggregatePathType step_;
   bool from_pivot_;
   bool is_push_down_;
   bool is_partition_gi_;

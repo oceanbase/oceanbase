@@ -3598,6 +3598,19 @@ ColumnItem *ObDMLStmt::get_column_item(uint64_t table_id, uint64_t column_id)
   return item;
 }
 
+const ColumnItem *ObDMLStmt::get_column_item(uint64_t table_id, uint64_t column_id) const
+{
+  const ColumnItem *item = NULL;
+  for (int64_t i = 0; i < column_items_.count(); ++i) {
+    if (table_id == column_items_[i].table_id_
+        && column_id == column_items_[i].column_id_) {
+      item = &column_items_.at(i);
+      break;
+    }
+  }
+  return item;
+}
+
 int ObDMLStmt::add_column_item(ObIArray<ColumnItem> &column_items)
 {
   int ret = OB_SUCCESS;
@@ -4376,9 +4389,9 @@ int ObDMLStmt::get_equal_set_conditions(ObIArray<ObRawExpr *> &conditions,
     LOG_WARN("failed to append conditions", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < joined_tables_.count(); ++i) {
-      if (OB_FAIL(extract_equal_condition_from_joined_table(joined_tables_.at(i),
-                                                            conditions,
-                                                            is_strict))) {
+      if (OB_FAIL(extract_on_condition_from_joined_table(joined_tables_.at(i),
+                                                         conditions,
+                                                         is_strict))) {
         LOG_WARN("failed to extract equal condition from joined table", K(ret));
       }
     }
@@ -4430,9 +4443,9 @@ int ObDMLStmt::get_where_scope_conditions(ObIArray<ObRawExpr *> &conditions,
   return ret;
 }
 
-int ObDMLStmt::extract_equal_condition_from_joined_table(const TableItem *table,
-                                                         ObIArray<ObRawExpr *> &conditions,
-                                                         const bool is_strict)
+int ObDMLStmt::extract_on_condition_from_joined_table(const TableItem *table,
+                                                      ObIArray<ObRawExpr *> &conditions,
+                                                      const bool is_strict)
 {
   int ret = OB_SUCCESS;
   bool is_stack_overflow = false;
@@ -4477,14 +4490,14 @@ int ObDMLStmt::extract_equal_condition_from_joined_table(const TableItem *table,
     }
     if (OB_FAIL(ret)) {
     } else if (check_left &&
-               OB_FAIL(SMART_CALL(extract_equal_condition_from_joined_table(joined_table->left_table_,
-                                                                            conditions,
-                                                                            is_strict)))) {
+               OB_FAIL(SMART_CALL(extract_on_condition_from_joined_table(joined_table->left_table_,
+                                                                         conditions,
+                                                                         is_strict)))) {
       LOG_WARN("failed to extract equal condition from join table", K(ret));
     } else if (check_right &&
-               OB_FAIL(SMART_CALL(extract_equal_condition_from_joined_table(joined_table->right_table_,
-                                                                            conditions,
-                                                                            is_strict)))) {
+               OB_FAIL(SMART_CALL(extract_on_condition_from_joined_table(joined_table->right_table_,
+                                                                         conditions,
+                                                                         is_strict)))) {
       LOG_WARN("failed to extract equal condition from join table", K(ret));
     }
   } else { /* do nothing */ }

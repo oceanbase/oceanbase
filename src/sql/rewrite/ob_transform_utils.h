@@ -57,7 +57,7 @@ struct ObNotNullContext
     exec_ctx_(ctx.exec_ctx_), allocator_(ctx.allocator_),
     is_for_ctas_(false), stmt_(stmt)
   {}
-  
+
   ObNotNullContext(const ObNotNullContext &other,
                    const ObDMLStmt *stmt) :
     exec_ctx_(other.exec_ctx_), allocator_(other.allocator_),
@@ -1611,6 +1611,7 @@ public:
   static int create_spj_and_pullup_correlated_exprs(const ObIArray<ObExecParamRawExpr *> &exec_params,
                                                     ObSelectStmt *&subquery,
                                                     ObTransformerCtx *ctx,
+                                                    const bool is_set_child_stmt = false,
                                                     const bool skip_const_in_select = false,
                                                     const bool skip_const_in_cond = true);
 
@@ -1622,17 +1623,16 @@ public:
   static int adjust_select_item_pos(ObIArray<ObRawExpr*> &right_select_exprs,
                                     ObSelectStmt *right_query);
 
-  static int replace_none_correlated_exprs(ObIArray<ObRawExpr*> &exprs,
-                                          const ObIArray<ObExecParamRawExpr *> &exec_params,
-                                          int &pos,
-                                          ObIArray<ObRawExpr*> &new_column_list,
-                                          const bool skip_const = true);
-
-  static int replace_none_correlated_expr(ObRawExpr *&expr,
-                                          const ObIArray<ObExecParamRawExpr *> &exec_params,
-                                          int &pos,
-                                          ObIArray<ObRawExpr*> &new_column_list,
-                                          const bool skip_const = true);
+  static int replace_non_correlated_exprs_after_pullup(ObSelectStmt *stmt,
+                                                       const ObIArray<ObExecParamRawExpr *> &exec_params,
+                                                       ObIArray<ObRawExpr*> &column_exprs,
+                                                       const bool skip_const_in_select,
+                                                       const bool skip_const_in_cond);
+  static int replace_non_correlated_expr(ObRawExpr *&expr,
+                                         const ObIArray<ObExecParamRawExpr *> &exec_params,
+                                         int &pos,
+                                         ObIArray<ObRawExpr*> &new_column_list,
+                                         const bool skip_const = true);
 
   static int pullup_correlated_exprs(const ObIArray<ObExecParamRawExpr *> &exec_params,
                                      ObIArray<ObRawExpr*> &exprs,
@@ -2107,6 +2107,15 @@ public:
                                             bool check_current_stmt,
                                             bool check_basic_deterministic,
                                             bool &strict_deterministic);
+  static bool is_safe_type_for_gen_col_replace(const ObExprResType &res_type);
+  static int split_lossless_convert_or_cast(ObRawExpr *&expr);
+  static int add_const_param_constraints(const ObExprEqualCheckContext &equal_ctx,
+                                            const ParamStore &param_store,
+                                            ObIArray<ObPCConstParamInfo> &constraints);
+  static int find_same_expr_recursively(ObRawExpr *expr,
+                                        ObRawExpr *target_expr,
+                                        ObIArray<ObRawExpr *> &same_exprs,
+                                        ObExprEqualCheckContext &check_context);
 
 private:
   static int inner_get_lazy_left_join(ObDMLStmt *stmt,

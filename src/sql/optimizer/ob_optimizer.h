@@ -204,6 +204,7 @@ namespace sql
     int extract_opt_ctx_basic_flags(const ObDMLStmt &stmt,
                                     ObSQLSessionInfo &session);
     int init_parallel_policy(ObDMLStmt &stmt, const ObSQLSessionInfo &session);
+
     int init_replica_policy(ObDMLStmt &stmt, const ObSQLSessionInfo &session);
     int set_auto_dop_params(const ObSQLSessionInfo &session);
     bool allowed_get_session_parallel_param(const ObSQLSessionInfo &session);

@@ -1466,6 +1466,8 @@ public:
    */
   void mark_is_plan_root() { is_plan_root_ = true; }
 
+  void mark_not_plan_root() { is_plan_root_ = false; }
+
   void set_is_plan_root(bool is_root) { is_plan_root_ = is_root; }
 
   /**
@@ -1909,7 +1911,6 @@ private:
                                                 ObRawExpr *candidate_sk_expr, uint64_t table_id,
                                                 ObLogicalOperator *&scan_op, bool &find_table_scan,
                                                 bool &table_scan_has_exchange, bool &has_px_coord);
-
 
   /* manual set dop for each dfo */
   int refine_dop_by_hint();

@@ -16386,8 +16386,9 @@ int ObDMLResolver::resolve_optimize_hint(const ParseNode &hint_node,
       }
       break;
     }
-    case T_UNION_MERGE_HINT: {
-      if (OB_FAIL(resolve_union_merge_hint(hint_node, opt_hint))) {
+    case T_INDEX_MERGE_HINT:
+    case T_NO_INDEX_MERGE_HINT: {
+      if (OB_FAIL(resolve_index_merge_hint(hint_node, opt_hint))) {
         LOG_WARN("failed to resolve union merge hint", K(ret));
       }
       break;
@@ -16646,47 +16647,47 @@ int ObDMLResolver::resolve_index_hint(const TableItem &table, const ParseNode &i
   return ret;
 }
 
-int ObDMLResolver::resolve_union_merge_hint(const ParseNode &hint_node,
+int ObDMLResolver::resolve_index_merge_hint(const ParseNode &hint_node,
                                             ObOptHint *&opt_hint)
 {
   int ret = OB_SUCCESS;
   opt_hint = NULL;
-  ObUnionMergeHint *union_merge_hint = NULL;
-  ParseNode *table_node = NULL;
-  ParseNode *index_list_node = NULL;
+  ObIndexMergeHint *index_merge_hint = NULL;
+  const ParseNode *table_node = NULL;
+  const ParseNode *index_list_node = NULL;
   ObString qb_name;
   if (OB_UNLIKELY(3 != hint_node.num_child_)
       || OB_ISNULL(table_node = hint_node.children_[1])) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected index merge hint", K(ret), K(hint_node.type_), K(hint_node.num_child_),
-                                      K(table_node));
-  } else if (OB_FAIL(ObQueryHint::create_hint(allocator_, hint_node.type_, union_merge_hint))) {
+    LOG_WARN("unexpected index merge hint", K(ret), K(hint_node.type_), K(hint_node.num_child_), K(table_node));
+  } else if (OB_FAIL(ObQueryHint::create_hint(allocator_, hint_node.type_, index_merge_hint))) {
     LOG_WARN("failed to create hint", K(ret));
   } else if (OB_FAIL(resolve_qb_name_node(hint_node.children_[0], qb_name))) {
     LOG_WARN("Failed to resolve qb name node", K(ret));
-  } else if (OB_FAIL(resolve_table_relation_in_hint(*table_node, union_merge_hint->get_table()))) {
+  } else if (OB_FALSE_IT(index_merge_hint->set_qb_name(qb_name))) {
+  } else if (OB_FAIL(resolve_table_relation_in_hint(*table_node, index_merge_hint->get_table()))) {
     LOG_WARN("Resolve table relation fail", K(ret));
-  } else if (OB_ISNULL(index_list_node = hint_node.children_[2])) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected union merge hint", K(ret));
+  } else if (NULL == (index_list_node = hint_node.children_[2])) {
+    // do nothing
   } else {
-    const ParseNode *index_node = NULL;
-    ObString index_name;
-    for (int32_t i = 0; OB_SUCC(ret) && i < index_list_node->num_child_; i++) {
-      if (OB_ISNULL(index_node = index_list_node->children_[i])) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < index_list_node->num_child_; ++i) {
+      const ParseNode *index_node = index_list_node->children_[i];
+      ObString index_name;
+      if (OB_ISNULL(index_node)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected nullptr index node", K(ret));
+        LOG_WARN("unexpected nullptr index node", K(ret), K(i));
       } else {
         index_name.assign_ptr(index_node->str_value_, static_cast<int32_t>(index_node->str_len_));
-        if (OB_FAIL(union_merge_hint->get_index_name_list().push_back(index_name))) {
-          LOG_WARN("failed to push back index name", K(index_name), K(union_merge_hint->get_index_name_list()));
+        if (OB_FAIL(index_merge_hint->get_index_name_list().push_back(index_name))) {
+          LOG_WARN("failed to push back index name", K(ret), K(index_name), K(index_merge_hint->get_index_name_list()));
         }
       }
     }
-    union_merge_hint->set_qb_name(qb_name);
-    opt_hint = union_merge_hint;
   }
-  LOG_TRACE("resolve union merge hint finished", KPC(union_merge_hint));
+  if (OB_SUCC(ret)) {
+    opt_hint = index_merge_hint;
+    LOG_DEBUG("resolve index merge hint finished", KPC(index_merge_hint));
+  }
   return ret;
 }
 
@@ -20463,19 +20464,10 @@ int ObDMLResolver::resolve_match_against_exprs(ObRawExpr *&expr,
             match_expr_on_table = static_cast<ObMatchFunRawExpr *>(match_exprs_on_table.at(idx));
             shared = true;
             // constraints need to be added if the same_as judgement relies on specific const value
-            for(int64_t i = 0; OB_SUCC(ret) && i < equal_ctx.param_expr_.count(); i++) {
-              ObPCConstParamInfo param_info;
-              int64_t param_idx = equal_ctx.param_expr_.at(i).param_idx_;
-              if (OB_UNLIKELY(param_idx < 0 || param_idx >= param_store->count())) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("get unexpected error", K(ret), K(param_idx), K(param_store->count()));
-              } else if (OB_FAIL(param_info.const_idx_.push_back(param_idx))) {
-                LOG_WARN("failed to push back param idx", K(ret));
-              } else if (OB_FAIL(param_info.const_params_.push_back(param_store->at(param_idx)))) {
-                LOG_WARN("failed to push back value", K(ret));
-              } else if (OB_FAIL(param_constraints.push_back(param_info))) {
-                LOG_WARN("failed to push back param info", K(ret));
-              }
+            if (OB_FAIL(ObTransformUtils::add_const_param_constraints(equal_ctx,
+                                                                        *param_store,
+                                                                        param_constraints))) {
+              LOG_WARN("failed to gather const param constraints", K(ret));
             }
           }
         }

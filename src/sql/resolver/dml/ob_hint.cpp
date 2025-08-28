@@ -874,6 +874,9 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
     case ENABLE_PX_ORDERED_COORD:
     case ENABLE_TOPN_RUNTIME_FILTER:
     case DISABLE_GTT_SESSION_ISOLATION:
+    case ENABLE_PARTIAL_GROUP_BY_PUSHDOWN:
+    case ENABLE_PARTIAL_LIMIT_PUSHDOWN:
+    case ENABLE_PARTIAL_DISTINCT_PUSHDOWN:
     case ENABLE_RUNTIME_FILTER_ADAPTIVE_APPLY:
     case EXTENDED_SQL_PLAN_MONITOR_METRICS:
     case PRESERVE_ORDER_FOR_GROUPBY: {
@@ -1354,6 +1357,7 @@ ObItemType ObHint::get_hint_type(ObItemType type)
     case T_NO_USE_HASH_SET: return T_USE_HASH_SET;
     case T_NO_USE_DISTRIBUTED_DML:    return T_USE_DISTRIBUTED_DML;
     case T_NO_PUSH_SUBQ:         return T_PUSH_SUBQ;
+    case T_NO_INDEX_MERGE_HINT: return T_INDEX_MERGE_HINT;
     default:                    return type;
   }
 }
@@ -1405,6 +1409,7 @@ const char* ObHint::get_hint_name(ObItemType type, bool is_enable_hint /* defaul
     case T_NO_INDEX_HINT:       return "NO_INDEX";
     case T_USE_DAS_HINT:        return is_enable_hint ? "USE_DAS" : "NO_USE_DAS";
     case T_UNION_MERGE_HINT:    return "UNION_MERGE";
+    case T_INDEX_MERGE_HINT:    return is_enable_hint ? "INDEX_MERGE" : "NO_INDEX_MERGE";
     case T_USE_COLUMN_STORE_HINT: return is_enable_hint ? "USE_COLUMN_TABLE" : "NO_USE_COLUMN_TABLE";
     case T_INDEX_SS_HINT:       return "INDEX_SS";
     case T_INDEX_SS_ASC_HINT:   return "INDEX_SS_ASC";
@@ -1511,7 +1516,7 @@ int ObHint::deep_copy_hint_contain_table(ObIAllocator *allocator, ObHint *&hint)
     case HINT_JOIN_FILTER:  DEEP_COPY_NORMAL_HINT(ObJoinFilterHint); break;
     case HINT_WIN_MAGIC: DEEP_COPY_NORMAL_HINT(ObWinMagicHint); break;
     case HINT_COALESCE_AGGR: DEEP_COPY_NORMAL_HINT(ObCoalesceAggrHint); break;
-    case HINT_UNION_MERGE: DEEP_COPY_NORMAL_HINT(ObUnionMergeHint); break;
+    case HINT_INDEX_MERGE: DEEP_COPY_NORMAL_HINT(ObIndexMergeHint); break;
     default:  {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected hint type to deep copy", K(ret), K(hint_class_));
@@ -2448,7 +2453,7 @@ int ObIndexHint::print_hint_desc(PlanText &plan_text) const
   return ret;
 }
 
-int ObUnionMergeHint::assign(const ObUnionMergeHint &other)
+int ObIndexMergeHint::assign(const ObIndexMergeHint &other)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(table_.assign(other.table_))) {
@@ -2461,7 +2466,7 @@ int ObUnionMergeHint::assign(const ObUnionMergeHint &other)
   return ret;
 }
 
-int ObUnionMergeHint::print_hint_desc(PlanText &plan_text) const
+int ObIndexMergeHint::print_hint_desc(PlanText &plan_text) const
 {
   int ret = OB_SUCCESS;
   char *buf = plan_text.buf_;

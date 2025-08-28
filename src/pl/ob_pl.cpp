@@ -1374,11 +1374,16 @@ int ObPLContext::set_role_id_array(ObPLFunction &routine,
                                    share::schema::ObSchemaGetterGuard &guard)
 {
   int ret = OB_SUCCESS;
+  /* always backup old session priv vars on PL context */
+  OZ (old_role_id_array_.assign(session_info_->get_enable_role_array()));
+  OX (old_priv_user_id_ = session_info_->get_priv_user_id());
+  OX (old_user_priv_set_ = session_info_->get_user_priv_set());
+  OX (old_db_priv_set_ = session_info_->get_db_priv_set());
   /* All roles are disabled in any named PL/SQL block (stored procedure, function, or trigger)
      that executes with definer's rights. Roles are not used for privilege checking
      and you cannot set roles within a definer's rights procedure. */
-
-  if (ObSchemaChecker::is_ora_priv_check() && !routine.is_invoker_right()
+  if (OB_FAIL(ret)) {
+  } else if (ObSchemaChecker::is_ora_priv_check() && !routine.is_invoker_right()
       && routine.get_proc_type() != NESTED_FUNCTION
       && routine.get_proc_type() != NESTED_PROCEDURE
       && routine.get_proc_type() != STANDALONE_ANONYMOUS) {
@@ -1406,10 +1411,8 @@ int ObPLContext::set_role_id_array(ObPLFunction &routine,
                 K(session_info_->get_database_name()));
       }
       /* 2. save priv user id, and set new priv user id, change grantee_id, for priv check */
-      OX (old_priv_user_id_ = session_info_->get_priv_user_id());
       OX (session_info_->set_priv_user_id(priv_user_id));
       /* 3. save role id array , remove role id array for priv check */
-      OZ (old_role_id_array_.assign(session_info_->get_enable_role_array()));
       OX (session_info_->get_enable_role_array().reset());
       OZ (session_info_->get_enable_role_array().push_back(OB_ORA_PUBLIC_ROLE_ID));
       OX (need_reset_role_id_array_ = true);
@@ -1434,11 +1437,6 @@ int ObPLContext::set_role_id_array(ObPLFunction &routine,
     OX (priv_user_id = user_info->get_user_id());
     /* save priv user id, and set new priv user id, change grantee_id, for priv check */
     if (OB_SUCC(ret) && priv_user_id != session_info_->get_priv_user_id()) {
-      //backup old session values firstly
-      OX (old_priv_user_id_ = session_info_->get_priv_user_id());
-      OZ (old_role_id_array_.assign(session_info_->get_enable_role_array()));
-      OX (old_user_priv_set_ = session_info_->get_user_priv_set());
-      OX (old_db_priv_set_ = session_info_->get_db_priv_set());
 
       OX (need_reset_role_id_array_ = true);
 

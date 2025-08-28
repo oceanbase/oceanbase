@@ -43,10 +43,12 @@ int ObGITaskSet::get_task_at_pos(ObGranuleTaskInfo &info, const int64_t &pos) co
     info.ss_ranges_.reset();
     for (int64_t i = pos; OB_SUCC(ret) && i < gi_task_set_.count(); i++) {
       if (cur_idx == gi_task_set_.at(i).idx_) {
-        if (OB_FAIL(info.ranges_.push_back(gi_task_set_.at(i).range_))) {
-          LOG_WARN("push back ranges failed", K(ret));
-        } else if (OB_FAIL(info.ss_ranges_.push_back(gi_task_set_.at(i).ss_range_))) {
-          LOG_WARN("push back skip scan ranges failed", K(ret));
+        if (!gi_task_set_.at(i).is_false_range_) {
+          if (OB_FAIL(info.ranges_.push_back(gi_task_set_.at(i).range_))) {
+            LOG_WARN("push back ranges failed", K(ret));
+          } else if (OB_FAIL(info.ss_ranges_.push_back(gi_task_set_.at(i).ss_range_))) {
+            LOG_WARN("push back skip scan ranges failed", K(ret));
+          }
         }
       } else {
         break;
@@ -109,10 +111,12 @@ int ObGITaskSet::get_next_gi_task(ObGranuleTaskInfo &info)
     info.ss_ranges_.reset();
     for (int64_t i = cur_pos_; OB_SUCC(ret) && i < gi_task_set_.count(); i++) {
       if (cur_idx == gi_task_set_.at(i).idx_) {
-        if (OB_FAIL(info.ranges_.push_back(gi_task_set_.at(i).range_))) {
-          LOG_WARN("push back ranges failed", K(ret));
-        } else if (OB_FAIL(info.ss_ranges_.push_back(gi_task_set_.at(i).ss_range_))) {
-          LOG_WARN("push back skip scan ranges failed", K(ret));
+        if (!gi_task_set_.at(i).is_false_range_) {
+          if (OB_FAIL(info.ranges_.push_back(gi_task_set_.at(i).range_))) {
+            LOG_WARN("push back ranges failed", K(ret));
+          } else if (OB_FAIL(info.ss_ranges_.push_back(gi_task_set_.at(i).ss_range_))) {
+            LOG_WARN("push back skip scan ranges failed", K(ret));
+          }
         }
         if (i == (gi_task_set_.count() - 1)) {
           cur_pos_ = gi_task_set_.count();
@@ -226,9 +230,11 @@ int ObGITaskSet::construct_taskset(ObIArray<ObDASTabletLoc*> &taskset_tablets,
                                    ObGIRandomType random_type)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(taskset_tablets.count() != taskset_ranges.count() ||
-                  taskset_tablets.count() != taskset_idxs.count() ||
-                  taskset_tablets.empty() || ss_ranges.count() > 1)) {
+  if (OB_UNLIKELY(taskset_tablets.count() != taskset_idxs.count() ||
+                  (!taskset_ranges.empty() &&
+                    taskset_tablets.count() != taskset_ranges.count()) ||
+                  taskset_tablets.empty() ||
+                  ss_ranges.count() > 1)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("taskset count err", K(taskset_tablets.count()),
                                   K(taskset_ranges),
@@ -242,11 +248,18 @@ int ObGITaskSet::construct_taskset(ObIArray<ObDASTabletLoc*> &taskset_tablets,
   } else {
     ObNewRange whole_range;
     whole_range.set_whole_range();
+    ObNewRange false_range;
+    false_range.set_false_range();
+    bool is_false_range = taskset_ranges.empty();
     ObNewRange &ss_range = ss_ranges.empty() ? whole_range : ss_ranges.at(0);
     int64_t max_idx = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < taskset_tablets.count(); i++) {
       max_idx = max(max_idx, taskset_idxs.at(i));
-      ObGITaskInfo task_info(taskset_tablets.at(i), taskset_ranges.at(i), ss_range, taskset_idxs.at(i));
+      ObGITaskInfo task_info(taskset_tablets.at(i),
+                             is_false_range ? false_range : taskset_ranges.at(i),
+                             ss_range,
+                             taskset_idxs.at(i),
+                             is_false_range);
       if (random_type != ObGITaskSet::GI_RANDOM_NONE) {
         task_info.hash_value_ = common::murmurhash(&task_info.idx_, sizeof(task_info.idx_), 0);
       }
@@ -856,7 +869,8 @@ int ObGranuleSplitter::split_gi_task(ObGranulePumpArgs &args,
                                         table_id, op_id, partition_granule,
                                         ObGranuleUtil::with_param_down(args.gi_attri_flag_)))) {
     LOG_WARN("get query range failed", K(ret));
-  } else if (ranges.count() <= 0) {
+  } else if (!tsc->get_query_range_provider().enable_new_false_range() &&
+             ranges.count() <= 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("the task has an empty range", K(ret), K(ranges));
   } else {
@@ -918,6 +932,7 @@ int ObGranuleSplitter::get_query_range(ObExecContext &ctx,
   ObQueryRangeArray skip_scan_ranges;
   ObPhysicalPlanCtx *plan_ctx = nullptr;
   bool has_extract_query_range = false;
+  bool is_false_range = false;
   // 如果tsc有对应的query range，就预先抽取对应的query range
   LOG_DEBUG("set partition granule to whole range", K(table_id), K(op_id),
       K(partition_granule), K(with_param_down),
@@ -949,6 +964,9 @@ int ObGranuleSplitter::get_query_range(ObExecContext &ctx,
                     scan_ranges,
                     ObBasicSessionInfo::create_dtc_params(ctx.get_my_session())))) {
         LOG_WARN("failed to get scan ranges", K(ret));
+      } else if (tsc_pre_query_range.enable_new_false_range() && scan_ranges.empty()) {
+        has_extract_query_range = true;
+        is_false_range = true;
       } else if (OB_FAIL(tsc_pre_query_range.get_ss_tablet_ranges(
                                   ctx.get_allocator(),
                                   ctx,
@@ -961,7 +979,9 @@ int ObGranuleSplitter::get_query_range(ObExecContext &ctx,
     }
     if (OB_SUCC(ret)) {
       // 没有抽取出来query range, 就使用whole range
-      if (scan_ranges.empty()) {
+      if (is_false_range) {
+        // do nothing
+      } else if (scan_ranges.empty()) {
         LOG_DEBUG("the scan ranges is invalid, use the whole range", K(scan_ranges));
         if (OB_FAIL(ranges.push_back(whole_range))) {
            LOG_WARN("Failed to push back scan range", K(ret));
@@ -980,6 +1000,9 @@ int ObGranuleSplitter::get_query_range(ObExecContext &ctx,
                       scan_ranges,
                       ObBasicSessionInfo::create_dtc_params(ctx.get_my_session())))) {
       LOG_WARN("failed to get scan ranges", K(ret));
+    } else if (tsc_pre_query_range.enable_new_false_range() && scan_ranges.empty()) {
+      has_extract_query_range = true;
+      is_false_range = true;
     } else if (OB_FAIL(tsc_pre_query_range.get_ss_tablet_ranges(
                                   ctx.get_allocator(),
                                   ctx,

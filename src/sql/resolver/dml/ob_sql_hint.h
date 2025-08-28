@@ -288,14 +288,12 @@ struct LogTableHint
                     parallel_hint_(NULL),
                     use_das_hint_(NULL),
                     use_column_store_hint_(NULL),
-                    union_merge_hint_(NULL),
                     dynamic_sampling_hint_(NULL),
                     is_ds_hint_conflict_(false) {}
   LogTableHint(const TableItem *table) :  table_(table),
                                           parallel_hint_(NULL),
                                           use_das_hint_(NULL),
                                           use_column_store_hint_(NULL),
-                                          union_merge_hint_(NULL),
                                           dynamic_sampling_hint_(NULL),
                                           is_ds_hint_conflict_(false) {}
   int assign(const LogTableHint &other);
@@ -306,7 +304,13 @@ struct LogTableHint
                                 || NULL != use_das_hint_ || !join_filter_hints_.empty()
                                 || dynamic_sampling_hint_ != NULL
                                 || NULL != use_column_store_hint_
-                                || NULL != union_merge_hint_; }
+                                || !index_merge_hints_.empty(); }
+  bool has_valid_index_merge_hint() const { return !index_merge_hints_.empty()
+                                                   && !index_merge_list_.empty(); }
+  bool has_force_index_merge_hint() const { return has_valid_index_merge_hint()
+                                                   && index_merge_hints_.at(0)->is_enable_hint(); }
+  bool has_no_index_merge_hint() const { return has_valid_index_merge_hint()
+                                                && index_merge_hints_.at(0)->is_disable_hint(); }
   int get_join_filter_hint(const ObRelIds &left_tables,
                            bool part_join_filter,
                            const ObJoinFilterHint *&hint) const;
@@ -320,8 +324,8 @@ struct LogTableHint
   int get_index_prefix(const uint64_t index_id, int64_t &index_prefix) const;
 
   TO_STRING_KV(K_(table), K_(index_list), K_(index_hints),
-               K_(parallel_hint), K_(use_das_hint), K_(union_merge_hint),
-               K_(join_filter_hints), K_(left_tables),
+               K_(parallel_hint), K_(use_das_hint), K_(index_merge_list),
+               K_(index_merge_hints), K_(join_filter_hints), K_(left_tables),
                KPC(dynamic_sampling_hint_), K(is_ds_hint_conflict_));
 
   const TableItem *table_;
@@ -330,8 +334,8 @@ struct LogTableHint
   const ObTableParallelHint *parallel_hint_;
   const ObIndexHint *use_das_hint_;
   const ObIndexHint *use_column_store_hint_;
-  const ObUnionMergeHint *union_merge_hint_;
-  common::ObSEArray<uint64_t, 2, common::ModulePageAllocator, true> union_merge_list_;
+  common::ObSEArray<uint64_t, 4, common::ModulePageAllocator, true> index_merge_list_;
+  common::ObSEArray<const ObIndexMergeHint*, 4, common::ModulePageAllocator, true> index_merge_hints_;
   ObSEArray<const ObJoinFilterHint*, 1, common::ModulePageAllocator, true> join_filter_hints_;
   ObSEArray<ObRelIds, 1, common::ModulePageAllocator, true> left_tables_; // left table relids in join filter hint
   const ObTableDynamicSamplingHint *dynamic_sampling_hint_;
@@ -430,9 +434,9 @@ struct ObLogPlanHint
   int add_index_hint(const ObDMLStmt &stmt,
                      const ObQueryHint &query_hint,
                      const ObIndexHint &index_hint);
-  int add_union_merge_hint(const ObDMLStmt &stmt,
+  int add_index_merge_hint(const ObDMLStmt &stmt,
                            const ObQueryHint &query_hint,
-                           const ObUnionMergeHint &union_merge_hint);
+                           const ObIndexMergeHint &index_merge_hint);
   int add_join_hint(const ObDMLStmt &stmt,
                     const ObQueryHint &query_hint,
                     const ObJoinHint &join_hint);
@@ -458,7 +462,6 @@ struct ObLogPlanHint
                                      bool config_disable,
                                      JoinFilterPushdownHintInfo& info) const;
   int check_use_das(uint64_t table_id, bool &force_das, bool &force_no_das) const;
-  const ObUnionMergeHint *get_union_merge_hint(uint64_t table_id) const;
   int check_use_column_store(uint64_t table_id, bool &force_column_store, bool &force_no_column_store) const;
   int check_use_skip_scan(uint64_t table_id,  uint64_t index_id,
                           bool &force_skip_scan,

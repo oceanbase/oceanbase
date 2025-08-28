@@ -297,9 +297,21 @@ int ObGranuleUtil::split_block_ranges(ObExecContext &exec_ctx,
   /**
    * prepare
    */
-  if (in_ranges.count() <= 0 || tablets.count() <= 0) {
+  if (tablets.count() <= 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ranges/tablets is empty", K(in_ranges), K(tablets), K(ret));
+  } else if (in_ranges.empty()) {
+    int64_t pk_idx = 0;
+    FOREACH_CNT_X(tablet, tablets, OB_SUCC(ret)) {
+      if (OB_FAIL(granule_tablets.push_back(*tablet))) {
+        LOG_WARN("push basck tablet failed", K(ret));
+      } else if (OB_FAIL(granule_idx.push_back(pk_idx))) {
+        LOG_WARN("push back pk_idx failed", K(ret));
+      } else {
+        pk_idx++;
+      }
+    }
+    LOG_TRACE("always false range gi partition granule");
   } else if (OB_FAIL(remove_empty_range(in_ranges, ranges, only_empty_range))) {
     LOG_WARN("failed to remove empty range", K(ret));
   } else if (force_partition_granule

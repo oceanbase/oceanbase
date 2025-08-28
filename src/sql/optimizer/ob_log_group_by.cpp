@@ -125,7 +125,29 @@ int ObLogGroupBy::get_group_rollup_exprs(common::ObIArray<ObRawExpr *> &group_ro
   } else { /*do nothing*/ }
   return ret;
 }
-
+int ObLogGroupBy::is_duplicate_insensitive_aggregation(bool & is_duplicate_insensitive)
+{
+  int ret = OB_SUCCESS;
+  // iterate over all aggregations
+  is_duplicate_insensitive = true;
+  for (int64_t i = 0; OB_SUCC(ret) && is_duplicate_insensitive && i < aggr_exprs_.count(); ++i) {
+    ObAggFunRawExpr *aggr_expr = static_cast<ObAggFunRawExpr *>(aggr_exprs_.at(i));
+    ObItemType aggr_type = aggr_expr->get_expr_type();
+    if (OB_ISNULL(aggr_expr) || OB_UNLIKELY(!aggr_expr->is_aggr_expr())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid aggr expr", K(ret));
+    } else if (aggr_expr->is_param_distinct()) {
+      // any distinct is duplicate insensitive
+      // do nothing
+    } else if (aggr_expr->get_order_items().count() == 0 &&
+               (aggr_type == T_FUN_MIN || aggr_type == T_FUN_MAX)) {
+      // max min is duplicate insensitive
+    } else {
+      is_duplicate_insensitive = false;
+    }
+  }
+  return ret;
+}
 int ObLogGroupBy::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
 {
   int ret = OB_SUCCESS;
@@ -490,6 +512,26 @@ int ObLogGroupBy::inner_replace_op_exprs(ObRawExprReplacer &replacer)
           }
         }
       }
+    }
+  }
+  return ret;
+}
+
+int ObLogGroupBy::unwrap_cast_for_aggr_expr()
+{
+  int ret = OB_SUCCESS;
+  // unwrap cast for aggr expr
+  for (int64_t i = 0; OB_SUCC(ret) && i < aggr_exprs_.count(); i++) {
+    ObRawExpr *aggr_expr = aggr_exprs_.at(i);
+    if (OB_ISNULL(aggr_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("aggr_expr is null", K(ret));
+    } else if (aggr_expr->get_expr_type() == T_FUN_SYS_CAST &&
+               aggr_expr->get_param_count() > 0 &&
+               aggr_expr->has_flag(IS_INNER_ADDED_EXPR)) {
+      // if param 0 is inner added aggr, unwrap cast
+      aggr_exprs_.at(i) = aggr_expr->get_param_expr(0);
+    } else {
     }
   }
   return ret;

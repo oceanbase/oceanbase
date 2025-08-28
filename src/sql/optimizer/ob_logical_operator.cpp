@@ -3770,7 +3770,6 @@ int ObLogicalOperator::set_plan_root_output_exprs()
       LOG_WARN("failed to append returning exprs into output", K(ret));
     }
   } else { /*do nothing*/ }
-
   return ret;
 }
 

@@ -545,7 +545,6 @@ int ObTscCgService::generate_table_param(const ObLogTableScan &op,
   ObBasicSessionInfo *session_info = cg_.opt_ctx_->get_session_info();
   int64_t route_policy = 0;
   bool is_cs_replica_query = false;
-  bool plan_enable_rich_format = false;
   CK(OB_NOT_NULL(schema_guard), OB_NOT_NULL(session_info), OB_NOT_NULL(op.get_plan()));
   if (OB_FAIL(ret)) {
   } else if (OB_UNLIKELY(pd_agg && 0 == scan_ctdef.aggregate_column_ids_.count()) ||
@@ -563,16 +562,14 @@ int ObTscCgService::generate_table_param(const ObLogTableScan &op,
     LOG_WARN("NULL ptr", K(ret), K(table_schema));
   } else {
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(session_info->get_effective_tenant_id()));
-    if (OB_FAIL(op.get_plan()->get_enable_rich_vector_format(tenant_config, plan_enable_rich_format))) {
-      LOG_WARN("fail to check whether enable rich vector format", K(ret), K(op));
-    } else if (table_schema->is_spatial_index() && FALSE_IT(scan_ctdef.table_param_.set_is_spatial_index(true))) {
+    if (table_schema->is_spatial_index() && FALSE_IT(scan_ctdef.table_param_.set_is_spatial_index(true))) {
     } else if (table_schema->is_fts_index() && FALSE_IT(scan_ctdef.table_param_.set_is_fts_index(true))) {
     } else if (table_schema->is_multivalue_index_aux() && FALSE_IT(scan_ctdef.table_param_.set_is_multivalue_index(true))) {
     } else if (table_schema->is_vec_index() && FALSE_IT(scan_ctdef.table_param_.set_is_vec_index(true))) {
     } else if (table_schema->get_semistruct_encoding_type().is_enable_semistruct_encoding() && FALSE_IT(scan_ctdef.table_param_.set_is_enable_semistruct_encoding(true))) {
     } else if (FALSE_IT(scan_ctdef.table_param_.set_is_partition_table(table_schema->is_partitioned_table()))) {
     } else if (FALSE_IT(scan_ctdef.table_param_.set_is_mlog_table(table_schema->is_mlog_table()))) {
-    } else if (FALSE_IT(scan_ctdef.table_param_.set_plan_enable_rich_format(plan_enable_rich_format))) {
+    } else if (FALSE_IT(scan_ctdef.table_param_.set_plan_enable_rich_format(op.get_plan()->get_optimizer_context().get_enable_rich_vector_format()))) {
     } else if (OB_FAIL(extract_das_output_column_ids(op, scan_ctdef, *table_schema, cg_ctx, tsc_out_cols))) {
       LOG_WARN("extract tsc output column ids failed", K(ret));
     } else if (OB_FAIL(session_info->get_sys_variable(SYS_VAR_OB_ROUTE_POLICY, route_policy))) {

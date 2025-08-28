@@ -362,6 +362,7 @@ int ObTransformDistinctAggregate::replace_aggr_func(ObSelectStmt *stmt,
     } else if (OB_FAIL(ObOptimizerUtil::generate_pullup_aggr_expr(*ctx_->expr_factory_,
                                                                   ctx_->session_info_,
                                                                   view_aggr_expr->get_expr_type(),
+                                                                  view_aggr_expr,
                                                                   column_expr,
                                                                   new_aggr))) {
       LOG_WARN("failed to build new aggregate funcion expr", K(ret));

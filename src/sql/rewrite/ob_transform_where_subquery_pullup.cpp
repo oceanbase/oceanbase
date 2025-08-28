@@ -488,6 +488,7 @@ int ObWhereSubQueryPullup::do_transform_pullup_subquery(ObDMLStmt *stmt,
     if (OB_FAIL(ObTransformUtils::create_spj_and_pullup_correlated_exprs(query_ref->get_exec_params(),
                                                                          subquery,
                                                                          ctx_,
+                                                                         false,
                                                                          skip_const_in_select))) {
       LOG_WARN("failed to create spj and pullup correlated exprs", K(ret));
     } else {

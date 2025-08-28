@@ -1380,6 +1380,20 @@ public:
                                 ObIArray<ObRawExpr *> &param_exprs,
                                 ObRawExpr *&unpivot_expr,
                                 bool is_label_expr);
+  static bool is_auxiliary_generated_column(const ObColumnRefRawExpr &col_ref);
+  static int resolve_identifier(ObIAllocator &allocator,
+      sql::ObSQLSessionInfo &session,
+      const common::ObObj &param,
+      const char* const param_name,
+      ObString &value,
+      bool nullable = true,
+      bool check_length = true);
+  static int resolve_qualified_names(ObIAllocator &allocator,
+      sql::ObSQLSessionInfo &session,
+      const common::ObObj &param,
+      const char* const param_name,
+      common::ObIArray<sql::ObQualifiedName> &q_name,
+      bool nullable);
 private:
   static int need_extra_cast_for_enumset(const ObRawExprResType &src_type,
                                          const ObRawExprResType &dst_type,

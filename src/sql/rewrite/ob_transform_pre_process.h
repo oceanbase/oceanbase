@@ -709,6 +709,22 @@ private:
                               ObLeadingTable &leading_table);
   int construct_leaf_leading_table(ObDMLStmt *stmt, TableItem *table, ObLeadingTable *&leading_table);
   int reset_view_base_and_transpose_item(ObDMLStmt *stmt);
+  int transform_generated_column(ObDMLStmt *stmt, bool &is_happened);
+  int collect_gen_cols_for_replace(ObDMLStmt *stmt,
+                                   ObIArray<ObColumnRefRawExpr*> &gen_cols_for_replace,
+                                   ObIArray<ObRawExpr*> &depend_exprs);
+  int collect_pullable_scopes_from_table(ObDMLStmt *stmt,
+                                        ObColumnRefRawExpr *gen_col,
+                                        ObRawExpr *depend_expr,
+                                        ObIArray<DmlStmtScope> &replace_scopes,
+                                        ObIArray<ObPCConstParamInfo> &constraints);
+  int check_gen_col_preds(ObIArray<ObRawExpr*> &relation_exprs,
+                          ObRawExpr *gen_col,
+                          ObIArray<ObRawExpr*> &depend_exprs,
+                          bool &pass_pred_check);
+  int check_gen_col_pred(ObRawExpr* root_expr,
+                        ObIArray<ObRawExpr*> &target_exprs,
+                        bool &pass_pred_check);
   int transform_any_all_row(ObDMLStmt *stmt, bool &trans_happened);
   int convert_any_all_row_expr(ObRawExpr *expr, ObRawExpr *&new_expr, bool &happened);
 

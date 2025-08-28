@@ -97,6 +97,11 @@ public:
                                ObBaseTableEstMethod &method);
   static int inner_estimate_index_merge_rowcount(common::ObIArray<IndexMergePath *> &paths,
                                                  ObBaseTableEstMethod &method);
+  static int estimate_one_index_merge_node(const ObIndexMergeNode *node,
+                                           const OptSelectivityCtx *sel_ctx,
+                                           double &selectivity,
+                                           double &sum_child_sel,
+                                           double &sum_child_row);
   static int inner_estimate_rowcount(ObOptimizerContext &ctx,
                                       common::ObIArray<AccessPath *> &paths,
                                       const bool is_inner_path,

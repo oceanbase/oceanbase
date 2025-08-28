@@ -2539,6 +2539,238 @@ int ObTransformPredicateMoveAround::deduce_param_cond_from_aggr_cond(
   return ret;
 }
 
+int ObTransformPredicateMoveAround::inner_add_split_in_exprs(ObRawExpr *in_expr,
+                                                             ObIArray<ObRawExpr *> &target_exprs,
+                                                             ObIArray<ObRawExpr *> &new_conds)
+{
+  int ret = OB_SUCCESS;
+  ObSqlBitSet <> skip_expr_set;
+  ObSqlBitSet <> split_expr_set;
+  if (OB_ISNULL(in_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null param", K(ret));
+  } else if (OB_UNLIKELY(2 != in_expr->get_param_count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid param cnt", K(ret), K(in_expr->get_param_count()));
+  } else if (OB_ISNULL(in_expr->get_param_expr(0)) ||
+             OB_ISNULL(in_expr->get_param_expr(1))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid null params", K(ret), K(in_expr->get_param_expr(0)),
+             K(in_expr->get_param_expr(1)));
+  } else if (in_expr->get_param_expr(0)->get_expr_type() !=  T_OP_ROW ||
+             in_expr->get_param_expr(0)->get_relation_ids().num_members() < 2 ||
+             in_expr->get_param_expr(1)->get_expr_type() !=  T_OP_ROW ||
+             !in_expr->get_param_expr(1)->is_const_expr()) {
+    // do nothing.
+  } else {
+    ObRawExpr* left_expr = in_expr->get_param_expr(0);
+    ObRawExpr* right_expr = in_expr->get_param_expr(1);
+    // for each i not extracted yet, create a new in expr with the same table id.
+    for (int i = 0; OB_SUCC(ret) && i < left_expr->get_param_count(); i++) {
+      if (OB_ISNULL(left_expr->get_param_expr(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get null raw exprs", K(ret));
+      } else if (skip_expr_set.has_member(i) || !left_expr->get_param_expr(i)->is_column_ref_expr() ||
+                 !ObOptimizerUtil::find_item(target_exprs, left_expr->get_param_expr(i))) {
+        // do nothing
+      } else {
+        ObRawExpr *split_in_expr = NULL;
+        int last_split_idx = -1;
+        split_expr_set.reuse();
+        // for each j, add index of left_expr with the same table id into split_expr_set
+        for (int j = i; OB_SUCC(ret) && j < left_expr->get_param_count(); j++) {
+          if (skip_expr_set.has_member(j)) {
+            // do nothing.
+          } else if (OB_ISNULL(left_expr->get_param_expr(j))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get null left expr param");
+          } else if (!left_expr->get_param_expr(j)->is_column_ref_expr() ||
+              static_cast<ObColumnRefRawExpr *>(left_expr->get_param_expr(j))->get_table_id() !=
+              static_cast<ObColumnRefRawExpr *>(left_expr->get_param_expr(i))->get_table_id()) {
+            // do nothing.
+          } else if (OB_FAIL(split_expr_set.add_member(j))) {
+            LOG_WARN("failed to add idx to split expr set", K(ret));
+          } else if (OB_FAIL(skip_expr_set.add_member(j))) {
+            LOG_WARN("failed to add idx to skip expr set", K(ret));
+          } else {
+            last_split_idx = j;
+          }
+        }
+        if (OB_FAIL(ret)) {
+          // do nothing
+        } else if (split_expr_set.num_members() == 1) {
+          if (OB_FAIL(create_new_op_expr_without_row(left_expr, right_expr, last_split_idx, split_in_expr))) {
+            LOG_WARN("failed to create new in expr without row", K(ret));
+          }
+        } else if (split_expr_set.num_members() > 1) {
+          if (OB_FAIL(create_new_op_expr_with_row(left_expr, right_expr, split_expr_set, split_in_expr))) {
+            LOG_WARN("failed to create new in expr without row", K(ret));
+          }
+        }
+        if (OB_FAIL(ret)) {
+          // do nothing
+        } else if (OB_ISNULL(split_in_expr)) {
+          // do nothing.
+        } else if (OB_FAIL(new_conds.push_back(split_in_expr))) {
+          LOG_WARN("failed to add new in expr to new conds", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformPredicateMoveAround::create_new_op_expr_without_row(ObRawExpr *left_expr,
+                                                                   ObRawExpr *right_expr,
+                                                                   int split_expr_idx,
+                                                                   ObRawExpr *&split_op_expr)
+{
+  int ret = OB_SUCCESS;
+  ObRawExprFactory *expr_factory = NULL;
+  ObSQLSessionInfo *session_info = NULL;
+  ObRawExpr *split_left_expr = NULL;
+  ObRawExpr *split_expr = NULL;
+  if (OB_ISNULL(ctx_) ||
+      OB_ISNULL(expr_factory = ctx_->expr_factory_) ||
+      OB_ISNULL(session_info = ctx_->session_info_) ||
+      OB_ISNULL(left_expr) || OB_ISNULL(right_expr) ||
+      OB_ISNULL(split_left_expr = left_expr->get_param_expr(split_expr_idx))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null param", K(ret));
+  } else if (right_expr->get_param_count() < 2) {
+    // do nothing.
+  } else {
+    ObOpRawExpr *split_right_expr = NULL;
+    int64_t dataset_size = right_expr->get_param_count();
+    if (OB_FAIL(expr_factory->create_raw_expr(T_OP_ROW, split_right_expr))) {
+      LOG_WARN("failed to create new exprs", K(ret));
+    } else if (OB_ISNULL(split_right_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("create null new right exprs", K(ret));
+    } else if (OB_FAIL(split_right_expr->init_param_exprs(dataset_size))) {
+      LOG_WARN("failed to init param exprs for new right expr", K(ret));
+    } else {
+      for (int i = 0; OB_SUCC(ret) && i < dataset_size; i++) {
+        if (OB_ISNULL(right_expr->get_param_expr(i))||
+            OB_ISNULL(right_expr->get_param_expr(i)->get_param_expr(split_expr_idx))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get null right param expr", K(ret));
+        } else if (OB_FAIL(split_right_expr->add_param_expr(right_expr->get_param_expr(i)->get_param_expr(split_expr_idx)))) {
+          LOG_WARN("failed to add param expr for new right expr", K(ret));
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(*expr_factory,
+                                                                   T_OP_IN,
+                                                                   split_left_expr,
+                                                                   split_right_expr,
+                                                                   split_expr))) {
+      LOG_WARN("failed to create new in expr", K(ret));
+    }
+
+  }
+  if (OB_SUCC(ret) && !OB_ISNULL(split_expr)) {
+    if (OB_FAIL(split_expr->formalize(session_info))) {
+      LOG_WARN("failed to formalize new op expr", K(ret));
+    } else if (OB_FAIL(split_expr->pull_relation_id())) {
+      LOG_WARN("failed to pull relation id and levels", K(ret));
+    } else {
+      split_op_expr = split_expr;
+    }
+  }
+  return ret;
+}
+
+int ObTransformPredicateMoveAround::create_new_op_expr_with_row(ObRawExpr *left_expr,
+                                                                ObRawExpr *right_expr,
+                                                                const ObSqlBitSet <> &split_expr_set,
+                                                                ObRawExpr *&split_op_expr)
+{
+  int ret = OB_SUCCESS;
+  ObRawExprFactory *expr_factory = NULL;
+  ObSQLSessionInfo *session_info = NULL;
+  ObOpRawExpr *split_left_expr = NULL;
+  ObOpRawExpr *split_right_expr = NULL;
+  ObRawExpr *split_expr = NULL;
+  int dim = split_expr_set.num_members();
+  if (OB_ISNULL(ctx_) || OB_ISNULL(expr_factory = ctx_->expr_factory_) ||
+      OB_ISNULL(session_info = ctx_->session_info_) || OB_ISNULL(left_expr) || OB_ISNULL(right_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null param", K(ret));
+  } else if (OB_FAIL(expr_factory->create_raw_expr(T_OP_ROW, split_left_expr)) ||
+             OB_FAIL(expr_factory->create_raw_expr(T_OP_ROW, split_right_expr))) {
+    LOG_WARN("failed to create new exprs", K(ret));
+  } else if (OB_ISNULL(split_left_expr) || OB_ISNULL(split_right_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("create null new exprs", K(ret));
+  } else if (OB_FAIL(split_left_expr->init_param_exprs(dim)) ||
+             OB_FAIL(split_right_expr->init_param_exprs(right_expr->get_param_count()))) {
+    LOG_WARN("failed to init param exprs for new left and right expr", K(ret));
+  } else {
+    // create row exprs for new right_expr
+    for (int k = 0; OB_SUCC(ret) && k < right_expr->get_param_count(); k++) {
+      ObOpRawExpr *split_right_expr_param = NULL;
+      if (OB_FAIL(expr_factory->create_raw_expr(T_OP_ROW, split_right_expr_param))) {
+        LOG_WARN("failed to create new expr", K(ret));
+      } else if(OB_ISNULL(split_right_expr_param)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("create null raw exprs", K(ret));
+      } else if (OB_FAIL(split_right_expr_param->init_param_exprs(dim))) {
+        LOG_WARN("failed to init param exprs for new right expr", K(ret));
+      } else if (OB_FAIL(split_right_expr->add_param_expr(split_right_expr_param))){
+        LOG_WARN("failed to add param expr", K(ret));
+      }
+    }
+    // fill in new left expr and each row of new right expr
+    for (int j = 0; OB_SUCC(ret) && j < left_expr->get_param_count(); j++) {
+      ObRawExpr *split_left_expr_param = NULL;
+      if (!split_expr_set.has_member(j)) {
+        // do nothing
+      } else if (OB_ISNULL(split_left_expr_param = left_expr->get_param_expr(j))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get null left param expr", K(ret));
+      } else if (OB_FAIL(split_left_expr->add_param_expr(split_left_expr_param))) {
+        LOG_WARN("failed to add param expr to new left expr", K(ret));
+      } else {
+        for (int k = 0; OB_SUCC(ret) && k < split_right_expr->get_param_count(); k++) {
+          ObOpRawExpr *split_right_expr_param = NULL;
+          ObRawExpr *split_right_expr_param_column = NULL;
+          if (OB_ISNULL(right_expr->get_param_expr(k)) ||
+              OB_ISNULL(split_right_expr_param_column =
+              right_expr->get_param_expr(k)->get_param_expr(j))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get null right param expr", K(ret));
+          } else if (OB_ISNULL(split_right_expr_param =
+                     static_cast<ObOpRawExpr *>(split_right_expr->get_param_expr(k)))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get null new right param expr", K(ret));
+          } else if (OB_FAIL(split_right_expr_param->add_param_expr(split_right_expr_param_column))) {
+            LOG_WARN("failed to add param to new right expr", K(ret));
+          }
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_FAIL(OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(*expr_factory,
+                                                                           T_OP_IN,
+                                                                           split_left_expr,
+                                                                           split_right_expr,
+                                                                           split_expr)))) {
+      LOG_WARN("failed to set param exprs to new in expr", K(ret));
+    } else if (OB_FAIL(split_expr->formalize(session_info))) {
+      LOG_WARN("failed to formalize new in exprs", K(ret));
+    } else if (OB_FAIL(split_expr->pull_relation_id())) {
+      LOG_WARN("failed to pull relation id and levels", K(ret));
+    } else {
+      split_op_expr = split_expr;
+    }
+  }
+  return ret;
+}
+
 int ObTransformPredicateMoveAround::split_or_having_expr(ObSelectStmt &stmt,
                                                         ObOpRawExpr &or_qual,
                                                         ObRawExpr *&new_expr)
@@ -3008,6 +3240,7 @@ int ObTransformPredicateMoveAround::pushdown_into_semi_info(ObDMLStmt *stmt,
     LOG_WARN("failed to check different", K(ret));
   }
   if (OB_FAIL(ret)) {
+    /* do nothing */
   } else if (right_table->is_values_table()) {
     /* not allow predicate moving into values table */
     OPT_TRACE("right table is values table");
@@ -3388,6 +3621,15 @@ int ObTransformPredicateMoveAround::transform_predicates(
     LOG_WARN("failed to append", K(ret));
   } else if (OB_FAIL(append(input_preds, other_preds))) {
     LOG_WARN("failed to append", K(ret));
+  } else if (!input_preds.empty()) {
+    OPT_TRACE(input_preds);
+  }
+  if (OB_SUCC(ret) && !is_pullup) {
+    if (!stmt.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_4_1)) {
+      // do nothing
+    } else if (OB_FAIL(transform_other_predicates(input_preds, target_exprs))) {
+      LOG_WARN("failed to add split in exprs into input preds", K(ret));
+    }
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < input_preds.count(); ++i) {
     bool is_valid = false;
@@ -3451,7 +3693,6 @@ int ObTransformPredicateMoveAround::transform_predicates(
     } else if (OB_FAIL(append(output_preds, aggr_bound_preds))) {
       LOG_WARN("failed to deduce aggr bound predicates", K(ret));
     } else if (!input_preds.empty()) {
-      OPT_TRACE(input_preds);
       OPT_TRACE("deduce to:");
       OPT_TRACE(output_preds);
     }
@@ -3472,6 +3713,33 @@ int ObTransformPredicateMoveAround::check_need_transform_predicates(ObIArray<ObR
     LOG_WARN("failed to extract const bool expr info", K(ret));
   } else {
     is_needed = false_exprs.empty();
+  }
+  return ret;
+}
+
+int ObTransformPredicateMoveAround::transform_other_predicates(ObIArray<ObRawExpr *> &input_preds,
+                                                               ObIArray<ObRawExpr *> &target_exprs)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr *, 4> split_preds;
+  for (int i = 0; OB_SUCC(ret) && i < input_preds.count(); i++) {
+    if (OB_ISNULL(input_preds.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid null condition expr", K(ret));
+    } else if (T_OP_IN != input_preds.at(i)->get_expr_type()) {
+      // do nothing.
+    } else if (OB_FAIL(inner_add_split_in_exprs(input_preds.at(i), target_exprs, split_preds))) {
+      LOG_WARN("failed to split exprs in other preds", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (split_preds.count() == 0) {
+    // do nothing.
+  } else if (OB_FAIL(append(input_preds, split_preds))) {
+    LOG_WARN("failed to append split exprs to input preds", K(ret));
+  } else {
+    OPT_TRACE("add split in exprs:", split_preds);
   }
   return ret;
 }

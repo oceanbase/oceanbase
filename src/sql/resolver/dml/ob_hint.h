@@ -225,9 +225,12 @@ struct ObOptParamHint
     DEF(ENABLE_TOPN_RUNTIME_FILTER, )               \
     DEF(PRESERVE_ORDER_FOR_GROUPBY,)                \
     DEF(ENABLE_PDML_INSERT_UP,)                     \
+    DEF(ENABLE_PARTIAL_LIMIT_PUSHDOWN,)             \
     DEF(PARQUET_FILTER_PUSHDOWN_LEVEL,)             \
     DEF(ORC_FILTER_PUSHDOWN_LEVEL,)                 \
     DEF(ENABLE_INDEX_MERGE,)                        \
+    DEF(ENABLE_PARTIAL_GROUP_BY_PUSHDOWN,)          \
+    DEF(ENABLE_PARTIAL_DISTINCT_PUSHDOWN,)          \
     DEF(ENABLE_RUNTIME_FILTER_ADAPTIVE_APPLY, )     \
     DEF(EXTENDED_SQL_PLAN_MONITOR_METRICS, )        \
     DEF(APPROX_COUNT_DISTINCT_PRECISION,)           \
@@ -677,7 +680,7 @@ public:
       HINT_JOIN_FILTER,
       HINT_TABLE_DYNAMIC_SAMPLING,
       HINT_PQ,
-      HINT_UNION_MERGE
+      HINT_INDEX_MERGE
     };
 
   static const int64_t MAX_EXPR_STR_LENGTH_IN_HINT = 1024;
@@ -754,7 +757,7 @@ public:
   bool is_coalesce_aggr_hint() const {return HINT_COALESCE_AGGR == hint_class_; }
   bool is_trans_added() const { return is_trans_added_; }
   bool set_trans_added(bool is_trans_added) { return is_trans_added_ = is_trans_added; }
-  bool is_union_merge_hint() const { return T_UNION_MERGE_HINT == hint_type_; }
+  bool is_index_merge_hint() const { return HINT_INDEX_MERGE == hint_class_; }
 
   VIRTUAL_TO_STRING_KV("hint_type", get_type_name(hint_type_),
                        K_(hint_class), K_(qb_name),
@@ -1158,22 +1161,23 @@ private:
   int64_t index_prefix_;
 };
 
-class ObUnionMergeHint : public ObOptHint
+class ObIndexMergeHint : public ObOptHint
 {
 public:
-  ObUnionMergeHint(ObItemType hint_type = T_UNION_MERGE_HINT)
+  ObIndexMergeHint(ObItemType hint_type = T_INDEX_MERGE_HINT)
     : ObOptHint(hint_type)
   {
-    set_hint_class(HINT_UNION_MERGE);
+    set_hint_class(HINT_INDEX_MERGE);
   }
-  int assign(const ObUnionMergeHint &other);
-  virtual ~ObUnionMergeHint() {}
+  int assign(const ObIndexMergeHint &other);
+  virtual ~ObIndexMergeHint() {}
   virtual int get_all_table_in_hint(ObIArray<ObTableInHint*> &all_tables) override { return all_tables.push_back(&table_); }
   virtual int print_hint_desc(PlanText &plan_text) const override;
-  ObTableInHint &get_table() { return table_; }
-  const ObTableInHint &get_table() const { return table_; }
-  common::ObIArray<common::ObString> &get_index_name_list() { return index_name_list_; }
-  const common::ObIArray<common::ObString> &get_index_name_list() const { return index_name_list_; }
+  inline ObTableInHint &get_table() { return table_; }
+  inline const ObTableInHint &get_table() const { return table_; }
+  inline common::ObIArray<common::ObString> &get_index_name_list() { return index_name_list_; }
+  inline const common::ObIArray<common::ObString> &get_index_name_list() const { return index_name_list_; }
+  inline int64_t get_index_list_count() const { return index_name_list_.count(); }
   INHERIT_TO_STRING_KV("ObHint", ObHint, K_(table), K_(index_name_list));
 private:
   ObTableInHint table_;

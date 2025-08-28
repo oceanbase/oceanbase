@@ -143,7 +143,8 @@ public:
         need_update_tablet_param_(false),
         in_row_cache_threshold_(common::DEFAULT_MAX_MULTI_GET_CACHE_AWARE_ROW_NUM),
         mds_collector_(nullptr),
-        row_scan_cnt_(NULL)
+        row_scan_cnt_(NULL),
+        enable_new_false_range_(false)
   {}
   virtual ~ObTableScanParam() {}
 public:
@@ -182,6 +183,7 @@ public:
   int64_t in_row_cache_threshold_;
   ObMdsReadInfoCollector *mds_collector_; // used for collect mds info when query mds sstable
   uint64_t *row_scan_cnt_;
+  bool enable_new_false_range_;
 
   DECLARE_VIRTUAL_TO_STRING;
 private:
