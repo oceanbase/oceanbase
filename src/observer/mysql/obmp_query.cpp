@@ -1436,52 +1436,6 @@ int ObMPQuery::store_params_value_to_str(ObIAllocator &allocator,
   return ret;
 }
 
-//int ObMPQuery::fill_feedback_session_info(ObMySQLResultSet &result,
-//                                          ObSQLSessionInfo &session)
-//{
-//  int ret = OB_SUCCESS;
-//  ObPhysicalPlan *temp_plan = NULL;
-//  ObTaskExecutorCtx *temp_task_ctx = NULL;
-//  ObSchemaGetterGuard *schema_guard = NULL;
-//  if (session.is_abundant_feedback_support() &&
-//      NULL != (temp_plan = result.get_physical_plan()) &&
-//      NULL != (temp_task_ctx = result.get_exec_context().get_task_executor_ctx()) &&
-//      NULL != (schema_guard = ctx_.schema_guard_) &&
-//      temp_plan->get_plan_type() == ObPhyPlanType::OB_PHY_PLAN_REMOTE &&
-//      temp_plan->get_location_type() != ObPhyPlanType::OB_PHY_PLAN_UNCERTAIN &&
-//      temp_task_ctx->get_table_locations().count() == 1 &&
-//      temp_task_ctx->get_table_locations().at(0).get_partition_location_list().count() == 1) {
-//    bool is_cache_hit = false;
-//    ObFBPartitionParam param;
-//    //FIXME: should remove ObPartitionKey
-//    ObPartitionKey partition_key;
-//    ObPartitionLocation partition_loc;
-//    const ObTableSchema *table_schema = NULL;
-//    ObPartitionReplicaLocationIArray &pl_array =
-//        temp_task_ctx->get_table_locations().at(0).get_partition_location_list();
-//    if (OB_FAIL(pl_array.at(0).get_partition_key(partition_key))) {
-//      LOG_WARN("failed to get partition key", K(ret));
-//    } else if (OB_FAIL(temp_cache->get(partition_key,
-//                                       partition_loc,
-//                                       0,
-//                                       is_cache_hit))) {
-//      LOG_WARN("failed to get partition location", K(ret));
-//    } else if (OB_FAIL(schema_guard->get_table_schema(partition_key.get_tenant_id(),
-//                                                      partition_key.get_table_id(),
-//                                                      table_schema))) {
-//      LOG_WARN("failed to get table schema", K(ret), K(partition_key));
-//    } else if (OB_ISNULL(table_schema)) {
-//      ret = OB_ERR_UNEXPECTED;
-//      LOG_WARN("null table schema", K(ret));
-//    } else if (OB_FAIL(build_fb_partition_param(*table_schema, partition_loc, param))) {
-//      LOG_WARN("failed to build fb partition pararm", K(ret));
-//    } else if (OB_FAIL(session.set_partition_location_feedback(param))) {
-//      LOG_WARN("failed to set partition location feedback", K(param), K(ret));
-//    } else { /*do nothing*/ }
-//  } else { /*do nothing*/}
-//  return ret;
-//}
-
 //int ObMPQuery::build_fb_partition_param(
 //    const ObTableSchema &table_schema,
 //    const ObPartitionLocation &partition_loc,

@@ -873,47 +873,53 @@ int ObGranuleSplitter::split_gi_task(ObGranulePumpArgs &args,
              ranges.count() <= 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("the task has an empty range", K(ret), K(ranges));
+  } else if (tsc->tsc_ctdef_.scan_ctdef_.is_ob_external_table()) {
+    ret = ObGranuleUtil::split_granule_for_external_table(args.ctx_->get_allocator(),
+                                                          tsc,
+                                                          ranges,
+                                                          tablets,
+                                                          args.external_table_files_,
+                                                          args.parallelism_,
+                                                          taskset_tablets,
+                                                          taskset_ranges,
+                                                          taskset_idxs);
+  } else if (tsc->tsc_ctdef_.scan_ctdef_.is_lake_external_table()) {
+    ret = ObGranuleUtil::split_granule_for_lake_table(*args.ctx_,
+                                                      args.ctx_->get_allocator(),
+                                                      ranges,
+                                                      tablets,
+                                                      partition_granule,
+                                                      taskset_tablets,
+                                                      taskset_ranges,
+                                                      taskset_idxs);
   } else {
-    bool is_external_table = tsc->tsc_ctdef_.scan_ctdef_.is_external_table_;
-    if (is_external_table) {
-      ret = ObGranuleUtil::split_granule_for_external_table(args.ctx_->get_allocator(),
-                                                            tsc,
-                                                            ranges,
-                                                            tablets,
-                                                            args.external_table_files_,
-                                                            args.parallelism_,
-                                                            taskset_tablets,
-                                                            taskset_ranges,
-                                                            taskset_idxs);
-    } else {
-      ret = ObGranuleUtil::split_block_ranges(*args.ctx_,
-                                              args.ctx_->get_allocator(),
-                                              tsc,
-                                              ranges,
-                                              tablets,
-                                              args.parallelism_,
-                                              args.tablet_size_,
-                                              partition_granule,
-                                              taskset_tablets,
-                                              taskset_ranges,
-                                              taskset_idxs,
-                                              range_independent);
-    }
-    if (OB_FAIL(ret)) {
-      LOG_WARN("failed to get granule task", K(ret), K(ranges), K(tablets), K(is_external_table));
-    } else if (OB_FAIL(task_set.construct_taskset(taskset_tablets,
-                                                  taskset_ranges,
-                                                  ss_ranges,
-                                                  taskset_idxs,
-                                                  random_type))) {
-      LOG_WARN("construct taskset failed", K(ret), K(taskset_tablets),
-                                                   K(taskset_ranges),
-                                                   K(ss_ranges),
-                                                   K(taskset_idxs),
-                                                   K(random_type));
-    } else {
-
-    }
+    ret = ObGranuleUtil::split_block_ranges(*args.ctx_,
+                                            args.ctx_->get_allocator(),
+                                            tsc,
+                                            ranges,
+                                            tablets,
+                                            args.parallelism_,
+                                            args.tablet_size_,
+                                            partition_granule,
+                                            taskset_tablets,
+                                            taskset_ranges,
+                                            taskset_idxs,
+                                            range_independent);
+  }
+  if (OB_FAIL(ret)) {
+    LOG_WARN("failed to get granule task", K(ret), K(ranges), K(tablets),
+                K(tsc->tsc_ctdef_.scan_ctdef_.is_ob_external_table()),
+                K(tsc->tsc_ctdef_.scan_ctdef_.is_lake_external_table()));
+  } else if (OB_FAIL(task_set.construct_taskset(taskset_tablets,
+                                                taskset_ranges,
+                                                ss_ranges,
+                                                taskset_idxs,
+                                                random_type))) {
+    LOG_WARN("construct taskset failed", K(ret), K(taskset_tablets),
+                                                 K(taskset_ranges),
+                                                 K(ss_ranges),
+                                                 K(taskset_idxs),
+                                                 K(random_type));
   }
   return ret;
 }

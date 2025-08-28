@@ -418,6 +418,7 @@ private:
       MacroBlkIdMap &mark_info,
       common::hash::ObHashSet<MacroBlockId, common::hash::NoPthreadDefendMode> &macro_id_set,
       ObMacroBlockMarkerStatus &tmp_status);
+  int calc_ext_disk_cache_blocks(ObMacroBlockMarkerStatus &tmp_status);
   int do_sweep(MacroBlkIdMap &mark_info);
   int sweep_one_block(const MacroBlockId& macro_id);
 

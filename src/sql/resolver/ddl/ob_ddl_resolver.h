@@ -474,7 +474,7 @@ public:
   static int resolve_file_prefix(ObString &url,
                                  ObSqlString &prefix_str,
                                  common::ObStorageType &device_type,
-                                 ObResolverParams &params);
+                                 ObIAllocator *allocator);
   static int resolve_external_file_format(const ParseNode *format_node,
                                           ObResolverParams &params,
                                           ObExternalFileFormat& format,
@@ -489,10 +489,17 @@ public:
                                             ObTableSchema &table_schema,
                                             common::ObString table_location);
 
+  static int resolve_external_file_location(ObIAllocator *allocator,
+                                            const common::ObString &table_location,
+                                            common::ObString &resolved_table_location,
+                                            common::ObString &resolved_access_info);
+
   static int resolve_external_file_location_object(ObResolverParams &params,
                                                   ObTableSchema &table_schema,
                                                   common::ObString location_obj,
                                                   common::ObString sub_path);
+
+
 
   static int mask_properties_sensitive_info(const ParseNode *node,
                                             const ObExternalFileFormat &format,

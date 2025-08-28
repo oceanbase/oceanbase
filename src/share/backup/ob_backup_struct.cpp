@@ -1274,6 +1274,20 @@ int ObBackupStorageInfo::set_endpoint(const common::ObStorageType device_type, c
   return ret;
 }
 
+int ObBackupStorageInfo::clone(
+    common::ObIAllocator &allocator,
+    common::ObObjectStorageInfo *&storage_info) const
+{
+  int ret = OB_SUCCESS;
+  ObBackupStorageInfo *tmp_storage_info = nullptr;
+  if (OB_FAIL(clone_impl_<ObBackupStorageInfo>(allocator, *this, tmp_storage_info))) {
+    LOG_WARN("fail to clone backup storage info", KR(ret), KPC(this));
+  } else {
+    storage_info = tmp_storage_info;
+  }
+  return ret;
+}
+
 int ObBackupStorageInfo::get_storage_info_str(char *storage_info, const int64_t info_len) const
 {
   int ret = OB_SUCCESS;

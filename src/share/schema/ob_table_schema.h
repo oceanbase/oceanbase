@@ -58,6 +58,7 @@ namespace common
 
 namespace share
 {
+enum class ObLakeTableFormat;
 namespace schema
 {
 class ObSchemaGetterGuard;
@@ -1679,6 +1680,8 @@ public:
   inline int64_t get_dop() const  { return table_dop_; }
   inline void set_catalog_id(const uint64_t catalog_id) { catalog_id_ = catalog_id; }
   inline uint64_t get_catalog_id() const { return catalog_id_; }
+  inline void set_lake_table_format(share::ObLakeTableFormat lake_table_format) { lake_table_format_ = lake_table_format; }
+  share::ObLakeTableFormat get_lake_table_format() const { return lake_table_format_; }
   const ObString &get_external_file_location() const { return external_file_location_; }
   const ObString &get_external_file_location_access_info() const { return external_file_location_access_info_; }
   uint64_t get_external_location_id() const { return external_location_id_; }
@@ -2391,6 +2394,7 @@ protected:
 
   //external table
   uint64_t catalog_id_ = OB_INTERNAL_CATALOG_ID; // do not need to serialized
+  share::ObLakeTableFormat lake_table_format_; // do not need to serialized
   common::ObString external_file_format_;
   common::ObString external_file_location_;
   common::ObString external_file_location_access_info_;

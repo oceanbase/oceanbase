@@ -210,7 +210,6 @@ public:
       ObIArray<common::ObAddr> &locations);
 
   int external_table_get(const uint64_t tenant_id,
-                         const uint64_t table_id,
                          ObIArray<common::ObAddr> &locations);
 
   // Nonblock way to renew the virtual table location

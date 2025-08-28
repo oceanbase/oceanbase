@@ -16,6 +16,7 @@
 #include "sql/ob_phy_table_location.h"
 #include "sql/ob_sql_define.h"
 #include "sql/optimizer/ob_route_policy.h"
+#include "sql/optimizer/file_prune/ob_lake_table_fwd.h"
 namespace oceanbase
 {
 namespace sql
@@ -112,7 +113,10 @@ public:
   ObOptTabletLoc &get_partition_location() { return opt_tablet_loc_; }
   const common::ObIArray<int64_t> &get_priority_replica_idxs() const { return priority_replica_idxs_; }
   bool is_server_in_replica(const common::ObAddr &server, int64_t &idx) const;
-  TO_STRING_KV(K_(opt_tablet_loc), K_(selected_replica_idx), K_(priority_replica_idxs));
+  // int set_lake_table_part_key(const ObLakeTablePartKey &part_key) { return lake_table_part_info_.set_part_key(part_key); }
+  ObIArray<ObIOptLakeTableFile*>& get_opt_lake_table_files_for_update() { return files_; }
+  const ObIArray<ObIOptLakeTableFile*>& get_opt_lake_table_files() const { return files_; }
+  TO_STRING_KV(K_(opt_tablet_loc), K_(selected_replica_idx), K_(priority_replica_idxs), K(files_));
 
 private:
   ObOptTabletLoc opt_tablet_loc_;
@@ -120,6 +124,8 @@ private:
   int64_t selected_replica_idx_;
   //对当前partition的所有副本进行优先级判断后，将最高优先级的replica index存到这里
   common::ObSEArray<int64_t, 2, common::ModulePageAllocator, true> priority_replica_idxs_;
+  common::ObSEArray<ObIOptLakeTableFile*, 1, common::ModulePageAllocator, true> files_;
+  // ObLakeTablePartInfo lake_table_part_info_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCandiTabletLoc);
 };
@@ -168,6 +174,8 @@ public:
                                   bool &is_same,
                                   common::ObAddr &the_server,
                                   int64_t &new_idx);
+  void set_is_lake_table(bool v) { is_lake_table_ = v; }
+  bool is_lake_table() const { return is_lake_table_; }
   TO_STRING_KV(K_(table_location_key), K_(ref_table_id), K_(candi_tablet_locs),
                K_(duplicate_type));
 
@@ -180,6 +188,8 @@ private:
   ObCandiTabletLocSEArray candi_tablet_locs_;
   //复制表类型, 如果是复制表且未被更改则可以在分配exg算子时挑选更合适的副本
   ObDuplicateType duplicate_type_;
+  // for lake table
+  bool is_lake_table_;
 private:
   /* functions */
   /* variables */

@@ -34,6 +34,7 @@ namespace storage
   class ObSSObjectAccessUtil;
   class ObStorageCachePolicyPrewarmer;
 #endif
+  class ObStorageIOPipelineTaskInfo;
 }
 namespace blocksstable
 {
@@ -61,6 +62,7 @@ class ObStorageObjectHandle final
   friend class storage::ObSSObjectAccessUtil;
   friend class storage::ObStorageCachePolicyPrewarmer;
   #endif
+  friend class storage::ObStorageIOPipelineTaskInfo;
 public:
   ObStorageObjectHandle() = default;
   ~ObStorageObjectHandle();

@@ -35,6 +35,7 @@ void ObExternalReadInfo::reset()
   io_timeout_ms_ = 0;
   io_desc_.reset();
   io_callback_ = nullptr;
+  io_metrics_ = nullptr;
 }
 
 bool ObExternalReadInfo::is_valid() const
@@ -55,7 +56,9 @@ bool ObExternalFileReadHandle::is_valid() const
 int ObExternalFileReadHandle::wait()
 {
   int ret = OB_SUCCESS;
+  int64_t io_time_us = 0;
   for (int64_t i = 0; OB_SUCC(ret) && i < object_handles_.count(); ++i) {
+    io_time_us = 0;
     ObStorageObjectHandle object_handle = object_handles_.at(i);
     if (OB_UNLIKELY(!object_handle.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
@@ -67,6 +70,12 @@ int ObExternalFileReadHandle::wait()
       } else {
         LOG_WARN("Failt to wait object handle finish", K(ret), K(object_handle));
       }
+    }
+    if (OB_FAIL(ret) || (nullptr == metrics_)) {
+    } else if (OB_FAIL(object_handle.get_io_handle().get_io_time_us(io_time_us))) {
+      LOG_WARN("failed to get io time us", K(ret));
+    } else {
+      metrics_->update_io_stat(io_time_us);
     }
   }
   return ret;
@@ -115,6 +124,11 @@ int ObExternalFileReadHandle::get_user_buf_read_data_size(int64_t &read_size) co
   return ret;
 }
 
+void ObExternalFileReadHandle::set_io_metrics(ObLakeTableIOMetrics &metrics)
+{
+  metrics_ = &metrics;
+}
+
 
 /***************** ObExternalFileAccess ****************/
 
@@ -136,6 +150,7 @@ int ObExternalFileAccess::reset()
 
   cache_options_.reset();
   fd_.reset();
+  file_size_ = -1;
   return ret;
 }
 
@@ -147,15 +162,17 @@ int ObExternalFileAccess::open(
   ObObjectStorageInfo *access_info = nullptr;
   ObHDFSStorageInfo hdfs_storage_info;
   ObBackupStorageInfo backup_storage_info;
-  int64_t modify_time = -1;
+  ObArenaAllocator temp_allocator;
   if (is_opened()) {
     ret = OB_INIT_TWICE;
     LOG_WARN("file has opened in this Access, call close before open another one", K(ret), K(lbt()));
+  } else if (info.file_size_ <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid file size", K(info.file_size_), K(ret));
   } else if (OB_FAIL(get_storage_type_from_path_for_external_table(info.location_, storage_type_))) {
     LOG_WARN("fail to resove storage type", K(ret));
   } else {
     // see ObExternalDataAccessDriver::init
-    ObArenaAllocator temp_allocator;
     ObString access_info_cstr;
     if (storage_type_ == OB_STORAGE_FILE) {
       access_info_cstr.assign_ptr(&DUMMY_EMPTY_CHAR_, strlen(&DUMMY_EMPTY_CHAR_));
@@ -175,8 +192,6 @@ int ObExternalFileAccess::open(
       LOG_WARN("failed to get access info", K(ret), K(storage_type_));
     } else if (OB_FAIL(access_info->set(storage_type_, access_info_cstr.ptr()))) {
       LOG_WARN("failed to set access_info", K(ret), K(storage_type_));
-    } else if (OB_FAIL(ObBackupIoAdapter::get_file_modify_time(info.url_, access_info, modify_time))) {
-      LOG_WARN("failed to get modify_time", K(ret));
     }
   }
 
@@ -185,9 +200,12 @@ int ObExternalFileAccess::open(
   } else if (OB_ISNULL(exdam = MTL(ObExternalDataAccessMgr*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObExternalDataAccessMgr", K(ret), KP(exdam), K(MTL_ID()));
-  } else if (OB_FAIL(exdam->open_and_reg_file(info.url_, access_info, modify_time, fd_))) {
-    LOG_WARN("failed to register file to DAM", K(ret), K(info), K(access_info), K(modify_time), K(fd_));
+  } else if (OB_FAIL(exdam->open_and_reg_file(info.url_, info.content_digest_, access_info,
+                                              info.modify_time_, info.file_size_, fd_))) {
+    LOG_WARN("failed to register file to DAM", K(ret), K(info), K(access_info), K(file_size_),
+             K(fd_));
   } else {
+    file_size_ = info.file_size_;
     cache_options_ = cache_options;
   }
   return ret;
@@ -217,14 +235,13 @@ int ObExternalFileAccess::inner_process_read_info_(
 {
   int ret = OB_SUCCESS;
   out_info = input_info;
-  // TODO process io_desc_, TODO @shifangdan.sfd
   out_info.io_desc_.set_mode(ObIOMode::READ);
   out_info.io_desc_.set_wait_event(ObWaitEventIds::OBJECT_STORAGE_READ);
-  // if (cache_options_.enable_disk_cache()) {
-  //   out_info.io_desc_.set_buffered_read();
-  // } else {
-  //   out_info.io_desc_.set_buffered_read(false);
-  // }
+  if (cache_options_.enable_disk_cache()) {
+    out_info.io_desc_.set_buffered_read(true);
+  } else {
+    out_info.io_desc_.set_buffered_read(false);
+  }
   return ret;
 }
 
@@ -237,6 +254,7 @@ int ObExternalFileAccess::async_read(
   int64_t read_size = 0;
   ObExternalReadInfo new_info = info;
   ObExternalDataAccessMgr *exdam = nullptr;
+  handle.set_io_metrics(metrics_);
   if (!is_opened()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("no opened file", K(ret), K(fd_), K(lbt()));
@@ -250,6 +268,8 @@ int ObExternalFileAccess::async_read(
     LOG_WARN("failed to get ObExternalDataAccessMgr", K(ret), K(lbt()));
   } else if (OB_FAIL(exdam->async_read(fd_, new_info, cache_options_.enable_page_cache(), handle))) {
     STORAGE_LOG(WARN, "fail to get file length", KR(ret), K(fd_));
+  } else {
+    metrics_.update_access_stat(true/*is_async*/, info.size_);
   }
   return ret;
 }
@@ -262,6 +282,7 @@ int ObExternalFileAccess::pread(
   ObExternalReadInfo new_info = info;
   ObExternalDataAccessMgr *exdam = nullptr;
   ObExternalFileReadHandle read_handle;
+  read_handle.set_io_metrics(metrics_);
   if (!is_opened()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("no opened file", K(ret), K(fd_), K(lbt()));
@@ -279,6 +300,8 @@ int ObExternalFileAccess::pread(
     LOG_WARN("wait failed", K(ret), K(fd_), K(info));
   } else if (OB_FAIL(read_handle.get_user_buf_read_data_size(read_size))) {
     LOG_WARN("failed to get read_size", K(ret), K(read_size), K(info), K(read_handle));
+  } else {
+    metrics_.update_access_stat(false/*is_async*/, read_size);
   }
   STORAGE_LOG(TRACE, "Read size and Real_read_size", K(ret), K(info), K(read_size), K(read_handle),
               K(cache_options_));
@@ -297,11 +320,18 @@ int ObExternalFileAccess::get_file_size(int64_t &file_size)
   if (!is_opened()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("should has a opened file", K(ret), K(fd_), K(lbt()));
-  } else if (OB_ISNULL(exdam = MTL(ObExternalDataAccessMgr*))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to get ObExternalDataAccessMgr", K(ret), K(lbt()));
-  } else if (OB_FAIL(exdam->get_file_size_by_fd(fd_, file_size))) {
-    STORAGE_LOG(WARN, "fail to get file length", KR(ret), K(fd_));
+  } else {
+    file_size = file_size_;
+  }
+  return ret;
+}
+
+int ObExternalFileAccess::register_io_metrics(ObLakeTableReaderProfile &reader_profile,
+                                              const ObString &label)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(reader_profile.register_metrics(&metrics_, label))) {
+    LOG_WARN("failed to add metrics", K(ret));
   }
   return ret;
 }

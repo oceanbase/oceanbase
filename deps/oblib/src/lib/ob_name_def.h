@@ -1112,6 +1112,7 @@
 #define N_EXTERNAL_FILE_URL                 "metadata$fileurl"
 #define N_EXTERNAL_FILE_ROW                 "external$filerow"
 #define N_EXTERNAL_FILE_POS                 "external$filepos"
+#define N_EXTERNAL_TABLE_COLUMN_ID          "external$table_col_id"
 
 #define N_PREFIX_PATTERN                    "prefix_pattern"
 #define N_PRIV_XML_BINARY                   "_make_xml_binary"

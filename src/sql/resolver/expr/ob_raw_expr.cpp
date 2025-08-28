@@ -6652,6 +6652,7 @@ int ObPseudoColumnRawExpr::assign(const ObRawExpr &other)
       table_id_ = tmp.table_id_;
       table_name_ = tmp.table_name_;
       data_access_path_ = tmp.data_access_path_;
+      mapped_column_id_ = tmp.mapped_column_id_;
     }
   }
   return ret;
@@ -6673,7 +6674,8 @@ bool ObPseudoColumnRawExpr::inner_same_as(const ObRawExpr &expr,
   UNUSED(check_context);
   return type_ == expr.get_expr_type() &&
          table_id_ == static_cast<const ObPseudoColumnRawExpr&>(expr).get_table_id() &&
-         0 == data_access_path_.compare(static_cast<const ObPseudoColumnRawExpr&>(expr).get_data_access_path());
+         0 == data_access_path_.compare(static_cast<const ObPseudoColumnRawExpr&>(expr).get_data_access_path()) &&
+         mapped_column_id_ == static_cast<const ObPseudoColumnRawExpr&>(expr).get_mapped_column_id();
 }
 
 void ObPseudoColumnRawExpr::inner_calc_hash()

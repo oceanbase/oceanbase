@@ -156,7 +156,7 @@ int ObAllVirtualSSLocalCacheInfo::add_tmpfile_cache_inst_()
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN, "macro cache mgr is null", KR(ret));
     } else {
-      ObLocalCacheHitStat hit_stat;
+      ObStorageCacheHitStat hit_stat;
       if (OB_FAIL(macro_cache_mgr->get_macro_cache_hit_stat_by_cache_type(ObSSMacroCacheType::TMP_FILE, hit_stat))) {
         SERVER_LOG(WARN, "fail to get macro cache hit stat by cache type", KR(ret));
       } else {
@@ -192,7 +192,7 @@ int ObAllVirtualSSLocalCacheInfo::add_shared_macro_cache_inst_()
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN, "macro cache mgr is null", KR(ret));
     } else {
-      ObLocalCacheHitStat hit_stat;
+      ObStorageCacheHitStat hit_stat;
       if (OB_FAIL(macro_cache_mgr->get_macro_cache_hit_stat_by_block_type(ObSSMacroBlockType::SHARED_MACRO, hit_stat))) {
         SERVER_LOG(WARN, "fail to get macro cache hit stat by block type", KR(ret));
       } else {
@@ -228,7 +228,7 @@ int ObAllVirtualSSLocalCacheInfo::add_private_macro_cache_inst_()
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN, "macro cache mgr is null", KR(ret));
     } else {
-      ObLocalCacheHitStat hit_stat;
+      ObStorageCacheHitStat hit_stat;
       if (OB_FAIL(macro_cache_mgr->get_macro_cache_hit_stat_by_block_type(ObSSMacroBlockType::PRIVATE_MACRO, hit_stat))) {
         SERVER_LOG(WARN, "fail to get macro cache hit stat by block type", KR(ret));
       } else {

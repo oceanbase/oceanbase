@@ -3569,7 +3569,7 @@ int ObBasicSessionInfo::fill_sys_vars_cache_base_value(
     case SYS_VAR_ENABLE_SQL_PLAN_MONITOR: {
       int64_t int_val = 0;
       OZ (val.get_int(int_val), val);
-      OX (sys_vars_cache.set_enable_sql_plan_monitor(int_val != 0));
+      OX (sys_vars_cache.set_base_enable_sql_plan_monitor(int_val != 0));
       break;
     }
     case SYS_VAR_OB_ENABLE_PS_PARAMETER_ANONYMOUS_BLOCK: {
@@ -3581,7 +3581,7 @@ int ObBasicSessionInfo::fill_sys_vars_cache_base_value(
     case SYS_VAR__CURRENT_DEFAULT_CATALOG: {
       uint64_t uint_val = 0;
       OZ (val.get_uint64(uint_val), val);
-      OX (sys_vars_cache.set_current_default_catalog(uint_val));
+      OX (sys_vars_cache.set_base_current_default_catalog(uint_val));
     }
     default: {
       //do nothing

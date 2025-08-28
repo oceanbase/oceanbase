@@ -50,7 +50,6 @@ class ObPCVSet;
 class ObPhysicalPlan;
 struct ObSqlCtx;
 class ObTableLocation;
-class ObPhyTableLocation;
 class ObCandiTableLoc;
 class ObTablePartitionInfo;
 class ObPlanCacheValue;

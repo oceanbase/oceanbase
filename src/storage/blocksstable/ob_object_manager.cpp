@@ -316,7 +316,8 @@ int ObObjectManager::alloc_object(const ObStorageObjectOpt &opt, ObStorageObject
   } else if (!is_shared_storage_) {
     if (ObStorageObjectType::PRIVATE_DATA_MACRO != opt.object_type_
         && ObStorageObjectType::PRIVATE_META_MACRO != opt.object_type_
-        && ObStorageObjectType::PRIVATE_CKPT_FILE != opt.object_type_) {
+        && ObStorageObjectType::PRIVATE_CKPT_FILE != opt.object_type_
+        && ObStorageObjectType::EXTERNAL_TABLE_FILE != opt.object_type_) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("only support private marco for shared-nothing", K(ret), K(opt.object_type_), K(opt));
     } else if (CLICK_FAIL(OB_SERVER_BLOCK_MGR.alloc_object(object_handle))) {

@@ -329,6 +329,36 @@ int ObBackupIoAdapter::get_file_modify_time(const common::ObString &uri,
   return ret;
 }
 
+int ObBackupIoAdapter::get_file_content_digest(
+    const common::ObString &uri,
+    const common::ObObjectStorageInfo *storage_info,
+    char *digest_buf, const int64_t digest_buf_len)
+{
+  int ret = OB_SUCCESS;
+  ObIODFileStat statbuf;
+  DeviceGuard device_guard;
+  if (OB_ISNULL(storage_info) || OB_ISNULL(digest_buf)
+      || OB_UNLIKELY(uri.empty() || digest_buf_len <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid args", KR(ret),
+        K(uri), KPC(storage_info), KP(digest_buf), K(digest_buf_len));
+  } else if (OB_FAIL(device_guard.init(uri, storage_info, ObStorageIdMod::get_default_id_mod()))) {
+    OB_LOG(WARN, "fail to init device guard", KR(ret), K(uri), KPC(storage_info));
+  } else if (OB_UNLIKELY(!device_guard.device_handle_->is_object_device())) {
+    ret = OB_NOT_SUPPORTED;
+    OB_LOG(WARN, "only object storage have file content digest",
+        KR(ret), K(uri), KPC(storage_info), K(device_guard));
+  } else {
+    ObObjectDevice *object_device_handle = static_cast<ObObjectDevice *>(device_guard.device_handle_);
+    if (OB_FAIL(object_device_handle->get_file_content_digest(
+        device_guard.uri_cstr_, digest_buf, digest_buf_len))) {
+      OB_LOG(WARN, "fail to get file content digest!",
+          KR(ret), K(uri), KPC(storage_info), K(device_guard));
+    }
+  }
+  return ret;
+}
+
 // if the uri's object does not exist, del_file will return OB_SUCCESS
 int ObBackupIoAdapter::del_file(const common::ObString &uri, const common::ObObjectStorageInfo *storage_info)
 {
@@ -1774,24 +1804,32 @@ int ObDirPrefixLSIDFilter::func(const dirent *entry)
 }
 
 
-int switch_cos_to_s3(ObIAllocator &allocator, const common::ObString &src_uri, common::ObString &dest_uri)
+int switch_s3_compatible_to_s3(ObIAllocator &allocator, const common::ObString &src_uri, common::ObString &dest_uri)
 {
   int ret = OB_SUCCESS;
   const ObString::obstr_size_t src_len = src_uri.length();
+  const char *replace_prefix = nullptr;
   char *ptr = nullptr;
-  ObStorageType src_type = ObStorageType::OB_STORAGE_MAX_TYPE;
   if (OB_UNLIKELY(src_uri.empty())) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid argument", K(ret), K(src_len));
   } else if (src_uri.prefix_match(OB_COS_PREFIX)) {
-    int64_t cos_prefix_len = STRLEN(OB_COS_PREFIX);
-    int64_t dest_uri_len = src_len - cos_prefix_len + STRLEN(OB_S3_PREFIX);
+    replace_prefix = OB_COS_PREFIX;
+  } else if (src_uri.prefix_match(OB_S3A_PREFIX)) {
+    replace_prefix = OB_S3A_PREFIX;
+  } else if (src_uri.prefix_match(OB_S3N_PREFIX)) {
+    replace_prefix = OB_S3N_PREFIX;
+  }
+
+  if (OB_SUCC(ret) && OB_NOT_NULL(replace_prefix)) {
+    const int64_t replace_prefix_len = STRLEN(replace_prefix);
+    const int64_t dest_uri_len = src_len - replace_prefix_len + STRLEN(OB_S3_PREFIX);
     if (OB_ISNULL(ptr = static_cast<char *>(allocator.alloc(dest_uri_len + 1)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       OB_LOG(WARN, "fail to alloc memory", K(ret), K(src_uri));
     } else {
       MEMCPY(ptr, OB_S3_PREFIX, STRLEN(OB_S3_PREFIX));
-      MEMCPY(ptr + STRLEN(OB_S3_PREFIX), src_uri.ptr() + cos_prefix_len, src_len - cos_prefix_len);
+      MEMCPY(ptr + STRLEN(OB_S3_PREFIX), src_uri.ptr() + replace_prefix_len, src_len - replace_prefix_len);
       ptr[dest_uri_len] = '\0';
       dest_uri.assign_ptr(ptr, dest_uri_len);
     }

@@ -907,7 +907,7 @@ int ObLogPlan::mock_base_rel_detectors(ObJoinOrder *&base_rel)
 }
 
 // 选择location
-int ObLogPlan::select_location(ObIArray<ObTablePartitionInfo *> &tbl_part_info_list)
+int ObLogPlan::select_location(ObTablePartitionInfo *tbl_part_info)
 {
   int ret = OB_SUCCESS;
   int64_t route_policy = 0;
@@ -920,22 +920,18 @@ int ObLogPlan::select_location(ObIArray<ObTablePartitionInfo *> &tbl_part_info_l
     LOG_ERROR("exec ctx is NULL", K(ret));
   } else if (OB_FAIL(session_info->get_sys_variable(SYS_VAR_OB_ROUTE_POLICY, route_policy))) {
     LOG_WARN("get route policy failed", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < tbl_part_info_list.count(); ++i) {
-    ObTablePartitionInfo *tbl_part_info = tbl_part_info_list.at(i);
-    if (OB_ISNULL(tbl_part_info)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("tbl part info is NULL", K(ret), K(i), K(tbl_part_info_list.count()));
-    } else if (OB_FAIL(tbl_loc_list.push_back(&tbl_part_info->get_table_location()))) {
-      LOG_WARN("fail to push back table location list",
-               K(ret), K(tbl_part_info->get_table_location()));
-    } else if (OB_FAIL(phy_tbl_loc_info_list.push_back(
-                &tbl_part_info->get_phy_tbl_location_info_for_update()))) {
-      LOG_WARN("fail to push back phy tble loc info",
-               K(ret), K(tbl_part_info->get_phy_tbl_location_info_for_update()));
-    } else {
-      tbl_part_info->get_table_location().get_loc_meta().route_policy_ = route_policy;
-    }
+  } else if (OB_ISNULL(tbl_part_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("tbl part info is NULL", K(ret));
+  } else if (OB_FAIL(tbl_loc_list.push_back(&tbl_part_info->get_table_location()))) {
+    LOG_WARN("fail to push back table location list",
+             K(ret), K(tbl_part_info->get_table_location()));
+  } else if (OB_FAIL(phy_tbl_loc_info_list.push_back(
+              &tbl_part_info->get_phy_tbl_location_info_for_update()))) {
+    LOG_WARN("fail to push back phy tble loc info",
+             K(ret), K(tbl_part_info->get_phy_tbl_location_info_for_update()));
+  } else {
+    tbl_part_info->get_loc_meta().route_policy_ = route_policy;
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ObLogPlan::select_replicas(*exec_ctx,
@@ -3196,6 +3192,7 @@ int ObLogPlan::allocate_access_path(AccessPath *ap,
     scan->set_pre_range_graph(ap->pre_range_graph_);
     scan->set_skip_scan(OptSkipScanState::SS_DISABLE != ap->use_skip_scan_);
     scan->set_table_type(table_schema->get_table_type());
+    scan->set_lake_table_format(table_schema->get_lake_table_format());
     scan->set_index_prefix(ap->index_prefix_);
     scan->set_mr_mv_scan(table_item->mr_mv_flags_);
     if (!ap->is_inner_path_ &&
@@ -4470,7 +4467,7 @@ int ObLogPlan::create_plan_tree_from_path(Path *path,
   } else if (NULL != path->log_op_) {
     out_plan_tree = path->log_op_;
   } else {
-    if (path->is_access_path()) {
+    if (path->is_access_path() || path->is_lake_table_access_path()) {
       AccessPath *access_path = static_cast<AccessPath *>(path);
       if (OB_FAIL(allocate_access_path(access_path, op))) {
         LOG_WARN("failed to allocate access path", K(ret));
@@ -14461,7 +14458,7 @@ int ObLogPlan::replace_generate_column_exprs(ObLogicalOperator *op)
           ObRawExpr *dep_expr = col_expr->get_dependant_expr();
           if (OB_FAIL(scan_op->extract_file_column_exprs_recursively(dep_expr))) {
             LOG_WARN("fail to extract file column expr", K(ret));
-          } else if (OB_FAIL(scan_op->get_ext_column_convert_exprs().push_back(dep_expr))) {
+          } else if (OB_FAIL(scan_op->get_ext_column_dependent_exprs().push_back(dep_expr))) {
             LOG_WARN("fail to push back expr", K(ret));
           }
         }
@@ -15568,7 +15565,7 @@ int ObLogPlan::build_location_related_tablet_ids()
     } else {
       for (int64_t j = 0; OB_SUCC(ret) && j < rel_info.table_part_infos_.count(); ++j) {
         ObTablePartitionInfo *source_part_info = rel_info.table_part_infos_.at(j);
-        ObDASTableLocMeta &source_loc_meta = source_part_info->get_table_location().get_loc_meta();
+        ObDASTableLocMeta &source_loc_meta = source_part_info->get_loc_meta();
         source_loc_meta.related_table_ids_.set_capacity(rel_info.related_ids_.count() - 1);
         for (int64_t k = 0; OB_SUCC(ret) && k < rel_info.related_ids_.count(); ++k) {
           //set related table ids to loc meta
@@ -15599,6 +15596,7 @@ int ObLogPlan::build_location_related_tablet_ids()
       // partition count is 0 means no matching partition for data table, no need to calculate
       // related tablet ids for it.
     } else if (!table_part_info->get_table_location().use_das() &&
+               !table_part_info->is_lake_table_partition_info() &&
                OB_FAIL(ObPhyLocationGetter::build_related_tablet_info(
                        table_part_info->get_table_location(), *optimizer_context_.get_exec_ctx(), map))) {
       LOG_WARN("rebuild related tablet info failed", K(ret));

@@ -2680,6 +2680,9 @@ DEF_STR_WITH_CHECKER(_ob_java_odps_data_transfer_mode, OB_CLUSTER_PARAMETER, "ar
 DEF_BOOL(_use_odps_jni_connector, OB_CLUSTER_PARAMETER, "False",
          "Enable or disable jni connector for external odps table",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_filesystem_catalog, OB_CLUSTER_PARAMETER, "False",
+         "Enable or disable filesystem catalog",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_CAP(_parquet_row_group_prebuffer_size, OB_CLUSTER_PARAMETER, "0M", "[0M,)",
         "the parquet prefetch maximum row group size. Range: [0, +∞)",
         ObParameterAttr(Section::SSTABLE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -2896,6 +2899,10 @@ DEF_CAP(external_table_io_range_size, OB_TENANT_PARAMETER, "8M", "[0B,)",
         " if combining two consecutive ranges would produce a range of a size greater"
         " than this, they are not combined",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(external_table_disk_cache_max_percentage, OB_CLUSTER_PARAMETER, "50", "[0,95]",
+        "The maximum ratio of external table disk space to datafile_size in shared-nothing mode, "
+        "ranges from [0, 95] in integer, with a default of 50",
+        ObParameterAttr(Section::SSTABLE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_INT(_orc_filter_pushdown_level, OB_TENANT_PARAMETER, "4", "[0, 4]",
         "This parameter controls the filter pushdown level for ORC external tables, "

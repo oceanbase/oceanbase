@@ -101,7 +101,6 @@ OB_SERIALIZE_MEMBER(ObSqcTableLocationKey,
                     is_loc_uncertain_);
 OB_SERIALIZE_MEMBER(ObPxCleanDtlIntermResInfo, ch_total_info_, sqc_id_, task_count_);
 OB_SERIALIZE_MEMBER(ObPxCleanDtlIntermResArgs, info_, batch_size_);
-OB_SERIALIZE_MEMBER(ObLakeTableFileDesc, dummy_);
 
 int ObQCMonitoringInfo::init(const ObDfo &dfo) {
   int ret = OB_SUCCESS;
@@ -158,6 +157,8 @@ int ObPxSqcMeta::assign(const ObPxSqcMeta &other)
     LOG_WARN("fail to assign qc monitoring info", K(ret));
   } else if (OB_FAIL(locations_order_.assign(other.locations_order_))) {
     LOG_WARN("fail to assign qc locations order", K(ret));
+  } else if (OB_FAIL(lake_table_file_desc_.assign(other.lake_table_file_desc_))) {
+    LOG_WARN("fail to assign lake table file desc", K(ret));
   } else {
     execution_id_ = other.execution_id_;
     qc_id_ = other.qc_id_;

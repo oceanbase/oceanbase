@@ -26,9 +26,10 @@ bool ObExternalDataPageCacheKey::operator== (const ObIKVCacheKey &other) const
 {
   const ObExternalDataPageCacheKey &key = reinterpret_cast<const ObExternalDataPageCacheKey &>(other);
   return ObString(url_size_, url_) == ObString(key.url_size_, key.url_)
-         && modify_time_ == key.modify_time_
-         && offset_ == key.offset_
-         && tenant_id_ == key.tenant_id_;
+         && ObString(content_digest_size_, content_digest_)
+              == ObString(key.content_digest_size_, key.content_digest_)
+         && modify_time_ == key.modify_time_ && page_size_ == key.page_size_
+         && offset_ == key.offset_ && tenant_id_ == key.tenant_id_;
 }
 
 uint64_t ObExternalDataPageCacheKey::get_tenant_id() const
@@ -39,15 +40,17 @@ uint64_t ObExternalDataPageCacheKey::get_tenant_id() const
 uint64_t ObExternalDataPageCacheKey::hash() const
 {
   uint64_t hash_val = ObString(url_size_, url_).hash();
+  hash_val = murmurhash(content_digest_, content_digest_size_, hash_val);
   hash_val = murmurhash(&tenant_id_, sizeof(tenant_id_), hash_val);
   hash_val = murmurhash(&modify_time_, sizeof(modify_time_), hash_val);
+  hash_val = murmurhash(&page_size_, sizeof(page_size_), hash_val);
   hash_val = murmurhash(&offset_, sizeof(offset_), hash_val);
   return hash_val;
 }
 
 int64_t ObExternalDataPageCacheKey::size() const
 {
-  return sizeof(*this) + url_size_;
+  return sizeof(*this) + url_size_ + content_digest_size_;
 }
 
 int ObExternalDataPageCacheKey::deep_copy(
@@ -65,7 +68,10 @@ int ObExternalDataPageCacheKey::deep_copy(
   } else {
     char *url = buf + sizeof(*this);
     MEMCPY(url, url_, url_size_); // copy url_
-    key = new (buf) ObExternalDataPageCacheKey(url, url_size_, modify_time_, offset_, tenant_id_);
+    char *content_digest = url + url_size_;
+    MEMCPY(content_digest, content_digest_, content_digest_size_);
+    key = new (buf) ObExternalDataPageCacheKey(url, url_size_, content_digest, content_digest_size_,
+                                               modify_time_, page_size_, offset_, tenant_id_);
   }
   return ret;
 }
@@ -74,22 +80,23 @@ int ObExternalDataPageCacheKey::deep_copy(
 bool ObExternalDataPageCacheKey::is_valid_() const
 {
   return OB_LIKELY(offset_ >= 0 &&
-                   modify_time_ >= 0 &&
+                   0 == offset_ % page_size_ &&
+                   page_size_ > 0 &&
                    tenant_id_ != OB_INVALID_TENANT_ID &&
                    url_ != nullptr &&
                    url_size_ > 0 &&
                    size() > 0);
 }
 
-bool ObExternalDataPageCacheKey::is_valid(const int64_t page_size) const
+bool ObExternalDataPageCacheKey::is_valid() const
 {
-  return OB_LIKELY(is_valid_() && (offset_ % page_size == 0));
+  return OB_LIKELY(is_valid_());
 }
 
 DEF_TO_STRING(ObExternalDataPageCacheKey) {
   int64_t pos = 0;
   J_OBJ_START();
-  J_KV(K_(offset), K_(modify_time), K_(tenant_id));
+  J_KV(K_(offset), K_(modify_time), K_(page_size), K_(tenant_id));
   J_COMMA();
   if (nullptr != url_ && url_size_ > 0) {
     ObString url(url_size_, url_);
@@ -102,10 +109,11 @@ DEF_TO_STRING(ObExternalDataPageCacheKey) {
 };
 
 /* -------------------------- ObExternalDataPageCacheValue --------------------------- */
-ObExternalDataPageCacheValue::ObExternalDataPageCacheValue(char *buf, const int64_t valid_data_size)
-  : buf_(buf), page_size_(ObExternalDataPageCache::PAGE_SIZE), valid_data_size_(valid_data_size)
-{
-}
+ObExternalDataPageCacheValue::ObExternalDataPageCacheValue(char *buf,
+                                                           const int64_t valid_data_size) :
+  buf_(buf),
+  valid_data_size_(valid_data_size)
+{}
 
 ObExternalDataPageCacheValue::~ObExternalDataPageCacheValue()
 {
@@ -113,7 +121,7 @@ ObExternalDataPageCacheValue::~ObExternalDataPageCacheValue()
 
 int64_t ObExternalDataPageCacheValue::size() const
 {
-  return sizeof(*this) + page_size_;
+  return sizeof(*this) + valid_data_size_;
 }
 
 int ObExternalDataPageCacheValue::deep_copy(
@@ -130,7 +138,8 @@ int ObExternalDataPageCacheValue::deep_copy(
     ret = OB_INVALID_DATA;
     STORAGE_LOG(WARN, "invalid external page cache value", KR(ret));
   } else {
-    ObExternalDataPageCacheValue *page_cache_value = new (buf) ObExternalDataPageCacheValue(buf + sizeof(*this), valid_data_size_);
+    ObExternalDataPageCacheValue *page_cache_value =
+      new (buf) ObExternalDataPageCacheValue(buf + sizeof(*this), valid_data_size_);
     MEMCPY(buf + sizeof(*this), buf_, size() - sizeof(*this));
     value = page_cache_value;
   }
@@ -164,7 +173,7 @@ int ObExternalDataPageCache::get_page(
 {
   int ret = OB_SUCCESS;
   const ObExternalDataPageCacheValue *value = nullptr;
-  if (OB_UNLIKELY(!key.is_valid(PAGE_SIZE))) {
+  if (OB_UNLIKELY(!key.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid arguments", KR(ret), K(key));
   } else if (OB_FAIL(get(key, value, handle.handle_))) {
@@ -190,7 +199,7 @@ void ObExternalDataPageCache::try_put_page_to_cache(
     const ObExternalDataPageCacheValue &value)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!key.is_valid(PAGE_SIZE) || !value.is_valid())) {
+  if (OB_UNLIKELY(!key.is_valid() || !value.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid arguments", KR(ret), K(key), K(value));
   } else if (OB_FAIL(put(key, value, false/*overwrite*/))) {
@@ -206,6 +215,23 @@ void ObExternalDataPageCache::try_put_page_to_cache(
 void ObExternalDataPageCache::destroy()
 {
   common::ObKVCache<ObExternalDataPageCacheKey, ObExternalDataPageCacheValue>::destroy();
+}
+
+int64_t ObExternalDataPageCache::get_page_size()
+{
+  int64_t page_size = ObExternalDataPageCache::DEFAULT_PAGE_SIZE;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  if (tenant_config.is_valid()) {
+    page_size = tenant_config->_external_table_mem_cache_page_size;
+    const size_t mask = 4095; // 0xFFF
+    page_size = (page_size + mask) & ~mask;
+    if (page_size < ObExternalDataPageCache::MIN_PAGE_SIZE) {
+      page_size = ObExternalDataPageCache::MIN_PAGE_SIZE;
+    } else if (page_size > ObExternalDataPageCache::MAX_PAGE_SIZE) {
+      page_size = ObExternalDataPageCache::MAX_PAGE_SIZE;
+    }
+  }
+  return page_size;
 }
 
 /***************** ObExCachedReadPageIOCallback ****************/
@@ -234,7 +260,7 @@ int ObExCachedReadPageIOCallback::process_kv_(
     const ObExternalDataPageCacheValue &value)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!key.is_valid(ObExternalDataPageCache::PAGE_SIZE) || !value.is_valid())) {
+  if (OB_UNLIKELY(!key.is_valid() || !value.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid arguments", KR(ret), K(key), K(value));
   } else if (OB_FAIL(cache_->put(key, value, true/*overwrite*/))) {
@@ -288,7 +314,7 @@ int ObExCachedReadPageIOCallback::inner_process(
   } else if (OB_FAIL(inner_process_user_bufer_(data_buffer, size))) {
     LOG_WARN("failed to process kv", K(ret), KP(data_buffer), K(size));
   } else if (FALSE_IT(time_guard.click("process_user_buf_"))) {
-  } else if (OB_FAIL(inner_process_cache_pages_(data_buffer, size))) {
+  } else if (OB_FAIL(inner_process_cache_pages_(data_buffer, size, page_key_.get_page_size()))) {
     LOG_WARN("failed to process kv", K(ret), KP(data_buffer), K(size));
   } else if (FALSE_IT(time_guard.click("process_kv_"))) {
   }
@@ -298,12 +324,12 @@ int ObExCachedReadPageIOCallback::inner_process(
 
 int ObExCachedReadPageIOCallback::inner_process_cache_pages_(
     const char *data_buffer,
-    const int64_t valid_size)
+    const int64_t valid_size,
+    const int64_t page_size)
 {
   int ret = OB_SUCCESS;
-  const int64_t PAGE_SIZE = ObExternalDataPageCache::PAGE_SIZE;
   ObExternalDataPageCacheValue value(nullptr, 0);
-  int64_t page_count = valid_size / PAGE_SIZE + (valid_size % PAGE_SIZE == 0 ? 0 : 1);
+  int64_t page_count = valid_size / page_size + (valid_size % page_size == 0 ? 0 : 1);
   if (OB_UNLIKELY(valid_size <= 0 || OB_ISNULL(data_buffer))) {
     ret = OB_INVALID_DATA;
     STORAGE_LOG(WARN, "invalid data buffer size", KR(ret), K(valid_size), KP(data_buffer));
@@ -313,12 +339,12 @@ int ObExCachedReadPageIOCallback::inner_process_cache_pages_(
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < page_count; i++) {
       const int64_t cur_valid_size = i == (page_count - 1) ?
-                                    (valid_size % PAGE_SIZE == 0 ? PAGE_SIZE : valid_size % PAGE_SIZE) :
-                                    (PAGE_SIZE);
-      if (FALSE_IT(value.set_buffer(const_cast<char*>(data_buffer + (i * PAGE_SIZE)), cur_valid_size))) {
+                                    (valid_size % page_size == 0 ? page_size : valid_size % page_size) :
+                                    (page_size);
+      if (FALSE_IT(value.set_buffer(const_cast<char*>(data_buffer + (i * page_size)), cur_valid_size))) {
       } else if (OB_FAIL(process_kv_(page_key_, value))) {
         STORAGE_LOG(WARN, "fail to process external page cache in callback", KR(ret));
-      } else if (FALSE_IT(page_key_.advance_offset(PAGE_SIZE))) {
+      } else if (FALSE_IT(page_key_.advance_offset(page_size))) {
       }
     }
   }
@@ -356,7 +382,7 @@ int ObExtCacheMissSegment::push_piece(
     LOG_WARN("invalid argument", K(ret), KP(buf), K(offset), K(len));
   } else if (is_valid() && buf_ + len_ != buf) {
     ret = OB_INVALID_DATA;
-    LOG_WARN("invalid data", K(ret), KP(buf), K(offset), K(len));
+    LOG_WARN("invalid data", K(ret), KP(buf), KP(buf_), K(offset), K(len));
   } else if (is_valid() && buf_ + len_ == buf) {
     len_ += len;
   } else if (!is_valid()) {
@@ -367,17 +393,16 @@ int ObExtCacheMissSegment::push_piece(
   return ret;
 }
 
-int64_t ObExtCacheMissSegment::get_page_count() const
+int64_t ObExtCacheMissSegment::get_page_count(const int64_t page_size) const
 {
-  const int64_t page_size = ObExternalDataPageCache::PAGE_SIZE;
   int64_t len = (offset_ % page_size) + len_;
   int64_t page_count = len % page_size == 0 ? (len / page_size) : (len / page_size + 1);
   return page_count;
 }
 
-int64_t ObExtCacheMissSegment::get_page_offset() const
+int64_t ObExtCacheMissSegment::get_page_offset(const int64_t page_size) const
 {
-  return offset_ - (offset_ % ObExternalDataPageCache::PAGE_SIZE);
+  return offset_ - (offset_ % page_size);
 }
 
 

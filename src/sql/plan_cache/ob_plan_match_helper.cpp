@@ -217,9 +217,9 @@ int ObPlanMatchHelper::cmp_table_types(
       const ObCandiTabletLocIArray &phy_part_loc_info_list =
         phy_tbl_infos.at(i).get_phy_part_loc_info_list();
       const ObTableLocation &tbl_loc = tbl_locs.at(i);
-      if (OB_FAIL(tbl_loc.get_location_type(server,
-                                            phy_part_loc_info_list,
-                                            loc_type))) {
+      if (OB_FAIL(ObTablePartitionInfo::get_location_type(server,
+                                                          phy_part_loc_info_list,
+                                                          loc_type))) {
         LOG_WARN("failed to get table location type",
                  K(ret),
                  K(server),

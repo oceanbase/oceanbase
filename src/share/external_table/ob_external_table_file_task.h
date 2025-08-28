@@ -61,7 +61,9 @@ class ObLoadExternalFileListRes
 {
   OB_UNIS_VERSION(1);
 public:
-  ObLoadExternalFileListRes() : rcode_(), file_urls_(), file_sizes_(), allocator_() {}
+  ObLoadExternalFileListRes() :
+    rcode_(), file_urls_(), file_sizes_(), modify_times_(), content_digests_(), allocator_()
+  {}
 
   ObIAllocator &get_alloc() { return allocator_; }
   int assign(const ObLoadExternalFileListRes &other);

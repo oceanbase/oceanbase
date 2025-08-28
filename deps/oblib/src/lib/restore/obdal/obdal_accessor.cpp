@@ -216,6 +216,10 @@ public:
   {
     last_modified_time_s = opendal_metadata_last_modified_ms(metadata) / 1000LL;
   }
+  static void obdal_metadata_etag(const opendal_metadata *metadata, char *&etag)
+  {
+    etag = opendal_metadata_etag(metadata);
+  }
   static void obdal_metadata_free(opendal_metadata *metadata)
   {
     opendal_metadata_free(metadata);
@@ -650,6 +654,10 @@ public:
   static void obdal_metadata_last_modified(const opendal_metadata *metadata, int64_t &last_modified_time_s)
   {
     ObDalWrapper::obdal_metadata_last_modified(metadata, last_modified_time_s);
+  }
+  static void obdal_metadata_etag(const opendal_metadata *metadata, char *&etag)
+  {
+    ObDalWrapper::obdal_metadata_etag(metadata, etag);
   }
   static void obdal_metadata_free(opendal_metadata *metadata)
   {
@@ -1433,6 +1441,23 @@ int ObDalAccessor::obdal_metadata_last_modified(
     OB_LOG(WARN, "invalid argument", K(ret), KP(metadata));
   } else if (OB_FAIL(do_safely_without_ret(ObDalRetryLayer::obdal_metadata_last_modified, metadata, std::ref(last_modified_time_s)))) {
     OB_LOG(WARN, "failed to get metadata last modified", K(ret));
+  }
+  return ret;
+}
+
+int ObDalAccessor::obdal_metadata_etag(const opendal_metadata *metadata, char *&etag)
+{
+  ObDalLogSpanGuard obdal_span;
+  int ret = OB_SUCCESS;
+  etag = nullptr;
+  if (OB_ISNULL(metadata)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid argument", K(ret), KP(metadata));
+  } else if (OB_FAIL(do_safely_without_ret(ObDalRetryLayer::obdal_metadata_etag, metadata, std::ref(etag)))) {
+    OB_LOG(WARN, "failed to get metadata etag", K(ret));
+  } else if (OB_ISNULL(etag)) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "failed to get metadata etag, return nullptr", K(ret));
   }
   return ret;
 }

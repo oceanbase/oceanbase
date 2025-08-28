@@ -491,6 +491,7 @@ ObMacroBlockMarkerStatus::ObMacroBlockMarkerStatus()
     reserved_block_count_(0),
     linked_block_count_(0),
     tmp_file_count_(0),
+    ext_disk_cache_count_(0),
     data_block_count_(0),
     shared_data_block_count_(0),
     index_block_count_(0),
@@ -538,6 +539,7 @@ void ObMacroBlockMarkerStatus::reuse()
   reserved_block_count_ = 0;
   linked_block_count_ = 0;
   tmp_file_count_ = 0;
+  ext_disk_cache_count_ = 0;
   data_block_count_ = 0;
   shared_data_block_count_ = 0;
   index_block_count_ = 0;

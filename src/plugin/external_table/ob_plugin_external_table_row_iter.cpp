@@ -193,13 +193,13 @@ int ObPluginExternalTableRowIterator::get_next_rows(int64_t &count, int64_t capa
   } else if (OB_ISNULL(eval_ctx = &scan_param_->op_->get_eval_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("cannot get eval context", KPC(scan_param_), K(ret));
-  } else if (OB_ISNULL(scan_param_->ext_column_convert_exprs_)) {
+  } else if (OB_ISNULL(scan_param_->ext_column_dependent_exprs_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("scan_param_->ext_column_convert_exprs_ is null");
-  } else if (scan_param_->ext_column_convert_exprs_->count() != column_exprs_.count()) {
+    LOG_WARN("scan_param_->ext_column_dependent_exprs_ is null");
+  } else if (scan_param_->ext_column_dependent_exprs_->count() != column_exprs_.count()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("convert exprs count not equal to column expr count",
-             K(scan_param_->ext_column_convert_exprs_->count()), K(column_exprs_.count()));
+    LOG_WARN("dependent exprs count not equal to column expr count",
+             K(scan_param_->ext_column_dependent_exprs_->count()), K(column_exprs_.count()));
   } else if (0 == external_scan_param_.task().compare(ObExternalTableUtils::dummy_file_name())) {
     ret = OB_ITER_END;
     LOG_TRACE("dummy task, ignore");
@@ -258,7 +258,7 @@ int ObPluginExternalTableRowIterator::get_next_rows(int64_t &count, int64_t capa
     // assign data from column_convert_expr to column_expr
     for (int64_t i = 0; OB_SUCC(ret) && i < column_exprs_.count(); i++) {
       ObExpr *column_expr = column_exprs_.at(i);
-      ObExpr *column_convert_expr = scan_param_->ext_column_convert_exprs_->at(i);
+      ObExpr *column_convert_expr = scan_param_->ext_column_dependent_exprs_->at(i);
       if (OB_ISNULL(column_expr) || OB_ISNULL(column_convert_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("expr is null", KP(column_expr), KP(column_convert_expr));

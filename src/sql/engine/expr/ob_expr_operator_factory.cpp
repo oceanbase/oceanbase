@@ -519,7 +519,7 @@
 #include "sql/engine/expr/ob_expr_ai/ob_expr_ai_embed.h"
 #include "sql/engine/expr/ob_expr_ai/ob_expr_ai_rerank.h"
 #include "sql/engine/expr/ob_expr_local_dynamic_filter.h"
-
+#include "sql/engine/expr/ob_expr_bucket.h"
 
 #include "sql/engine/expr/ob_expr_lock_func.h"
 #include "sql/engine/expr/ob_expr_format_profile.h"
@@ -1307,6 +1307,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprAIRerank);
     REG_OP(ObExprLocalDynamicFilter);
     REG_OP(ObExprFormatProfile);
+    REG_OP(ObExprBucket);
   }();
 // 注册oracle系统函数
   REG_OP_ORCL(ObExprSysConnectByPath);

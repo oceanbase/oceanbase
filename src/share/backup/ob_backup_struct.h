@@ -947,6 +947,10 @@ public:
 public:
   ObBackupStorageInfo();
   virtual ~ObBackupStorageInfo();
+
+  virtual int clone(
+      common::ObIAllocator &allocator,
+      common::ObObjectStorageInfo *&storage_info) const override;
   virtual void reset() override;
   int set(
       const common::ObStorageType device_type,

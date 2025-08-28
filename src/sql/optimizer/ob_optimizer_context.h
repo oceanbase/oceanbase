@@ -316,7 +316,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     enable_runtime_filter_adaptive_apply_(true),
     enable_rich_vector_format_(false),
     rowsets_enabled_(false),
-    extend_sql_plan_monitor_metrics_(false)
+    extend_sql_plan_monitor_metrics_(false),
+    min_cluster_version_(GET_MIN_CLUSTER_VERSION())
   { }
   inline common::ObOptStatManager *get_opt_stat_manager() { return opt_stat_manager_; }
   inline void set_opt_stat_manager(common::ObOptStatManager *sm) { opt_stat_manager_ = sm; }
@@ -364,17 +365,6 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   obrpc::ObSrvRpcProxy* get_srv_proxy() { return srv_proxy_; }
   void set_srv_proxy(obrpc::ObSrvRpcProxy *srv_proxy) { srv_proxy_ = srv_proxy; }
   common::ObIArray<ObTablePartitionInfo *> & get_table_partition_info() { return table_partition_infos_; }
-  ObTablePartitionInfo *get_table_part_info_by_id(uint64_t table_loc_id, uint64_t ref_table_id)
-  {
-    ObTablePartitionInfo *table_part = nullptr;
-    for (int64_t i = 0; OB_ISNULL(table_part) && i < table_partition_infos_.count(); ++i) {
-      const ObDASTableLocMeta &loc_meta = table_partition_infos_.at(i)->get_table_location().get_loc_meta();
-      if (table_loc_id == loc_meta.table_loc_id_ && ref_table_id == loc_meta.ref_table_id_) {
-        table_part = table_partition_infos_.at(i);
-      }
-    }
-    return table_part;
-  }
   common::ObIArray<ObTableLocation> &get_table_location_list() { return table_location_list_; }
   inline const ParamStore *get_params()
   {
@@ -581,7 +571,7 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     if (0 > runtime_filter_type_) {
       get_runtime_filter_type();
     }
-    return 0 != runtime_filter_type_ && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_0_0;
+    return 0 != runtime_filter_type_ && get_min_cluster_version() >= CLUSTER_VERSION_4_2_0_0;
   }
   bool enable_bloom_filter() {
     if (0 > runtime_filter_type_) {
@@ -838,7 +828,7 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline void set_enable_rich_vector_format(bool enabled) { enable_rich_vector_format_ = enabled; }
   inline void set_extend_sql_plan_monitor_metrics(bool enabled) { extend_sql_plan_monitor_metrics_ = enabled; }
   inline bool extend_sql_plan_monitor_metrics() { return extend_sql_plan_monitor_metrics_; }
-
+  inline uint64_t get_min_cluster_version() const { return min_cluster_version_; }
 private:
   ObSQLSessionInfo *session_info_;
   ObExecContext *exec_ctx_;
@@ -973,6 +963,7 @@ private:
   bool enable_rich_vector_format_;
   bool rowsets_enabled_;
   bool extend_sql_plan_monitor_metrics_;
+  uint64_t min_cluster_version_; // Record the unified cluster version during the optimizer phase
 };
 }
 }

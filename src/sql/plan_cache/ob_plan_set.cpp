@@ -1944,7 +1944,6 @@ int ObSqlPlanSet::try_get_local_plan(ObPlanCacheCtx &pc_ctx,
   get_next = false;
   ObExecContext &exec_ctx = pc_ctx.exec_ctx_;
   ObPhyPlanType real_type = OB_PHY_PLAN_UNINITIALIZED;
-  ObSEArray<ObCandiTableLoc, 2> candi_table_locs;
   ObPhysicalPlan *local_plan = get_local_plan(pc_ctx);
   if (OB_ISNULL(local_plan)) {
     LOG_DEBUG("local plan is null");
@@ -1953,7 +1952,7 @@ int ObSqlPlanSet::try_get_local_plan(ObPlanCacheCtx &pc_ctx,
     pc_ctx.exist_local_plan_ = true;
     if (FALSE_IT(plan = local_plan)) {
     } else if (OB_FAIL(get_plan_type(plan->get_table_locations(),
-                                     plan->has_uncertain_local_operator(), pc_ctx, candi_table_locs,
+                                     plan->has_uncertain_local_operator(), pc_ctx,
                                      real_type))) {
       LOG_WARN("fail to get plan type", K(ret));
     } else if (OB_PHY_PLAN_LOCAL != real_type) {
@@ -1994,14 +1993,12 @@ int ObSqlPlanSet::try_get_remote_plan(ObPlanCacheCtx &pc_ctx,
   plan = NULL;
   get_next = false;
   ObPhyPlanType real_type = OB_PHY_PLAN_UNINITIALIZED;
-  ObSEArray<ObCandiTableLoc, 2> candi_table_locs;
   if (OB_ISNULL(remote_plan_)) {
     LOG_DEBUG("remote plan is null");
     get_next = true;
   } else if (OB_FAIL(get_plan_type(remote_plan_->get_table_locations(),
                                   remote_plan_->has_uncertain_local_operator(),
                                   pc_ctx,
-                                  candi_table_locs,
                                   real_type))) {
     LOG_WARN("fail to get plan type", K(ret));
   } else if (OB_PHY_PLAN_REMOTE != real_type) {
@@ -2063,7 +2060,6 @@ int ObSqlPlanSet::get_plan_special(ObPlanCacheCtx &pc_ctx,
   plan = NULL;
   bool get_next = true;
   ObPhyPlanType real_type = OB_PHY_PLAN_UNINITIALIZED;
-  ObSEArray<ObCandiTableLoc, 2> candi_table_locs;
 #ifdef OB_BUILD_SPM
   if (OB_FAIL(try_get_evolution_plan(pc_ctx, plan, get_next))) {
     SQL_PC_LOG(TRACE, "get evolution plan failed", K(ret));
@@ -2425,11 +2421,10 @@ int ObSqlPlanSet::extend_param_store(const ParamStore &params,
 int ObSqlPlanSet::get_plan_type(const ObIArray<ObTableLocation> &table_locations,
                                 const bool is_contain_uncertain_op,
                                 ObPlanCacheCtx &pc_ctx,
-                                ObIArray<ObCandiTableLoc> &candi_table_locs,
                                 ObPhyPlanType &plan_type)
 {
   int ret = OB_SUCCESS;
-  candi_table_locs.reuse();
+  ObSEArray<ObCandiTableLoc, 1> candi_table_locs;
 
   if (OB_FAIL(get_phy_locations(table_locations,
                                 pc_ctx,

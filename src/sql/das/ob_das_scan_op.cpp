@@ -311,7 +311,8 @@ int ObDASScanOp::init_scan_param()
   scan_param_.ext_file_column_exprs_ = &(scan_ctdef_->pd_expr_spec_.ext_file_column_exprs_);
   scan_param_.ext_mapping_column_exprs_ = &(scan_ctdef_->pd_expr_spec_.ext_mapping_column_exprs_);
   scan_param_.ext_mapping_column_ids_ = &(scan_ctdef_->pd_expr_spec_.ext_mapping_column_ids_);
-  scan_param_.ext_column_convert_exprs_ = &(scan_ctdef_->pd_expr_spec_.ext_column_convert_exprs_);
+  scan_param_.ext_column_dependent_exprs_ = &(scan_ctdef_->pd_expr_spec_.ext_column_convert_exprs_);
+  scan_param_.ext_enable_late_materialization_ = scan_ctdef_->pd_expr_spec_.ext_enable_late_materialization_;
   scan_param_.calc_exprs_ = &(scan_ctdef_->pd_expr_spec_.calc_exprs_);
   scan_param_.aggregate_exprs_ = &(scan_ctdef_->pd_expr_spec_.pd_storage_aggregate_output_);
   scan_param_.table_param_ = &(scan_ctdef_->table_param_);
@@ -373,6 +374,7 @@ int ObDASScanOp::init_scan_param()
     scan_param_.partition_infos_ = &(scan_ctdef_->partition_infos_);
     scan_param_.external_file_access_info_ = scan_ctdef_->external_file_access_info_.str_;
     scan_param_.external_file_location_ = scan_ctdef_->external_file_location_.str_;
+    scan_param_.lake_table_format_ = scan_ctdef_->lake_table_format_;
     scan_param_.external_pushdown_filters_ = &scan_ctdef_->external_pushdown_filters_.strs_;
     if (OB_FAIL(scan_param_.external_file_format_.load_from_string(scan_ctdef_->external_file_format_str_.str_, *scan_param_.allocator_))) {
       LOG_WARN("fail to load from string", K(ret));

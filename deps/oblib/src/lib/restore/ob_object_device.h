@@ -114,6 +114,10 @@ public:
 
   virtual bool should_limit_net_bandwidth() const override { return !is_local_disk_; }
 
+  // only object storage have file content digest
+  int get_file_content_digest(
+      const char *pathname, char *digest_buf, const int64_t digest_buf_len);
+
 public:
   common::ObFdSimulator& get_fd_mng() {return fd_mng_;}                 
 

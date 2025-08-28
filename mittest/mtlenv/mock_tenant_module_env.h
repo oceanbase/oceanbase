@@ -801,6 +801,8 @@ int MockTenantModuleEnv::init_before_start_mtl()
 #endif
   } else if (OB_FAIL(OB_STORAGE_OBJECT_MGR.init(GCTX.is_shared_storage_mode(), 2*1024*1024UL))) {
     STORAGE_LOG(WARN, "fail to init server object manager", K(ret));
+  } else if (OB_FAIL(OB_EXTERNAL_FILE_DISK_SPACE_MGR.init())) {
+    STORAGE_LOG(WARN, "fail to init external file disk space mgr", K(ret));
   } else if (OB_FAIL(net_frame_.init(mysql_unix_path_.c_str(), rpc_unix_path_.c_str()))) {
     STORAGE_LOG(WARN, "net", "ss", _executeShellCommand("ss -antlp").c_str());
     STORAGE_LOG(WARN, "fail to init env", K(ret));
@@ -982,6 +984,8 @@ int MockTenantModuleEnv::start_()
     SERVER_LOG(ERROR, "log pool start failed", KR(ret));
   } else if (OB_FAIL(OB_STORAGE_OBJECT_MGR.start(0/*reserved_size*/))) {
     STORAGE_LOG(WARN, "fail to start object manager", K(ret));
+  } else if (OB_FAIL(OB_EXTERNAL_FILE_DISK_SPACE_MGR.start())) {
+    STORAGE_LOG(WARN, "fail to start external file disk space mgr", K(ret));
   } else if (OB_FAIL(startup_accel_handler_.start())) {
     STORAGE_LOG(WARN, "fail to start server startup task handler", KR(ret));
   } else if (OB_FAIL(SERVER_STORAGE_META_SERVICE.start())) {
@@ -1063,6 +1067,10 @@ void MockTenantModuleEnv::destroy()
   multi_tenant_.destroy();
   ObKVGlobalCache::get_instance().destroy();
   SERVER_STORAGE_META_SERVICE.destroy();
+
+  OB_EXTERNAL_FILE_DISK_SPACE_MGR.stop();
+  OB_EXTERNAL_FILE_DISK_SPACE_MGR.wait();
+  OB_EXTERNAL_FILE_DISK_SPACE_MGR.destroy();
 
   OB_STORAGE_OBJECT_MGR.stop();
   OB_STORAGE_OBJECT_MGR.wait();

@@ -4071,11 +4071,15 @@ int ObSql::code_generate(
           ObTableLocation &tl = tbl_part_infos.at(i)->get_table_location();
           if (!tl.use_das()) {
             const ObCandiTableLoc &candi_table_loc = tbl_part_infos.at(i)->get_phy_tbl_location_info();
-            if (OB_FAIL(das_ctx.add_candi_table_loc(tl.get_loc_meta(), candi_table_loc))) {
-              LOG_WARN("add candi table location failed", K(ret), K(tl.get_loc_meta()), K(candi_table_loc));
+            if (OB_FAIL(das_ctx.add_candi_table_loc(tbl_part_infos.at(i)->get_loc_meta(), candi_table_loc))) {
+              LOG_WARN("add candi table location failed", K(ret),
+                      K(tbl_part_infos.at(i)->get_loc_meta()), K(candi_table_loc));
             } else if (OB_UNLIKELY(das_ctx.get_table_loc_list().empty())) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("unexpected empty table loc list", K(ret), K(candi_table_loc), K(tbl_part_infos));
+            } else if (tbl_part_infos.at(i)->get_loc_meta().is_lake_table_ &&
+                       OB_FAIL(result.get_exec_context().add_lake_table_files(tbl_part_infos.at(i)->get_loc_meta(), candi_table_loc))) {
+              LOG_WARN("failed to add lake table files");
             }
           }
         } // for end
@@ -4086,7 +4090,9 @@ int ObSql::code_generate(
       bool skip_non_partition_optimized = false;
       for (int64_t i = 0; OB_SUCC(ret) && i < tbl_part_infos.count(); i++) {
         ObTableLocation &tl = tbl_part_infos.at(i)->get_table_location();
-        if (tl.is_partitioned() || is_virtual_table(tl.get_loc_meta().ref_table_id_)) {
+        if (tl.is_partitioned() ||
+            is_virtual_table(tbl_part_infos.at(i)->get_loc_meta().ref_table_id_) ||
+            tbl_part_infos.at(i)->is_lake_table_partition_info()) {
           skip_non_partition_optimized = true;
           break;
         }

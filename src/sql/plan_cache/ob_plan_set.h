@@ -372,7 +372,6 @@ public:
   int get_plan_type(const ObIArray<ObTableLocation> &table_locations,
                     const bool is_contain_uncertain_op,
                     ObPlanCacheCtx &pc_ctx,
-                    ObIArray<ObCandiTableLoc> &candi_table_locs,
                     ObPhyPlanType &plan_type);
 #ifdef OB_BUILD_SPM
   int add_evolution_plan_for_spm(ObPhysicalPlan *plan, ObPlanCacheCtx &ctx);

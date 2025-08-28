@@ -49,6 +49,11 @@ namespace schema
 class ObSchemaGetterGuard;
 }
 }
+namespace common
+{
+class ObLakeTableStat;
+class ObLakeColumnStat;
+}
 namespace sql
 {
   class ObJoinOrder;
@@ -56,6 +61,7 @@ namespace sql
   class ObIndexInfoCache;
   class ObSelectLogPlan;
   class ObConflictDetector;
+  class ObLakeTablePartitionInfo;
   struct CandiRangeExprs
   {
     int64_t column_id_;
@@ -404,6 +410,7 @@ class Path
     bool is_json_table_path() const;
     bool is_temp_table_path() const;
     bool is_access_path() const;
+    bool is_lake_table_access_path() const;
     bool is_join_path() const;
     bool is_subquery_path() const;
     bool is_values_table_path() const;
@@ -2771,6 +2778,42 @@ struct MergeKeyInfoHelper
                                       const ObIArray<ObRawExpr*> &join_condition,
                                       const ObIArray<ObRawExpr*> &equal_join_condition,
                                       const ObJoinType join_type);
+
+    int generate_lake_table_paths();
+    int generate_lake_table_paths(PathHelper &helper);
+    int compute_lake_table_property(uint64_t table_id, uint64_t ref_table_id);
+    int compute_lake_table_location_and_meta(const uint64_t table_id,
+                                             const uint64_t ref_table_id,
+                                             ObTablePartitionInfo *&table_partition_info);
+    int compute_lake_table_meta_info(const uint64_t table_id,
+                                     const uint64_t ref_table_id);
+
+    int create_lake_table_access_paths(const uint64_t table_id,
+                                                const uint64_t ref_table_id,
+                                                PathHelper &helper,
+                                                ObIArray<AccessPath *> &access_paths,
+                                                ObIndexInfoCache &index_info_cache);
+    int fill_lake_table_index_info_entry(const uint64_t table_id,
+                                         const uint64_t base_table_id,
+                                         ObIndexInfoCache &index_info_cache,
+                                         PathHelper &helper);
+    int compute_sharding_info_for_lake_table_entry(IndexInfoEntry *index_info_entry);
+
+    int compute_sharding_info_for_lake_paths(ObIArray<AccessPath *> &access_paths);
+    int set_sharding_info_for_lake_table_path(AccessPath *access_path);
+    int get_iceberg_table_stat(ObIAllocator &allocator,
+                               uint64_t table_id,
+                               ObIArray<uint64_t> &column_ids,
+                               ObIArray<ObColumnRefRawExpr*> &column_exprs,
+                               common::ObLakeTableStat &table_stat,
+                               ObIArray<common::ObLakeColumnStat*> &column_stats);
+    int get_common_lake_table_stat(ObIAllocator &allocator,
+                                   uint64_t ref_table_id,
+                                   ObIArray<ObColumnRefRawExpr*> &column_exprs,
+                                   ObIArray<ObString> &partition_names,
+                                   common::ObLakeTableStat &table_stat,
+                                   ObIArray<common::ObLakeColumnStat*> &column_stats);
+    int get_lake_table_partition_values(ObIArray<ObString> &partition_names);
 
   private:
     int find_matching_cond(const ObIArray<ObRawExpr *> &join_conditions,

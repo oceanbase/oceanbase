@@ -20,6 +20,7 @@
 #include "sql/engine/px/p2p_datahub/ob_runtime_filter_query_range.h"
 #include "sql/optimizer/ob_log_set.h"
 #include "src/share/vector_index/ob_plugin_vector_index_adaptor.h"
+#include "share/catalog/ob_catalog_properties.h"
 
 namespace oceanbase
 {
@@ -378,6 +379,7 @@ public:
         has_index_scan_filter_(false),
         has_index_lookup_filter_(false),
         table_type_(share::schema::MAX_TABLE_TYPE),
+        lake_table_format_(share::ObLakeTableFormat::INVALID),
         use_column_store_(false),
         doc_id_table_id_(common::OB_INVALID_ID),
         text_retrieval_info_(),
@@ -620,8 +622,8 @@ public:
   inline common::ObIArray<ObRawExpr *> &get_ext_file_column_exprs()
   { return ext_file_column_exprs_; }
 
-  inline common::ObIArray<ObRawExpr *> &get_ext_column_convert_exprs()
-  { return ext_column_convert_exprs_; }
+  inline common::ObIArray<ObRawExpr *> &get_ext_column_dependent_exprs()
+  { return ext_column_dependent_exprs_; }
 
   ObRawExpr* get_real_expr(const ObRawExpr *col) const;
   /**
@@ -822,6 +824,8 @@ public:
   int init_calc_part_id_expr();
   void set_table_type(share::schema::ObTableType table_type) { table_type_ = table_type; }
   share::schema::ObTableType get_table_type() const { return table_type_; }
+  void set_lake_table_format(share::ObLakeTableFormat lake_table_format) { lake_table_format_ = lake_table_format; }
+  share::ObLakeTableFormat get_lake_table_type() const { return lake_table_format_; }
   virtual int get_plan_item_info(PlanText &plan_text,
                                 ObSqlPlanItem &plan_item) override;
   int print_stats_version(OptTableMeta &table_meta, char *buf, int64_t &buf_len, int64_t &pos);
@@ -842,6 +846,7 @@ public:
   int extract_pushdown_filters(ObIArray<ObRawExpr*> &nonpushdown_filters,
                                ObIArray<ObRawExpr*> &scan_pushdown_filters,
                                ObIArray<ObRawExpr*> &lookup_pushdown_filters,
+                               bool *ext_enable_late_materialization = nullptr,
                                ObIArray<ObString> *external_pushdown_filters = nullptr,
                                bool ignore_pd_filter = false) const;
   int extract_nonpushdown_filters(const ObIArray<ObRawExpr*> &filters,
@@ -1002,10 +1007,11 @@ public:
 
   const ObIArray<ObRawFilterMonotonicity>& get_filter_monotonicity() const
   { return filter_monotonicity_; }
-  int get_filter_monotonicity(const ObRawExpr *filter,
-                              const ObColumnRefRawExpr *col_expr,
-                              PushdownFilterMonotonicity &mono,
-                              ObIArray<ObRawExpr *> &assist_exprs) const;
+  static int get_filter_monotonicity(const ObRawExpr *filter,
+                                     const ObColumnRefRawExpr *col_expr,
+                                     const ObIArray<ObRawFilterMonotonicity> &filter_monotonicity,
+                                     PushdownFilterMonotonicity &mono,
+                                     ObIArray<ObRawExpr *> &assist_exprs);
   int get_aggr_param_monotonicity(const ObRawExpr *param_expr,
                                   const ObColumnRefRawExpr *col_expr,
                                   Monotonicity &mono) const;
@@ -1041,6 +1047,23 @@ public:
   int try_adjust_scan_direction(const ObIArray<OrderItem> &sort_keys);
   int set_scan_order();
   int check_is_dbms_calc_partition_expr(const ObRawExpr &expr, bool &is_true);
+  static int generate_filter_monotonicity(const ObDMLStmt *stmt,
+                                          ObExecContext *exec_ctx,
+                                          const ParamStore *param_store,
+                                          ObRawExprFactory &expr_factory,
+                                          ObIAllocator &allocator,
+                                          const ObIArray<ObRawExpr *> &filter_exprs,
+                                          ObIArray<ObRawFilterMonotonicity> &filter_monotonicity,
+                                          ObIArray<ObPCConstParamInfo> *const_param_constraints);
+  static int recursive_generate_filter_monotonicity(ObExecContext *exec_ctx,
+                                                    const ParamStore *param_store,
+                                                    ObRawExprFactory &expr_factory,
+                                                    ObIAllocator &allocator,
+                                                    ObRawExpr *filter_expr,
+                                                    ObIArray<ObRawFilterMonotonicity> &filter_monotonicity,
+                                                    ObIArray<ObPCConstParamInfo> *const_param_constraints);
+  static int get_filter_assist_exprs(ObIArray<ObRawFilterMonotonicity> &filter_monotonicity,
+                                     ObIArray<ObRawExpr *> &assist_exprs);
 private: // member functions
   //called when index_back_ set
   int pick_out_query_range_exprs();
@@ -1081,7 +1104,6 @@ private: // member functions
   int find_nearest_rcte_op(ObLogSet *&rcte_op);
   int generate_filter_monotonicity();
   int generate_aggr_param_monotonicity();
-  int get_filter_assist_exprs(ObIArray<ObRawExpr *> &assist_exprs);
   int prepare_rowkey_domain_id_dep_exprs();
   bool use_query_range() const;
   int prepare_rowkey_vid_dep_exprs(const bool is_rowkey_docid = false);
@@ -1089,9 +1111,12 @@ private: // member functions
                         const share::schema::ObColumnSchemaV2 &column_schema,
                         ObColumnRefRawExpr *&column_expr);
   int check_is_delete_insert_scan(bool &is_delete_insert_scan) const;
-  int extract_external_table_pushdown_filters(ObIArray<ObRawExpr*> &nonpushdown_filters,
-                                              ObIArray<ObString> &external_pushdown_filters,
-                                              bool ignore_pd_filter = false) const;
+  int extract_plugin_external_table_pushdown_filters(ObIArray<ObRawExpr*> &filters,
+                                                     ObString external_properties_str,
+                                                     ObIArray<ObRawExpr*> &nonpushdown_filters,
+                                                     ObIArray<ObString> &external_pushdown_filters) const;
+  int check_ext_filter_need_duplicate(const ObRawExpr *expr, int64_t &file_column_count,
+                                      bool &need_duplicate) const;
 
 protected: // memeber variables
   // basic info
@@ -1159,7 +1184,7 @@ protected: // memeber variables
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> domain_exprs_;
   //for external table
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> ext_file_column_exprs_;
-  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> ext_column_convert_exprs_;
+  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> ext_column_dependent_exprs_;
   // for oracle-mapping, map access expr to a real column expr
   common::ObArray<std::pair<ObRawExpr *, ObRawExpr *>, common::ModulePageAllocator, true> real_expr_map_;
   // aggr func pushdwon to table scan
@@ -1231,6 +1256,7 @@ protected: // memeber variables
   // end for global index lookup
 
   share::schema::ObTableType table_type_;
+  share::ObLakeTableFormat lake_table_format_;
   bool use_column_store_;
   uint64_t doc_id_table_id_; // used for rowkey lookup of fulltext, JSON multi-value and vector index
   // text retrieval as index scan

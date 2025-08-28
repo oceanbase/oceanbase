@@ -19,7 +19,6 @@
 #include "sql/engine/expr/ob_expr_frame_info.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/resolver/ob_resolver_utils.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "src/sql/resolver/ob_stmt_resolver.h"
 #include "sql/engine/table/ob_odps_table_row_iter.h"
 
@@ -31,10 +30,44 @@ class ObAlterTableStmt;
 
 namespace share {
 
-struct ObExternalFileInfo {
+struct ObExternalTableBasicFileInfo
+{
+  ObExternalTableBasicFileInfo() :
+    url_(), size_(OB_INVALID_SIZE), last_modify_time_(OB_INVALID_TIMESTAMP), content_digest_()
+  {}
+  ObExternalTableBasicFileInfo(const ObString &url, const int64_t size) :
+    url_(url),
+    size_(size), last_modify_time_(OB_INVALID_TIMESTAMP), content_digest_()
+  {}
+  ObExternalTableBasicFileInfo(const ObString &url, const int64_t size,
+                               const int64_t last_modify_time, const ObString &digest) :
+    url_(url),
+    size_(size), last_modify_time_(last_modify_time), content_digest_(digest)
+  {}
+  void reset()
+  {
+    size_ = OB_INVALID_SIZE;
+    last_modify_time_ = OB_INVALID_TIMESTAMP;
+    url_.reset();
+    content_digest_.reset();
+  }
+  bool is_valid() const
+  {
+    return (!url_.empty() && size_ != OB_INVALID_SIZE && last_modify_time_ != OB_INVALID_TIMESTAMP
+            && !content_digest_.empty());
+  }
+  TO_STRING_KV(K_(url), K_(size), K_(last_modify_time), K_(content_digest));
+  ObString url_;
+  int64_t size_;
+  int64_t last_modify_time_;
+  ObString content_digest_;
+};
+
+struct ObExternalFileInfo
+{
   ObExternalFileInfo() :
-    file_id_(INT64_MAX), part_id_(0), file_size_(0), row_start_(0), row_count_(0), pos_del_files_(),
-    modify_time_(OB_INVALID_TIMESTAMP), content_digest_()
+    file_id_(INT64_MAX), part_id_(0), file_size_(OB_INVALID_SIZE), row_start_(0), row_count_(0),
+    pos_del_files_(), modify_time_(OB_INVALID_TIMESTAMP), content_digest_()
   {}
   common::ObString file_url_;
   int64_t file_id_;
@@ -48,9 +81,10 @@ struct ObExternalFileInfo {
   int64_t modify_time_;
   common::ObString content_digest_;
   int deep_copy(ObIAllocator &allocator, const ObExternalFileInfo &other);
+  int assign(const ObExternalFileInfo &other);
   TO_STRING_KV(K_(file_url), K_(file_id), K_(part_id), K_(file_addr), K_(file_size),
-              K_(row_start), K_(row_count), K_(session_id), K_(pos_del_files),
-              K_(modify_time), K_(content_digest));
+               K_(modify_time), K_(row_start), K_(row_count), K_(session_id), K_(content_digest),
+               K_(pos_del_files));
   OB_UNIS_VERSION(1);
 };
 
@@ -81,36 +115,159 @@ public:
   uint64_t partition_id_;
 };
 
+class ObExternalTableFileListKey : public ObIKVCacheKey
+{
+public:
+  ObExternalTableFileListKey() : tenant_id_(OB_INVALID_ID), path_(nullptr)
+  {
+  }
+  virtual ~ObExternalTableFileListKey() = default;
+  bool operator==(const ObIKVCacheKey &other) const override
+  {
+    const ObExternalTableFileListKey &other_key
+        = reinterpret_cast<const ObExternalTableFileListKey &>(other);
+    return this->tenant_id_ == other_key.tenant_id_
+           && this->path_.case_compare(other_key.path_) == 0;
+  }
+  uint64_t hash() const override;
+  uint64_t get_tenant_id() const override
+  {
+    return tenant_id_;
+  }
+  int64_t size() const override
+  {
+    return sizeof(*this) + path_.length() + 1;
+  }
+  int deep_copy(char *buf, const int64_t buf_len, ObIKVCacheKey *&key) const override;
+  TO_STRING_KV(K(tenant_id_), K(path_));
+
+public:
+  uint64_t tenant_id_;
+  ObString path_;
+};
+
+class ObExternalTablePartitionsKey : public ObIKVCacheKey
+{
+public:
+  ObExternalTablePartitionsKey() : tenant_id_(OB_INVALID_ID), catalog_id_(OB_INVALID_ID)
+  {
+  }
+  virtual ~ObExternalTablePartitionsKey() = default;
+  bool operator==(const ObIKVCacheKey &other) const override;
+  uint64_t hash() const override;
+  uint64_t get_tenant_id() const override
+  {
+    return tenant_id_;
+  }
+  int64_t size() const override
+  {
+    return sizeof(ObExternalTablePartitionsKey) + db_name_.length() + 1 + tb_name_.length() + 1;
+  }
+  int deep_copy(char *buf, const int64_t buf_len, ObIKVCacheKey *&key) const override;
+  TO_STRING_KV(K(tenant_id_), K(catalog_id_), K(db_name_), K(tb_name_));
+
+public:
+  uint64_t tenant_id_;
+  uint64_t catalog_id_;
+  ObString db_name_;
+  ObString tb_name_;
+};
+
+struct PartitionInfo
+{
+  PartitionInfo() : partition_(), path_(), modify_ts_(0)
+  {
+  }
+  // 分区，比如 pa=a/pb=b/pc=c
+  ObString partition_;
+  // 该分区对应的文件路径，比如 hdfs://abc/def
+  ObString path_;
+  // 该分区的分区值，比如 [a,b,c]
+  ObArrayWrap<ObString> partition_values_;
+  int64_t modify_ts_;
+  TO_STRING_KV(K_(partition), K_(path), K_(modify_ts));
+
+  int64_t get_size() const
+  {
+    int64_t size = sizeof(PartitionInfo)
+                   + sizeof(ObString) + partition_.length() + 1
+                   + sizeof(ObString) + path_.length() + 1;
+    for (int64_t i = 0; i < partition_values_.count(); ++i) {
+      size += sizeof(ObString) + partition_values_.at(i).length() + 1;
+    }
+    return size;
+  }
+};
+
+class ObExternalTablePartitions : public ObIKVCacheValue
+{
+public:
+  ObExternalTablePartitions() : create_ts_(0), partition_infos_()
+  {
+  }
+  virtual ~ObExternalTablePartitions() = default;
+  int64_t size() const override
+  {
+    int64_t size = sizeof(ObExternalTablePartitions);
+    for (int i = 0; i < partition_infos_.count(); ++i) {
+      size += partition_infos_.at(i).get_size();
+    }
+
+    return size;
+  }
+  int deep_copy(char *buf, const int64_t buf_len, ObIKVCacheValue *&value) const override;
+  TO_STRING_KV(K(create_ts_), K(partition_infos_));
+
+public:
+  int64_t create_ts_;  // ms
+  ObArrayWrap<PartitionInfo> partition_infos_;
+};
+
+
 class ObExternalTableFiles : public ObIKVCacheValue
 {
 public:
-  ObExternalTableFiles() : create_ts_(0) {}
+  ObExternalTableFiles() : create_ts_(0), modify_ts_(0) {}
   virtual ~ObExternalTableFiles() {}
   int64_t size() const override;
   int deep_copy(char *buf, const int64_t buf_len, ObIKVCacheValue *&value) const override;
-  TO_STRING_KV(K(file_urls_), K(file_ids_), K(create_ts_));
+  TO_STRING_KV(K(file_urls_), K(content_digests_), K(file_ids_), K(modify_times_), K(create_ts_), K(modify_ts_));
 public:
   ObArrayWrap<ObString> file_urls_;
+  ObArrayWrap<ObString> content_digests_;
   ObArrayWrap<int64_t> file_ids_;
   ObArrayWrap<int64_t> file_sizes_;
-  int64_t create_ts_;
+  ObArrayWrap<int64_t> modify_times_;  // 记录每个文件自己的修改时间
+  int64_t create_ts_; // cache 的创建时间，用于标记 cache 刷新
+  int64_t modify_ts_; // 当前文件列表整体的最新修改时间，用来标记当前文件列表是否有变更。
+                      // 比如：对于文件存储来说，就是文件列表所属上一层目录的修改时间
+                      //      对于hive来说，就是分区信息或者表属性的ddl时间
 };
 
 class ObExternalTableFileManager
 {
 public:
-  struct ObExternalFileInfoTmp {
-    ObExternalFileInfoTmp(common::ObString file_url,
-                          int64_t file_size,
-                          int64_t part_id,
+  struct ObExternalFileInfoTmp
+  {
+    ObExternalFileInfoTmp(common::ObString file_url, common::ObString content_digest,
+                          int64_t file_size, int64_t modify_time, int64_t part_id,
                           int64_t delete_version = MAX_VERSION) :
-      file_url_(file_url), file_size_(file_size), part_id_(part_id), delete_version_(delete_version) {}
-    ObExternalFileInfoTmp() : file_url_(), file_size_(0), part_id_(0), delete_version_(0) {}
+      file_url_(file_url),
+      content_digest_(content_digest), file_size_(file_size), modify_time_(modify_time),
+      part_id_(part_id), delete_version_(delete_version)
+    {}
+    ObExternalFileInfoTmp() :
+      file_url_(), content_digest_(), file_size_(0), modify_time_(0), part_id_(0),
+      delete_version_(0)
+    {}
     common::ObString file_url_;
+    common::ObString content_digest_;
     int64_t file_size_;
+    int64_t modify_time_;
     int64_t part_id_;
     int64_t delete_version_;
-    TO_STRING_KV(K_(file_url),K_(part_id), K_(file_size), K_(delete_version));
+    TO_STRING_KV(K_(file_url), K_(part_id), K_(file_size), K_(modify_time), K_(delete_version),
+                 K_(content_digest));
   };
 
   static const int64_t CACHE_EXPIRE_TIME = 20 * 1000000L; //20s
@@ -166,15 +323,11 @@ public:
       const uint64_t table_id,
       const uint64_t part_id);
 
-  int update_inner_table_file_list(sql::ObExecContext &exec_ctx,
-                                  const uint64_t tenant_id,
-                                  const uint64_t table_id,
-                                  common::ObIArray<common::ObString> &file_urls,
-                                  common::ObIArray<int64_t> &file_sizes,
-                                  common::ObIArray<uint64_t> &updated_part_ids,
-                                  bool &has_partition_changed,
-                                  const uint64_t part_id = -1,
-                                  bool collect_statistic = true);
+  int update_inner_table_file_list(
+    sql::ObExecContext &exec_ctx, const uint64_t tenant_id, const uint64_t table_id,
+    common::ObArray<share::ObExternalTableBasicFileInfo> &basic_file_infos,
+    common::ObIArray<uint64_t> &updated_part_ids, bool &has_partition_changed,
+    const uint64_t part_id = -1, bool collect_statistic = true);
 
   int get_all_records_from_inner_table(ObIAllocator &allocator,
                                     int64_t tenant_id,
@@ -193,13 +346,35 @@ public:
     const uint64_t part_id,
     ObMySQLTransaction &trans);
 
-  int get_external_file_list_on_device(const common::ObString &location,
-                                       const common::ObString &pattern,
-                                       const sql::ObExprRegexpSessionVariables &regexp_vars,
-                                       common::ObIArray<common::ObString> &file_urls,
-                                       common::ObIArray<int64_t> &file_sizes,
-                                       const common::ObString &access_info,
-                                       common::ObIAllocator &allocator);
+  int get_external_file_list_on_device_with_cache(
+      const common::ObString &location,
+      const uint64_t tenant_id,
+      const uint64_t ts,
+      const common::ObString &pattern,
+      const sql::ObExprRegexpSessionVariables &regexp_vars,
+      ObExternalTableFiles &external_table_files,
+      const common::ObString &access_info,
+      common::ObIAllocator &allocator,
+      int64_t refresh_interval_ms);
+
+  int get_external_file_list_on_device(const ObString &location,
+                                       const uint64_t modify_ts,
+                                       const ObString &pattern,
+                                       const ObExprRegexpSessionVariables &regexp_vars,
+                                       const ObString &access_info,
+                                       ObIAllocator &allocator,
+                                       ObExternalTableFiles &file_list);
+
+  int get_partitions_info_with_cache(const ObTableSchema &table_schema,
+                                     ObSqlSchemaGuard &sql_schema_guard,
+                                     common::ObIAllocator& allocator,
+                                     int64_t refresh_interval_ms,
+                                     ObArray<PartitionInfo*> &partition_infos);
+
+  int get_partitions_info(const ObTableSchema &table_schema,
+                          ObSqlSchemaGuard &sql_schema_guard,
+                          common::ObIAllocator &allocator,
+                          ObExternalTablePartitions &pts);
 
   int flush_external_file_cache(
     const uint64_t tenant_id,
@@ -224,6 +399,21 @@ public:
                                           const ObIArray<ObExternalFileInfoTmp> &file_infos,
                                           ObIArray<ObNewRow> &part_vals,
                                           ObIAllocator &allocator);
+  static int get_external_file_list_on_device(const common::ObString &location,
+                                              const common::ObString &pattern,
+                                              const sql::ObExprRegexpSessionVariables &regexp_vars,
+                                              common::ObIArray<common::ObString> &file_urls,
+                                              common::ObIArray<int64_t> &file_sizes,
+                                              common::ObIArray<int64_t> &last_modify_times,
+                                              common::ObIArray<common::ObString> &content_digests,
+                                              const common::ObString &access_info,
+                                              common::ObIAllocator &allocator);
+  static int collect_files_content_digest(const common::ObString &location,
+                                          const common::ObString &access_info,
+                                          const common::ObIArray<common::ObString> &file_urls,
+                                          common::ObIAllocator &allocator,
+                                          common::ObIArray<ObString> &content_digests);
+
 private:
   int collect_odps_table_statistics(const bool collect_statistic,
                                     const uint64_t tenant_id,
@@ -251,6 +441,9 @@ private:
 
   bool is_cache_value_timeout(const ObExternalTableFiles &ext_files) {
     return ObTimeUtil::current_time() - ext_files.create_ts_ > CACHE_EXPIRE_TIME;
+  }
+  bool is_cache_value_timeout(int64_t create_ts_ms, int64_t refresh_interval_ms) {
+    return ObTimeUtil::current_time_ms() - create_ts_ms > refresh_interval_ms;
   }
   int fill_cache_from_inner_table(
       const ObExternalTableFilesKey &key,
@@ -346,6 +539,8 @@ private:
 private:
   common::ObSpinLock fill_cache_locks_[LOAD_CACHE_LOCK_CNT];
   common::ObKVCache<ObExternalTableFilesKey, ObExternalTableFiles> kv_cache_;
+  common::ObKVCache<ObExternalTableFileListKey, ObExternalTableFiles> external_file_list_cache_;
+  common::ObKVCache<ObExternalTablePartitionsKey, ObExternalTablePartitions> external_partitions_cache_;
 };
 
 

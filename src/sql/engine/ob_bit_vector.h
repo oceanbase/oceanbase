@@ -471,22 +471,7 @@ inline int64_t ObBitVectorImpl<WordType>::accumulate_bit_cnt(const int64_t size)
 template<typename WordType>
 inline int64_t ObBitVectorImpl<WordType>::accumulate_bit_cnt(const EvalBound &bound) const
 {
-  int64_t bit_cnt = 0;
-  const int64_t start = bound.start() / WORD_BITS;
-  const int64_t end = bound.end() / WORD_BITS;
-  for (int64_t i = start; i < end; ++i) {
-    WordType v = data_[i];
-    bit_cnt += popcount64(v);
-  }
-  const int64_t front = bound.start() % WORD_BITS;
-  if (front > 0) {
-    bit_cnt -= popcount64(data_[start] & ((1LU << front) - 1));
-  }
-  const int64_t back = bound.end() % WORD_BITS;
-  if (back > 0) {
-    bit_cnt += popcount64(data_[end] & ((1LU << back) - 1));
-  }
-  return bit_cnt;
+  return accumulate_bit_cnt(bound.start(), bound.end());
 }
 
 template<typename WordType>

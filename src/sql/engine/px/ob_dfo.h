@@ -196,17 +196,6 @@ public:
   TO_STRING_KV(K_(cur_sql), K_(qc_tid));
 };
 
-// dummy struct for static check
-struct ObLakeTableFileDesc
-{
-public:
-  OB_UNIS_VERSION(1);
-public:
-  explicit ObLakeTableFileDesc() : dummy_(0) {}
-  TO_STRING_KV(K_(dummy));
-  int dummy_;
-};
-
 // PX 端描述每个 SQC 的数据结构
 class ObPxSqcMeta
 {
@@ -258,7 +247,8 @@ public:
               interrupt_by_dm_(false),
               p2p_dh_map_info_(),
               sqc_order_gi_tasks_(false),
-              locations_order_()
+              locations_order_(),
+              lake_table_file_desc_(allocator_)
   {}
   ~ObPxSqcMeta() = default;
   int assign(const ObPxSqcMeta &other);
@@ -273,6 +263,7 @@ public:
   ObIArray<ObSqcTableLocationKey> &get_access_table_location_keys() { return access_table_location_keys_; }
   ObIArray<ObSqcTableLocationIndex> &get_access_table_location_indexes() { return access_table_location_indexes_; }
   ObIArray<share::ObExternalFileInfo> &get_access_external_table_files() { return access_external_table_files_; }
+  ObLakeTableFileDesc &get_lake_table_file_desc() { return lake_table_file_desc_; }
   DASTabletLocIArray &get_access_table_locations_for_update() { return access_table_locations_; }
   const DASTabletLocIArray &get_access_table_locations() const { return access_table_locations_; }
   DASTabletLocIArray &get_extra_access_table_locations_for_update() { return extra_access_table_locations_; }
@@ -350,6 +341,7 @@ public:
     access_external_table_files_.reset();
     allocator_.reset();
     monitoring_info_.reset();
+    lake_table_file_desc_.reset();
   }
   // SQC 端收到 InitSQC 消息后通过 data_channel 信息是否为空
   // 来判断 data channel 是否已经预分配好，是否要走轻量调度
@@ -479,7 +471,7 @@ private:
   bool partition_random_affinitize_{true}; // whether do partition random in gi task split
   // record ordering of locations. first is operator id of table scan and second is asc.
   ObSEArray<std::pair<int64_t, bool>, 18> locations_order_;
-  // dummy struct for static check
+  // for lake table file
   ObLakeTableFileDesc lake_table_file_desc_;
 };
 

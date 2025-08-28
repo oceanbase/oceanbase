@@ -171,6 +171,7 @@
 #include "observer/virtual_table/ob_all_virtual_log_stat.h"
 #include "observer/virtual_table/ob_all_virtual_apply_stat.h"
 #include "observer/virtual_table/ob_all_virtual_ha_diagnose.h"
+#include "observer/virtual_table/ob_all_virtual_hms_client_pool_stat.h"
 #include "observer/virtual_table/ob_all_virtual_replay_stat.h"
 #include "observer/virtual_table/ob_all_virtual_unit.h"
 #include "observer/virtual_table/ob_all_virtual_server.h"
@@ -3229,6 +3230,15 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             }
             break;
           }
+          case OB_ALL_VIRTUAL_HMS_CLIENT_POOL_STAT_TID: {
+            ObAllVirtualHMSClientPoolStat *hms_client_pool_stat_table = NULL;
+            if (OB_FAIL(
+                    NEW_VIRTUAL_TABLE(ObAllVirtualHMSClientPoolStat, hms_client_pool_stat_table))) {
+              SERVER_LOG(ERROR, "ObAllVirtualHMSClientPoolStat construct failed", K(ret));
+            } else {
+              vt_iter = static_cast<ObVirtualTableIterator *>(hms_client_pool_stat_table);
+            }
+          } break;
         END_CREATE_VT_ITER_SWITCH_LAMBDA
 
 #define AGENT_VIRTUAL_TABLE_CREATE_ITER

@@ -32,6 +32,7 @@
 #include "lib/udt/ob_collection_type.h"
 #include "sql/plan_cache/ob_adaptive_auto_dop.h"
 #include "sql/engine/ob_diagnosis_manager.h"
+#include "sql/optimizer/file_prune/ob_lake_table_file_map.h"
 
 #define GET_PHY_PLAN_CTX(ctx) ((ctx).get_physical_plan_ctx())
 #define GET_MY_SESSION(ctx) ((ctx).get_my_session())
@@ -327,6 +328,11 @@ public:
   inline bool &get_tmp_alloc_used() { return tmp_alloc_used_; }
   // set write branch id for DML write
   void set_branch_id(const int16_t branch_id) { das_ctx_.set_write_branch_id(branch_id); }
+  bool has_lake_table_file_map() const { return lake_table_file_map_ != nullptr; }
+  void set_lake_table_file_map(ObLakeTableFileMap *map) { lake_table_file_map_ = map; }
+  int get_lake_table_file_map(ObLakeTableFileMap *&lake_table_file_map);
+  int add_lake_table_files(const ObDASTableLocMeta &loc_meta, const ObCandiTableLoc &candi_table_loc);
+  int add_lake_table_file(uint64_t table_loc_id, ObTabletID tablet_id, const ObCandiTabletLoc &candi_tablet_loc);
   VIRTUAL_NEED_SERIALIZE_AND_DESERIALIZE;
 protected:
   uint64_t get_ser_version() const;
@@ -788,6 +794,12 @@ protected:
   void *external_py_url_resource_cache_;
   void *external_py_sch_resource_cache_;
   void *py_sub_inter_ctx_;
+  /*
+   * lake table file map, no need to serialize.
+   * @brief The key is (table_loc_id, tablet_id),
+   *        The value is a file array related to the key.
+   * */
+  ObLakeTableFileMap *lake_table_file_map_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExecContext);
 };

@@ -377,7 +377,8 @@ int ObDASFuncDataIter::init_main_lookup_scan_param(
     param.ext_file_column_exprs_ = &(ctdef->pd_expr_spec_.ext_file_column_exprs_);
     param.ext_mapping_column_exprs_ = &(ctdef->pd_expr_spec_.ext_mapping_column_exprs_);
     param.ext_mapping_column_ids_ = &(ctdef->pd_expr_spec_.ext_mapping_column_ids_);
-    param.ext_column_convert_exprs_ = &(ctdef->pd_expr_spec_.ext_column_convert_exprs_);
+    param.ext_column_dependent_exprs_ = &(ctdef->pd_expr_spec_.ext_column_convert_exprs_);
+    param.ext_enable_late_materialization_ = ctdef->pd_expr_spec_.ext_enable_late_materialization_;
     param.calc_exprs_ = &(ctdef->pd_expr_spec_.calc_exprs_);
     param.table_param_ = &(ctdef->table_param_);
     param.op_ = rtdef->p_pd_expr_op_;

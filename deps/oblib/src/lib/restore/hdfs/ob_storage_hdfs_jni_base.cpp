@@ -479,7 +479,7 @@ int ObStorageHdfsJniUtil::list_files(const common::ObString &uri, common::ObBase
           hdfsFileInfo file_info = file_infos[idx];
           if (file_info.mKind == kObjectKindDirectory) {
             // do nothing
-          } else if (op.need_get_file_size()) {
+          } else if (op.need_get_file_meta()) {
             if (OB_UNLIKELY(file_info.mSize < 0)) {
               ret = OB_INVALID_ARGUMENT;
               OB_LOG(WARN, "invalid hdfs file size", K(file_info.mSize),
@@ -739,13 +739,23 @@ int ObStorageHdfsReader::pread(char *buf,
   } else if (OB_ISNULL(buf) || OB_UNLIKELY(buf_size <= 0 || offset < 0)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid arguments", K(ret), KP(buf), K(buf_size), K(offset));
-  } else if (OB_UNLIKELY(offset > file_length_)) {
-    ret = OB_HDFS_INVALID_ARGUMENT;
-    OB_LOG(WARN, "offset exceeds file size", K(ret), K_(file_length), K(offset));
+  } else {
+    get_data_size = buf_size;
+    if (has_meta_) {
+      if (OB_UNLIKELY(offset > file_length_)) {
+        ret = OB_HDFS_INVALID_ARGUMENT;
+        OB_LOG(WARN, "offset exceeds file size", K(ret), K_(file_length), K(offset));
+      } else {
+        get_data_size = MIN(buf_size, file_length_ - offset);
+      }
+    }
   }
+
 
   if (OB_FAIL(ret)) {
     /* do nothing */
+  } else if (get_data_size == 0) {
+    read_size = 0;
   } else {
     hdfsFile readable_file = get_hdfs_read_file();
     hdfsFS fs = get_fs();
@@ -767,19 +777,31 @@ int ObStorageHdfsReader::pread(char *buf,
       int32_t last_bytes_read = 0;
 
       do {
-        last_bytes_read = obHdfsPread(fs, readable_file, temp_offset,
-                                    buf + read_size, buf_size - read_size);
-        OB_LOG(TRACE, "pread stat info in detail", K(ret), K(last_bytes_read),
-               K(read_size), K(temp_offset), K(buf_size));
+        last_bytes_read = obHdfsPread(fs,
+                                      readable_file,
+                                      temp_offset,
+                                      buf + read_size,
+                                      get_data_size - read_size);
+        OB_LOG(TRACE,
+               "pread stat info in detail",
+               K(ret),
+               K(last_bytes_read),
+               K(read_size),
+               K(temp_offset),
+               K(get_data_size));
         if (last_bytes_read == -1) {
           ret = OB_HDFS_READ_FILE_ERROR;
-          OB_LOG(WARN, "failed to position read file", K(ret), K(temp_offset),
-                 K(buf_size), K(read_size));
+          OB_LOG(WARN,
+                 "failed to position read file",
+                 K(ret),
+                 K(temp_offset),
+                 K(get_data_size),
+                 K(read_size));
         } else {
           temp_offset += last_bytes_read;
           read_size += last_bytes_read;
         }
-      } while (last_bytes_read > 0 && OB_SUCC(ret));
+      } while (last_bytes_read > 0 && (get_data_size - read_size) > 0 && OB_SUCC(ret));
     }
   }
   return ret;

@@ -45,6 +45,15 @@ private:
                                     char *buf,
                                     const int64_t &buf_len,
                                     int64_t &pos) const;
+  int print_hive_catalog_definition(const share::ObHMSCatalogProperties &odps,
+                                    char *buf, const int64_t &buf_len,
+                                    int64_t &pos) const;
+
+
+  int print_filesystem_catalog_definition(const share::ObFilesystemCatalogProperties &properties,
+                                          char *buf,
+                                          const int64_t &buf_len,
+                                          int64_t &pos) const;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObShowCreateCatalog);

@@ -164,6 +164,17 @@ int ObCSVTableRowIterator::init(const storage::ObTableScanParam *scan_param)
     is_bad_file_enabled_ = true;
   }
 
+  for (int64_t i = 0; OB_SUCC(ret) && i < scan_param_->ext_file_column_exprs_->count(); i++) {
+    ObExpr *meta_expr = scan_param_->ext_file_column_exprs_->at(i);
+    if (OB_ISNULL(meta_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null meta expr");
+    } else if (meta_expr->type_ == T_PSEUDO_PARTITION_LIST_COL) {
+      need_partition_info_ = true;
+      break;
+    }
+  }
+
   return ret;
 }
 
@@ -218,10 +229,19 @@ int ObCSVTableRowIterator::open_next_file()
     if (OB_FAIL(ret)) {
     } else if (part_id == 0) {
       //empty file do not belong to any partitions
+    } else if (!need_partition_info_) {
+      // non-partitioned table
     } else {
       if (part_id != state_.part_id_) {
         state_.part_id_ = part_id;
-        OZ (calc_file_partition_list_value(part_id, arena_alloc_, state_.part_list_val_));
+        bool is_external_object = is_external_object_id(scan_param_->table_param_->get_table_id());
+        if (OB_LIKELY(is_external_object)) {
+          OZ(calc_file_part_list_value_by_array(part_id, arena_alloc_,
+                                                scan_param_->partition_infos_,
+                                                state_.part_list_val_));
+        } else {
+          OZ (calc_file_partition_list_value(part_id, arena_alloc_, state_.part_list_val_));
+        }
       }
     }
     if (OB_SUCC(ret)) {
@@ -241,10 +261,14 @@ int ObCSVTableRowIterator::open_next_file()
         state_.skip_lines_ = parser_.get_format().skip_header_lines_ + start_line - 1;
         state_.line_count_limit_ = end_line - start_line + 1;
       }
-      const char *split_char = "/";
-      OZ (url_.append_fmt("%.*s%s%.*s", location.length(), location.ptr(),
-                                        (location.empty() || location[location.length() - 1] == '/') ? "" : split_char,
-                                        file_url.length(), file_url.ptr()));
+      if (!is_abs_url(file_url)) {
+        const char *split_char = "/";
+        OZ (url_.append_fmt("%.*s%s%.*s", location.length(), location.ptr(),
+                                          (location.empty() || location[location.length() - 1] == '/') ? "" : split_char,
+                                          file_url.length(), file_url.ptr()));
+      } else {
+        url_.assign(file_url);
+      }
       // skip empty file and non-exist file
       OZ (file_reader_.get_data_access_driver().get_file_size(url_.string(), file_size));
       state_.cur_file_size_ = file_size;
@@ -532,7 +556,7 @@ int ObCSVTableRowIterator::get_next_row()
 
   for (int i = 0; OB_SUCC(ret) && i < column_exprs_.count(); i++) {
     ObExpr *column_expr = column_exprs_.at(i);
-    ObExpr *column_convert_expr = scan_param_->ext_column_convert_exprs_->at(i);
+    ObExpr *column_convert_expr = scan_param_->ext_column_dependent_exprs_->at(i);
     ObDatum *convert_datum = NULL;
     OZ (column_convert_expr->eval(eval_ctx, convert_datum));
     if (OB_SUCC(ret)) {
@@ -765,11 +789,11 @@ int ObCSVTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
   if (enable_rich_format) {
     for (int i = 0; OB_SUCC(ret) && i < column_exprs_.count(); i++) {
       ObExpr *column_expr = column_exprs_.at(i);
-      ObExpr *column_convert_expr = scan_param_->ext_column_convert_exprs_->at(i);
+      ObExpr *column_convert_expr = scan_param_->ext_column_dependent_exprs_->at(i);
       OZ (column_convert_expr->eval_vector(eval_ctx, *bit_vector_cache_, returned_row_cnt, true));
       if (OB_SUCC(ret)) {
         ObExpr *to = column_exprs_.at(i);
-        ObExpr *from = scan_param_->ext_column_convert_exprs_->at(i);
+        ObExpr *from = scan_param_->ext_column_dependent_exprs_->at(i);
         VectorHeader &to_vec_header = to->get_vector_header(eval_ctx);
         VectorHeader &from_vec_header = from->get_vector_header(eval_ctx);
         if (from_vec_header.format_ == VEC_UNIFORM_CONST) {
@@ -798,7 +822,7 @@ int ObCSVTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
   } else {
     for (int i = 0; OB_SUCC(ret) && i < column_exprs_.count(); i++) {
       ObExpr *column_expr = column_exprs_.at(i);
-      ObExpr *column_convert_expr = scan_param_->ext_column_convert_exprs_->at(i);
+      ObExpr *column_convert_expr = scan_param_->ext_column_dependent_exprs_->at(i);
       OZ (column_convert_expr->eval_batch(eval_ctx, *bit_vector_cache_, returned_row_cnt));
       if (OB_SUCC(ret)) {
         MEMCPY(column_expr->locate_batch_datums(eval_ctx),

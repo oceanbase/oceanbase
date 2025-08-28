@@ -3941,6 +3941,8 @@ int ObLogicalOperator::explain_print_partitions(ObTablePartitionInfo &table_part
   ObOptimizerContext *opt_ctx = NULL;
   const share::schema::ObTableSchema *table_schema = NULL;
   const ObDMLStmt *stmt = NULL;
+  bool is_lake_table = table_partition_info.is_lake_table_partition_info();
+  int64_t file_count = -1;
   if (OB_ISNULL(get_plan())
       || OB_ISNULL(opt_ctx = &get_plan()->get_optimizer_context())
       || OB_ISNULL(schema_guard = opt_ctx->get_sql_schema_guard())
@@ -3951,6 +3953,8 @@ int ObLogicalOperator::explain_print_partitions(ObTablePartitionInfo &table_part
     // do nothing
   } else if (OB_FAIL(schema_guard->get_table_schema(ref_table_id, table_schema))) {
     LOG_WARN("fail to get index schema", K(ret), K(ref_table_id), K(table_id));
+  } else if (is_lake_table) {
+    file_count = 0;
   }
   int64_t N = partitions.count();
   ObArray<int64_t> table_part_ids;
@@ -3964,6 +3968,10 @@ int ObLogicalOperator::explain_print_partitions(ObTablePartitionInfo &table_part
         part_info.part_id_ = part_loc.get_partition_id();
         OZ(part_infos.push_back(part_info));
       }
+    } else if (is_lake_table) {
+      part_info.part_id_ = part_loc.get_partition_id();
+      file_count += partitions.at(i).get_opt_lake_table_files().count();
+      OZ(part_infos.push_back(part_info));
     } else if (!table_schema->is_partitioned_table()) {
       part_info.part_id_ = 0;
       OZ(part_infos.push_back(part_info));
@@ -4012,7 +4020,7 @@ int ObLogicalOperator::explain_print_partitions(ObTablePartitionInfo &table_part
   if (OB_SUCC(ret)) {
     Compare cmp;
     lib::ob_sort(part_infos.begin(), part_infos.end(), CopyableComparer(cmp));
-    if (OB_FAIL(ObLogicalOperator::explain_print_partitions(part_infos, two_level,
+    if (OB_FAIL(ObLogicalOperator::explain_print_partitions(part_infos, two_level, file_count,
                                                             buf, buf_len, pos))) {
       LOG_WARN("Failed to print partitions");
     } else { }//do nothing
@@ -4023,6 +4031,7 @@ int ObLogicalOperator::explain_print_partitions(ObTablePartitionInfo &table_part
 int ObLogicalOperator::explain_print_partitions(
     const ObIArray<ObLogicalOperator::PartInfo> &part_infos,
     const bool two_level,
+    int64_t file_count,
     char *buf,
     int64_t &buf_len,
     int64_t &pos)
@@ -4104,6 +4113,11 @@ int ObLogicalOperator::explain_print_partitions(
   }
   if (OB_SUCC(ret)) {
     ret = BUF_PRINTF(")");
+  }
+  if (OB_SUCC(ret) && file_count >= 0) {
+    if (OB_FAIL(BUF_PRINTF(", file_count=%lu", file_count))) {
+      LOG_WARN("Failed to printf file count");
+    }
   }
   return ret;
 }
@@ -4423,6 +4437,10 @@ int ObLogicalOperator::allocate_granule_nodes_above(AllocGIContext &ctx)
           LOG_WARN("external table do not support partition GI", K(ret));
         } else {
           gi_op->set_used_by_external_table();
+        }
+        if (static_cast<ObLogTableScan *>(this)->get_lake_table_type() == share::ObLakeTableFormat::ICEBERG
+            || static_cast<ObLogTableScan *>(this)->get_lake_table_type() == share::ObLakeTableFormat::HIVE) {
+          gi_op->set_used_by_lake_table();
         }
       }
 

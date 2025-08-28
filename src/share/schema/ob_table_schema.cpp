@@ -12,7 +12,11 @@
 
 #define USING_LOG_PREFIX SHARE_SCHEMA
 #include "ob_table_schema.h"
+
+#include "share/catalog/ob_external_catalog.h"
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
+
+#include "sql/table_format/iceberg/ob_iceberg_table_metadata.h"
 namespace oceanbase
 {
 namespace share
@@ -1867,6 +1871,7 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
       micro_block_format_version_ = src_schema.micro_block_format_version_;
       mlog_tid_ = src_schema.mlog_tid_;
       catalog_id_ = src_schema.catalog_id_;
+      lake_table_format_ = src_schema.lake_table_format_;
       merge_engine_type_ = src_schema.merge_engine_type_;
       external_location_id_ = src_schema.external_location_id_;
       tmp_mlog_tid_ = src_schema.tmp_mlog_tid_;
@@ -3989,6 +3994,7 @@ void ObTableSchema::reset()
   rls_context_ids_.reset();
 
   catalog_id_ = OB_INTERNAL_CATALOG_ID;
+  lake_table_format_ = share::ObLakeTableFormat::INVALID;
   external_file_format_.reset();
   external_file_location_.reset();
   external_file_location_access_info_.reset();

@@ -468,6 +468,8 @@ int ObTransformConditionalAggrCoalesce::check_statistics_threshold(ObSelectStmt 
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
+  } else if (table_schema->get_lake_table_format() != ObLakeTableFormat::INVALID) {
+    LOG_TRACE("lake table format is not supported", K(table_schema->get_lake_table_format()));
   } else {
     // collect ndv product for cols_in_groupby
     for (int64_t i = 0; OB_SUCC(ret) && i < cols_in_groupby.count(); i++) {

@@ -80,7 +80,6 @@ int ObSchemaGetterGuard::get_location_schema_by_id(const uint64_t tenant_id,
   return ret;
 }
 
-
 int ObSchemaGetterGuard::get_location_schema_by_prefix_match_with_priv(
                                           const ObSessionPrivInfo &session_priv,
                                           const common::ObIArray<uint64_t> &enable_role_id_array,

@@ -459,6 +459,7 @@
 #include "sql/engine/expr/ob_expr_ai/ob_expr_ai_rerank.h"
 #include "ob_expr_local_dynamic_filter.h"
 #include "ob_expr_format_profile.h"
+#include "ob_expr_bucket.h"
 
 namespace oceanbase
 {
@@ -1435,7 +1436,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprVecChunk::generate_vec_chunk,                        /* 865 */
   NULL, // ObExprEmbeddedVec::generate_embedded_vec,                  /* 866 */
   NULL, // ObExprSemanticDistance::calc_semantic_distance,            /* 867 */
-  NULL, // ObExprBucket::calc_bucket_expr,                            /* 868 */
+  ObExprBucket::calc_bucket_expr,                                     /* 868 */
   NULL, // ObExprSemanticVectorDistance::calc_semantic_vector_distance, /* 869 */
 };
 

@@ -33,11 +33,15 @@ devdeps-icu-69.1-72022112416.el8.aarch64.rpm
 devdeps-s3-cpp-sdk-1.11.156-102023122011.el8.aarch64.rpm
 devdeps-protobuf-c-1.5.1-100000052025032810.el8.aarch64.rpm
 devdeps-roaringbitmap-croaring-3.0.0-42024042816.el8.aarch64.rpm
-devdeps-apache-arrow-9.0.0-322024052923.el8.aarch64.rpm
+devdeps-apache-arrow-20.0.0-22025060511.el8.aarch64.rpm
 devdeps-vsag-1.1.0-312025071511.el8.aarch64.rpm
-devdeps-apache-orc-2.1.1-62025032517.el8.aarch64.rpm
+devdeps-apache-orc-2.1.1-82025081116.el8.aarch64.rpm
 devdeps-fast-float-6.1.3-42024112122.el8.aarch64.rpm
 devdeps-hdfs-sdk-3.3.6-112024123116.el8.aarch64.rpm
+devdeps-apache-avro-cpp-1.12.0-72025062510.el8.aarch64.rpm
+devdeps-apache-thrift-0.16.0-132025070909.el8.aarch64.rpm
+devdeps-mit-krb5-1.21.3-212025063015.el8.aarch64.rpm
+devdeps-cyrus-sasl-2.1.28-102025070115.el8.aarch64.rpm
 devdeps-python3-3.13.3-132025070111.el8.aarch64.rpm
 
 [tools]

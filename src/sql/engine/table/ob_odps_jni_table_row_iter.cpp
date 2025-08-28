@@ -1095,7 +1095,7 @@ int ObODPSJNITableRowIterator::get_next_rows_storage_api(int64_t &count, int64_t
     }
     for (int i = 0; OB_SUCC(ret) && i < column_exprs_.count(); i++) {
       ObExpr *column_expr = column_exprs_.at(i);
-      ObExpr *column_convert_expr = scan_param_->ext_column_convert_exprs_->at(i);
+      ObExpr *column_convert_expr = scan_param_->ext_column_dependent_exprs_->at(i);
       if (OB_FAIL(column_convert_expr->eval_batch(ctx, *bit_vector_cache_, should_read_rows))) {
         LOG_WARN("failed to eval batch",
             K(ret),
@@ -1454,7 +1454,7 @@ int ObODPSJNITableRowIterator::get_next_rows_tunnel(int64_t &count, int64_t capa
       // OFF in all situation
       // /*
       ObExpr *column_expr = column_exprs_.at(i);
-      ObExpr *column_convert_expr = scan_param_->ext_column_convert_exprs_->at(i);
+      ObExpr *column_convert_expr = scan_param_->ext_column_dependent_exprs_->at(i);
       if (OB_FAIL(column_convert_expr->eval_batch(ctx, *bit_vector_cache_, should_read_rows))) {
         LOG_WARN("failed to eval batch",
             K(ret),
@@ -3946,9 +3946,9 @@ int ObODPSJNITableRowIterator::init_access_exprs(const ObDASScanCtDef &das_ctdef
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("column ids not equal to access expr");
   }
-  const ObIArray<ObExpr*> &ext_column_convert_exprs = das_ctdef.pd_expr_spec_.ext_column_convert_exprs_;
-  for (int i = 0; is_valid && i < ext_column_convert_exprs.count(); ++i) {
-    ObExpr *convert_expr = ext_column_convert_exprs.at(i);
+  const ObIArray<ObExpr*> &ext_column_dependent_exprs = das_ctdef.pd_expr_spec_.ext_column_convert_exprs_;
+  for (int i = 0; is_valid && i < ext_column_dependent_exprs.count(); ++i) {
+    ObExpr *convert_expr = ext_column_dependent_exprs.at(i);
     if (OB_ISNULL(convert_expr) || T_FUN_COLUMN_CONV != convert_expr->type_ ||
         convert_expr->arg_cnt_ != 6) {
       is_valid = false;

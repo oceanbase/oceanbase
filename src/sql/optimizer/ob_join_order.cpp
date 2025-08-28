@@ -24,6 +24,10 @@
 #include "sql/engine/px/ob_px_util.h"
 #include "sql/das/iter/ob_das_text_retrieval_eval_node.h"
 #include "share/external_table/ob_external_table_utils.h"
+#include "share/catalog/ob_catalog_properties.h"
+#include "sql/optimizer/ob_lake_table_partition_info.h"
+#include "share/stat/ob_lake_table_stat.h"
+
 using namespace oceanbase;
 using namespace sql;
 using namespace oceanbase::common;
@@ -283,10 +287,7 @@ int ObJoinOrder::compute_table_location(const uint64_t table_id,
   }
   if (OB_SUCC(ret)) {
     //select location for the newly created table partition info
-    ObSEArray<ObTablePartitionInfo*, 1> tbl_part_infos;
-    if (OB_FAIL(tbl_part_infos.push_back(table_partition_info))) {
-      LOG_WARN("push back table partition info failed", K(ret));
-    } else if (OB_FAIL(get_plan()->select_location(tbl_part_infos))) {
+    if (OB_FAIL(get_plan()->select_location(table_partition_info))) {
       LOG_WARN("failed to select location", K(ret));
     }
   }
@@ -5018,7 +5019,8 @@ int ObJoinOrder::revise_output_rows_after_creating_path(PathHelper &helper,
         if (OB_ISNULL(interesting_paths_.at(i))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("null path", K(ret));
-        } else if (!interesting_paths_.at(i)->is_access_path()) {
+        } else if (!interesting_paths_.at(i)->is_access_path()
+                   && !interesting_paths_.at(i)->is_lake_table_access_path()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("should be access path", K(ret));
         } else {
@@ -6413,7 +6415,7 @@ int ObJoinOrder::estimate_size_for_base_table(PathHelper &helper,
   ObSEArray<ObRawExpr*, 4> pushdown_exprs;
   if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt()) ||
       OB_ISNULL(table_item = stmt->get_table_item_by_id(table_id_)) ||
-      OB_UNLIKELY(type_ != ACCESS) || OB_ISNULL(helper.table_opt_info_)) {
+      OB_UNLIKELY(type_ != ACCESS && type_ != LAKE_TABLE_ACCESS) || OB_ISNULL(helper.table_opt_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null or path type",
                 K(ret), K(get_plan()), K(table_item), K(type_), K(stmt));
@@ -7726,6 +7728,11 @@ bool oceanbase::sql::Path::is_temp_table_path() const
 bool oceanbase::sql::Path::is_access_path() const
 {
   return NULL != parent_ && parent_->get_type() == ACCESS;
+}
+
+bool oceanbase::sql::Path::is_lake_table_access_path() const
+{
+  return NULL != parent_ && parent_->get_type() == LAKE_TABLE_ACCESS;
 }
 
 bool oceanbase::sql::Path::is_values_table_path() const
@@ -10591,12 +10598,19 @@ int ObJoinOrder::init_base_join_order(const TableItem *table_item)
     table_id_ = table_item->table_id_;
     table_meta_info_.ref_table_id_ = table_item->ref_id_;
     table_meta_info_.table_type_ = table_item->table_type_;
+    table_meta_info_.lake_table_format_ = table_item->lake_table_format_;
     table_bit_index = stmt->get_table_bit_index(table_item->table_id_);
+
     if (OB_FAIL(get_tables().add_member(table_bit_index)) ||
         OB_FAIL(get_output_tables().add_member(table_bit_index))) {
       LOG_WARN("failed to add member", K(table_bit_index), K(ret));
     } else if (table_item->is_basic_table()) {
-      set_type(ACCESS);
+      if (share::ObLakeTableFormat::ICEBERG == table_item->lake_table_format_ ||
+          share::ObLakeTableFormat::HIVE == table_item->lake_table_format_) {
+        set_type(LAKE_TABLE_ACCESS);
+      } else {
+        set_type(ACCESS);
+      }
     } else if (table_item->is_temp_table()) {
       set_type(TEMP_TABLE_ACCESS);
     } else if (table_item->is_generated_table()) {
@@ -10638,6 +10652,8 @@ int ObJoinOrder::generate_base_paths()
     OPT_TRACE_TITLE("end generate subplan");
   } else if (VALUES_TABLE_ACCESS == get_type()) {
     ret = generate_values_table_paths();
+  } else if (LAKE_TABLE_ACCESS == get_type()) {
+    ret = generate_lake_table_paths();
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected base path type", K(get_type()), K(ret));
@@ -16376,10 +16392,18 @@ int ObJoinOrder::compute_table_meta_info(const uint64_t table_id,
     LOG_TRACE("after compute table meta info", K(table_meta_info_));
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(init_est_sel_info_for_access_path(table_id,
-                                                  ref_table_id,
-                                                  *table_schema))) {
-      LOG_WARN("failed to init estimation selectivity info", K(ret));
+    if (table_meta_info_.lake_table_format_ != ObLakeTableFormat::ICEBERG &&
+        table_meta_info_.lake_table_format_ != ObLakeTableFormat::HIVE &&
+        table_meta_info_.lake_table_format_ != ObLakeTableFormat::ODPS) {
+      if (OB_FAIL(init_est_sel_info_for_access_path(table_id,
+                                                    ref_table_id,
+                                                    *table_schema))) {
+        LOG_WARN("failed to init estimation selectivity info", K(ret));
+      }
+    } else {
+      if (OB_FAIL(compute_lake_table_meta_info(table_id, ref_table_id))) {
+        LOG_WARN("failed to compute lake table meta info", K(ret));
+      }
     }
   }
   return ret;
@@ -21675,6 +21699,537 @@ int ObJoinOrder::check_depend_expr_on_index(const ObDMLStmt *stmt,
       }
     }
     found |= inner_found;
+  }
+  return ret;
+}
+
+int ObJoinOrder::generate_lake_table_paths()
+{
+  int ret = OB_SUCCESS;
+  PathHelper helper;
+  helper.is_inner_path_ = false;
+  helper.table_opt_info_ = &table_opt_info_;
+  if (OB_FAIL(ObOptimizerUtil::classify_subquery_exprs(restrict_info_set_,
+                                                       helper.subquery_exprs_,
+                                                       helper.filters_,
+                                                       false /* with_onetime */ ))) {
+    LOG_WARN("failed to assign restrict info set", K(ret));
+  } else if (OB_FAIL(generate_lake_table_paths(helper))) {
+    LOG_WARN("failed to generate access paths", K(ret));
+  }
+  return ret;
+}
+
+int ObJoinOrder::generate_lake_table_paths(PathHelper &helper)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<AccessPath *, 8> access_paths;
+  uint64_t table_id = table_id_;
+  uint64_t ref_table_id = table_meta_info_.ref_table_id_;
+  ObIndexInfoCache index_info_cache;
+  if (OB_FAIL(compute_lake_table_property(table_id, ref_table_id))) {
+    LOG_WARN("failed to compute base path property", K(ret));
+  } else if (OB_FAIL(create_lake_table_access_paths(table_id,
+                                                    ref_table_id,
+                                                    helper,
+                                                    access_paths,
+                                                    index_info_cache))) {
+    LOG_WARN("failed to add table to join order(single)", K(ret));
+  } else if (OB_FAIL(estimate_size_for_base_table(helper, access_paths))) {
+    LOG_WARN("failed to estimate_size", K(ret));
+  } else if (OB_FAIL(compute_parallel_and_server_info_for_base_paths(access_paths))) {
+    LOG_WARN("failed to compute", K(ret));
+  } else if (OB_FAIL(compute_sharding_info_for_lake_paths(access_paths))) {
+    LOG_WARN("failed to calc sharding info", K(ret));
+  } else if (OB_FAIL(compute_cost_and_prune_access_path(helper, access_paths))) {
+    LOG_WARN("failed to compute cost and prune access path", K(ret));
+  } else if (OB_FAIL(revise_output_rows_after_creating_path(helper, access_paths))) {
+    LOG_WARN("failed to revise output rows after creating path", K(ret));
+  } else if (OB_FAIL(create_plan_tree_from_access_paths(access_paths))) {
+    LOG_WARN("failed to create plan from access paths", K(ret));
+  } else if (OB_FAIL(append(available_access_paths_, access_paths))) {
+    LOG_WARN("failed to append access paths", K(ret));
+  }
+  return ret;
+}
+
+int ObJoinOrder::compute_lake_table_property(uint64_t table_id,
+                                             uint64_t ref_table_id)
+{
+  int ret = OB_SUCCESS;
+  // 相比 base table, lake table不需要
+  // 1. 计算 fd item。schema演进后不同的数据可能有不同的主键。
+  // 2. is_at_most_one_row_
+  const ObDMLStmt *stmt = NULL;
+  if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(get_plan()), K(stmt));
+  } else if (OB_FAIL(ObOptimizerUtil::compute_const_exprs(restrict_info_set_, output_const_exprs_))) {
+    LOG_WARN("failed to compute const exprs for lake table");
+  } else if (OB_FAIL(ObEqualAnalysis::compute_equal_set(allocator_, restrict_info_set_, output_equal_sets_))) {
+    LOG_WARN("failed to compute equal set for lake table");
+  } else if (OB_FAIL(compute_lake_table_location_and_meta(table_id,
+                                                          ref_table_id,
+                                                          table_partition_info_))) {
+    LOG_WARN("failed to calc table location", K(ret));
+  } else if (OB_FAIL(compute_lake_table_meta_info(table_id, ref_table_id))) {
+    LOG_WARN("failed to compute table meta info", K(ret));
+  } else if (OB_FAIL(ObOptEstCost::estimate_width_for_table(get_plan()->get_basic_table_metas(),
+                                                            get_plan()->get_selectivity_ctx(),
+                                                            stmt->get_column_items(),
+                                                            table_id_,
+                                                            output_row_size_))) {
+    LOG_WARN("estimate width of row failed", K(table_id_), K(ret));
+  } else {
+    LOG_TRACE("succeed to compute lake table property", K(restrict_info_set_), K(output_const_exprs_),
+                K(output_equal_sets_));
+  }
+  return ret;
+}
+
+int ObJoinOrder::compute_lake_table_location_and_meta(const uint64_t table_id,
+                                                      const uint64_t ref_table_id,
+                                                      ObTablePartitionInfo *&table_partition_info)
+{
+  int ret = OB_SUCCESS;
+  const ObDMLStmt *stmt = NULL;
+  ObSqlSchemaGuard *sql_schema_guard = NULL;
+  const ParamStore *params = NULL;
+  ObExecContext *exec_ctx = NULL;
+  //this place restrict_info include sub_query.
+  ObArray<ObRawExpr *> correlated_filters;
+  ObArray<ObRawExpr *> uncorrelated_filters;
+  ObLakeTablePartitionInfo *lake_table_partition_info = nullptr;
+
+  if (OB_ISNULL(get_plan()) || OB_ISNULL(allocator_) ||
+      OB_ISNULL(stmt = get_plan()->get_stmt()) ||
+      OB_ISNULL(sql_schema_guard = OPT_CTX.get_sql_schema_guard()) ||
+      OB_ISNULL(params = OPT_CTX.get_params()) ||
+      OB_ISNULL(exec_ctx = OPT_CTX.get_exec_ctx())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get unexpected null", K(get_plan()), K(stmt), K(sql_schema_guard), K(params), K(exec_ctx), K(allocator_));
+  } else if (OB_FALSE_IT(lake_table_partition_info = OB_NEWx(ObLakeTablePartitionInfo, allocator_, *allocator_))) {
+  } else if (OB_ISNULL(lake_table_partition_info)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory for ObLakeTablePartitionInfo");
+  } else if (OB_FAIL(ObOptimizerUtil::extract_parameterized_correlated_filters(get_restrict_infos(),
+                                                                               correlated_filters,
+                                                                               uncorrelated_filters))) {
+    LOG_WARN("Failed to extract correlated filters", K(ret));
+  } else if (OB_FAIL(lake_table_partition_info->prune_file_and_select_location(*sql_schema_guard,
+                                                                               *stmt,
+                                                                               exec_ctx,
+                                                                               table_id,
+                                                                               ref_table_id,
+                                                                               uncorrelated_filters))) {
+    LOG_WARN("failed to prune file and select location");
+  } else {
+    table_partition_info = lake_table_partition_info;
+    LOG_TRACE("succeed to calculate lake table location", K(table_id), K(ref_table_id));
+  }
+  return ret;
+}
+
+int ObJoinOrder::compute_lake_table_meta_info(const uint64_t table_id,
+                                              const uint64_t ref_table_id)
+{
+  int ret = OB_SUCCESS;
+  ObSqlSchemaGuard *schema_guard = NULL;
+  const ObTableSchema* table_schema = NULL;
+  ObLakeTableStat table_stat;
+  ObSEArray<ObLakeColumnStat*, 8> column_stats;
+  ObSEArray<ObColumnRefRawExpr*, 16> column_exprs;
+  ObSEArray<uint64_t, 16> column_ids;
+  ObSEArray<ObString, 16> partition_values;
+  if (OB_ISNULL(get_plan()) || OB_ISNULL(table_partition_info_) ||
+      OB_ISNULL(schema_guard = OPT_CTX.get_sql_schema_guard())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get unexpected null", K(schema_guard), K(get_plan()), K(table_partition_info_), K(ret));
+  } else if (OB_FAIL(schema_guard->get_table_schema(ref_table_id, table_schema))) {
+    LOG_WARN("failed to get table schema", K(ret));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null table schema", K(ret));
+  } else if (OB_FAIL(get_plan()->get_column_exprs(table_id, column_exprs))) {
+    LOG_WARN("failed to get column exprs", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_exprs.count(); ++i) {
+      ObColumnRefRawExpr *col_expr = column_exprs.at(i);
+      if (OB_ISNULL(col_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null col expr", K(ret));
+      } else if (OB_FAIL(column_ids.push_back(col_expr->get_column_id()))) {
+        LOG_WARN("failed to push back column id", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (table_meta_info_.lake_table_format_ == ObLakeTableFormat::ICEBERG) {
+      if (OB_UNLIKELY(!table_partition_info_->is_lake_table_partition_info())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected table partition info");
+      } else if (OB_FAIL(get_iceberg_table_stat(*allocator_,
+                                                ref_table_id,
+                                                column_ids,
+                                                column_exprs,
+                                                table_stat,
+                                                column_stats))) {
+        LOG_WARN("failed to get iceberg table stat", K(ret));
+      } else {
+        table_meta_info_.table_row_count_ = table_stat.total_row_count_;
+      }
+    } else {
+      if (OB_FAIL(get_lake_table_partition_values(partition_values))) {
+        LOG_WARN("failed to get lake table partition values", K(ret));
+      } else if (OB_FAIL(get_common_lake_table_stat(*allocator_,
+                                                    ref_table_id,
+                                                    column_exprs,
+                                                    partition_values,
+                                                    table_stat,
+                                                    column_stats))) {
+        LOG_WARN("failed to get common lake table stat", K(ret));
+      } else if (table_stat.last_analyzed_ > 0) {
+        if (partition_values.count() > 0 &&
+            partition_values.count() < table_stat.part_cnt_) {
+          double scale_ratio = static_cast<double>(partition_values.count()) / table_stat.part_cnt_;
+          if (OB_FAIL(ObLakeTableStatUtils::scale_table_stat(scale_ratio, table_stat))) {
+            LOG_WARN("failed to scale table stat", K(ret));
+          } else if (OB_FAIL(ObLakeTableStatUtils::scale_column_stats(table_stat.total_row_count_,
+                                                                      scale_ratio,
+                                                                      column_stats))) {
+            LOG_WARN("failed to scale column stats", K(ret));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          table_meta_info_.table_row_count_ = table_stat.total_row_count_;
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      table_meta_info_.ref_table_id_ = ref_table_id;
+      table_meta_info_.table_rowkey_count_ = table_schema->get_rowkey_info().get_size();
+      table_meta_info_.table_column_count_ = table_schema->get_column_count();
+      table_meta_info_.micro_block_size_ = table_schema->get_block_size();
+      table_meta_info_.part_count_ = table_partition_info_->get_phy_tbl_location_info().get_phy_part_loc_info_list().count();
+      table_meta_info_.schema_version_ = table_schema->get_schema_version();
+      table_meta_info_.is_broadcast_table_ = table_schema->is_broadcast_table();
+      LOG_TRACE("after compute table meta info", K(table_meta_info_));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    OptTableStatType stat_type = table_stat.last_analyzed_ > 0 ?
+                                  OptTableStatType::OPT_TABLE_GLOBAL_STAT :
+                                  OptTableStatType::DEFAULT_TABLE_STAT;
+    if (OB_FAIL(get_plan()->get_basic_table_metas().add_lake_table_meta_info(
+                get_plan()->get_selectivity_ctx(),
+                table_id,
+                ref_table_id,
+                table_meta_info_.table_row_count_,
+                table_stat.last_analyzed_,
+                column_ids,
+                column_stats,
+                stat_type,
+                &table_meta_info_))) {
+      LOG_WARN("failed to add lake table meta info");
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::create_lake_table_access_paths(const uint64_t table_id,
+                                                const uint64_t ref_table_id,
+                                                PathHelper &helper,
+                                                ObIArray<AccessPath *> &access_paths,
+                                                ObIndexInfoCache &index_info_cache)
+{
+  int ret = OB_SUCCESS;
+  helper.table_opt_info_->optimization_method_ = OptimizationMethod::COST_BASED;
+  AccessPath *lake_table_access_path = NULL;
+  if (OB_FAIL(fill_lake_table_index_info_entry(table_id, ref_table_id,
+                                               index_info_cache, helper))) {
+    LOG_WARN("failed to fill lake table index info cache");
+  } else if (OB_FAIL(create_one_access_path(table_id,
+                                            ref_table_id,
+                                            ref_table_id,
+                                            index_info_cache,
+                                            helper,
+                                            lake_table_access_path,
+                                            false,
+                                            true,
+                                            OptSkipScanState::SS_DISABLE))) {
+    LOG_WARN("failed to create one lake table access path", K(ref_table_id));
+  } else if(OB_FAIL(access_paths.push_back(lake_table_access_path))) {
+    LOG_WARN("failed to push back access path", K(ret));
+  }
+  return ret;
+}
+
+int ObJoinOrder::fill_lake_table_index_info_entry(const uint64_t table_id,
+                                                  const uint64_t ref_table_id,
+                                                  ObIndexInfoCache &index_info_cache,
+                                                  PathHelper &helper)
+{
+  int ret = OB_SUCCESS;
+  index_info_cache.set_table_id(table_id);
+  index_info_cache.set_base_table_id(ref_table_id);
+  ObSqlSchemaGuard *schema_guard = nullptr;
+  const ObTableSchema *table_schema = nullptr;
+  IndexInfoEntry *index_entry = OB_NEWx(IndexInfoEntry, allocator_);
+  if (OB_ISNULL(get_plan()) || OB_ISNULL(allocator_) ||
+      OB_ISNULL(schema_guard = OPT_CTX.get_sql_schema_guard())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(get_plan()), K(schema_guard));
+  } else if (OB_FAIL(schema_guard->get_table_schema(ref_table_id, table_schema))) {
+    LOG_WARN("failed to get index schema", K(ret));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null table schema", K(table_id), K(ref_table_id));
+  } else if (OB_ISNULL(index_entry)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory for IndexInfoEntry");
+  } else {
+    index_entry->set_index_id(ref_table_id);
+    index_entry->set_is_index_global(false);
+    index_entry->set_is_index_geo(false);
+    index_entry->set_is_index_back(false);
+    index_entry->set_is_unique_index(false);
+    index_entry->set_is_fulltext_index(false);
+    index_entry->set_is_multivalue_index(false);
+    index_entry->set_is_vector_index(false);
+    index_entry->get_ordering_info().set_scan_direction(default_asc_direction());
+    index_entry->set_force_direction(false);
+    index_entry->set_interesting_order_prefix_count(0);
+    index_entry->set_interesting_order_info(OrderingFlag::NOT_MATCH);
+    index_entry->set_partition_info(table_partition_info_);
+
+    if (OB_FAIL(get_plan()->get_rowkey_exprs(table_id, *table_schema,
+                                             index_entry->get_ordering_info().get_index_keys()))) {
+      LOG_WARN("failed to get rowkey exprs", K(table_id), KPC(table_schema));
+    } else if (OB_FAIL(get_query_range_info(table_id,
+                                            ref_table_id,
+                                            ref_table_id,
+                                            index_entry->get_range_info(),
+                                            helper))) {
+      LOG_WARN("failed to get query range info", K(table_id), K(ref_table_id));
+    } else if (OB_FAIL(compute_sharding_info_for_lake_table_entry(index_entry))) {
+      LOG_WARN("failed to compute sharding info for lake table");
+    } else if (OB_FAIL(index_info_cache.add_index_info_entry(index_entry))) {
+      LOG_WARN("failed to add index info entry", K(ret));
+    }
+
+    if (OB_FAIL(ret) && OB_NOT_NULL(index_entry)) {
+      index_entry->~IndexInfoEntry();
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::compute_sharding_info_for_lake_table_entry(IndexInfoEntry *index_info_entry)
+{
+  int ret = OB_SUCCESS;
+  ObTablePartitionInfo *part_info = NULL;
+  ObTableLocationType location_type = OB_TBL_LOCATION_UNINITIALIZED;
+  ObShardingInfo *sharding_info = NULL;
+  if (OB_ISNULL(index_info_entry) ||
+      OB_ISNULL(part_info = index_info_entry->get_partition_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  }  else if (NULL != sharding_info_) {
+    sharding_info = sharding_info_;
+  } else if (OB_FAIL(part_info->get_location_type(OPT_CTX.get_local_server_addr(), location_type))) {
+    LOG_WARN("failed to get location type");
+  } else if (OB_FAIL(compute_sharding_info_with_part_info(location_type, part_info, sharding_info))) {
+    LOG_WARN("compute sharding info with partition info failed");
+  } else {
+    // TODO yibo init sharding info with lake partition info
+    sharding_info = OPT_CTX.get_distributed_sharding();
+  }
+
+  if (OB_SUCC(ret)) {
+    index_info_entry->set_sharding_info(sharding_info);
+    if (NULL == sharding_info_) {
+      sharding_info_ = sharding_info;
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::compute_sharding_info_for_lake_paths(ObIArray<AccessPath *> &access_paths)
+{
+  int ret = OB_SUCCESS;
+  // compute path sharding info
+  for (int64_t i = 0; OB_SUCC(ret) && i < access_paths.count(); i++) {
+    AccessPath *path = NULL;
+    if (OB_ISNULL(path = access_paths.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(path), K(ret));
+    } else if (OB_FAIL(set_sharding_info_for_lake_table_path(path))) {
+      LOG_WARN("failed to compute sharding info for base path", K(ret));
+    } else if (OB_FAIL(compute_base_table_path_plan_type(path))) {
+      LOG_WARN("failed to compute base table path plan type", K(ret));
+    } else {
+      LOG_TRACE("succeed to compute base sharding info", K(*path));
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::set_sharding_info_for_lake_table_path(AccessPath *path)
+{
+  int ret = OB_SUCCESS;
+  const ObDMLStmt *stmt = NULL;
+  ObTableLocationType location_type = OB_TBL_LOCATION_UNINITIALIZED;
+  ObShardingInfo *sharding_info = NULL;
+  ObTablePartitionInfo *table_partition_info = NULL;
+  if (OB_ISNULL(path) || OB_ISNULL(table_partition_info = path->table_partition_info_) ||
+      OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(path), K(table_partition_info), K(get_plan()), K(stmt));
+  } else if (OB_FAIL(table_partition_info->get_location_type(OPT_CTX.get_local_server_addr(), location_type))) {
+    LOG_WARN("failed to get location type");
+  } else if (ObGlobalHint::DEFAULT_PARALLEL < path->parallel_
+             && (OB_TBL_LOCATION_LOCAL == location_type || OB_TBL_LOCATION_REMOTE == location_type)) {
+    sharding_info = OPT_CTX.get_distributed_sharding();
+  } else {
+    sharding_info = path->strong_sharding_;
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(sharding_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to compute base table sharding info", K(ret), K(sharding_info));
+  } else {
+    path->strong_sharding_ = sharding_info;
+  }
+  return ret;
+}
+
+int ObJoinOrder::get_iceberg_table_stat(ObIAllocator &allocator,
+                                        uint64_t ref_table_id,
+                                        ObIArray<uint64_t> &column_ids,
+                                        ObIArray<ObColumnRefRawExpr*> &column_exprs,
+                                        common::ObLakeTableStat &table_stat,
+                                        ObIArray<common::ObLakeColumnStat*> &column_stats)
+{
+  int ret = OB_SUCCESS;
+  ObLakeTablePartitionInfo *lake_table_partition_info = static_cast<ObLakeTablePartitionInfo*>(table_partition_info_);
+  ObLakeTableStat common_table_stat;
+  ObSEArray<ObLakeColumnStat*, 8> common_column_stats;
+  ObSEArray<ObString, 1> partition_names;
+  double scale_ratio = 1.0;
+  if (OB_ISNULL(lake_table_partition_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null lake table partition info", K(ret));
+  } else if (OB_FAIL(ObLakeTableStatUtils::construct_stat_from_iceberg(MTL_ID(),
+                                                                       column_ids,
+                                                                       lake_table_partition_info->get_file_descs(),
+                                                                       table_stat,
+                                                                       column_stats,
+                                                                       &allocator))) {
+    LOG_WARN("failed to construct table stat from iceberg");
+  } else if (OB_FAIL(get_common_lake_table_stat(allocator,
+                                                ref_table_id,
+                                                column_exprs,
+                                                partition_names,
+                                                common_table_stat,
+                                                common_column_stats))) {
+    LOG_WARN("failed to get common lake table stat", K(ret));
+  } else if (common_table_stat.total_row_count_ == 0 ||
+             common_table_stat.last_analyzed_ == 0) {
+    LOG_TRACE("common table stat is not valid", K(common_table_stat));
+  } else if (OB_FALSE_IT(scale_ratio = table_stat.total_row_count_ / static_cast<double>(common_table_stat.total_row_count_))) {
+  } else if (OB_FAIL(ObLakeTableStatUtils::scale_column_stats(table_stat.total_row_count_,
+                                                              scale_ratio,
+                                                              common_column_stats))) {
+    LOG_WARN("failed to scale column stats", K(ret));
+  } else if (OB_FAIL(ObLakeTableStatUtils::merge_iceberg_column_stats(common_column_stats,
+                                                                      column_stats))) {
+    LOG_WARN("failed to merge iceberg column stats", K(ret));
+  }
+  return ret;
+}
+
+int ObJoinOrder::get_common_lake_table_stat(ObIAllocator &allocator,
+                                            uint64_t ref_table_id,
+                                            ObIArray<ObColumnRefRawExpr*> &column_exprs,
+                                            ObIArray<ObString> &partition_names,
+                                            common::ObLakeTableStat &table_stat,
+                                            ObIArray<common::ObLakeColumnStat*> &column_stats)
+{
+  int ret = OB_SUCCESS;
+  ObOptimizerContext *opt_ctx = NULL;
+  ObSqlSchemaGuard *sql_schema_guard = NULL;
+  ObSEArray<ObString, 16> column_names;
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < column_exprs.count(); ++i) {
+    const ObColumnRefRawExpr *col_expr = column_exprs.at(i);
+    if (OB_ISNULL(col_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null col expr", K(ret));
+    } else if (OB_FAIL(column_names.push_back(col_expr->get_column_name()))) {
+      LOG_WARN("failed to push back column name", K(ret));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(get_plan()) ||
+                       OB_ISNULL(opt_ctx = &get_plan()->get_optimizer_context()) ||
+                       OB_ISNULL(sql_schema_guard = opt_ctx->get_sql_schema_guard()) ||
+                       OB_ISNULL(opt_ctx->get_session_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_FAIL(ObOptStatManager::get_instance().get_external_table_stat(
+                     opt_ctx->get_session_info()->get_effective_tenant_id(),
+                     ref_table_id,
+                     partition_names,
+                     *sql_schema_guard,
+                     table_stat))) {
+    LOG_WARN("failed to get external table stat", K(ret));
+  } else if (OB_FAIL(ObOptStatManager::get_instance().get_external_column_stat(
+                     allocator,
+                     opt_ctx->get_session_info()->get_effective_tenant_id(),
+                     ref_table_id,
+                     column_names,
+                     partition_names,
+                     *sql_schema_guard,
+                     table_stat.total_row_count_,
+                     1.0,
+                     column_stats))) {
+    LOG_WARN("failed to get external column stat", K(ret));
+  }
+
+  if (OB_FAIL(ret)) {
+    LOG_WARN("failed to get external table stat or column stat", K(ret));
+    ret = OB_SUCCESS;
+    table_stat.total_row_count_ = 0;
+    table_stat.last_analyzed_ = 0;
+    for (int64_t i = 0; i < column_stats.count(); ++i) {
+      common::ObLakeColumnStat *column_stat = column_stats.at(i);
+      if (OB_NOT_NULL(column_stat)) {
+        column_stat->~ObLakeColumnStat();
+        column_stat = NULL;
+      }
+    }
+    column_stats.reuse();
+  }
+
+  return ret;
+}
+
+int ObJoinOrder::get_lake_table_partition_values(ObIArray<ObString> &partition_values)
+{
+  int ret = OB_SUCCESS;
+  partition_values.reuse();
+
+  if (table_meta_info_.lake_table_format_ == ObLakeTableFormat::HIVE) {
+    ObLakeTablePartitionInfo *lake_table_partition_info = static_cast<ObLakeTablePartitionInfo*>(table_partition_info_);
+    if (OB_ISNULL(lake_table_partition_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null table partition info", K(ret));
+    } else if (OB_FAIL(lake_table_partition_info->get_partition_values(partition_values))) {
+      LOG_WARN("failed to get partition values", K(ret));
+    }
+  } else {
+    // For other lake table formats (ICEBERG, ODPS), use empty partition names (global stats)
+    LOG_TRACE("using global statistics for default lake table", K(table_meta_info_.lake_table_format_));
   }
   return ret;
 }

@@ -289,12 +289,9 @@ int ObDistributedSchedulerTest::exception_test()
   server.set_ip_addr("127.0.0.1", 8888);
   ObArenaAllocator allocator(ObModIds::OB_SQL_EXEC_CONTEXT);
   ObPhyTableLocationArray table_locs(allocator);
-  ObPhyTableLocation table_loc;
   ObPartitionLocation partition_loc;
   partition_loc.set_table_id(TEST_TABLE_ID);
   partition_loc.set_partition_id(9);
-  table_loc.set_table_id(TEST_TABLE_ID);
-  EXPECT_EQ(OB_SUCCESS, table_loc.add_partition_location(partition_loc));
   ObMockFetchResultStreamHandle resp_handler(allocator);
   ObExecuteResult exe_result;
   ObExecContext exec_ctx;
@@ -307,8 +304,6 @@ int ObDistributedSchedulerTest::exception_test()
   executor_ctx->set_partition_service(&rpc_.partition_service_);
   executor_ctx->set_execute_result(&exe_result);
   executor_ctx->init_table_location(1);
-  EXPECT_EQ(OB_SUCCESS, table_locs.push_back(table_loc));
-  executor_ctx->set_table_locations(table_locs);
 
   TEST_FAIL(create_plan_tree(exec_ctx));
 
@@ -330,13 +325,9 @@ TEST_F(ObDistributedSchedulerTest, basic_test)
   ObDistributedSchedulerManager *sc_manager = ObDistributedSchedulerManager::get_instance();
 
   ObPhyTableLocationSEArray table_locs;
-  ObPhyTableLocation table_loc;
   ObPartitionLocation partition_loc;
   partition_loc.set_table_id(TEST_TABLE_ID);
   partition_loc.set_partition_id(9);
-  table_loc.set_table_id(TEST_TABLE_ID);
-  ASSERT_EQ(OB_SUCCESS, table_loc.add_partition_location(partition_loc));
-  ASSERT_EQ(OB_SUCCESS, table_locs.push_back(table_loc));
 
   ObAddr server;
   server.set_ip_addr("127.0.0.1", 8888);
@@ -356,7 +347,6 @@ TEST_F(ObDistributedSchedulerTest, basic_test)
   executor_ctx->set_partition_location_cache(&rpc_.partition_loc_cache_);
   executor_ctx->set_partition_service(&rpc_.partition_service_);
   executor_ctx->set_execute_result(&exe_result);
-  executor_ctx->set_table_locations(table_locs);
 
   create_plan_tree(exec_ctx);
 

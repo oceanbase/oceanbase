@@ -615,7 +615,7 @@ private:
     ObLSFileListOp();
     virtual ~ObLSFileListOp() {}
     int init(const ObArchiveStore *store, ObIArray<ObSingleLSInfoDesc::OneFile> *filelist);
-    bool need_get_file_size() const override { return true; }
+    bool need_get_file_meta() const override { return true; }
     int func(const dirent *entry) override;
 
     TO_STRING_KV(K_(is_inited), KPC(store_), KPC(filelist_));

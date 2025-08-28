@@ -163,6 +163,11 @@ ob_set_subtarget(ob_storage blocksstable_index_block
   blocksstable/index_block/ob_index_block_bare_iterator.cpp
 )
 
+ob_set_subtarget(ob_storage macro_cache
+  macro_cache/ob_storage_disk_space_meta.cpp
+  macro_cache/ob_ext_table_disk_cache_common_meta.cpp
+)
+
 ob_set_subtarget(ob_storage meta_store
   meta_store/ob_server_storage_meta_service.cpp
   meta_store/ob_storage_meta_io_util.cpp

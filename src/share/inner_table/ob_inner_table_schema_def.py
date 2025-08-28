@@ -17042,7 +17042,28 @@ def_table_schema(
 # 12567: __all_virtual_backup_validate_ls_task
 # 12568: __all_virtual_backup_validate_ls_task_history
 # 12569: __all_virtual_tenant_ss_storage_stat
-# 12570: __all_virtual_hms_client_pool_stat
+
+def_table_schema(
+  owner             = 'xutengting.xtt',
+  table_name        = '__all_virtual_hms_client_pool_stat',
+  table_id          = '12570',
+  table_type        = 'VIRTUAL_TABLE',
+  in_tenant_space   = True,
+  gm_columns        = [],
+  rowkey_columns    = [
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('tenant_id', 'int'),
+  ],
+  normal_columns    = [
+    ('catalog_id',          'int'),
+    ('total_clients',       'int'),
+    ('in_use_clients',      'int'),
+    ('idle_clients',        'int'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
 
 def_table_schema(
   owner = 'wangbai.wx',
@@ -17649,7 +17670,7 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15523', all_def_keyword
 # 15529: __all_virtual_backup_validate_task
 # 15530: __all_virtual_backup_validate_task_history
 # 15531: __all_virtual_tenant_ss_storage_stat
-# 15532: __all_virtual_hms_client_pool_stat
+def_table_schema(**gen_oracle_mapping_virtual_table_def('15532', all_def_keywords['__all_virtual_hms_client_pool_stat']))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15533', all_def_keywords['__all_virtual_dba_source_v1']))
 # 15534: __all_virtual_ss_diagnose_info
 
@@ -41385,6 +41406,8 @@ def_table_schema(
                           THEN 'Meta Data'
         WHEN asu.file_type IN ('tenant slog data')
                           THEN 'Slog Data'
+        WHEN asu.file_type IN ('tenant ext disk cache')
+                          THEN 'Ext Disk Cache'
       END AS SPACE_TYPE,
       sum(asu.data_size) as DATA_BYTES,
       sum(asu.used_size) as USAGE_BYTES
@@ -41394,7 +41417,8 @@ def_table_schema(
         AND asu.file_type in ('tenant tmp data',
                               'tenant clog data',
                               'tenant meta data',
-                              'tenant slog data')
+                              'tenant slog data',
+                              'tenant ext disk cache')
     group by TENANT_ID, SERVER_IP, SERVER_PORT, SPACE_TYPE
     UNION
     select
@@ -43622,8 +43646,40 @@ WHERE
 # 21684: V$OB_IVF_INDEX_INFO
 # 21685: CDB_OB_SS_SPACE_USAGE
 # 21686: DBA_OB_SS_SPACE_USAGE
-# 21687: GV$OB_HMS_CLIENT_POOL_STAT
-# 21688: V$OB_HMS_CLIENT_POOL_STAT
+
+def_table_schema(
+  owner = 'xutengting.xtt',
+  table_name     = 'GV$OB_HMS_CLIENT_POOL_STAT',
+  table_id       = '21687',
+  table_type = 'SYSTEM_VIEW',
+  gm_columns = [],
+  in_tenant_space = True,
+  rowkey_columns = [],
+  view_definition = """
+  SELECT SVR_IP,SVR_PORT,TENANT_ID,CATALOG_ID,TOTAL_CLIENTS,IN_USE_CLIENTS,IDLE_CLIENTS
+  FROM oceanbase.__all_virtual_hms_client_pool_stat
+""".replace("\n", " "),
+
+  normal_columns = [
+  ],
+)
+
+def_table_schema(
+  owner = 'xutengting.xtt',
+  table_name     = 'V$OB_HMS_CLIENT_POOL_STAT',
+  table_id       = '21688',
+  table_type = 'SYSTEM_VIEW',
+  gm_columns = [],
+  in_tenant_space = True,
+  rowkey_columns = [],
+  view_definition = """
+  SELECT SVR_IP,SVR_PORT,TENANT_ID,CATALOG_ID,TOTAL_CLIENTS,IN_USE_CLIENTS,IDLE_CLIENTS
+  FROM oceanbase.GV$OB_HMS_CLIENT_POOL_STAT WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
+""".replace("\n", " "),
+
+  normal_columns = [
+  ],
+)
 
 def_table_schema(
   owner           = 'shenyunlong.syl',
@@ -77821,8 +77877,54 @@ def_table_schema(
 # 28280: GV$OB_SQL_HISTOGRAM
 # 28281: V$OB_SQL_HISTOGRAM
 # 28282: DBA_WR_SQL_HISTOGRAM
-# 28283: GV$OB_HMS_CLIENT_POOL_STAT
-# 28284: V$OB_HMS_CLIENT_POOL_STAT
+
+def_table_schema(
+    owner = 'xutengting.xtt',
+    table_name      = 'GV$OB_HMS_CLIENT_POOL_STAT',
+    name_postfix    = '_ORA',
+    database_id     = 'OB_ORA_SYS_DATABASE_ID',
+    table_id        = '28283',
+    table_type      = 'SYSTEM_VIEW',
+    rowkey_columns  = [],
+    normal_columns  = [],
+    gm_columns      = [],
+    in_tenant_space = True,
+    view_definition = """
+      SELECT
+      SVR_IP,
+      SVR_PORT,
+      TENANT_ID,
+      CATALOG_ID,
+      TOTAL_CLIENTS,
+      IN_USE_CLIENTS,
+      IDLE_CLIENTS
+      FROM SYS.ALL_VIRTUAL_HMS_CLIENT_POOL_STAT
+""".replace("\n", " ")
+)
+
+def_table_schema(
+    owner = 'xutengting.xtt',
+    table_name      = 'V$OB_HMS_CLIENT_POOL_STAT',
+    name_postfix    = '_ORA',
+    database_id     = 'OB_ORA_SYS_DATABASE_ID',
+    table_id        = '28284',
+    table_type      = 'SYSTEM_VIEW',
+    rowkey_columns  = [],
+    normal_columns  = [],
+    gm_columns      = [],
+    in_tenant_space = True,
+    view_definition = """
+      SELECT SVR_IP,
+      SVR_PORT,
+      TENANT_ID,
+      CATALOG_ID,
+      TOTAL_CLIENTS,
+      IN_USE_CLIENTS,
+      IDLE_CLIENTS
+      FROM SYS.GV$OB_HMS_CLIENT_POOL_STAT WHERE
+      SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
+""".replace("\n", " ")
+)
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位

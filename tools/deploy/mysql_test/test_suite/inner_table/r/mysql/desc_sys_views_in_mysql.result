@@ -11115,6 +11115,44 @@ end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_VECTOR_MEMORY limit 1);
 cnt
 1
+desc oceanbase.GV$OB_HMS_CLIENT_POOL_STAT;
+Field	Type	Null	Key	Default	Extra
+SVR_IP	varchar(46)	NO		NULL	
+SVR_PORT	bigint(20)	NO		NULL	
+TENANT_ID	bigint(20)	NO		NULL	
+CATALOG_ID	bigint(20)	NO		NULL	
+TOTAL_CLIENTS	bigint(20)	NO		NULL	
+IN_USE_CLIENTS	bigint(20)	NO		NULL	
+IDLE_CLIENTS	bigint(20)	NO		NULL	
+set @query_type = (select 
+case 
+when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_HMS_CLIENT_POOL_STAT|%') then 2
+when ('' like '%|GV$OB_HMS_CLIENT_POOL_STAT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_HMS_CLIENT_POOL_STAT|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_HMS_CLIENT_POOL_STAT limit 1);
+cnt
+1
+desc oceanbase.V$OB_HMS_CLIENT_POOL_STAT;
+Field	Type	Null	Key	Default	Extra
+SVR_IP	varchar(46)	NO			
+SVR_PORT	bigint(20)	NO			
+TENANT_ID	bigint(20)	NO			
+CATALOG_ID	bigint(20)	NO			
+TOTAL_CLIENTS	bigint(20)	NO			
+IN_USE_CLIENTS	bigint(20)	NO			
+IDLE_CLIENTS	bigint(20)	NO			
+set @query_type = (select 
+case 
+when ('|KEY_COLUMN_USAGE|' like '%|V$OB_HMS_CLIENT_POOL_STAT|%') then 2
+when ('' like '%|V$OB_HMS_CLIENT_POOL_STAT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_HMS_CLIENT_POOL_STAT|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_HMS_CLIENT_POOL_STAT limit 1);
+cnt
+1
 desc oceanbase.DBA_OB_AI_MODELS;
 Field	Type	Null	Key	Default	Extra
 MODEL_ID	bigint(20)	NO		NULL	

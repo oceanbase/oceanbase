@@ -113,6 +113,12 @@ int ObStorageIOPipelineTaskInfo::set_state(const TaskState target_state)
   return ret;
 }
 
+int ObStorageIOPipelineTaskInfo::set_macro_block_id(
+    blocksstable::ObStorageObjectHandle &handle, const MacroBlockId &macro_id)
+{
+  return handle.set_macro_block_id(macro_id);
+}
+
 /*-----------------------------------------TaskInfoWithRWHandle-----------------------------------------*/
 TaskInfoWithRWHandle::TaskInfoWithRWHandle()
     : ObStorageIOPipelineTaskInfo(),
@@ -171,31 +177,55 @@ int TaskInfoWithRWHandle::refresh_state(TaskState &cur_state)
     ret = OB_NOT_INIT;
     LOG_WARN("invalid argument", KR(ret), KPC(this));
   } else {
-    bool is_finished = false;
     if (TASK_READ_IN_PROGRESS == state_) {
-      if (OB_FAIL(read_handle_.check_is_finished(is_finished))) {
-        LOG_WARN("fail to check is finished", KR(ret), KPC(this));
-      } else if (is_finished) {
-        if (OB_FAIL(read_handle_.wait())) {
-          LOG_WARN("fail to wait result", KR(ret), KPC(this));
-        } else {
-          state_ = TASK_READ_DONE;
-        }
+      if (OB_FAIL(refresh_read_state_())) {
+        LOG_WARN("fail to refresh read state", KR(ret), KPC(this));
       }
     } else if (TASK_WRITE_IN_PROGRESS == state_) {
-      if (OB_FAIL(write_handle_.check_is_finished(is_finished))) {
-        LOG_WARN("fail to check is finished", KR(ret), KPC(this));
-      } else if (is_finished) {
-        if (OB_FAIL(write_handle_.wait())) {
-          LOG_WARN("fail to wait result", KR(ret), KPC(this));
-        } else {
-          state_ = TASK_WRITE_DONE;
-        }
+      if (OB_FAIL(refresh_write_state_())) {
+        LOG_WARN("fail to refresh write state", KR(ret), KPC(this));
       }
     }
 
     if (OB_SUCC(ret)) {
       cur_state = state_;
+    }
+  }
+  return ret;
+}
+
+// internal func, skips validation check
+int TaskInfoWithRWHandle::refresh_read_state_()
+{
+  int ret = OB_SUCCESS;
+  bool is_finished = false;
+  if (TASK_READ_IN_PROGRESS == state_) {
+    if (OB_FAIL(read_handle_.check_is_finished(is_finished))) {
+      LOG_WARN("fail to check is finished", KR(ret), KPC(this));
+    } else if (is_finished) {
+      if (OB_FAIL(read_handle_.wait())) {
+        LOG_WARN("fail to wait result", KR(ret), KPC(this));
+      } else {
+        state_ = TASK_READ_DONE;
+      }
+    }
+  }
+  return ret;
+}
+
+int TaskInfoWithRWHandle::refresh_write_state_()
+{
+  int ret = OB_SUCCESS;
+  bool is_finished = false;
+  if (TASK_WRITE_IN_PROGRESS == state_) {
+    if (OB_FAIL(write_handle_.check_is_finished(is_finished))) {
+      LOG_WARN("fail to check is finished", KR(ret), KPC(this));
+    } else if (is_finished) {
+      if (OB_FAIL(write_handle_.wait())) {
+        LOG_WARN("fail to wait result", KR(ret), KPC(this));
+      } else {
+        state_ = TASK_WRITE_DONE;
+      }
     }
   }
   return ret;

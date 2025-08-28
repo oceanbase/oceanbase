@@ -931,7 +931,8 @@ int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
   for (int64_t i = 0; OB_SUCC(ret) && i < infos.count(); ++i) {
     ObTableLocation &tl = infos.at(i)->get_table_location();
     const ObTableSchema *table_schema = nullptr;
-    if (tl.use_das()) {
+    if (infos.at(i)->is_lake_table_partition_info()) {
+    } else if (tl.use_das()) {
       if (OB_FAIL(das_table_locations_.push_back(tl))) {
         LOG_WARN("fail to push das table location", K(ret), K(i));
       }

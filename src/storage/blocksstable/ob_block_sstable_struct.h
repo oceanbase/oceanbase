@@ -707,6 +707,7 @@ public:
                K_(reserved_block_count),
                K_(linked_block_count),
                K_(tmp_file_count),
+               K_(ext_disk_cache_count),
                K_(data_block_count),
                K_(shared_data_block_count),
                K_(index_block_count),
@@ -728,6 +729,7 @@ public:
   int64_t reserved_block_count_;
   int64_t linked_block_count_;
   int64_t tmp_file_count_;
+  int64_t ext_disk_cache_count_;
   int64_t data_block_count_;
   int64_t shared_data_block_count_;
   int64_t index_block_count_;

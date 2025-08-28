@@ -1005,7 +1005,7 @@ int ObOptimizerUtil::get_expr_monotonicity_recursively(const ObRawExpr* expr,
   if (OB_ISNULL(expr) || OB_ISNULL(var)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected expression input is null error", K(ret));
-  } else if (expr->is_const_raw_expr()) {
+  } else if (expr->is_const_expr()) {
     // here if cannot merge into upperline
     // select x + 10(:?) 通过返回结果看 + int 或者+ null都会被解析为const raw expr 只有返回类型能够区分
     if (!static_cast<const ObConstRawExpr*>(expr)->get_param().is_null_oracle()) {

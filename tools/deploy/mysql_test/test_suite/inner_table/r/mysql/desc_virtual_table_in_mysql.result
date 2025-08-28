@@ -6125,6 +6125,21 @@ svr_port	bigint(20)	NO		NULL
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ss_gc_detect_info;
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_hms_client_pool_stat;
+Field	Type	Null	Key	Default	Extra
+svr_ip	varchar(46)	NO	PRI	NULL	
+svr_port	bigint(20)	NO	PRI	NULL	
+tenant_id	bigint(20)	NO	PRI	NULL	
+catalog_id	bigint(20)	NO		NULL	
+total_clients	bigint(20)	NO		NULL	
+in_use_clients	bigint(20)	NO		NULL	
+idle_clients	bigint(20)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_hms_client_pool_stat;
+IF(count(*) >= 0, 1, 0)
+1
+"oceanbase.__all_virtual_hms_client_pool_stat runs in single server"
+IF(count(*) >= 0, 1, 0)
+1
 desc oceanbase.__all_virtual_dba_source_v1;
 Field	Type	Null	Key	Default	Extra
 owner	varchar(128)	NO		NULL	

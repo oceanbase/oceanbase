@@ -133,6 +133,7 @@ public:
     }
     return ret;
   }
+  // select server by file url
   int select_server(const ObString &file_url, ObAddr &addr)
   {
     int ret = OB_SUCCESS;
@@ -150,6 +151,28 @@ public:
       addr = iter->svr_addr_;
 #ifndef NDEBUG
       SQL_ENG_LOG(INFO, "select server", K(file_url), K(addr), KPC(iter));
+#endif
+    }
+    return ret;
+  }
+  // select server by hash part idx
+  int select_server(const int32_t part_idx, ObAddr &addr)
+  {
+    int ret = OB_SUCCESS;
+    if (part_idx < 0) {
+      ret = OB_INVALID_ARGUMENT;
+      SQL_ENG_LOG(WARN, "get invalid part idx", K(ret), K(part_idx));
+    } else {
+      uint64_t hash_val = 0;
+      hash_val = hash_func_(&part_idx, sizeof(int32_t), hash_val);
+      typename NodeList::iterator iter =
+        std::lower_bound(node_list_.begin(), node_list_.end(), hash_val, VirtualNodeHashCmp());
+      if (iter == node_list_.end()) {
+        iter = node_list_.begin();
+      }
+      addr = iter->svr_addr_;
+#ifndef NDEBUG
+      SQL_ENG_LOG(INFO, "select server", K(part_idx), K(addr), KPC(iter));
 #endif
     }
     return ret;

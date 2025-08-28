@@ -25,6 +25,7 @@
 #include "sql/resolver/dml/ob_raw_expr_sets.h"
 #include "sql/resolver/expr/ob_raw_expr_copier.h"
 #include "sql/resolver/dml/ob_stmt_expr_visitor.h"
+#include "share/catalog/ob_catalog_properties.h"
 #include "share/vector_index/ob_vector_index_param.h"
 
 namespace oceanbase
@@ -174,6 +175,7 @@ struct TableItem
     ddl_table_id_ = common::OB_INVALID_ID;
     json_table_def_ = nullptr;
     table_type_ = MAX_TABLE_TYPE;
+    lake_table_format_ = share::ObLakeTableFormat::INVALID;
     values_table_def_ = NULL;
     sample_info_ = nullptr;
     transpose_table_def_ = NULL;
@@ -323,6 +325,7 @@ struct TableItem
   bool is_view_table_; //for VIEW privilege check
   bool is_recursive_union_fake_table_; //mark whether this table is a tmp fake table for resolve the recursive cte table
   share::schema::ObTableType table_type_;
+  share::ObLakeTableFormat lake_table_format_;
   CTEType cte_type_;
   common::ObString database_name_;
   /* FOR UPDATE clause */

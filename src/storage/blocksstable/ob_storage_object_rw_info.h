@@ -18,6 +18,7 @@
 #include "share/io/ob_io_define.h"
 #include "storage/blocksstable/ob_macro_block_id.h"
 #include "storage/blocksstable/ob_logic_macro_id.h"
+#include "sql/engine/basic/ob_lake_table_reader_profile.h"
 
 namespace oceanbase
 {
@@ -140,7 +141,7 @@ public:
   ObStorageObjectReadInfo()
     : macro_block_id_(), offset_(), size_(), io_timeout_ms_(DEFAULT_IO_WAIT_TIME_MS), io_desc_(),
       io_callback_(NULL), buf_(NULL), mtl_tenant_id_(OB_INVALID_TENANT_ID), local_cache_read_info_(),
-      path_(nullptr), access_info_(nullptr)
+      path_(), access_info_(nullptr), io_metrics_(nullptr)
   {}
   ~ObStorageObjectReadInfo() = default;
   OB_INLINE bool is_valid() const
@@ -192,7 +193,7 @@ public:
   }
   TO_STRING_KV(K_(macro_block_id), K_(offset), K_(size), K_(io_timeout_ms), K_(io_desc),
                KP_(io_callback), KP_(buf), K_(mtl_tenant_id), K_(local_cache_read_info),
-               K(path_), KPC(access_info_));
+               K(path_), KPC(access_info_), KPC(io_metrics_));
 public:
   blocksstable::MacroBlockId macro_block_id_;
   int64_t offset_;
@@ -203,8 +204,9 @@ public:
   char *buf_;
   uint64_t mtl_tenant_id_;
   ObLocalCacheReadInfo local_cache_read_info_;
-  const char *path_;
+  ObString path_;
   const ObObjectStorageInfo *access_info_;
+  sql::ObLakeTableIOMetrics *io_metrics_;
 };
 
 } // namespace blocksstable

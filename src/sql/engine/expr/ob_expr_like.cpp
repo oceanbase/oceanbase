@@ -1647,7 +1647,7 @@ int ObExprLike::eval_like_expr_vector_only_text_vectorized(VECTOR_EVAL_FUNC_ARG_
   // the third arg escape must be varchar
   } else if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound))) {
     LOG_WARN("eval text batch failed", K(ret));
-  }  else {
+  } else {
     VectorFormat text_format = expr.args_[0]->get_format(ctx);
     VectorFormat res_format = expr.get_format(ctx);
     if (VEC_DISCRETE == text_format && VEC_DISCRETE == res_format) {

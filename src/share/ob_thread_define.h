@@ -176,6 +176,7 @@ TG_DEF(TieredStorageTimer, TieredStorageTimer, TIMER)
 TG_DEF(TenantTTLManager, TTLManager, TIMER)
 TG_DEF(TenantTabletTTLMgr, TTLTabletMgr, TIMER)
 TG_DEF(TntSharedTimer, TntSharedTimer, TIMER)
+TG_DEF(PCachedExtServiceScheduler, PCachedExtServiceScheduler, TIMER)
 TG_DEF(VectorAsyncTaskPool, VectorAsyncTask, QUEUE_THREAD, 1, 8)   // for tmp
 TG_DEF(DRCreateSSLOGTimer, DRCreateSSLOGTimer, TIMER)
 TG_DEF(VectorTaskPool, VectorTaskPool, QUEUE_THREAD, 1, 1024)

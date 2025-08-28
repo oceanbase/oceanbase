@@ -27,7 +27,6 @@
 #include "sql/optimizer/ob_opt_est_utils.h"
 #include "sql/optimizer/ob_opt_selectivity.h"
 #include "sql/optimizer/ob_log_operator_factory.h"
-#include "sql/optimizer/ob_table_partition_info.h"
 #include "sql/optimizer/ob_optimizer.h"
 #include "share/client_feedback/ob_feedback_int_struct.h"
 #include "sql/optimizer/ob_logical_operator.h"
@@ -90,6 +89,7 @@ class ObSelectLogPlan;
 class ObThreeStageAggrInfo;
 struct ObTextRetrievalInfo;
 class ObHashRollupInfo;
+class ObTablePartitionInfo;
 
 struct TableDependInfo {
   TO_STRING_KV(
@@ -503,7 +503,7 @@ public:
 
   int prepare_ordermap_pathset(const JoinOrderArray base_level);
 
-  int select_location(ObIArray<ObTablePartitionInfo *> &tbl_part_info_list);
+  int select_location(ObTablePartitionInfo *tbl_part_info);
 
   int get_subplan(const ObRawExpr *expr, SubPlanInfo *&info);
 

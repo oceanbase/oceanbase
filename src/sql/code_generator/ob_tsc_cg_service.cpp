@@ -112,6 +112,7 @@ int ObTscCgService::generate_tsc_ctdef(ObLogTableScan &op, ObTableScanCtDef &tsc
       LOG_WARN("fail to check location access priv", K(ret));
     } else {
       scan_ctdef.is_external_table_ = true;
+      scan_ctdef.lake_table_format_ = op.get_lake_table_type();
       const ObString &table_format_or_properties = table_schema->get_external_file_format().empty() ?
                                             table_schema->get_external_properties() :
                                             table_schema->get_external_file_format();
@@ -274,45 +275,18 @@ int ObTscCgService::generate_tsc_ctdef(ObLogTableScan &op, ObTableScanCtDef &tsc
 
   OZ (cg_.generate_rt_exprs(op.get_ext_file_column_exprs(),
                             tsc_ctdef.scan_ctdef_.pd_expr_spec_.ext_file_column_exprs_));
-  OZ (cg_.generate_rt_exprs(op.get_ext_column_convert_exprs(),
+  OZ (cg_.generate_rt_exprs(op.get_ext_column_dependent_exprs(),
                             tsc_ctdef.scan_ctdef_.pd_expr_spec_.ext_column_convert_exprs_));
   OZ (tsc_ctdef.scan_ctdef_.pd_expr_spec_.ext_mapping_column_ids_.prepare_allocate(op.get_ext_file_column_exprs().count()));
   OZ (tsc_ctdef.scan_ctdef_.pd_expr_spec_.ext_mapping_column_exprs_.prepare_allocate(op.get_ext_file_column_exprs().count()));
   if (OB_SUCC(ret)) {
-    common::ObArray<ObRawExpr *> tmp_expr_array;
-    for (int i = 0; OB_SUCC(ret) && i < op.get_ext_file_column_exprs().count(); i++) {
-      ObRawExpr *dep_expr = op.get_ext_file_column_exprs().at(i);
-      tsc_ctdef.scan_ctdef_.pd_expr_spec_.ext_file_column_exprs_.at(i)->extra_ = dep_expr->get_column_idx();
-      int64_t found_cnt = 0;
-      int64_t idx = -1;
-      for (int j = 0; OB_SUCC(ret) && j < op.get_access_exprs().count(); ++j) {
-        ObColumnRefRawExpr *col_expr = NULL;
-        if (op.get_access_exprs().at(j)->is_column_ref_expr()
-            && (col_expr = static_cast<ObColumnRefRawExpr*>(
-                  op.get_access_exprs().at(j)))->is_stored_generated_column()) {
-          ObRawExpr *root_expr = col_expr->get_dependant_expr();
-          bool found = false;
-          if (OB_FAIL(ObRawExprUtils::find_expr(root_expr, dep_expr, found))) {
-            LOG_WARN("failed to find expr", K(ret));
-          } else if (found) {
-            ++found_cnt;
-            idx = j;
-          }
-        }
-      }
-      if (OB_SUCC(ret)) {
-        if (1 == found_cnt) {
-          ObExpr *rt_expr = nullptr;
-          OZ (cg_.generate_rt_expr(*op.get_access_exprs().at(idx), rt_expr));
-          tsc_ctdef.scan_ctdef_.pd_expr_spec_.ext_mapping_column_exprs_.at(i) = rt_expr;
-          tsc_ctdef.scan_ctdef_.pd_expr_spec_.ext_mapping_column_ids_.at(i)
-            = static_cast<ObColumnRefRawExpr *> (op.get_access_exprs().at(idx))->get_column_id();
-        } else {
-          tsc_ctdef.scan_ctdef_.pd_expr_spec_.ext_mapping_column_exprs_.at(i) = nullptr;
-          tsc_ctdef.scan_ctdef_.pd_expr_spec_.ext_mapping_column_ids_.at(i) = OB_INVALID_ID;
-        }
-      }
+    for (int i = 0; i < op.get_ext_file_column_exprs().count(); i++) {
+      tsc_ctdef.scan_ctdef_.pd_expr_spec_.ext_file_column_exprs_.at(i)->extra_
+          = op.get_ext_file_column_exprs().at(i)->get_column_idx();
     }
+  }
+  if (OB_SUCC(ret) && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_1_0) {
+    OZ (generate_ext_column_mapping(op, tsc_ctdef));
   }
 
   bool need_attach = false;
@@ -424,6 +398,49 @@ int ObTscCgService::generate_tsc_ctdef(ObLogTableScan &op, ObTableScanCtDef &tsc
 
   LOG_DEBUG("generate tsc ctdef finish", K(ret), K(op), K(tsc_ctdef),
                                                     K(tsc_ctdef.scan_ctdef_.pd_expr_spec_.ext_file_column_exprs_));
+  return ret;
+}
+
+int ObTscCgService::generate_ext_column_mapping(ObLogTableScan &op, ObTableScanCtDef &tsc_ctdef)
+{
+  int ret = OB_SUCCESS;
+  common::ObArray<ObRawExpr *> tmp_expr_array;
+  for (int64_t i = 0; i < tsc_ctdef.scan_ctdef_.pd_expr_spec_.ext_mapping_column_exprs_.count(); ++i) {
+    tsc_ctdef.scan_ctdef_.pd_expr_spec_.ext_mapping_column_exprs_.at(i) = nullptr;
+    tsc_ctdef.scan_ctdef_.pd_expr_spec_.ext_mapping_column_ids_.at(i) = OB_INVALID_ID;
+  }
+
+  if (op.get_access_exprs().count() == op.get_ext_file_column_exprs().count()) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < op.get_access_exprs().count(); ++i) {
+      int64_t found_cnt = 0;
+      ObColumnRefRawExpr *col_expr = NULL;
+      int64_t idx = -1;
+      if (op.get_access_exprs().at(i)->is_column_ref_expr()
+          && (col_expr = static_cast<ObColumnRefRawExpr*>(
+              op.get_access_exprs().at(i)))->is_stored_generated_column()) {
+        ObRawExpr *root_expr = col_expr->get_dependant_expr();
+        for (int64_t j = 0; OB_SUCC(ret) && j < op.get_ext_file_column_exprs().count(); ++j) {
+          bool found = false;
+          ObRawExpr *dep_expr = op.get_ext_file_column_exprs().at(j);
+          if (OB_FAIL(ObRawExprUtils::find_expr(root_expr, dep_expr, found))) {
+            LOG_WARN("failed to find expr", K(ret));
+          } else if (found) {
+            ++found_cnt;
+            idx = j;
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (1 == found_cnt) {
+          ObExpr *rt_expr = nullptr;
+          OZ (cg_.generate_rt_expr(*op.get_access_exprs().at(i), rt_expr));
+          tsc_ctdef.scan_ctdef_.pd_expr_spec_.ext_mapping_column_exprs_.at(idx) = rt_expr;
+          tsc_ctdef.scan_ctdef_.pd_expr_spec_.ext_mapping_column_ids_.at(idx)
+            = static_cast<ObColumnRefRawExpr *> (op.get_access_exprs().at(i))->get_column_id();
+        }
+      }
+    }
+  }
   return ret;
 }
 
@@ -831,6 +848,7 @@ int ObTscCgService::generate_tsc_filter(const ObLogTableScan &op, ObTableScanSpe
   } else if (OB_FAIL(op.extract_pushdown_filters(nonpushdown_filters,
                                                  scan_pushdown_filters,
                                                  lookup_pushdown_filters,
+                                                 &scan_ctdef.pd_expr_spec_.ext_enable_late_materialization_,
                                                  &external_pushdown_filters))) {
     LOG_WARN("extract pushdown filters failed", K(ret));
   } else if (op.get_contains_fake_cte()) {
@@ -866,8 +884,10 @@ int ObTscCgService::generate_tsc_filter(const ObLogTableScan &op, ObTableScanSpe
       LOG_WARN("generate scan ctdef pushdown filter");
     } else if (pd_filter) {
       ObPushdownFilterConstructor filter_constructor(
-          &cg_.phy_plan_->get_allocator(), cg_, &op,
+          &cg_.phy_plan_->get_allocator(), cg_,
+          &op.get_filter_monotonicity(),
           scan_ctdef.pd_expr_spec_.pd_storage_flag_.is_use_column_store(),
+          op.get_table_type(),
           scan_ctdef.table_param_.is_enable_semistruct_encoding());
       if (OB_FAIL(filter_constructor.apply(
           scan_pushdown_filters, scan_ctdef.pd_expr_spec_.pd_storage_filters_.get_pushdown_filter()))) {
@@ -885,8 +905,10 @@ int ObTscCgService::generate_tsc_filter(const ObLogTableScan &op, ObTableScanSpe
       LOG_WARN("generate lookup ctdef pushdown filter failed", K(ret));
     } else if (pd_filter) {
       ObPushdownFilterConstructor filter_constructor(
-          &cg_.phy_plan_->get_allocator(), cg_, &op,
+          &cg_.phy_plan_->get_allocator(), cg_,
+          &op.get_filter_monotonicity(),
           lookup_ctdef->pd_expr_spec_.pd_storage_flag_.is_use_column_store(),
+          op.get_table_type(),
           lookup_ctdef->table_param_.is_enable_semistruct_encoding());
       if (OB_FAIL(filter_constructor.apply(
           lookup_pushdown_filters, lookup_ctdef->pd_expr_spec_.pd_storage_filters_.get_pushdown_filter()))) {
@@ -1636,8 +1658,10 @@ int ObTscCgService::generate_das_scan_ctdef(const ObLogTableScan &op,
         LOG_WARN("failed to generate index scan pushdown filter", K(scan_ctdef.ref_table_id_), K(ret));
       } else if (scan_ctdef.pd_expr_spec_.pd_storage_flag_.is_filter_pushdown()) {
         ObPushdownFilterConstructor filter_constructor(
-            &cg_.phy_plan_->get_allocator(), cg_, &op,
+            &cg_.phy_plan_->get_allocator(), cg_,
+            &op.get_filter_monotonicity(),
             scan_ctdef.pd_expr_spec_.pd_storage_flag_.is_use_column_store(),
+            op.get_table_type(),
             scan_ctdef.table_param_.is_enable_semistruct_encoding());
         if (OB_FAIL(filter_constructor.apply(
                     scan_pushdown_filters, scan_ctdef.pd_expr_spec_.pd_storage_filters_.get_pushdown_filter()))) {
@@ -1911,6 +1935,8 @@ int ObTscCgService::generate_table_loc_meta(uint64_t table_loc_id,
   loc_meta.ref_table_id_ = real_table_id;
   loc_meta.is_dup_table_ = table_schema.is_duplicate_table();
   loc_meta.is_external_table_ = table_schema.is_external_table();
+  loc_meta.is_lake_table_ = (table_schema.get_lake_table_format() == share::ObLakeTableFormat::ICEBERG
+                             || table_schema.get_lake_table_format() == share::ObLakeTableFormat::HIVE);
   ObString file_location;
   CK (OB_NOT_NULL(schema_guard->get_schema_guard()));
   OZ (ObExternalTableUtils::get_external_file_location(table_schema, *schema_guard->get_schema_guard(), cg_.phy_plan_->get_allocator(), file_location));

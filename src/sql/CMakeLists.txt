@@ -256,6 +256,7 @@ ob_set_subtarget(ob_sql engine_basic
   engine/basic/ob_hp_infras_vec_mgr.cpp
   engine/basic/ob_truncate_filter_struct.cpp
   engine/basic/ob_consistent_hashing_load_balancer.cpp
+  engine/basic/ob_lake_table_reader_profile.cpp
 )
 
 ob_set_subtarget(ob_sql engine_cmd
@@ -912,6 +913,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_ai/ob_expr_ai_rerank.cpp
   engine/expr/ob_expr_local_dynamic_filter.cpp
   engine/expr/ob_expr_format_profile.cpp
+  engine/expr/ob_expr_bucket.cpp
 )
 
 ob_set_subtarget(ob_sql_extra ALONE
@@ -1092,10 +1094,13 @@ ob_set_subtarget(ob_sql engine_table
   engine/table/ob_external_data_page_cache.cpp
   engine/table/ob_external_table_access_service.cpp
   engine/table/ob_pcached_external_file_service.cpp
+  engine/table/ob_pcached_external_file_service_scheduler.cpp
   engine/table/ob_external_table_pushdown_filter.cpp
   engine/table/ob_csv_table_row_iter.cpp
+  engine/table/ob_dummy_table_row_iter.cpp
   engine/table/ob_orc_table_row_iter.cpp
   engine/table/ob_parquet_table_row_iter.cpp
+  engine/table/ob_iceberg_delete_bitmap_builder.cpp
   engine/table/ob_odps_table_row_iter.cpp
   engine/table/ob_file_prefetch_buffer.cpp
   engine/table/ob_odps_jni_table_row_iter.cpp
@@ -1172,7 +1177,6 @@ ob_set_subtarget(ob_sql optimizer
   optimizer/ob_index_info_cache.cpp
   optimizer/ob_insert_all_log_plan.cpp
   optimizer/ob_insert_log_plan.cpp
-  optimizer/ob_intersect_route_policy.cpp
   optimizer/ob_join_order.cpp
   optimizer/ob_log_count.cpp
   optimizer/ob_log_del_upd.cpp
@@ -1246,6 +1250,13 @@ ob_set_subtarget(ob_sql optimizer
   optimizer/ob_log_values_table_access.cpp
   optimizer/ob_direct_load_optimizer_ctx.cpp
   optimizer/ob_log_expand.cpp
+  optimizer/file_prune/ob_hive_file_pruner.cpp
+  optimizer/file_prune/ob_i_lake_table_file_pruner.cpp
+  optimizer/file_prune/ob_iceberg_file_pruner.cpp
+  optimizer/file_prune/ob_iceberg_file_filter.cpp
+  optimizer/file_prune/ob_lake_table_file_map.cpp
+  optimizer/file_prune/ob_lake_table_fwd.cpp
+  optimizer/ob_lake_table_partition_info.cpp
 )
 
 ob_set_subtarget(ob_sql plan_cache
@@ -1624,6 +1635,29 @@ ob_set_subtarget(ob_sql udr
 )
 
 add_definitions(-D_GLIBCXX_USE_CXX11_ABI=0)
+
+ob_set_subtarget(ob_sql hive
+  table_format/hive/ob_hive_table_metadata.cpp
+)
+
+ob_set_subtarget(ob_sql odps
+  table_format/odps/ob_odps_table_metadata.cpp
+)
+
+ob_set_subtarget(ob_sql iceberg
+  table_format/iceberg/ob_iceberg_utils.cpp
+  table_format/iceberg/ob_iceberg_table_metadata.cpp
+  table_format/iceberg/spec/table_metadata.cpp
+  table_format/iceberg/spec/statistics.cpp
+  table_format/iceberg/spec/schema.cpp
+  table_format/iceberg/spec/snapshot.cpp
+  table_format/iceberg/spec/partition.cpp
+  table_format/iceberg/spec/manifest_list.cpp
+  table_format/iceberg/spec/manifest.cpp
+  table_format/iceberg/scan/task.cpp
+  table_format/iceberg/scan/conversions.cpp
+  table_format/iceberg/scan/delete_file_index.cpp
+)
 
 ob_add_new_object_target(ob_sql ob_sql)
 ob_add_new_object_target(ob_sql_extra ob_sql_extra)

@@ -1450,7 +1450,8 @@ void ObDASLocationRouter::set_retry_info(const ObQueryRetryInfo* retry_info)
   history_retry_cnt_ = retry_info->get_retry_cnt();
 }
 
-int ObDASLocationRouter::get_external_table_ls_location(ObLSLocation &location)
+int ObDASLocationRouter::get_external_table_ls_location(ObLSLocation &location,
+                                                        const common::ObAddr *server)
 {
   int ret = OB_SUCCESS;
   int64_t now = ObTimeUtility::current_time();
@@ -1458,8 +1459,8 @@ int ObDASLocationRouter::get_external_table_ls_location(ObLSLocation &location)
   ObLSReplicaLocation ls_replica;
   ObLSRestoreStatus ls_restore_status(ObLSRestoreStatus::NONE);
   OZ (location.init(GCONF.cluster_id, MTL_ID(), ObLSID(ObLSID::VT_LS_ID), now));
-  OZ (ls_replica.init(GCTX.self_addr(), common::LEADER,
-                      GCONF.mysql_port, REPLICA_TYPE_FULL,
+  OZ (ls_replica.init(server == nullptr ? GCTX.self_addr() : *server,
+                      common::LEADER, GCONF.mysql_port, REPLICA_TYPE_FULL,
                       mock_prop, ls_restore_status, 1 /*proposal_id*/));
   OZ (location.add_replica_location(ls_replica));
   return ret;

@@ -32,6 +32,28 @@ uint64_t ObRoaringBitmap::get_cardinality()
   return cardinality;
 }
 
+uint64_t ObRoaringBitmap::get_range_cardinality(uint64_t range_start, uint64_t range_end)
+{
+  uint64_t cardinality = 0;
+  if (is_empty_type()) {
+    //do nothing
+  } else if (is_single_type()) {
+    if (single_value_ >= range_start && single_value_ < range_end) {
+      cardinality = 1;
+    }
+  } else if (is_set_type()) {
+    hash::ObHashSet<uint64_t>::const_iterator iter;
+    for (iter = set_.begin(); iter != set_.end(); iter++) {
+      if (iter->first >= range_start && iter->first < range_end) {
+        cardinality++;
+      }
+    }
+  } else if (is_bitmap_type()) {
+    cardinality = roaring::api::roaring64_bitmap_range_cardinality(bitmap_, range_start, range_end);
+  }
+  return cardinality;
+}
+
 uint64_t ObRoaringBitmap::get_max()
 {
   uint64_t max_val = 0;

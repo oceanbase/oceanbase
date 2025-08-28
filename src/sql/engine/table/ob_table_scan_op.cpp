@@ -662,7 +662,8 @@ DEF_TO_STRING(ObTableScanSpec)
        K_(tenant_id_col_idx),
        K_(parser_name),
        K_(parser_properties),
-       K_(lob_inrow_threshold));
+       K_(lob_inrow_threshold),
+       K_(lake_table_format));
   J_OBJ_END();
   return pos;
 }
@@ -1488,17 +1489,16 @@ int ObTableScanOp::prepare_single_scan_range(int64_t group_idx, bool need_sort)
               key_ranges,
               ObBasicSessionInfo::create_dtc_params(ctx_.get_my_session())))) {
     LOG_WARN("failed to extract pre query ranges", K(ret));
-  } else if (MY_CTDEF.scan_ctdef_.is_external_table_) {
+  } else if (MY_CTDEF.scan_ctdef_.is_ob_external_table()) {
     uint64_t table_loc_id = MY_SPEC.get_table_loc_id();
     ObDASTableLoc *tab_loc = DAS_CTX(ctx_).get_table_loc_by_id(table_loc_id, MY_CTDEF.scan_ctdef_.ref_table_id_);
-    const ObString &table_format_or_properties =  MY_CTDEF.scan_ctdef_.external_file_format_str_.str_;
     ObArray<int64_t> partition_ids;
     if (OB_ISNULL(tab_loc)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table lock is null", K(ret));
     } else {
       for (DASTabletLocListIter iter = tab_loc->tablet_locs_begin(); OB_SUCC(ret)
-             && iter != tab_loc->tablet_locs_end(); ++iter) {
+            && iter != tab_loc->tablet_locs_end(); ++iter) {
         ret = partition_ids.push_back((*iter)->partition_id_);
       }
     }
@@ -1515,6 +1515,12 @@ int ObTableScanOp::prepare_single_scan_range(int64_t group_idx, bool need_sort)
                                                 tab_loc->loc_meta_->is_external_files_on_disk_,
                                                 ctx_))) {
       LOG_WARN("failed to prepare single scan range for external table", K(ret));
+    }
+  } else if (MY_CTDEF.scan_ctdef_.is_lake_external_table()) {
+    uint64_t table_loc_id = MY_SPEC.get_table_loc_id();
+    ObDASTableLoc *tab_loc = DAS_CTX(ctx_).get_table_loc_by_id(table_loc_id, MY_CTDEF.scan_ctdef_.ref_table_id_);
+    if (OB_FAIL(ObExternalTableUtils::prepare_lake_table_single_scan_range(ctx_, tab_loc, range_allocator, key_ranges))) {
+      LOG_WARN("fail to prepare lake table single scan range");
     }
   } else if (MY_CTDEF.enable_new_false_range_ && key_ranges.empty()) {
     // always false, do nothing

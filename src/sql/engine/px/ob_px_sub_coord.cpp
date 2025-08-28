@@ -69,6 +69,8 @@ int ObPxSubCoord::pre_process()
       LOG_WARN("unexpected status: op root is null", K(ret));
     } else if (OB_FAIL(rebuild_sqc_access_table_locations())) {
       LOG_WARN("fail to rebuild locations and tsc ops", K(ret));
+    } else if (!is_single_tsc_leaf_dfo_ && OB_FAIL(rebuild_sqc_lake_table_file_map())) {
+      LOG_WARN("failed to rebuild sqc lake table file map");
     } else if (OB_FAIL(construct_p2p_dh_map())) {
       LOG_WARN("fail to construct p2p dh map", K(ret));
     } else if (OB_FAIL(setup_op_input(*sqc_arg_.exec_ctx_,
@@ -1153,5 +1155,56 @@ void ObPxSubCoord::try_get_dml_op(ObOpSpec &root, ObTableModifySpec *&dml_op)
       try_get_dml_op(*root.get_child(0), dml_op);
     }
   }
+}
+
+int ObPxSubCoord::rebuild_sqc_lake_table_file_map()
+{
+  int ret = OB_SUCCESS;
+  ObLakeTableFileMap *lake_table_file_map = nullptr;
+  ObExecContext *exec_ctx = sqc_arg_.exec_ctx_;
+  ObLakeTableFileDesc &lake_table_file_desc = sqc_arg_.sqc_.get_lake_table_file_desc();
+  ObLakeTableFileArray *files = nullptr;
+  if (OB_ISNULL(exec_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("error unexpected, exec ctx must not be nullptr", K(ret));
+  } else if (lake_table_file_desc.is_empty()) {
+    // do nothing
+  } else if (OB_FAIL(exec_ctx->get_lake_table_file_map(lake_table_file_map))) {
+    LOG_WARN("failed to get lake table file map", K(ret));
+  } else if (OB_ISNULL(lake_table_file_map)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("lake table file map is null", K(ret));
+  } else {
+    for (int i = 0; OB_SUCC(ret) && i < lake_table_file_desc.keys_.count(); ++i) {
+      files = nullptr;
+      ObLakeTableFileMapKey &key = lake_table_file_desc.keys_.at(i);
+      int64_t offset = lake_table_file_desc.offsets_.at(i);
+      int64_t end = (i < lake_table_file_desc.keys_.count() - 1) ?
+                    lake_table_file_desc.offsets_.at(i + 1) :
+                    lake_table_file_desc.values_.count();
+      if (offset == end) {
+        // do nothing
+      } else {
+        files = OB_NEWx(ObLakeTableFileArray, &exec_ctx->get_allocator(), exec_ctx->get_allocator());
+        if (OB_ISNULL(files)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to allocate memory for ObLakeTableFileArray");
+        } else if (OB_FAIL(files->init(end - offset))) {
+          LOG_WARN("failed to init lake table file array");
+        } else {
+          for (int64_t j = offset; OB_SUCC(ret) && j < end; ++j) {
+            if (OB_FAIL(files->push_back(lake_table_file_desc.values_.at(j)))) {
+              LOG_WARN("failed to push back lake table file");
+            }
+          }
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(lake_table_file_map->set_refactored(key, files))) {
+        LOG_WARN("failed to set lake table file map", K(ret));
+      }
+    }
+  }
+  return ret;
 }
 //////////// END /////////

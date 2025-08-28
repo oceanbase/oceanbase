@@ -466,7 +466,8 @@ public:
 
   static int cast_compact2vector_fmt(ObIVector *column, const int64_t size, const ObBitVector &skip);
 
-  static int cast_vector2compact_fmt(ObIVector *column, const int64_t size, const ObBitVector &skip);
+  static int cast_vector2compact_fmt(ObIVector *column, const int64_t start, const int64_t end,
+                                     const ObBitVector *skip);
 };
 
 

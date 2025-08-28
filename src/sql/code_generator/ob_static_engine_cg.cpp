@@ -5949,6 +5949,7 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
 
   if (OB_SUCC(ret) && op.get_table_type() == share::schema::EXTERNAL_TABLE) {
     spec.is_external_table_ = true;
+    spec.lake_table_format_ = op.get_lake_table_type();
   }
 
   if (OB_SUCC(ret) && opt_ctx_->is_insert_stmt_in_online_ddl()) {

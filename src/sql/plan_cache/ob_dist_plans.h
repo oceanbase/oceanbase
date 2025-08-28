@@ -22,7 +22,6 @@ namespace sql {
 struct ObPlanCacheCtx;
 class ObPhysicalPlan;
 class ObTableLocation;
-class ObPhyTableLocation;
 class ObCandiTableLoc;
 class ObSqlPlanSet;
 
@@ -99,13 +98,6 @@ private:
   bool is_plan_available(const ObPhysicalPlan &plan, ObPlanCacheCtx &pc_ctx) const;
   bool is_same_plan(const ObPhysicalPlan &plan, const ObPhysicalPlan &compare_plan,
                     ObPlanCacheCtx &pc_ctx) const;
-
-  /**
-   * @brief 为pc_ctx.exec_ctx设置table location
-   *
-   */
-  int set_phy_table_locations_for_ctx(ObPlanCacheCtx &pc_ctx,
-                                      const ObIArray<ObPhyTableLocation> &table_locations);
 
 private:
   common::ObSEArray<ObPhysicalPlan *, 4> dist_plans_;

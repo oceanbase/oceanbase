@@ -113,6 +113,83 @@ public:
   common::ObString region_;
 };
 
+class ObFilesystemCatalogProperties : public ObCatalogProperties
+{
+public:
+  enum class ObFilesystemCatalogOptions
+  {
+    WAREHOUSE = 0,
+    MAX_OPTIONS
+  };
+  static constexpr const char *OPTION_NAMES[] = {
+      "WAREHOUSE",
+  };
+  ObFilesystemCatalogProperties() : ObCatalogProperties(CatalogType::FILESYSTEM_TYPE) {}
+  virtual ~ObFilesystemCatalogProperties() = default;
+  virtual int to_json_kv_string(char *buf, const int64_t buf_len, int64_t &pos) const override;
+  virtual int load_from_string(const common::ObString &str,
+                               common::ObIAllocator &allocator) override;
+  virtual int resolve_catalog_properties(const ParseNode &node) override;
+  virtual int encrypt(ObIAllocator &allocator) override;
+  virtual int decrypt(ObIAllocator &allocator) override;
+
+  common::ObString warehouse_;
+};
+
+class ObHMSCatalogProperties : public ObCatalogProperties
+{
+private:
+  static constexpr int64_t DEFAULT_HMS_CLIENT_POOL_SIZE = 2;
+  static constexpr int64_t DEFAULT_HMS_CLIENT_SOCKET_TIMEOUT_US = 10LL * 1000LL * 1000LL; // 10 seconds
+  static constexpr int64_t DEFAULT_CACHE_REFRESH_INTERVAL_SEC = 10 * 60L; // 10 min
+  static constexpr int64_t INVALID_CACHE_REFRESH_INTERVAL_SEC = -1;
+
+public:
+  enum ObHiveCatalogOptions {
+    URI = 0,
+    PRINCIPAL,
+    KEYTAB,
+    KRB5CONF,
+    MAX_CLIENT_POOL_SIZE,
+    SOCKET_TIMEOUT,
+    CACHE_REFRESH_INTERVAL_SEC,
+    MAX_OPTIONS
+  };
+  ObHMSCatalogProperties() :
+    ObCatalogProperties(CatalogType::HMS_TYPE)
+  {
+    max_client_pool_size_ = DEFAULT_HMS_CLIENT_POOL_SIZE;
+    socket_timeout_ = DEFAULT_HMS_CLIENT_SOCKET_TIMEOUT_US;
+    cache_refresh_interval_sec_ = INVALID_CACHE_REFRESH_INTERVAL_SEC;
+  }
+  virtual ~ObHMSCatalogProperties() {}
+  virtual int to_json_kv_string(char *buf, const int64_t buf_len, int64_t &pos) const override;
+  virtual int load_from_string(const common::ObString &str, common::ObIAllocator &allocator) override;
+  virtual int resolve_catalog_properties(const ParseNode &node) override;
+  virtual int encrypt(ObIAllocator &allocator) override;
+  virtual int decrypt(ObIAllocator &allocator) override;
+
+  int64_t get_cache_refresh_interval_sec() const;
+  bool is_set_cache_refresh_interval_sec() const;
+public:
+  static constexpr const char *OPTION_NAMES[] = {
+    "URI",
+    "PRINCIPAL",
+    "KEYTAB",
+    "KRB5CONF",
+    "MAX_CLIENT_POOL_SIZE",
+    "SOCKET_TIMEOUT",
+    "CACHE_REFRESH_INTERVAL_SEC"
+  };
+  common::ObString uri_;
+  common::ObString principal_;
+  common::ObString keytab_;
+  common::ObString krb5conf_;
+  int64_t max_client_pool_size_;
+  int64_t socket_timeout_;
+  int64_t cache_refresh_interval_sec_;
+};
+
 } // namespace share
 } // namespace oceanbase
 

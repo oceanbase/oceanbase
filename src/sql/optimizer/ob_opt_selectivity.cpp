@@ -16,8 +16,10 @@
 #include "sql/rewrite/ob_transform_utils.h"
 #include "share/stat/ob_opt_stat_manager.h"
 #include "share/stat/ob_dbms_stats_utils.h"
+#include "share/stat/ob_lake_table_stat.h"
 #include "sql/optimizer/ob_access_path_estimation.h"
 #include "sql/optimizer/ob_sel_estimator.h"
+
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
 namespace oceanbase
@@ -417,6 +419,96 @@ int OptTableMeta::init(const uint64_t table_id,
     LOG_WARN("init column meta failed", K(ret));
     }
 
+  return ret;
+}
+
+int OptTableMeta::init_lake_table(const uint64_t table_id,
+                                  const uint64_t ref_table_id,
+                                  const int64_t rows,
+                                  const int64_t last_analyzed,
+                                  const OptTableStatType stat_type,
+                                  ObIArray<uint64_t> &column_ids,
+                                  const ObIArray<ObLakeColumnStat*> &column_stats,
+                                  const OptSelectivityCtx &ctx,
+                                  const ObTableMetaInfo *base_meta_info)
+{
+  int ret = OB_SUCCESS;
+  //init common member variable
+  table_id_ = table_id;
+  ref_table_id_ = ref_table_id;
+  rows_ = rows;
+  stat_type_ = stat_type;
+  base_meta_info_ = base_meta_info;
+  real_rows_ = rows;
+  base_rows_ = rows;
+  last_analyzed_ = last_analyzed;
+  if (OB_FAIL(column_metas_.prepare_allocate(column_ids.count()))) {
+    LOG_WARN("failed to init column metas", K(ret));
+  } else if (OB_FAIL(init_lake_column_meta(ctx, column_ids, column_stats, column_metas_))) {
+    LOG_WARN("init column meta failed", K(ret));
+  }
+  return ret;
+}
+
+int OptTableMeta::init_lake_column_meta(const OptSelectivityCtx &ctx,
+                                        const ObIArray<uint64_t> &column_ids,
+                                        const ObIArray<ObLakeColumnStat*> &column_stats,
+                                        ObIArray<OptColumnMeta> &column_metas)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObGlobalColumnStat, 4> col_stats;
+  if (use_default_stat()) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_ids.count(); ++i) {
+      ObGlobalColumnStat s;
+      column_metas.at(i).set_default_meta(rows_);
+      if (OB_FAIL(col_stats.push_back(s))) {
+        LOG_WARN("failed to push back column id", K(ret));
+      }
+    }
+  } else if (!column_ids.empty()) {
+    // batch get column stats
+    if (OB_UNLIKELY(column_ids.count() != column_stats.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected column size", K(column_ids.count()), K(column_stats.count()));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < column_ids.count(); ++i) {
+        ObGlobalColumnStat s;
+        ObLakeColumnStat* column_stat = column_stats.at(i);
+        if (OB_ISNULL(column_stat)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get null column stat");
+        } else {
+          if (!column_stat->min_val_.is_null() &&
+              !column_stat->max_val_.is_null()) {
+            column_metas.at(i).set_max_value(column_stat->max_val_);
+            column_metas.at(i).set_min_value(column_stat->min_val_);
+            column_metas.at(i).set_min_max_inited(true);
+          }
+          column_metas.at(i).set_num_null(column_stat->null_count_);
+          if (column_stat->record_count_ > 0) {
+            s.avglen_val_ = column_stat->size_ / column_stat->record_count_;
+          } else {
+            // magic number
+            s.avglen_val_ = 4;
+          }
+          s.ndv_val_ = column_stat->num_distinct_;
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(refine_column_stat(s, rows_, column_metas.at(i)))) {
+            LOG_WARN("failed to refine column stat", K(ret));
+          } else if (OB_FAIL(col_stats.push_back(s))) {
+            LOG_WARN("failed to push back column id", K(ret));
+          }
+        }
+      }
+    }
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < column_ids.count(); ++i) {
+    if (OB_FAIL(refine_column_meta(ctx, column_ids.at(i), col_stats.at(i), column_metas.at(i)))) {
+      LOG_WARN("failed to init column ", K(ret));
+    }
+  }
   return ret;
 }
 
@@ -1065,6 +1157,31 @@ double OptTableMetas::get_base_rows(const uint64_t table_id) const
     rows = table_meta->get_base_rows();
   }
   return rows;
+}
+
+int OptTableMetas::add_lake_table_meta_info(OptSelectivityCtx &ctx,
+                                            const uint64_t table_id,
+                                            const uint64_t ref_table_id,
+                                            const int64_t rows,
+                                            const int64_t last_analyzed,
+                                            ObIArray<uint64_t> &column_ids,
+                                            const ObIArray<ObLakeColumnStat*> &column_stats,
+                                            const OptTableStatType stat_type,
+                                            const ObTableMetaInfo *base_meta_info)
+{
+  int ret = OB_SUCCESS;
+  OptTableMeta *table_meta = NULL;
+  if (OB_ISNULL(table_meta = table_metas_.alloc_place_holder())) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate place holder for table meta", K(ret));
+  } else if (OB_FAIL(table_meta->init_lake_table(table_id, ref_table_id, rows, last_analyzed, stat_type,
+                                                 column_ids, column_stats, ctx, base_meta_info))) {
+    LOG_WARN("failed to init new tstat", K(ret));
+  } else {
+    LOG_TRACE("add base table meta info success", K(*table_meta));
+  }
+
+  return ret;
 }
 
 int ObOptSelectivity::calculate_conditional_selectivity(const OptTableMetas &table_metas,

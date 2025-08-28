@@ -151,7 +151,12 @@ int ObStorageObjectHandle::async_read(const ObStorageObjectReadInfo &read_info)
     LOG_WARN("invalid io argument", K(ret), K(read_info), KCSTRING(lbt()));
   } else {
     if (read_info.macro_block_id_.is_id_mode_local()) {
-      if (OB_FAIL(sn_async_read(read_info))) {
+      // Since read_info is valid, offset and size are already validated,
+      // so we only need to check if the read range is within bounds
+      if (OB_UNLIKELY(read_info.offset_ + read_info.size_ > OB_STORAGE_OBJECT_MGR.get_macro_block_size())) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid read range", KR(ret), K(read_info));
+      } else if (OB_FAIL(sn_async_read(read_info))) {
         LOG_WARN("fail to sn_async_read", K(ret), K(read_info));
       }
     } else if (read_info.macro_block_id_.is_id_mode_backup()) {

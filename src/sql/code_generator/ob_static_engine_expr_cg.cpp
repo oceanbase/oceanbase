@@ -590,6 +590,7 @@ int ObStaticEngineExprCG::cg_expr_by_operator(const ObIArray<ObRawExpr *> &raw_e
                                     data_access_info->data_access_path_))) {
           LOG_WARN("fail to write string", K(ret));
         } else {
+          data_access_info->mapped_column_id_ = column_expr->get_mapped_column_id();
           rt_expr->extra_info_ = extra_info;
           LOG_DEBUG("external file col expr", K(ret), "path", data_access_info->data_access_path_);
         }

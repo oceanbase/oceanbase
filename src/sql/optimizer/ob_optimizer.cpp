@@ -34,14 +34,12 @@ int ObOptimizer::optimize(ObDMLStmt &stmt, ObLogPlan *&logical_plan)
   int64_t last_mem_usage = ctx_.get_allocator().total();
   int64_t optimizer_mem_usage = 0;
   ObDMLStmt *target_stmt = &stmt;
-  ObTaskExecutorCtx *task_exec_ctx = ctx_.get_task_exec_ctx();
   if (stmt.is_explain_stmt()) {
     target_stmt = static_cast<ObExplainStmt*>(&stmt)->get_explain_query_stmt();
   }
-  if (OB_ISNULL(query_ctx) || OB_ISNULL(session) ||
-      OB_ISNULL(target_stmt)|| OB_ISNULL(task_exec_ctx)) {
+  if (OB_ISNULL(query_ctx) || OB_ISNULL(session) || OB_ISNULL(target_stmt)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(query_ctx), K(session), K(target_stmt), K(task_exec_ctx));
+    LOG_WARN("invalid arguments", K(ret), K(query_ctx), K(session), K(target_stmt));
   } else if (OB_FAIL(init_env_info(*target_stmt))) {
     LOG_WARN("failed to init px info", K(ret));
   } else if (!target_stmt->is_reverse_link() &&
@@ -62,8 +60,6 @@ int ObOptimizer::optimize(ObDMLStmt &stmt, ObLogPlan *&logical_plan)
       ObSEArray<ObTablePartitionInfo*, 8> table_partitions;
       if (OB_FAIL(plan->get_global_table_partition_info(table_partitions))) {
         LOG_WARN("failed to get global table partition info", K(ret));
-      } else if (OB_FAIL(task_exec_ctx->set_table_locations(table_partitions))) {
-        LOG_WARN("failed to set table locations", K(ret));
       }
 
       if (OB_SUCC(ret)) {

@@ -376,6 +376,17 @@ public:
   ObCostTableScanSimpleInfo& get_est_cost_simple_info() { return est_cost_simple_info_; }
   const ObCostTableScanSimpleInfo& get_est_cost_simple_info() const { return est_cost_simple_info_; }
   ObQueryFlag get_query_flag() const { return tsc_ctdef_.scan_flags_; }
+  bool is_ob_external_table() const
+  {
+    return is_external_table_ && lake_table_format_ != share::ObLakeTableFormat::ICEBERG
+           && lake_table_format_ != share::ObLakeTableFormat::HIVE;
+  }
+  bool is_lake_external_table() const
+  {
+    return is_external_table_
+           && (lake_table_format_ == share::ObLakeTableFormat::ICEBERG
+               || lake_table_format_ == share::ObLakeTableFormat::HIVE);
+  }
 
   DECLARE_VIRTUAL_TO_STRING;
 

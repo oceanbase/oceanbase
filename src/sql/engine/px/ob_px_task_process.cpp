@@ -480,6 +480,23 @@ int ObPxTaskProcess::do_process()
       }
     }
 
+    if (OB_SUCC(ret) && !arg_.task_.is_use_local_thread()) {
+      const ObPxSqcMeta &sqc_meta = arg_.sqc_handler_->get_sqc_init_arg().sqc_;
+      if (sqc_meta.is_fulltree() &&
+          OB_NOT_NULL(arg_.sqc_handler_->get_sqc_init_arg().exec_ctx_) &&
+          arg_.sqc_handler_->get_sqc_init_arg().exec_ctx_->has_lake_table_file_map()) {
+        ObLakeTableFileMap *lake_table_file_map = nullptr;
+        if (OB_FAIL(arg_.sqc_handler_->get_sqc_init_arg().exec_ctx_->get_lake_table_file_map(lake_table_file_map))) {
+          LOG_WARN("failed to get lake table file map");
+        } else if (OB_ISNULL(lake_table_file_map)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get null lake table file map");
+        } else {
+          arg_.exec_ctx_->set_lake_table_file_map(lake_table_file_map);
+        }
+      }
+    }
+
     if (OB_SUCC(ret)) {
       if (nullptr != arg_.op_spec_root_) {
         const ObPxSqcMeta &sqc_meta = arg_.sqc_handler_->get_sqc_init_arg().sqc_;

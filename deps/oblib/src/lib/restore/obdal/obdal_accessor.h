@@ -77,6 +77,7 @@ public:
   // metadata
   static int obdal_metadata_content_length(const opendal_metadata *metadata, int64_t &content_length);
   static int obdal_metadata_last_modified(const opendal_metadata *metadata, int64_t &last_modified_time_s);
+  static int obdal_metadata_etag(const opendal_metadata *metadata, char *&etag);
   static int obdal_metadata_free(opendal_metadata *&metadata);
 
   // reader

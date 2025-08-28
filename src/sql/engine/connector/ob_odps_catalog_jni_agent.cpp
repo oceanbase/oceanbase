@@ -297,7 +297,7 @@ int ObOdpsJniCatalogAgent::do_query_table_list(ObIAllocator &allocator, ObIArray
   return ret;
 }
 
-int ObOdpsJniCatalogAgent::do_query_table_info(ObIAllocator &allocator, const ObString &tbl_name, share::ObCatalogBasicTableInfo &table_info) {
+int ObOdpsJniCatalogAgent::do_query_table_info(ObIAllocator &allocator, const ObString &tbl_name, int64_t &last_modification_time_s) {
   int ret = OB_SUCCESS;
   jmethodID get_table_info_method = nullptr;
   if (OB_ISNULL(env_)) {
@@ -332,9 +332,10 @@ int ObOdpsJniCatalogAgent::do_query_table_info(ObIAllocator &allocator, const Ob
             LOG_WARN("failed to check jni exception", K(ret));
           } else {
             // 假设返回的long数组包含: [create_time, last_ddl_time, last_modification_time]
-            table_info.create_time_s = long_elements[0];
-            table_info.last_ddl_time_s = long_elements[1];
-            table_info.last_modification_time_s = long_elements[2];
+            // table_info.create_time_s = long_elements[0];
+            // table_info.last_ddl_time_s = long_elements[1];
+            // table_info.last_modification_time_s = long_elements[2];
+            last_modification_time_s = long_elements[2];
             env_->ReleaseLongArrayElements(jlong_array, long_elements, JNI_ABORT);
           }
         } else {

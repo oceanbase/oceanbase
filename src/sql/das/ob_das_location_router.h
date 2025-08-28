@@ -396,7 +396,8 @@ public:
   void reset_cur_retry_cnt() { cur_retry_cnt_ = 0; }
   void inc_cur_retry_cnt() { ++cur_retry_cnt_; }
   void set_retry_info(const ObQueryRetryInfo* retry_info);
-  int get_external_table_ls_location(share::ObLSLocation &location);
+  static int get_external_table_ls_location(share::ObLSLocation &location,
+                                            const common::ObAddr *server = nullptr);
   void save_cur_exec_status(int err_no)
   {
     if (OB_SUCCESS == cur_errno_) {

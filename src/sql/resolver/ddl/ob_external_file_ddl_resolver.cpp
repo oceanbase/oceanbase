@@ -22,6 +22,7 @@ using namespace share;
 using namespace obrpc;
 namespace sql
 {
+
 int ObDDLResolver::resolve_external_file_format(const ParseNode *format_node,
                                                 ObResolverParams &params,
                                                 ObExternalFileFormat& format,
@@ -125,87 +126,112 @@ int ObDDLResolver::resolve_external_file_pattern(const ParseNode *option_node,
 }
 
 int ObDDLResolver::resolve_external_file_location(ObResolverParams &params,
-                                                 ObTableSchema &table_schema,
-                                                 common::ObString table_location)
+                                                  ObTableSchema &table_schema,
+                                                  common::ObString table_location)
 {
   int ret = OB_SUCCESS;
+  ObString resolved_table_location;
+  ObString resolved_access_info;
   if (!table_schema.is_external_table()) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "location option");
-  } else {
-    ObString url = table_location;
-    uint64_t data_version = 0;
-    const bool is_hdfs_type = url.prefix_match(OB_HDFS_PREFIX);
+  } else if (OB_FAIL(resolve_external_file_location(params.allocator_,
+                                                    table_location,
+                                                    resolved_table_location,
+                                                    resolved_access_info))) {
+    LOG_WARN("failed to resolve external file location", K(ret));
+  } else if (OB_FAIL(table_schema.set_external_file_location(resolved_table_location))) {
+    LOG_WARN("failed to set external file location", K(ret));
+  } else if (OB_FAIL(table_schema.set_external_file_location_access_info(resolved_access_info))) {
+    LOG_WARN("failed to set external file location access info", K(ret));
+  }
 
-    if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
-      LOG_WARN("failed to get data version", K(ret));
-    } else if (is_hdfs_type && data_version < DATA_VERSION_4_3_5_1) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("failed to support hdfs feature when data version is lower", K(ret), K(data_version));
-    } else if (url.prefix_match(OB_COS_PREFIX) && data_version > DATA_VERSION_4_3_5_1) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "create external table on cos");
-      LOG_WARN("create external table on cos is no longer supported");
-    }
-    ObHDFSStorageInfo hdfs_storage_info;
-    ObBackupStorageInfo backup_storage_info;
-    ObObjectStorageInfo *storage_info = is_hdfs_type
-                                        ? static_cast<ObObjectStorageInfo *>(&hdfs_storage_info)
-                                        : static_cast<ObObjectStorageInfo *>(&backup_storage_info);
-    char storage_info_buf[OB_MAX_BACKUP_STORAGE_INFO_LENGTH] = { 0 };
-    ObString path = url.split_on('?');
-    if (OB_FAIL(ret)) {
-      /* do nothing */
-    } else if (path.empty()) {
-      // url like: oss://ak:sk@host/bucket/...
-      ObSqlString tmp_location;
-      ObSqlString prefix;
+  return ret;
+}
 
-      if (OB_FAIL(resolve_file_prefix(url, prefix, storage_info->device_type_, params))) {
-        LOG_WARN("failed to resolve file prefix", K(ret));
-      } else if (OB_FAIL(tmp_location.append(prefix.string()))) {
-        LOG_WARN("failed to append prefix", K(ret));
-      } else {
-        url = url.trim_space_only();
-      }
+int ObDDLResolver::resolve_external_file_location(ObIAllocator *allocator,
+                                                  const common::ObString &table_location,
+                                                  common::ObString &resolved_table_location,
+                                                  common::ObString &resolved_access_info)
+{
+  int ret = OB_SUCCESS;
 
-      if (OB_SUCC(ret)) {
-        if (OB_STORAGE_FILE != storage_info->device_type_  &&
-            OB_STORAGE_HDFS != storage_info->device_type_ /* hdfs with simple auth*/) {
-          if (OB_FAIL(ObSQLUtils::split_remote_object_storage_url(url, storage_info))) {
-            LOG_WARN("failed to split remote object storage url", K(ret));
-          }
-        }
-      }
+  ObString url = table_location;
+  uint64_t data_version = 0;
+  const bool is_hdfs_type = url.prefix_match(OB_HDFS_PREFIX);
 
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(tmp_location.append(url))) {
-          LOG_WARN("failed to append url", K(ret));
-        } else if (OB_FAIL(storage_info->get_storage_info_str(storage_info_buf, sizeof(storage_info_buf)))) {
-          LOG_WARN("failed to get storage info str", K(ret));
-        } else if (OB_FAIL(table_schema.set_external_file_location(tmp_location.string()))) {
-          LOG_WARN("failed to set external file location", K(ret));
-        } else if (OB_FAIL(table_schema.set_external_file_location_access_info(storage_info_buf))) {
-          LOG_WARN("failed to set external file location access info", K(ret));
-        }
-      }
+  if (OB_ISNULL(allocator)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid allocator", K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
+    LOG_WARN("failed to get data version", K(ret));
+  } else if (is_hdfs_type && data_version < DATA_VERSION_4_3_5_1) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("failed to support hdfs feature when data version is lower", K(ret), K(data_version));
+  } else if (url.prefix_match(OB_COS_PREFIX) && data_version > DATA_VERSION_4_3_5_1) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "create external table on cos");
+    LOG_WARN("create external table on cos is no longer supported");
+  }
+  ObHDFSStorageInfo hdfs_storage_info;
+  ObBackupStorageInfo backup_storage_info;
+  ObObjectStorageInfo *storage_info
+      = is_hdfs_type ? static_cast<ObObjectStorageInfo *>(&hdfs_storage_info)
+                     : static_cast<ObObjectStorageInfo *>(&backup_storage_info);
+  char storage_info_buf[OB_MAX_BACKUP_STORAGE_INFO_LENGTH] = {0};
+  ObString path = url.split_on('?');
+  if (OB_FAIL(ret)) {
+    /* do nothing */
+  } else if (path.empty()) {
+    // url like: oss://ak:sk@host/bucket/...
+    ObSqlString tmp_location;
+    ObSqlString prefix;
+
+    if (OB_FAIL(resolve_file_prefix(url, prefix, storage_info->device_type_, allocator))) {
+      LOG_WARN("failed to resolve file prefix", K(ret));
+    } else if (OB_FAIL(tmp_location.append(prefix.string()))) {
+      LOG_WARN("failed to append prefix", K(ret));
     } else {
-      // url like: oss://bucket/...?host=xxxx&access_id=xxx&access_key=xxx
-      ObString uri_cstr;
-      ObString storage_info_cstr;
-      if (OB_FAIL(ob_write_string(*params.allocator_, path, uri_cstr, true))) {
-        LOG_WARN("failed to write string", K(ret));
-      } else if (OB_FAIL(ob_write_string(*params.allocator_, url, storage_info_cstr, true))) {
-        LOG_WARN("failed to write string", K(ret));
-      } else if (OB_FAIL(storage_info->set(uri_cstr.ptr(), storage_info_cstr.ptr()))) {
-        LOG_WARN("failed to set storage info", K(ret));
-      } else if (OB_FAIL(storage_info->get_storage_info_str(storage_info_buf, sizeof(storage_info_buf)))) {
-        LOG_WARN("failed to get storage info str", K(ret));
-      } else if (OB_FAIL(table_schema.set_external_file_location(path))) {
-        LOG_WARN("failed to set external file location", K(ret));
-      } else if (OB_FAIL(table_schema.set_external_file_location_access_info(storage_info_buf))) {
-        LOG_WARN("failed to set external file location access info", K(ret));
+      url = url.trim_space_only();
+    }
+
+    if (OB_SUCC(ret)) {
+      if (OB_STORAGE_FILE != storage_info->device_type_
+          && OB_STORAGE_HDFS != storage_info->device_type_ /* hdfs with simple auth*/) {
+        if (OB_FAIL(ObSQLUtils::split_remote_object_storage_url(url, storage_info))) {
+          LOG_WARN("failed to split remote object storage url", K(ret));
+        }
       }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(tmp_location.append(url))) {
+        LOG_WARN("failed to append url", K(ret));
+      } else if (OB_FAIL(storage_info->get_storage_info_str(storage_info_buf,
+                                                            sizeof(storage_info_buf)))) {
+        LOG_WARN("failed to get storage info str", K(ret));
+      } else {
+        OZ(ob_write_string(*allocator, tmp_location.string(), resolved_table_location));
+        OZ(ob_write_string(*allocator, storage_info_buf, resolved_access_info));
+      }
+    }
+  } else {
+    // url like: oss://bucket/...?host=xxxx&access_id=xxx&access_key=xxx
+    ObString uri_cstr;
+    ObString storage_info_cstr;
+    ObArenaAllocator tmp_allocator;
+    if (OB_FAIL(ob_write_string(tmp_allocator, path, uri_cstr, true))) {
+      LOG_WARN("failed to write string", K(ret));
+    } else if (OB_FAIL(ob_write_string(tmp_allocator, url, storage_info_cstr, true))) {
+      LOG_WARN("failed to write string", K(ret));
+    } else if (OB_FAIL(storage_info->set(uri_cstr.ptr(), storage_info_cstr.ptr()))) {
+      LOG_WARN("failed to set storage info", K(ret));
+    } else if (OB_FAIL(storage_info->get_storage_info_str(storage_info_buf,
+                                                          sizeof(storage_info_buf)))) {
+      LOG_WARN("failed to get storage info str", K(ret));
+    } else {
+      OZ(ob_write_string(*allocator, path, resolved_table_location));
+      OZ(ob_write_string(*allocator, storage_info_buf, resolved_access_info));
     }
   }
   return ret;
@@ -268,5 +294,6 @@ int ObDDLResolver::resolve_external_file_location_object(ObResolverParams &param
   }
   return ret;
 }
+
 }
 }

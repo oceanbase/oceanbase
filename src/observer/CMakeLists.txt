@@ -475,6 +475,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_apply_stat.cpp
   virtual_table/ob_all_virtual_replay_stat.cpp
   virtual_table/ob_all_virtual_ha_diagnose.cpp
+  virtual_table/ob_all_virtual_hms_client_pool_stat.cpp
   virtual_table/ob_all_virtual_ls_migration_task.cpp
   virtual_table/ob_global_variables.cpp
   virtual_table/ob_gv_sql.cpp

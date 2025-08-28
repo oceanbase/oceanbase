@@ -68,6 +68,8 @@ int ObMPInitDB::process()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema_service is null", K(ret));
   } else {
+    // catalog 检查权限的时候，需要从 thread local 的地方获取 session
+    THIS_WORKER.set_session(session);
     ObCollationType old_db_coll_type = CS_TYPE_INVALID;
     ObCollationType collation_connection = CS_TYPE_INVALID;
     ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());
@@ -192,6 +194,10 @@ int ObMPInitDB::process()
       LOG_WARN("fail to send ok packet", K(ok_param), K(ret));
     }
   }
+
+  // bugfix:
+  // 必须总是将 THIS_WORKER 里的指针设置为 null
+  THIS_WORKER.set_session(NULL); // clear session
   if (session != NULL) {
     if (OB_FAIL(revert_session(session))) {
       LOG_ERROR("failed to revert session", K(ret));

@@ -258,6 +258,8 @@ public:
                                              const ObOptColumnStat &col_stat,
                                              const ObObjMeta &text_col_meta,
                                              ObOptColumnStat *&text_column_stat);
+  static int deep_copy_string(char *buf, const int64_t buf_len, int64_t &pos,
+                              const ObString &str, ObString &dst);
 
   static int get_max_work_area_size(uint64_t tenant_id, int64_t &max_wa_memory_size);
 

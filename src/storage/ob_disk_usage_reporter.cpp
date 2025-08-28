@@ -17,6 +17,7 @@
 #include "storage/meta_store/ob_server_storage_meta_service.h"
 #include "storage/meta_store/ob_tenant_storage_meta_service.h"
 #include "logservice/ob_server_log_block_mgr.h"
+#include "sql/engine/table/ob_pcached_external_file_service.h" // for ObPCachedExternalFileService
 
 namespace oceanbase
 {
@@ -175,19 +176,23 @@ int ObDiskUsageReportTask::count_tenant_data(const uint64_t tenant_id)
   ObDiskUsageReportKey major_data_key;
   ObDiskUsageReportKey local_data_key;
   ObDiskUsageReportKey quick_restore_remote_key;
+  ObDiskUsageReportKey ext_disk_cache_key;
   int64_t meta_size = 0;
   int64_t backup_size = 0;
   int64_t data_size = 0;
   int64_t occupy_size = 0;
   int64_t tablet_shared_occupy_size = 0;
   int64_t tablet_local_required_size = 0;
+  int64_t ext_disk_cache_occupy_size = 0;
+  int64_t ext_disk_cache_required_size = 0;
 
   if (OB_FAIL(MTL(ObTenantStorageMetaService*)->get_meta_block_list(block_list))) {
     STORAGE_LOG(WARN, "failed to get tenant's meta block list", K(ret));
   } else {
     ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
     ObLSService *ls_service = MTL(ObLSService*);
-    if (OB_ISNULL(ls_service) || OB_ISNULL(t3m) ) {
+    sql::ObPCachedExternalFileService *ext_file_svr = MTL(sql::ObPCachedExternalFileService*);
+    if (OB_ISNULL(ls_service) || OB_ISNULL(t3m)) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "unexpected error!!! ls_service and t3m must not nullptr", K(ret), KP(ls_service), KP(t3m));
     } else {
@@ -242,6 +247,19 @@ int ObDiskUsageReportTask::count_tenant_data(const uint64_t tenant_id)
         } else {
           meta_size += block_list.count() * OB_DEFAULT_MACRO_BLOCK_SIZE;
         }
+
+        ObStorageCacheStat cache_stat;
+        if (is_meta_tenant(tenant_id)) {
+          // do nothing
+        } else if (OB_ISNULL(ext_file_svr)) {
+          ret = OB_ERR_UNEXPECTED;
+          STORAGE_LOG(WARN, "unexpected null ext_file_svr", K(ret));
+        } else if (OB_FAIL(ext_file_svr->get_cache_stat(cache_stat))) {
+          STORAGE_LOG(WARN, "failed to get ext cache stat", K(ret));
+        } else {
+          ext_disk_cache_occupy_size += cache_stat.used_size_;
+          ext_disk_cache_required_size += cache_stat.allocated_size_;
+        }
       }
     }
   }
@@ -257,14 +275,18 @@ int ObDiskUsageReportTask::count_tenant_data(const uint64_t tenant_id)
     local_data_key.file_type_ = ObDiskReportFileType::TENANT_MAJOR_LOCAL_DATA;
     quick_restore_remote_key.tenant_id_ = tenant_id;
     quick_restore_remote_key.file_type_ = ObDiskReportFileType::TENANT_BACKUP_DATA;
+    ext_disk_cache_key.tenant_id_ = tenant_id;
+    ext_disk_cache_key.file_type_ = ObDiskReportFileType::TENANT_EXT_DISK_CACHE;
     if (OB_FAIL(result_map_.set_refactored(meta_key, std::make_pair(meta_size, meta_size), 1 /* whether allowed to override */))) {
-      STORAGE_LOG(WARN, "failed to insert meta info result_map_", K(ret), K(meta_key), K(meta_size));
+      STORAGE_LOG(WARN, "failed to insert meta into result_map_", K(ret), K(meta_key), K(meta_size));
     } else if (OB_FAIL(result_map_.set_refactored(data_key, std::make_pair(occupy_size, data_size), 1 /* whether allowed to override */))) {
-      STORAGE_LOG(WARN, "failed to insert data info result_map_", K(ret), K(data_key), K(occupy_size), K(data_size));
+      STORAGE_LOG(WARN, "failed to insert data into result_map_", K(ret), K(data_key), K(occupy_size), K(data_size));
     } else if (OB_FAIL(result_map_.set_refactored(local_data_key,std::make_pair(tablet_local_required_size, tablet_local_required_size), 1 /* whether allowed to override */))) {
-      STORAGE_LOG(WARN, "failed to insert data info result_map_", K(ret), K(local_data_key), K(tablet_local_required_size));
+      STORAGE_LOG(WARN, "failed to insert data into result_map_", K(ret), K(local_data_key), K(tablet_local_required_size));
     } else if (OB_FAIL(result_map_.set_refactored(quick_restore_remote_key, std::make_pair(backup_size, backup_size), 1 /* whether allowed to override */))) {
-      STORAGE_LOG(WARN, "failed to insert backup_size info result_map_", K(ret), K(data_key), K(backup_size));
+      STORAGE_LOG(WARN, "failed to insert backup_size into result_map_", K(ret), K(data_key), K(backup_size));
+    } else if (OB_FAIL(result_map_.set_refactored(ext_disk_cache_key, std::make_pair(ext_disk_cache_occupy_size, ext_disk_cache_required_size), 1 /* whether allowed to override */))) {
+      STORAGE_LOG(WARN, "failed to insert ext_disk_cache_size into result_map_", K(ret), K(ext_disk_cache_key), K(ext_disk_cache_occupy_size), K(ext_disk_cache_required_size));
     }
     #ifdef OB_BUILD_SHARED_STORAGE
     else if (OB_FAIL(result_map_.set_refactored(major_data_key,std::make_pair(tablet_shared_occupy_size, tablet_shared_occupy_size), 1 /* whether allowed to override */))) {
@@ -519,11 +541,12 @@ int ObDiskUsageReportTask::get_data_disk_used_size(const uint64_t tenant_id, int
     STORAGE_LOG(WARN, "ObDiskUsageReportTask not inited", K(ret));
   } else {
     // the file_type_ of which data is on data disk is needed
-    const int need_cnt = 3;
+    const int need_cnt = 4;
     const ObDiskReportFileType file_types_need[need_cnt] = {
         ObDiskReportFileType::TENANT_DATA,
         ObDiskReportFileType::TENANT_META_DATA,
-        ObDiskReportFileType::TENANT_TMP_DATA
+        ObDiskReportFileType::TENANT_TMP_DATA,
+        ObDiskReportFileType::TENANT_EXT_DISK_CACHE
     };
     ObDiskUsageReportKey key;
     key.tenant_id_ = tenant_id;

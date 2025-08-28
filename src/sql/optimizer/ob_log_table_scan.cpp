@@ -333,7 +333,7 @@ int ObLogTableScan::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
     LOG_WARN("failed to analyze aggr param monotonicity", K(ret));
   } else if (OB_FAIL(generate_filter_monotonicity())) {
     LOG_WARN("failed to analyze filter monotonicity", K(ret));
-  } else if (OB_FAIL(get_filter_assist_exprs(all_exprs))) {
+  } else if (OB_FAIL(get_filter_assist_exprs(filter_monotonicity_, all_exprs))) {
     LOG_WARN("failed to get filter assist expr", K(ret));
   } else if (use_index_merge() && OB_FAIL(append_array_no_dup(all_exprs, full_filters_))) {
     LOG_WARN("failed to append index merge full filters", K(ret));
@@ -967,6 +967,7 @@ int ObLogTableScan::has_nonpushdown_filter(bool &has_npd_filter)
   if (OB_FAIL(extract_pushdown_filters(nonpushdown_filters,
                                        scan_pushdown_filters,
                                        lookup_pushdown_filters,
+                                       nullptr /* ext_enable_late_materialization */,
                                        nullptr /* external_pushdown_filters */,
                                        true /*ignore pushdown filters*/))) {
     LOG_WARN("extract pushdnow filters failed", K(ret));
@@ -1007,6 +1008,7 @@ int ObLogTableScan::has_nonpushdown_aggr(const ObIArray<ObAggFunRawExpr*> &aggr_
 int ObLogTableScan::extract_pushdown_filters(ObIArray<ObRawExpr*> &nonpushdown_filters,
                                              ObIArray<ObRawExpr*> &scan_pushdown_filters,
                                              ObIArray<ObRawExpr*> &lookup_pushdown_filters,
+                                             bool *ext_enable_late_materialization /* = nullptr */,
                                              ObIArray<ObString> *external_pushdown_filters /* = nullptr */,
                                              bool ignore_pd_filter /*= false */) const
 {
@@ -1018,16 +1020,6 @@ int ObLogTableScan::extract_pushdown_filters(ObIArray<ObRawExpr*> &nonpushdown_f
     //all filters can not push down to storage
     if (OB_FAIL(nonpushdown_filters.assign(filters))) {
       LOG_WARN("store non-pushdown filters failed", K(ret));
-    }
-  } else if (EXTERNAL_TABLE == get_table_type()) {
-    ObArray<ObString> tmp_external_filters;
-    if (OB_ISNULL(external_pushdown_filters)) {
-      external_pushdown_filters = &tmp_external_filters;
-    }
-    if (OB_FAIL(extract_external_table_pushdown_filters(nonpushdown_filters,
-                                                        *external_pushdown_filters,
-                                                        ignore_pd_filter))) {
-      LOG_WARN("failed to pushdown filters to external table", K(ret));
     }
   } else {
     //part of filters can push down to storage
@@ -1108,95 +1100,104 @@ int ObLogTableScan::extract_pushdown_filters(ObIArray<ObRawExpr*> &nonpushdown_f
       }
     }
     if (OB_SUCC(ret) && EXTERNAL_TABLE == get_table_type()) {
-      // for external table, all filters are duplicate in no pushdown
-      nonpushdown_filters.reset();
-      if (OB_FAIL(nonpushdown_filters.assign(filters))) {
-        LOG_WARN("store non-pushdown filters failed", K(ret));
+      bool need_dup_filter = true;
+      ObSqlSchemaGuard *schema_guard  = nullptr;
+      const ObTableSchema *table_schema = nullptr;
+      ObExternalFileFormat::FormatType external_table_type = ObExternalFileFormat::FormatType::INVALID_FORMAT;
+      if (OB_ISNULL(schema_guard = get_plan()->get_optimizer_context().get_sql_schema_guard())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_FAIL(schema_guard->get_table_schema(get_real_ref_table_id(), table_schema))) {
+        LOG_WARN("failed to get table schema", K(ret));
+      } else if (OB_ISNULL(table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_FAIL(ObSQLUtils::get_external_table_type(table_schema, external_table_type))) {
+          LOG_WARN("failed to get external table type", K(ret));
+      } else if (ObExternalFileFormat::PLUGIN_FORMAT == external_table_type) {
+        ObArray<ObString> tmp_external_filters;
+        if (OB_ISNULL(external_pushdown_filters)) {
+          external_pushdown_filters = &tmp_external_filters;
+        }
+        if (OB_FAIL(extract_plugin_external_table_pushdown_filters(scan_pushdown_filters,
+                                                                   table_schema->get_external_properties(),
+                                                                   nonpushdown_filters,
+                                                                   *external_pushdown_filters))) {
+          LOG_WARN("failed to pushdown filters to external table", K(ret));
+        } else {
+          need_dup_filter = false;
+        }
+      } else if (get_plan()->get_optimizer_context().get_min_cluster_version()
+                 >= CLUSTER_VERSION_4_4_1_0) {
+        if (external_table_type == ObExternalFileFormat::FormatType::ICEBERG_FORMAT ||
+            external_table_type == ObExternalFileFormat::FormatType::PARQUET_FORMAT ||
+            external_table_type == ObExternalFileFormat::FormatType::ORC_FORMAT) {
+          need_dup_filter = false;
+          // for iceberg, parquet and orc, we need to check if the filter need to be duplicated
+          int64_t file_column_count = 0;
+          for (int64_t i = 0; OB_SUCC(ret) && !need_dup_filter && i < filters.count(); ++i) {
+            if (OB_FAIL(check_ext_filter_need_duplicate(filters.at(i), file_column_count, need_dup_filter))) {
+              LOG_WARN("failed to check ext filter need duplicate", K(ret));
+            }
+          }
+          LOG_TRACE("check ext filter need duplicate done", K(ret), K(need_dup_filter));
+        }
+      }
+      if (OB_SUCC(ret) && need_dup_filter) {
+        // for external table, all filters are duplicate in no pushdown
+        nonpushdown_filters.reset();
+        if (OB_FAIL(nonpushdown_filters.assign(filters))) {
+          LOG_WARN("store non-pushdown filters failed", K(ret));
+        }
+      }
+      if (OB_SUCC(ret) && OB_NOT_NULL(ext_enable_late_materialization)) {
+        *ext_enable_late_materialization = !need_dup_filter;
       }
     }
   }
   return ret;
 }
 
-int ObLogTableScan::extract_external_table_pushdown_filters(ObIArray<ObRawExpr*> &nonpushdown_filters,
-                                                            ObIArray<ObString> &external_pushdown_filters,
-                                                            bool ignore_pd_filter /* = false */) const
+int ObLogTableScan::extract_plugin_external_table_pushdown_filters(ObIArray<ObRawExpr*> &filters,
+                                                                   ObString external_properties_str,
+                                                                   ObIArray<ObRawExpr*> &nonpushdown_filters,
+                                                                   ObIArray<ObString> &external_pushdown_filters) const
 {
   int ret = OB_SUCCESS;
-  const ObIArray<ObRawExpr*> &filters = get_filter_exprs();
-  ObSqlSchemaGuard *schema_guard = nullptr;
-  const ObTableSchema *table_schema = nullptr;
   const ParamStore *param_store = nullptr;
-  ObString external_properties_str;
   ObExternalFileFormat external_file_format;
   plugin::ObExternalDataEngine *data_engine = nullptr;
-  ObArray<ObRawExpr *> candidate_pushdown_filters;
   ObMemAttr mem_attr(MTL_ID(), "ExternPushdown");
   ObArenaAllocator arena_allocator(mem_attr);
   ObIAllocator *allocator = nullptr;
 
-  candidate_pushdown_filters.set_attr(mem_attr);
-
   const auto &flags = get_filter_before_index_flags();
+  ObExternalFileFormat::FormatType format_type = ObExternalFileFormat::FormatType::INVALID_FORMAT;
   if (OB_ISNULL(get_stmt()) || OB_ISNULL(get_plan()) || OB_ISNULL(allocator = &get_plan()->get_allocator()) ||
-      OB_ISNULL(schema_guard = get_plan()->get_optimizer_context().get_sql_schema_guard()) ||
       OB_ISNULL(param_store = get_plan()->get_optimizer_context().get_params())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FAIL(schema_guard->get_table_schema(ref_table_id_, table_schema))) {
-    LOG_WARN("failed to get table schema", K(ret));
-  } else if (OB_ISNULL(table_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table schema is null", K(ret));
-  } else if (FALSE_IT(external_properties_str = table_schema->get_external_properties())) {
-  } else if (external_properties_str.empty()) {
-    // all filters can not push down to storage
-    // this is a csv external table
-    if (OB_FAIL(nonpushdown_filters.assign(filters))) {
-      LOG_WARN("store non-pushdown filters failed", K(ret));
-    }
-  } else if (OB_FAIL(external_file_format.load_from_string(external_properties_str, arena_allocator))) {
+  } else if (OB_FAIL(external_file_format.parse_format_type(external_properties_str, arena_allocator, format_type))) {
     LOG_WARN("failed to parse external file format", K(ret));
-  } else if (ObExternalFileFormat::PLUGIN_FORMAT != external_file_format.format_type_) {
-    if (OB_FAIL(nonpushdown_filters.assign(filters))) {
-      LOG_WARN("non-plugin external table store non pushdown filters failed", K(ret));
-    }
+  } else if (ObExternalFileFormat::PLUGIN_FORMAT != format_type) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected format type", K(format_type));
+  } else if (OB_FAIL(external_file_format.load_from_string(external_properties_str, arena_allocator))) {
+    LOG_WARN("failed to load external file format", K(ret));
   } else if (OB_FAIL(external_file_format.plugin_format_.create_engine(arena_allocator, data_engine))) {
     LOG_WARN("failed to create data engine", K(ret));
   } else if (OB_UNLIKELY(OB_ISNULL(data_engine))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("data engine is null", K(ret));
-  } else {
-    // part of filters can push down to storage
-    // refer to extract_pushdown_filters
-    for (int64_t i = 0; OB_SUCC(ret) && i < filters.count(); ++i) {
-      if ((use_batch() && filters.at(i)->has_flag(CNT_DYNAMIC_PARAM)) ||
-          (filters.at(i)->has_flag(CNT_PL_UDF) || filters.at(i)->has_flag(CNT_OBJ_ACCESS_EXPR)) ||
-          (filters.at(i)->has_flag(CNT_DYNAMIC_USER_VARIABLE) || filters.at(i)->has_flag(CNT_ASSIGN_EXPR)) ||
-          (has_func_lookup() && (filters.at(i)->has_flag(CNT_MATCH_EXPR) || !flags.at(i))) ||
-          (is_text_retrieval_scan() && need_text_retrieval_calc_relevance()) ||
-          (get_index_back())) { // external table doesn't has index now
-        if (OB_FAIL(nonpushdown_filters.push_back(filters.at(i)))) {
-          LOG_WARN("push scan store non-pushdown filter failed", K(ret), K(i));
-        }
-      } else if (OB_FAIL(candidate_pushdown_filters.push_back(filters.at(i)))) {
-        LOG_WARN("failed to pushback filter to candidate pushdown filters", K(ret));
-      }
-    }
-  }
-
-  if (OB_FAIL(ret) || candidate_pushdown_filters.count() == 0) {
-  } else if (OB_FAIL(data_engine->pushdown_filters(
-      *allocator, *param_store, candidate_pushdown_filters, external_pushdown_filters))) {
+  } else if (filters.count() == 0) {
+  } else if (OB_FAIL(data_engine->pushdown_filters(*allocator, *param_store, filters, external_pushdown_filters))) {
     LOG_WARN("failed to detect pushdown filters by external table data engine", K(ret));
-  } else if (external_pushdown_filters.count() > candidate_pushdown_filters.count()) {
-    LOG_WARN("invalid pushdown filters number",
-             K(external_pushdown_filters.count()),
-             K(candidate_pushdown_filters.count()));
+  } else if (external_pushdown_filters.count() > filters.count()) {
+    LOG_WARN("invalid pushdown filters number", K(external_pushdown_filters.count()), K(filters.count()));
   } else {
     for (int64_t i = external_pushdown_filters.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
       const ObString &filter_info = external_pushdown_filters.at(i);
-      ObRawExpr *filter = candidate_pushdown_filters.at(i);
+      ObRawExpr *filter = filters.at(i);
       if (filter_info.empty()) {
         if (OB_FAIL(nonpushdown_filters.push_back(filter))) {
           LOG_WARN("failed to push filter into nonpushdown_filters", K(ret), K(i));
@@ -1209,6 +1210,43 @@ int ObLogTableScan::extract_external_table_pushdown_filters(ObIArray<ObRawExpr*>
 
   LOG_TRACE("external table pushdown filters done",
             K(ret), K(external_pushdown_filters.count()), K(nonpushdown_filters.count()));
+  return ret;
+}
+
+int ObLogTableScan::check_ext_filter_need_duplicate(const ObRawExpr *expr,
+                                                    int64_t &file_column_count,
+                                                    bool &need_duplicate) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null", K(ret));
+  } else if (need_duplicate) {
+    // do nothing
+  } else if (T_PSEUDO_EXTERNAL_FILE_COL == expr->get_expr_type()) {
+    // multiple file columns need to be duplicated
+    file_column_count++;
+    need_duplicate = file_column_count > 1;
+  } else if (expr->is_column_ref_expr()) {
+    const ObColumnRefRawExpr *col_ref_expr = static_cast<const ObColumnRefRawExpr *>(expr);
+    if (col_ref_expr->is_stored_generated_column()) {
+      const ObRawExpr *dep_expr = col_ref_expr->get_dependant_expr();
+      file_column_count = 0;
+      if (OB_ISNULL(dep_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("dep expr is null", K(ret));
+      } else if (OB_FAIL(check_ext_filter_need_duplicate(dep_expr, file_column_count, need_duplicate))) {
+        LOG_WARN("fail to check ext filter need duplicate", K(ret));
+      }
+    }
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && !need_duplicate && i < expr->get_param_count(); ++i) {
+      if (OB_FAIL(check_ext_filter_need_duplicate(expr->get_param_expr(i), file_column_count,
+                                                  need_duplicate))) {
+        LOG_WARN("fail to check ext filter need duplicate", K(ret));
+      }
+    }
+  }
   return ret;
 }
 
@@ -2057,7 +2095,7 @@ int ObLogTableScan::get_plan_item_info(PlanText &plan_text,
       } else if (OB_FAIL(BUF_PRINTF(OUTPUT_PREFIX))) {
         LOG_WARN("BUG_PRINTF fails", K(ret));
       } else {
-        ObIArray<ObRawExpr*> &column_values = get_ext_column_convert_exprs();
+        ObIArray<ObRawExpr*> &column_values = get_ext_column_dependent_exprs();
         EXPLAIN_PRINT_EXPRS(column_values, type);
       }
     }
@@ -5197,169 +5235,221 @@ int ObLogTableScan::check_das_need_keep_ordering()
 int ObLogTableScan::generate_filter_monotonicity()
 {
   int ret = OB_SUCCESS;
-  ObExecContext *exec_ctx = NULL;
-  const ParamStore *param_store = NULL;
-  ObRawExpr * filter_expr = NULL;
-  ObSEArray<ObRawExpr *, 2> col_exprs;
-  if (OB_ISNULL(get_plan()) || OB_ISNULL(get_stmt()) || OB_ISNULL(get_stmt()->get_query_ctx()) ||
-      OB_ISNULL(exec_ctx = get_plan()->get_optimizer_context().get_exec_ctx()) ||
-      OB_ISNULL(param_store = get_plan()->get_optimizer_context().get_params())) {
+  if (OB_ISNULL(get_plan()) || OB_ISNULL(get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("got unexpected NULL ptr", K(ret));
-  } else if (get_stmt()->get_query_ctx()->optimizer_features_enable_version_ < COMPAT_VERSION_4_3_2) {
-    filter_monotonicity_.reset();
+  } else if (OB_FAIL(ObLogTableScan::generate_filter_monotonicity(get_stmt(),
+                                                  get_plan()->get_optimizer_context().get_exec_ctx(),
+                                                  get_plan()->get_optimizer_context().get_params(),
+                                                  get_plan()->get_optimizer_context().get_expr_factory(),
+                                                  get_plan()->get_allocator(),
+                                                  get_filter_exprs(),
+                                                  filter_monotonicity_,
+                                                  &const_param_constraints_))) {
+    LOG_WARN("failed to generate filter monotonicity");
+  }
+  return ret;
+}
+
+int ObLogTableScan::generate_filter_monotonicity(const ObDMLStmt *stmt,
+                                                 ObExecContext *exec_ctx,
+                                                 const ParamStore *param_store,
+                                                 ObRawExprFactory &expr_factory,
+                                                 ObIAllocator &allocator,
+                                                 const ObIArray<ObRawExpr *> &filter_exprs,
+                                                 ObIArray<ObRawFilterMonotonicity> &filter_monotonicity,
+                                                 ObIArray<ObPCConstParamInfo> *const_param_constraints)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(stmt) || OB_ISNULL(stmt->get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected NULL", KP(stmt));
+  } else if (stmt->get_query_ctx()->optimizer_features_enable_version_ < COMPAT_VERSION_4_3_2) {
+    filter_monotonicity.reset();
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < get_filter_exprs().count(); ++i) {
-      col_exprs.reuse();
-      if (OB_ISNULL(filter_expr = get_filter_exprs().at(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("got unexpected NULL ptr", K(ret));
-      } else if (T_OP_GT != filter_expr->get_expr_type() &&
-                 T_OP_GE != filter_expr->get_expr_type() &&
-                 T_OP_LT != filter_expr->get_expr_type() &&
-                 T_OP_LE != filter_expr->get_expr_type() &&
-                 T_OP_EQ != filter_expr->get_expr_type()) {
-        /* do nothing */
-      } else if (OB_UNLIKELY(2 != filter_expr->get_param_count())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("got unexpected param", K(ret), K(*filter_expr));
-      } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(filter_expr, col_exprs))) {
-        LOG_WARN("failed to extract column exprs", K(ret));
-      } else if (1 == col_exprs.count()) {
-        Monotonicity mono = Monotonicity::NONE_MONO;
-        Monotonicity left_mono = Monotonicity::NONE_MONO;
-        Monotonicity right_mono = Monotonicity::NONE_MONO;
-        bool left_dummy_bool = true;
-        bool right_dummy_bool = true;
-        bool is_left_func_expr = true;
-        ObPCConstParamInfo left_const_param_info;
-        ObPCConstParamInfo right_const_param_info;
-        ObRawFilterMonotonicity *filter_mono = NULL;
-        ObOpRawExpr *assist_expr = NULL;
-        ObRawExpr *func_expr = NULL;
-        ObRawExpr *const_expr = NULL;
-        if (OB_FAIL(ObOptimizerUtil::get_expr_monotonicity(filter_expr->get_param_expr(0), col_exprs.at(0),
-                                                           *exec_ctx, left_mono, left_dummy_bool,
-                                                           *param_store, left_const_param_info))) {
-          LOG_WARN("failed to get expr monotonicity", K(ret));
-        } else if (OB_FAIL(ObOptimizerUtil::get_expr_monotonicity(filter_expr->get_param_expr(1),
-                                                           col_exprs.at(0), *exec_ctx, right_mono,
-                                                           right_dummy_bool, *param_store,
-                                                           right_const_param_info))) {
-          LOG_WARN("failed to get expr monotonicity", K(ret));
+    for (int64_t i = 0; OB_SUCC(ret) && i < filter_exprs.count(); ++i) {
+      if (OB_FAIL(recursive_generate_filter_monotonicity(exec_ctx, param_store, expr_factory,
+                                                         allocator, filter_exprs.at(i),
+                                                         filter_monotonicity, const_param_constraints))) {
+        LOG_WARN("failed to recursive generate filter monotonicity");
+      }
+    } // end for
+  }
+  return ret;
+}
+
+int ObLogTableScan::recursive_generate_filter_monotonicity(ObExecContext *exec_ctx,
+                                                           const ParamStore *param_store,
+                                                           ObRawExprFactory &expr_factory,
+                                                           ObIAllocator &allocator,
+                                                           ObRawExpr *filter_expr,
+                                                           ObIArray<ObRawFilterMonotonicity> &filter_monotonicity,
+                                                           ObIArray<ObPCConstParamInfo> *const_param_constraints)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(exec_ctx) || OB_ISNULL(param_store) || OB_ISNULL(filter_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("got unexpected NULL ptr", KP(exec_ctx), KP(param_store), KP(filter_expr));
+  } else if (T_OP_AND == filter_expr->get_expr_type() || T_OP_OR == filter_expr->get_expr_type()) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < filter_expr->get_param_count(); ++i) {
+      if (OB_FAIL(SMART_CALL(recursive_generate_filter_monotonicity(exec_ctx, param_store, expr_factory,
+                                                                    allocator, filter_expr->get_param_expr(i),
+                                                                    filter_monotonicity, const_param_constraints)))) {
+        LOG_WARN("failed to recursive generate filter monotonicity");
+      }
+    }
+  } else {
+    ObSEArray<ObRawExpr *, 2> col_exprs;
+    if (T_OP_GT != filter_expr->get_expr_type() &&
+        T_OP_GE != filter_expr->get_expr_type() &&
+        T_OP_LT != filter_expr->get_expr_type() &&
+        T_OP_LE != filter_expr->get_expr_type() &&
+        T_OP_EQ != filter_expr->get_expr_type()) {
+      /* do nothing */
+    } else if (OB_UNLIKELY(2 != filter_expr->get_param_count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("got unexpected param", K(ret), K(*filter_expr));
+    } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(filter_expr, col_exprs))) {
+      LOG_WARN("failed to extract column exprs", K(ret));
+    } else if (1 == col_exprs.count()) {
+      Monotonicity mono = Monotonicity::NONE_MONO;
+      Monotonicity left_mono = Monotonicity::NONE_MONO;
+      Monotonicity right_mono = Monotonicity::NONE_MONO;
+      bool left_dummy_bool = true;
+      bool right_dummy_bool = true;
+      bool is_left_func_expr = true;
+      ObPCConstParamInfo left_const_param_info;
+      ObPCConstParamInfo right_const_param_info;
+      ObRawFilterMonotonicity *filter_mono = NULL;
+      ObOpRawExpr *assist_expr = NULL;
+      ObRawExpr *func_expr = NULL;
+      ObRawExpr *const_expr = NULL;
+      if (OB_FAIL(ObOptimizerUtil::get_expr_monotonicity(filter_expr->get_param_expr(0), col_exprs.at(0),
+                                                         *exec_ctx, left_mono, left_dummy_bool,
+                                                         *param_store, left_const_param_info))) {
+        LOG_WARN("failed to get expr monotonicity", K(ret));
+      } else if (OB_FAIL(ObOptimizerUtil::get_expr_monotonicity(filter_expr->get_param_expr(1),
+                                                         col_exprs.at(0), *exec_ctx, right_mono,
+                                                         right_dummy_bool, *param_store,
+                                                         right_const_param_info))) {
+        LOG_WARN("failed to get expr monotonicity", K(ret));
+      } else {
+        if (Monotonicity::NONE_MONO == left_mono) {
+          /* do nothing */
+        } else if (Monotonicity::CONST == left_mono) {
+          const_expr = filter_expr->get_param_expr(0);
+        } else if (Monotonicity::ASC == left_mono || Monotonicity::DESC == left_mono) {
+          func_expr = filter_expr->get_param_expr(0);
+          mono = left_mono;
         } else {
-          if (Monotonicity::NONE_MONO == left_mono) {
-            /* do nothing */
-          } else if (Monotonicity::CONST == left_mono) {
-            const_expr = filter_expr->get_param_expr(0);
-          } else if (Monotonicity::ASC == left_mono || Monotonicity::DESC == left_mono) {
-            func_expr = filter_expr->get_param_expr(0);
-            mono = left_mono;
-          } else {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("got unknow monotonicity type", K(ret), K(left_mono));
-          }
-          if (OB_FAIL(ret)) {
-          } else if (Monotonicity::NONE_MONO == right_mono) {
-            /* do nothing */
-          } else if (Monotonicity::CONST == right_mono) {
-            const_expr = filter_expr->get_param_expr(1);
-          } else if (Monotonicity::ASC == right_mono || Monotonicity::DESC == right_mono) {
-            func_expr = filter_expr->get_param_expr(1);
-            mono = right_mono;
-            is_left_func_expr = false;
-          } else {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("got unknow monotonicity type", K(ret), K(right_mono));
-          }
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("got unknow monotonicity type", K(ret), K(left_mono));
         }
-        if (OB_SUCC(ret)) {
-          if (NULL == func_expr || NULL == const_expr ||
-              !(Monotonicity::ASC == mono || Monotonicity::DESC == mono)) {
-            /* do nothing */
-          } else if (OB_ISNULL(filter_mono = filter_monotonicity_.alloc_place_holder())) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("alloc failed", K(ret));
-          } else if (!left_const_param_info.const_idx_.empty() &&
-                     OB_FAIL(const_param_constraints_.push_back(left_const_param_info))) {
-            LOG_WARN("failed to push back", K(ret));
-          } else if (!right_const_param_info.const_idx_.empty() &&
-                     OB_FAIL(const_param_constraints_.push_back(right_const_param_info))) {
-            LOG_WARN("failed to push back", K(ret));
-          } else {
-            filter_mono->filter_expr_ = filter_expr;
-            filter_mono->col_expr_ = static_cast<ObColumnRefRawExpr*>(col_exprs.at(0));
-            if (T_OP_EQ != filter_expr->get_expr_type()) {
-              /* asc  && f(x) > const  --> mon_asc
-               * asc  && const < f(x)  --> mon_asc
-               * asc  && f(x) < const  --> mon_desc
-               * asc  && const > f(x)  --> mon_desc
-               *
-               * desc && f(x) > const  --> mon_desc
-               * desc && const < f(x)  --> mon_desc
-               * desc && f(x) < const  --> mon_asc
-               * desc && const > f(x)  --> mon_asc
-              */
-              if (Monotonicity::ASC == mono) {
-                if ((is_left_func_expr && (T_OP_GT == filter_expr->get_expr_type() ||
-                                           T_OP_GE == filter_expr->get_expr_type())) ||
-                    (!is_left_func_expr && (T_OP_LT == filter_expr->get_expr_type() ||
-                                            T_OP_LE == filter_expr->get_expr_type()))) {
-                  filter_mono->mono_ = PushdownFilterMonotonicity::MON_ASC;
-                } else {
-                  filter_mono->mono_ = PushdownFilterMonotonicity::MON_DESC;
-                }
+        if (OB_FAIL(ret)) {
+        } else if (Monotonicity::NONE_MONO == right_mono) {
+          /* do nothing */
+        } else if (Monotonicity::CONST == right_mono) {
+          const_expr = filter_expr->get_param_expr(1);
+        } else if (Monotonicity::ASC == right_mono || Monotonicity::DESC == right_mono) {
+          func_expr = filter_expr->get_param_expr(1);
+          mono = right_mono;
+          is_left_func_expr = false;
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("got unknow monotonicity type", K(ret), K(right_mono));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (NULL == func_expr || NULL == const_expr ||
+            !(Monotonicity::ASC == mono || Monotonicity::DESC == mono)) {
+          /* do nothing */
+        } else if (OB_ISNULL(filter_mono = filter_monotonicity.alloc_place_holder())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("alloc failed", K(ret));
+        } else if (!left_const_param_info.const_idx_.empty() &&
+                   const_param_constraints != nullptr &&
+                   OB_FAIL(const_param_constraints->push_back(left_const_param_info))) {
+          LOG_WARN("failed to push back", K(ret));
+        } else if (!right_const_param_info.const_idx_.empty() &&
+                   const_param_constraints != nullptr &&
+                   OB_FAIL(const_param_constraints->push_back(right_const_param_info))) {
+          LOG_WARN("failed to push back", K(ret));
+        } else {
+          filter_mono->filter_expr_ = filter_expr;
+          filter_mono->col_expr_ = static_cast<ObColumnRefRawExpr*>(col_exprs.at(0));
+          if (T_OP_EQ != filter_expr->get_expr_type()) {
+            /* asc  && f(x) > const  --> mon_asc
+             * asc  && const < f(x)  --> mon_asc
+             * asc  && f(x) < const  --> mon_desc
+             * asc  && const > f(x)  --> mon_desc
+             *
+             * desc && f(x) > const  --> mon_desc
+             * desc && const < f(x)  --> mon_desc
+             * desc && f(x) < const  --> mon_asc
+             * desc && const > f(x)  --> mon_asc
+            */
+            if (Monotonicity::ASC == mono) {
+              if ((is_left_func_expr && (T_OP_GT == filter_expr->get_expr_type() ||
+                                         T_OP_GE == filter_expr->get_expr_type())) ||
+                  (!is_left_func_expr && (T_OP_LT == filter_expr->get_expr_type() ||
+                                          T_OP_LE == filter_expr->get_expr_type()))) {
+                filter_mono->mono_ = PushdownFilterMonotonicity::MON_ASC;
               } else {
-                if ((is_left_func_expr && (T_OP_GT == filter_expr->get_expr_type() ||
-                                           T_OP_GE == filter_expr->get_expr_type())) ||
-                    (!is_left_func_expr && (T_OP_LT == filter_expr->get_expr_type() ||
-                                            T_OP_LE == filter_expr->get_expr_type()))) {
-                  filter_mono->mono_ = PushdownFilterMonotonicity::MON_DESC;
-                } else {
-                  filter_mono->mono_ = PushdownFilterMonotonicity::MON_ASC;
-                }
+                filter_mono->mono_ = PushdownFilterMonotonicity::MON_DESC;
               }
             } else {
-              /* asc  && f(x) = const --> mon_eq_asc  + f(x) > const + f(x) < const
-               * desc && f(x) = const --> mon_eq_desc + f(x) > const + f(x) < const
-               *
-               * asc  && const = f(x) --> mon_eq_asc  + f(x) > const + f(x) < const
-               * desc && const = f(x) --> mon_eq_desc + f(x) > const + f(x) < const
-              */
-              ObRawExprFactory &expr_factory = get_plan()->get_optimizer_context().get_expr_factory();
-              ObIAllocator &allocator = get_plan()->get_allocator();
-              filter_mono->mono_ = Monotonicity::ASC == mono ? PushdownFilterMonotonicity::MON_EQ_ASC :
-                                                               PushdownFilterMonotonicity::MON_EQ_DESC;
-              filter_mono->assist_exprs_.set_allocator(&allocator);
-              filter_mono->assist_exprs_.set_capacity(2);
-              if (OB_FAIL(expr_factory.create_raw_expr(T_OP_GT, assist_expr))) {
-                LOG_WARN("failed to create gt raw expr", K(ret));
-              } else if (OB_ISNULL(assist_expr)) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("alloc failed", K(ret));
-              } else if (OB_FAIL(assist_expr->set_param_exprs(func_expr, const_expr))) {
-                LOG_WARN("failed to set param exprs", K(ret));
-              } else if (OB_FAIL(assist_expr->formalize(get_plan()->get_optimizer_context().get_session_info()))) {
-                LOG_WARN("failed to get formalize expr", K(ret));
-              } else if (OB_FAIL(filter_mono->assist_exprs_.push_back(assist_expr))) {
-                LOG_WARN("failed to push back", K(ret));
-              } else if (OB_FAIL(expr_factory.create_raw_expr(T_OP_LT, assist_expr))) {
-                LOG_WARN("failed to create gt raw expr", K(ret));
-              } else if (OB_ISNULL(assist_expr)) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("alloc failed", K(ret));
-              } else if (OB_FAIL(assist_expr->set_param_exprs(func_expr, const_expr))) {
-                LOG_WARN("failed to set param exprs", K(ret));
-              } else if (OB_FAIL(assist_expr->formalize(get_plan()->get_optimizer_context().get_session_info()))) {
-                LOG_WARN("failed to get formalize expr", K(ret));
-              } else if (OB_FAIL(filter_mono->assist_exprs_.push_back(assist_expr))) {
-                LOG_WARN("failed to push back", K(ret));
+              if ((is_left_func_expr && (T_OP_GT == filter_expr->get_expr_type() ||
+                                         T_OP_GE == filter_expr->get_expr_type())) ||
+                  (!is_left_func_expr && (T_OP_LT == filter_expr->get_expr_type() ||
+                                          T_OP_LE == filter_expr->get_expr_type()))) {
+                filter_mono->mono_ = PushdownFilterMonotonicity::MON_DESC;
+              } else {
+                filter_mono->mono_ = PushdownFilterMonotonicity::MON_ASC;
               }
+            }
+          } else {
+            /* asc  && f(x) = const --> mon_eq_asc  + f(x) > const + f(x) < const
+             * desc && f(x) = const --> mon_eq_desc + f(x) > const + f(x) < const
+             *
+             * asc  && const = f(x) --> mon_eq_asc  + f(x) > const + f(x) < const
+             * desc && const = f(x) --> mon_eq_desc + f(x) > const + f(x) < const
+            */
+            filter_mono->mono_ = Monotonicity::ASC == mono ? PushdownFilterMonotonicity::MON_EQ_ASC :
+                                                             PushdownFilterMonotonicity::MON_EQ_DESC;
+            filter_mono->assist_exprs_.set_allocator(&allocator);
+            filter_mono->assist_exprs_.set_capacity(2);
+            if (OB_FAIL(expr_factory.create_raw_expr(T_OP_GT, assist_expr))) {
+              LOG_WARN("failed to create gt raw expr", K(ret));
+            } else if (OB_ISNULL(assist_expr)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("alloc failed", K(ret));
+            } else if (OB_FAIL(assist_expr->set_param_exprs(func_expr, const_expr))) {
+              LOG_WARN("failed to set param exprs", K(ret));
+            } else if (OB_FAIL(assist_expr->formalize(exec_ctx->get_my_session()))) {
+              LOG_WARN("failed to get formalize expr", K(ret));
+            } else if (OB_FAIL(filter_mono->assist_exprs_.push_back(assist_expr))) {
+              LOG_WARN("failed to push back", K(ret));
+            } else if (OB_FAIL(expr_factory.create_raw_expr(T_OP_LT, assist_expr))) {
+              LOG_WARN("failed to create gt raw expr", K(ret));
+            } else if (OB_ISNULL(assist_expr)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("alloc failed", K(ret));
+            } else if (OB_FAIL(assist_expr->set_param_exprs(func_expr, const_expr))) {
+              LOG_WARN("failed to set param exprs", K(ret));
+            } else if (OB_FAIL(assist_expr->formalize(exec_ctx->get_my_session()))) {
+              LOG_WARN("failed to get formalize expr", K(ret));
+            } else if (OB_FAIL(filter_mono->assist_exprs_.push_back(assist_expr))) {
+              LOG_WARN("failed to push back", K(ret));
+            }
+            if (OB_ERR_INVALID_TYPE_FOR_OP == ret) {
+              filter_mono->mono_ = PushdownFilterMonotonicity::MON_NON;
+              filter_mono->assist_exprs_.reset();
+              ret = OB_SUCCESS;
             }
           }
         }
       }
-    } // end for
+    }
   }
   return ret;
 }
@@ -5423,8 +5513,9 @@ int ObLogTableScan::generate_aggr_param_monotonicity()
 
 int ObLogTableScan::get_filter_monotonicity(const ObRawExpr *filter,
                                             const ObColumnRefRawExpr *col_expr,
+                                            const ObIArray<ObRawFilterMonotonicity> &filter_monotonicity,
                                             PushdownFilterMonotonicity &mono,
-                                            ObIArray<ObRawExpr*> &assist_exprs) const
+                                            ObIArray<ObRawExpr*> &assist_exprs)
 {
   int ret = OB_SUCCESS;
   mono = PushdownFilterMonotonicity::MON_NON;
@@ -5433,12 +5524,12 @@ int ObLogTableScan::get_filter_monotonicity(const ObRawExpr *filter,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("got unexpected NULL ptr", K(ret));
   }
-  for (int64_t i = 0; OB_SUCC(ret) && i < filter_monotonicity_.count(); ++i) {
-    if (filter == filter_monotonicity_.at(i).filter_expr_ &&
-        col_expr == filter_monotonicity_.at(i).col_expr_ &&
-        PushdownFilterMonotonicity::MON_NON != filter_monotonicity_.at(i).mono_) {
-      mono = filter_monotonicity_.at(i).mono_;
-      if (OB_FAIL(append(assist_exprs, filter_monotonicity_.at(i).assist_exprs_))) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < filter_monotonicity.count(); ++i) {
+    if (filter == filter_monotonicity.at(i).filter_expr_ &&
+        col_expr == filter_monotonicity.at(i).col_expr_ &&
+        PushdownFilterMonotonicity::MON_NON != filter_monotonicity.at(i).mono_) {
+      mono = filter_monotonicity.at(i).mono_;
+      if (OB_FAIL(append(assist_exprs, filter_monotonicity.at(i).assist_exprs_))) {
         LOG_WARN("failed to append");
       }
       break;
@@ -5466,11 +5557,12 @@ int ObLogTableScan::get_aggr_param_monotonicity(const ObRawExpr *param_expr,
   return ret;
 }
 
-int ObLogTableScan::get_filter_assist_exprs(ObIArray<ObRawExpr *> &assist_exprs)
+int ObLogTableScan::get_filter_assist_exprs(ObIArray<ObRawFilterMonotonicity> &filter_monotonicity,
+                                            ObIArray<ObRawExpr *> &assist_exprs)
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < filter_monotonicity_.count(); ++i) {
-    if (OB_FAIL(append(assist_exprs, filter_monotonicity_.at(i).assist_exprs_))) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < filter_monotonicity.count(); ++i) {
+    if (OB_FAIL(append(assist_exprs, filter_monotonicity.at(i).assist_exprs_))) {
       LOG_WARN("failed to append");
     }
   }

@@ -1771,7 +1771,7 @@ protected:
   int explain_print_partitions(ObTablePartitionInfo &table_partition_info,
                                char *buf, int64_t &buf_len, int64_t &pos);
   static int explain_print_partitions(const ObIArray<ObLogicalOperator::PartInfo> &part_infos,
-                                      const bool two_level, char *buf,
+                                      const bool two_level, int64_t file_count, char *buf,
                                       int64_t &buf_len, int64_t &pos);
 
 protected:

@@ -36,21 +36,29 @@ int ObAsyncLoadExternalTableFileListP::process()
   ObLoadExternalFileListReq &req = arg_;
   ObLoadExternalFileListRes &res = result_;
   ObSEArray<ObString, 16> file_urls;
+  ObSEArray<ObString, 16> content_digests;
   ObString access_info;
   ObArenaAllocator allocator;
-  if (OB_FAIL(ObExternalTableFileManager::get_instance().get_external_file_list_on_device(req.location_,
-                                                                                          req.pattern_,
-                                                                                          req.regexp_vars_,
-                                                                                          file_urls,
-                                                                                          res.file_sizes_,
-                                                                                          access_info,
-                                                                                          allocator))) {
+  if (OB_FAIL(ObExternalTableFileManager::get_external_file_list_on_device(req.location_,
+                                                                           req.pattern_,
+                                                                           req.regexp_vars_,
+                                                                           file_urls,
+                                                                           res.file_sizes_,
+                                                                           res.modify_times_,
+                                                                           content_digests,
+                                                                           access_info,
+                                                                           allocator))) {
     LOG_WARN("get external table file on device failed", K(ret));
   }
   for (int64_t i =0 ; OB_SUCC(ret) && i < file_urls.count(); i++) {
     ObString tmp;
     OZ(ob_write_string(res.get_alloc(), file_urls.at(i), tmp));
     OZ(res.file_urls_.push_back(tmp));
+  }
+  for (int64_t i =0 ; OB_SUCC(ret) && i < content_digests.count(); i++) {
+    ObString tmp;
+    OZ(ob_write_string(res.get_alloc(), content_digests.at(i), tmp));
+    OZ(res.content_digests_.push_back(tmp));
   }
   res.rcode_.rcode_ = ret;
   LOG_DEBUG("get external table file", K(ret), K(req.location_), K(req.pattern_), K(file_urls), K(res.file_urls_));

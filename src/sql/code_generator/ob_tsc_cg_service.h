@@ -59,6 +59,7 @@ public:
                                  ObDASScanCtDef &scan_ctdef,
                                  const ObRawExpr *trans_info_expr,
                                  const bool include_agg = false);
+  int generate_ext_column_mapping(ObLogTableScan &op, ObTableScanCtDef &tsc_ctdef);
 private:
   // temporary context for multiple das scan in one table scan operator
   struct DASScanCGCtx

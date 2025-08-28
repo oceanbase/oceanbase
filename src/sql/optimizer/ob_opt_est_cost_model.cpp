@@ -17,7 +17,6 @@
 #include "sql/optimizer/ob_opt_est_cost_model_vector.h"
 #include "sql/optimizer/ob_opt_est_parameter_vector.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
-#define DEFAULT_BATCH_SIZE  256
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 using namespace oceanbase;
@@ -26,6 +25,7 @@ using namespace sql;
 const int64_t ObOptEstCostModel::DEFAULT_LOCAL_ORDER_DEGREE = 32;
 const int64_t ObOptEstCostModel::DEFAULT_MAX_STRING_WIDTH = 64;
 const int64_t ObOptEstCostModel::DEFAULT_FIXED_OBJ_WIDTH = 12;
+const int64_t ObOptEstCostModel::DEFAULT_BATCH_SIZE = 256;
 
 int ObCostColumnGroupInfo::assign(const ObCostColumnGroupInfo& info)
 {
@@ -127,6 +127,8 @@ void ObTableMetaInfo::assign(const ObTableMetaInfo &table_meta_info)
   has_opt_stat_ = table_meta_info.has_opt_stat_;
   micro_block_count_ = table_meta_info.micro_block_count_;
   table_type_ = table_meta_info.table_type_;
+  lake_table_format_ = table_meta_info.lake_table_format_;
+  lake_table_file_count_ = table_meta_info.lake_table_file_count_;
 }
 
 int ObCostTableScanInfo::has_exec_param(const ObIArray<ObRawExpr *> &exprs, bool &bool_ret) const
@@ -2015,7 +2017,7 @@ int ObOptEstCostModel::range_scan_cpu_cost(const ObCostTableScanInfo &est_cost_i
         NULL != table_meta_info &&
         table_meta_info->has_opt_stat_ &&
         table_meta_info->micro_block_count_ > 100 &&
-        table_meta_info->table_row_count_ / table_meta_info->micro_block_count_ < DEFAULT_BATCH_SIZE) {
+        table_meta_info->table_row_count_ / table_meta_info->micro_block_count_ < ObOptEstCostModel::DEFAULT_BATCH_SIZE) {
       cpu_cost *= 2 * (1-0.002 * (table_meta_info->table_row_count_ / table_meta_info->micro_block_count_));
     }
     LOG_TRACE("OPT: [RANGE SCAN CPU COST]", K(is_scan_index), K(is_get),

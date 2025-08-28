@@ -5300,13 +5300,15 @@ class ObPseudoColumnRawExpr : public ObTerminalRawExpr
 public:
   ObPseudoColumnRawExpr() :
     ObTerminalRawExpr(),
-    table_id_(common::OB_INVALID_ID)
+    table_id_(common::OB_INVALID_ID),
+    mapped_column_id_(common::OB_INVALID_ID)
   {
     set_expr_class(EXPR_PSEUDO_COLUMN);
   }
   ObPseudoColumnRawExpr(common::ObIAllocator &alloc) :
     ObTerminalRawExpr(alloc),
-    table_id_(common::OB_INVALID_ID)
+    table_id_(common::OB_INVALID_ID),
+    mapped_column_id_(common::OB_INVALID_ID)
   {
     set_expr_class(EXPR_PSEUDO_COLUMN);
   }
@@ -5330,8 +5332,9 @@ public:
   void set_table_name(const common::ObString &table_name) { table_name_ = table_name; }
   const common::ObString & get_table_name() const { return table_name_; }
   void set_data_access_path(const common::ObString &data_access_path) { data_access_path_ = data_access_path; }
+  void set_mapped_column_id(int64_t mapped_column_id) { mapped_column_id_ = mapped_column_id; }
   const common::ObString & get_data_access_path() const { return data_access_path_; }
-
+  int64_t get_mapped_column_id() const { return mapped_column_id_; }
   VIRTUAL_TO_STRING_KVP(N_ITEM_TYPE, type_,
                        N_RESULT_TYPE, result_type_,
                        N_EXPR_INFO, info_,
@@ -5339,13 +5342,15 @@ public:
                        N_TABLE_ID, table_id_,
                        N_TABLE_NAME, table_name_,
                        K_(data_access_path),
-                       K_(expr_hash));
+                       K_(expr_hash),
+                       K_(mapped_column_id));
 private:
   ObRawExpr *cte_cycle_value_;
   ObRawExpr *cte_cycle_default_value_;
   uint64_t table_id_;
   common::ObString table_name_;
   common::ObString data_access_path_; //for external table column
+  int64_t mapped_column_id_; // for external table column
   DISALLOW_COPY_AND_ASSIGN(ObPseudoColumnRawExpr);
 };
 

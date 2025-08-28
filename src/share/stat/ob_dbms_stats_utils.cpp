@@ -2062,6 +2062,24 @@ int ObDbmsStatsUtils::copy_prefix_column_stat_to_text(ObIAllocator &allocator,
   return ret;
 }
 
+int ObDbmsStatsUtils::deep_copy_string(char *buf,
+                                       const int64_t buf_len,
+                                       int64_t &pos,
+                                       const ObString &str,
+                                       ObString &dst)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(buf) || buf_len < pos + str.length()) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid argument.", K(ret), KP(buf), K(buf_len), K(pos), K(str.length()));
+  } else {
+    MEMCPY(buf + pos, str.ptr(), str.length());
+    dst.assign_ptr(buf + pos, str.length());
+    pos += str.length();
+  }
+  return ret;
+}
+
 int ObDbmsStatsUtils::get_max_work_area_size(uint64_t tenant_id, int64_t &max_wa_memory_size)
 {
   int ret = OB_SUCCESS;

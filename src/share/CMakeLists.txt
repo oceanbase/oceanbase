@@ -599,6 +599,7 @@ ob_set_subtarget(ob_share schema
   schema/ob_sequence_sql_service.cpp
   schema/ob_server_schema_service.cpp
   schema/ob_table_schema.cpp
+  schema/ob_iceberg_table_schema.cpp
   schema/ob_latest_schema_guard.cpp
   schema/ob_mlog_info.cpp
   schema/ob_mview_info.cpp
@@ -611,6 +612,7 @@ ob_set_subtarget(ob_share schema
   schema/ob_external_resource_mgr.cpp
   schema/ob_external_resource_schema_struct.cpp
   schema/ob_external_resource_sql_service.cpp
+  schema/ob_external_table_column_schema_helper.cpp
   schema/ob_location_schema_struct.cpp
   schema/ob_schema_getter_guard_location.cpp
   schema/ob_ai_model_mgr.cpp
@@ -655,6 +657,20 @@ ob_set_subtarget(ob_share stat
   stat/ob_opt_system_stat_cache.cpp
   stat/ob_min_max_estimator.cpp
   stat/ob_column_store_refine_estimator.cpp
+  stat/ob_lake_table_stat.cpp
+  stat/ob_opt_external_column_stat.cpp
+  stat/ob_opt_external_column_stat_builder.cpp
+  stat/ob_opt_external_column_stat_cache.cpp
+  stat/ob_opt_external_table_stat.cpp
+  stat/ob_opt_external_table_stat_cache.cpp
+  stat/ob_opt_external_table_stat_builder.cpp
+  stat/hive/ob_hive_hll_utils.cpp
+  stat/hive/ob_hive_hll_constants.cpp
+  stat/hive/ob_hive_hll.cpp
+  stat/hive/ob_hive_hll_dense_register.cpp
+  stat/hive/ob_hive_hll_sparse_register.cpp
+  stat/hive/ob_hive_fm_sketch.cpp
+  stat/hive/ob_hive_fm_sketch_utils.cpp
 )
 
 ob_set_subtarget(ob_share external_table
@@ -674,10 +690,25 @@ ob_set_subtarget(ob_share catalog
   catalog/ob_catalog_meta_getter.cpp
   catalog/ob_cached_catalog_meta_getter.cpp
   catalog/ob_catalog_utils.cpp
+  catalog/ob_catalog_location_schema_provider.cpp
   catalog/odps/ob_odps_catalog_utils.cpp
   catalog/odps/ob_odps_catalog.cpp
+  catalog/filesystem/ob_filesystem_catalog.cpp
+  catalog/hive/thrift/gen_cpp/FacebookService.cpp
+  catalog/hive/thrift/gen_cpp/fb303_types.cpp
+  catalog/hive/thrift/gen_cpp/hive_metastore_constants.cpp
+  catalog/hive/thrift/gen_cpp/hive_metastore_types.cpp
+  catalog/hive/thrift/gen_cpp/ThriftHiveMetastore.cpp
+  catalog/hive/thrift/transport/ob_t_sasl_client_transport.cpp
+  catalog/hive/thrift/transport/ob_t_sasl_transport.cpp
+  catalog/hive/thrift/transport/ob_t_sasl.cpp
+  catalog/hive/ob_kerberos.cpp
+  catalog/hive/ob_hms_client_pool.cpp
+  catalog/hive/ob_hms_catalog.cpp
+  catalog/hive/ob_hive_metastore.cpp
+  catalog/hive/ob_iceberg_catalog_stat_helper.cpp
+  catalog/hive/ob_hive_catalog_stat_helper.cpp
 )
-
 
 ob_set_subtarget(ob_share io
   io/ob_io_define.cpp

@@ -30,7 +30,7 @@
 | ObMultiSetRawExpr | 240 |
 | ObCollPredRawExpr | 240 |
 | ObWinFunRawExpr | 680 |
-| ObPseudoColumnRawExpr | 232 |
+| ObPseudoColumnRawExpr | 240 |
 | ObOpPseudoColumnRawExpr | 184 |
 | ObMatchFunRawExpr | 464 |
 | ObUnpivotRawExpr | 360 |

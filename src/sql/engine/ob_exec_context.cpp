@@ -144,7 +144,8 @@ ObExecContext::ObExecContext(ObIAllocator &allocator)
     external_url_resource_cache_(nullptr),
     external_py_url_resource_cache_(nullptr),
     external_py_sch_resource_cache_(nullptr),
-    py_sub_inter_ctx_(nullptr)
+    py_sub_inter_ctx_(nullptr),
+    lake_table_file_map_(nullptr)
 {
 }
 
@@ -261,6 +262,10 @@ ObExecContext::~ObExecContext()
   if (OB_NOT_NULL(py_sub_inter_ctx_)) {
     pl::ObPyUtils::ob_py_end_sub_inter(py_sub_inter_ctx_);
     py_sub_inter_ctx_ = nullptr;
+  }
+  if (OB_NOT_NULL(lake_table_file_map_)) {
+    lake_table_file_map_->destroy();
+    lake_table_file_map_ = NULL;
   }
 }
 
@@ -1412,6 +1417,97 @@ int ObExecContext::get_lob_access_ctx(ObLobAccessCtx *&lob_access_ctx)
     LOG_WARN("alloc", K(ret), "size", sizeof(ObLobAccessCtx));
   } else {
     lob_access_ctx = lob_access_ctx_;
+  }
+  return ret;
+}
+
+int ObExecContext::get_lake_table_file_map(ObLakeTableFileMap *&lake_table_file_map)
+{
+  int ret = OB_SUCCESS;
+  lake_table_file_map = nullptr;
+  if (nullptr == lake_table_file_map_) {
+    void *buf = allocator_.alloc(sizeof(ObLakeTableFileMap));
+    if (nullptr == buf) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("Failed to allocate memories", K(ret));
+    } else if (FALSE_IT(lake_table_file_map_ = new(buf) ObLakeTableFileMap())) {
+    } else if (OB_FAIL(lake_table_file_map_->create(LAKE_TABLE_FILE_MAP_BUCKET_NUM, ObModIds::OB_SQL_PX))) {
+      LOG_WARN("Failed to create gi task map", K(ret));
+    } else {
+      lake_table_file_map = lake_table_file_map_;
+    }
+  } else {
+    lake_table_file_map = lake_table_file_map_;
+  }
+  return ret;
+}
+
+int ObExecContext::add_lake_table_files(const ObDASTableLocMeta &loc_meta,
+                                        const ObCandiTableLoc &candi_table_loc)
+{
+  int ret = OB_SUCCESS;
+  const ObCandiTabletLocIArray &candi_tablet_locs = candi_table_loc.get_phy_part_loc_info_list();
+  for (int64_t i = 0; OB_SUCC(ret) && i < candi_tablet_locs.count(); ++i) {
+    const ObCandiTabletLoc &candi_tablet_loc = candi_tablet_locs.at(i);
+    if (OB_FAIL(add_lake_table_file(loc_meta.table_loc_id_,
+                                    candi_tablet_loc.get_partition_location().get_tablet_id(),
+                                    candi_tablet_loc))) {
+      LOG_WARN("extended tablet loc failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObExecContext::add_lake_table_file(uint64_t table_loc_id,
+                                       ObTabletID tablet_id,
+                                       const ObCandiTabletLoc &candi_tablet_loc)
+{
+  int ret = OB_SUCCESS;
+  ObLakeTableFileMap *lake_table_file_map = nullptr;
+  ObLakeTableFileArray *files = nullptr;
+  if (OB_FAIL(get_lake_table_file_map(lake_table_file_map))) {
+    LOG_WARN("failed to get lake table file map");
+  } else if (OB_ISNULL(lake_table_file_map)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("lake table file map is null");
+  } else if (candi_tablet_loc.get_opt_lake_table_files().empty()) {
+    // do nothing
+  } else {
+    files = OB_NEWx(ObLakeTableFileArray, &allocator_, allocator_);
+    if (OB_ISNULL(files)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory for ObLakeTableFileArray");
+    } else if (OB_FAIL(files->init(candi_tablet_loc.get_opt_lake_table_files().count()))) {
+      LOG_WARN("failed to init lake table file array");
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < candi_tablet_loc.get_opt_lake_table_files().count(); ++i) {
+        ObILakeTableFile *das_file = nullptr;
+        ObIOptLakeTableFile *opt_file = candi_tablet_loc.get_opt_lake_table_files().at(i);
+        if (OB_ISNULL(opt_file)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get null opt lake table file");
+        } else if (OB_FAIL(ObILakeTableFile::create_lake_table_file_by_type(allocator_,
+                                                                            opt_file->get_file_type(),
+                                                                            das_file))) {
+          LOG_WARN("failed to create lake table file by type", K(opt_file->get_file_type()));
+        } else if (OB_ISNULL(das_file)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to allocate memory for ObLakeTableFile");
+        } else if (OB_FAIL(das_file->init_with_opt_lake_table_file(allocator_, *opt_file))) {
+          LOG_WARN("failed to deep copt file task");
+        } else if (OB_FAIL(files->push_back(das_file))) {
+          LOG_WARN("failed to push back lake table file");
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ObLakeTableFileMapKey key;
+    key.table_loc_id_ = table_loc_id;
+    key.tablet_id_ = tablet_id;
+    if (OB_FAIL(lake_table_file_map->set_refactored(key, files))) {
+      LOG_WARN("failed to set refactored", K(key), K(files));
+    }
   }
   return ret;
 }

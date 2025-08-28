@@ -5077,7 +5077,10 @@ int ObResolverUtils::calc_file_column_idx(const ObString &column_name, uint64_t 
       PREFIX_LEN = str_length(N_EXTERNAL_TABLE_COLUMN_PREFIX);
     } else if (column_name.prefix_match_ci(N_EXTERNAL_FILE_POS)) {
       PREFIX_LEN = str_length(N_EXTERNAL_FILE_POS);
+    } else if (column_name.prefix_match_ci(N_EXTERNAL_TABLE_COLUMN_ID)) {
+      PREFIX_LEN = str_length(N_EXTERNAL_TABLE_COLUMN_ID);
     }
+
     if (column_name.length() <= PREFIX_LEN) {
       ret = OB_ERR_UNEXPECTED;
     } else {
@@ -5128,6 +5131,21 @@ ObRawExpr *ObResolverUtils::find_file_column_expr(ObIArray<ObRawExpr *> &pseudo_
     if (pseudo_expr->get_table_id() == table_id
         && pseudo_expr->get_column_idx() == column_idx
         && pseudo_expr->get_expr_name().prefix_match_ci(expr_name)) {
+      expr = pseudo_expr;
+      break;
+    }
+  }
+  return expr;
+}
+
+ObRawExpr *ObResolverUtils::find_file_column_expr(ObIArray<ObRawExpr *> &pseudo_exprs,
+                                                  int64_t table_id, int64_t mapped_column_id)
+{
+  ObRawExpr *expr = nullptr;
+  for (int i = 0; i < pseudo_exprs.count(); ++i) {
+    ObPseudoColumnRawExpr *pseudo_expr = static_cast<ObPseudoColumnRawExpr *>(pseudo_exprs.at(i));
+    if (pseudo_expr->get_table_id() == table_id
+        && pseudo_expr->get_mapped_column_id() == mapped_column_id) {
       expr = pseudo_expr;
       break;
     }
@@ -5192,6 +5210,18 @@ int ObResolverUtils::resolve_external_table_column_def(ObRawExprFactory &expr_fa
           LOG_WARN("fail to build external table file column expr", K(ret));
         }
       }
+    } else if (ObExternalFileFormat::ICEBERG_FORMAT ==
+                            ObResolverUtils::resolve_external_file_column_type(q_name.col_name_)) {
+      if (OB_FAIL(ObResolverUtils::calc_file_column_idx(q_name.col_name_, file_column_idx))) {
+        LOG_WARN("fail to calc file column idx", K(ret));
+      } else if (nullptr == (file_column_expr = ObResolverUtils::find_file_column_expr(
+                               real_exprs, OB_INVALID_ID, file_column_idx, q_name.col_name_))) {
+        if (OB_FAIL(ObResolverUtils::build_file_column_expr_for_iceberg(expr_factory, session_info,
+                                              OB_INVALID_ID, ObString(), q_name.col_name_,
+                                              file_column_idx, gen_col_schema, file_column_expr))) {
+          LOG_WARN("fail to build external table file column expr", K(ret));
+        }
+      }
     } else {
       if (OB_FAIL(ObResolverUtils::build_file_row_expr_for_parquet(expr_factory, session_info,
                                                                    OB_INVALID_ID, ObString(),
@@ -5237,6 +5267,8 @@ ObExternalFileFormat::FormatType ObResolverUtils::resolve_external_file_column_t
     type = ObExternalFileFormat::ODPS_FORMAT;
   } else if (0 == name.case_compare(N_EXTERNAL_FILE_ROW) || name.prefix_match_ci(N_EXTERNAL_FILE_POS)) {
     type = ObExternalFileFormat::PARQUET_FORMAT;
+  } else if (name.prefix_match_ci(N_EXTERNAL_TABLE_COLUMN_ID)) {
+    type = ObExternalFileFormat::ICEBERG_FORMAT;
   }
   return type;
 }
@@ -5250,7 +5282,7 @@ int ObResolverUtils::build_file_column_expr_for_parquet(
     ObRawExpr *get_path_expr,
     ObRawExpr *cast_expr,
     const ObColumnSchemaV2 *generated_column,
-    bool is_index_by_pos,
+    sql::ColumnIndexType column_index_type,
     uint64_t column_idx,
     ObRawExpr *&expr)
 {
@@ -5269,7 +5301,7 @@ int ObResolverUtils::build_file_column_expr_for_parquet(
     file_column_expr->set_table_id(table_id);
     file_column_expr->set_explicited_reference();
 
-    if (!is_index_by_pos &&
+    if (column_index_type == ColumnIndexType::NAME &&
         (OB_ISNULL(get_path_expr) || OB_ISNULL(path_expr = get_path_expr->get_param_expr(1)))) {
       ret = OB_ERR_UNEXPECTED;
     }
@@ -5312,6 +5344,7 @@ int ObResolverUtils::build_file_column_expr_for_parquet(
           file_column_expr->set_data_type(column_expr->get_data_type());
           file_column_expr->set_collation_type(column_expr->get_collation_type());
           file_column_expr->set_collation_level(column_expr->get_collation_level());
+          file_column_expr->set_subschema_id(column_expr->get_subschema_id());
           if ((column_expr->get_result_type().is_string_or_lob_locator_type()
                || column_expr->get_result_type().is_enum_or_set())
               && ObCharset::charset_type_by_coll(column_expr->get_collation_type()) != CHARSET_UTF8MB4) {
@@ -5337,22 +5370,40 @@ int ObResolverUtils::build_file_column_expr_for_parquet(
     }
 
     if (OB_SUCC(ret)) {
-      if (is_index_by_pos) {
-        file_column_expr->set_column_idx(column_idx);
-      } else {
-        //get path
-        if (OB_FAIL(path_expr->formalize(&session_info))) {
-          LOG_WARN("fail to formalize expr", K(ret));
-        } else if (!path_expr->is_static_const_expr()) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("not support non-const expr", K(ret), KPC(path_expr));
-        } else {
-          ObConstRawExpr *const_path_expr = static_cast<ObConstRawExpr *>(path_expr);
-          if (!const_path_expr->get_value().is_string_type()) {
+      // for skipping column convert expr in iterator
+      file_column_expr->set_mapped_column_id(generated_column->get_column_id());
+      switch (column_index_type) {
+        case ColumnIndexType::NAME: {
+          //get path
+          if (OB_FAIL(path_expr->formalize(&session_info))) {
+            LOG_WARN("fail to formalize expr", K(ret));
+          } else if (!path_expr->is_static_const_expr()) {
             ret = OB_NOT_SUPPORTED;
+            LOG_WARN("not support non-const expr", K(ret), KPC(path_expr));
           } else {
-            file_column_expr->set_data_access_path(const_path_expr->get_value().get_string());
+            ObConstRawExpr *const_path_expr = static_cast<ObConstRawExpr *>(path_expr);
+            if (!const_path_expr->get_value().is_string_type()) {
+              ret = OB_NOT_SUPPORTED;
+            } else {
+              file_column_expr->set_data_access_path(const_path_expr->get_value().get_string());
+            }
           }
+          break;
+        }
+        case ColumnIndexType::ID: {
+          file_column_expr->set_column_idx(column_idx);
+          // for iceberg file without column id
+          file_column_expr->set_data_access_path(generated_column->get_column_name());
+          break;
+        }
+        case ColumnIndexType::POSITION: {
+          file_column_expr->set_column_idx(column_idx);
+          break;
+        }
+        default: {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected column index type", K(ret), K(column_index_type));
+          break;
         }
       }
     }
@@ -5495,6 +5546,76 @@ int ObResolverUtils::build_file_column_expr_for_csv(ObRawExprFactory &expr_facto
     if (lib::is_oracle_mode()) {
       file_column_expr->set_length_semantics(LS_BYTE);
     }
+    if (OB_FAIL(file_column_expr->formalize(&session_info))) {
+      LOG_WARN("failed to extract info", K(ret));
+    } else {
+      expr = file_column_expr;
+    }
+  }
+
+  return ret;
+}
+
+int ObResolverUtils::build_file_column_expr_for_iceberg(
+    ObRawExprFactory &expr_factory,
+    const ObSQLSessionInfo &session_info,
+    const uint64_t table_id,
+    const ObString &table_name,
+    const ObString &column_name,
+    int64_t column_idx,
+    const ObColumnSchemaV2 *generated_column,
+    ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  ObPseudoColumnRawExpr *file_column_expr = nullptr;
+
+  if (OB_FAIL(expr_factory.create_raw_expr(T_PSEUDO_EXTERNAL_FILE_COL, file_column_expr))) {
+    LOG_WARN("create nextval failed", K(ret));
+  } else if (OB_ISNULL(file_column_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null", K(ret));
+  } else {
+    file_column_expr->set_expr_name(column_name);
+    file_column_expr->set_table_name(table_name);
+    file_column_expr->set_table_id(table_id);
+    file_column_expr->set_explicited_reference();
+    file_column_expr->set_column_idx(column_idx);
+
+    if (OB_NOT_NULL(generated_column)) {
+      ObColumnRefRawExpr *column_expr = nullptr;
+      if (OB_FAIL(ObRawExprUtils::build_column_expr(expr_factory, *generated_column, &session_info, column_expr))) {
+        LOG_WARN("failed to build column expr", K(ret));
+      } else {
+        file_column_expr->set_accuracy(column_expr->get_accuracy());
+        file_column_expr->set_data_type(column_expr->get_data_type());
+        file_column_expr->set_collation_type(column_expr->get_collation_type());
+        file_column_expr->set_collation_level(column_expr->get_collation_level());
+        file_column_expr->set_subschema_id(column_expr->get_subschema_id());
+        if ((column_expr->get_result_type().is_string_or_lob_locator_type()
+              || column_expr->get_result_type().is_enum_or_set())
+            && ObCharset::charset_type_by_coll(column_expr->get_collation_type()) != CHARSET_UTF8MB4) {
+          // string data stored in parquet file as UTF8 format
+          file_column_expr->set_collation_type(CS_TYPE_UTF8MB4_BIN);
+        }
+        if (ob_is_enum_or_set_type(column_expr->get_data_type())
+            || ob_is_text_tc(column_expr->get_data_type())) {
+          if (is_oracle_mode() && CS_TYPE_BINARY == column_expr->get_collation_type()) {
+            file_column_expr->set_data_type(ObRawType);
+          } else if (is_mysql_mode() && ob_is_enum_or_set_type(column_expr->get_data_type())) {
+            file_column_expr->set_data_type(ObCharType);
+            file_column_expr->set_length(OB_MAX_MYSQL_VARCHAR_LENGTH);
+          } else {
+            file_column_expr->set_data_type(ObVarcharType);
+          }
+        }
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected arg", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
     if (OB_FAIL(file_column_expr->formalize(&session_info))) {
       LOG_WARN("failed to extract info", K(ret));
     } else {

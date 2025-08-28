@@ -234,7 +234,6 @@ public:
   uint64_t get_signature() const { return signature_; }
   void set_plan_hash_value(uint64_t v) { stat_.plan_hash_value_ = v; }
   int32_t *alloc_projector(int64_t projector_size);
-  int add_table_location(const ObPhyTableLocation &table_location);
   ObExprOperatorFactory &get_expr_op_factory() { return expr_op_factory_; }
   const ObExprOperatorFactory &get_expr_op_factory() const { return expr_op_factory_; }
 

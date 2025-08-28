@@ -147,6 +147,17 @@ public:
     return is_new_query_range_ ? static_cast<const ObQueryRangeProvider&>(pre_range_graph_)
                                : static_cast<const ObQueryRangeProvider&>(pre_query_range_);
   }
+  bool is_ob_external_table() const
+  {
+    return is_external_table_ && lake_table_format_ != share::ObLakeTableFormat::ICEBERG
+           && lake_table_format_ != share::ObLakeTableFormat::HIVE;
+  }
+  bool is_lake_external_table() const
+  {
+    return is_external_table_
+           && (lake_table_format_ == share::ObLakeTableFormat::ICEBERG
+               || lake_table_format_ == share::ObLakeTableFormat::HIVE);
+  }
 
   INHERIT_TO_STRING_KV("ObDASBaseCtDef", ObDASBaseCtDef,
                        K_(ref_table_id),

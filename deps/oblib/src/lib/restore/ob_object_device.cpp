@@ -753,6 +753,18 @@ int ObObjectDevice::inner_stat_(const char *pathname,
   return ret;
 }
 
+int ObObjectDevice::get_file_content_digest(
+    const char *pathname, char *digest_buf, const int64_t digest_buf_len)
+{
+  int ret = OB_SUCCESS;
+  const common::ObString uri(pathname);
+  if (OB_FAIL(util_.get_file_content_digest(uri, digest_buf, digest_buf_len))) {
+    OB_LOG(WARN, "fail to get file content digest!",
+        K(ret), K(uri), KP(digest_buf), K(digest_buf_len));
+  }
+  return ret;
+}
+
 int ObObjectDevice::scan_dir(const char *dir_name, common::ObBaseDirEntryOperator &op)
 {
   return inner_scan_dir_(dir_name, op, false/*is_adaptive*/);

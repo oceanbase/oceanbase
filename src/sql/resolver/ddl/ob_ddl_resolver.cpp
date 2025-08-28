@@ -1281,16 +1281,19 @@ int ObDDLResolver::add_storing_column(const ObString &column_name,
   return ret;
 }
 
-
-int ObDDLResolver::resolve_file_prefix(ObString &url, ObSqlString &prefix_str, common::ObStorageType &device_type, ObResolverParams &params) {
+int ObDDLResolver::resolve_file_prefix(ObString &url,
+                                       ObSqlString &prefix_str,
+                                       common::ObStorageType &device_type,
+                                       ObIAllocator *allocator)
+{
   int ret = OB_SUCCESS;
   ObString tmp_url;
-  ObArenaAllocator allocator;
-  OZ (ob_write_string(allocator, url, tmp_url));
+  ObArenaAllocator tmp_allocator;
+  OZ (ob_write_string(tmp_allocator, url, tmp_url));
   ObCharset::caseup(CS_TYPE_UTF8MB4_GENERAL_CI, tmp_url);
   device_type = common::ObStorageType::OB_STORAGE_MAX_TYPE;
   ObString tmp_prefix = tmp_url.split_on(':');
-  OZ (ob_write_string(allocator, tmp_prefix, tmp_prefix, true));
+  OZ (ob_write_string(tmp_allocator, tmp_prefix, tmp_prefix, true));
   if (!tmp_prefix.empty()) {
     OZ (get_storage_type_from_name(tmp_prefix.ptr(), device_type));
   }
@@ -1307,11 +1310,11 @@ int ObDDLResolver::resolve_file_prefix(ObString &url, ObSqlString &prefix_str, c
   if (OB_SUCC(ret)) {
     ObString prefix;
     const char *ts = get_storage_type_str(device_type);
-    if (OB_ISNULL(params.allocator_)) {
+    if (OB_ISNULL(allocator)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("allocator is null", K(ret));
     } else {
-      if (OB_FAIL(ob_write_string(*params.allocator_, ObString(ts), prefix))) {
+      if (OB_FAIL(ob_write_string(*allocator, ObString(ts), prefix))) {
         LOG_WARN("failed to write string", K(ret));
       } else {
         ObCharset::casedn(CS_TYPE_UTF8MB4_GENERAL_CI, prefix);

@@ -36,6 +36,7 @@ public:
   tablet_id_expr_(NULL),
   repartition_ref_table_id_(OB_INVALID_ID),
   used_by_external_table_(false),
+  used_by_lake_table_(false),
   px_rf_info_()
   { }
   virtual ~ObLogGranuleIterator()
@@ -89,6 +90,8 @@ public:
 
   void set_used_by_external_table() { used_by_external_table_ = true; }
   bool is_used_by_external_table() const { return used_by_external_table_; }
+  void set_used_by_lake_table() { used_by_lake_table_ = true; }
+  bool is_used_by_lake_table() const { return used_by_lake_table_; }
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogGranuleIterator);
   int64_t tablet_size_;
@@ -99,6 +102,7 @@ private:
   ObOpPseudoColumnRawExpr *tablet_id_expr_;
   int64_t repartition_ref_table_id_;
   bool used_by_external_table_;
+  bool used_by_lake_table_;
   ObPxRFStaticInfo px_rf_info_; // for runtime filter extract query range
 };
 

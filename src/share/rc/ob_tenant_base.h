@@ -277,6 +277,7 @@ class ObResourceLimitCalculator;
 class ObWorkloadRepositoryContext;
 class ObPluginVectorIndexService;
 class ObAutoSplitTaskCache;
+class ObHMSClientPoolMgr;
 #ifdef OB_BUILD_SHARED_STORAGE
 class ObTabletSplitTaskCache;
 #endif
@@ -518,7 +519,8 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       storage::ObTabletReorgInfoTableService*,       \
       omt::ObTenantAiService*,                       \
       sql::ObSQLCCLRuleManager*,                     \
-      share::ObBackupDestIOPermissionMgr*            \
+      share::ObBackupDestIOPermissionMgr*,           \
+      share::ObHMSClientPoolMgr*                     \
   )
 
 
