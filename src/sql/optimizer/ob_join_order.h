@@ -1375,7 +1375,7 @@ struct NullAwareAntiJoinInfo {
   public:
     // used for heuristic index selection
     static const int64_t TABLE_HEURISTIC_UNIQUE_KEY_RANGE_THRESHOLD = 10000;
-    static const int64_t PRUNING_ROW_COUNT_THRESHOLD = 1000;
+    static constexpr double PRUNING_ROW_COUNT_THRESHOLD = 1000.0;
 
     struct MatchExprInfo {
       MatchExprInfo()

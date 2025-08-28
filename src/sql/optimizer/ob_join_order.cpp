@@ -6304,7 +6304,6 @@ double ObJoinOrder::calc_single_parallel_rows(double rows, int64_t parallel)
   if (parallel >= 1) {
     ret = rows / parallel;
   }
-  ret = ret < 1 ? 1 : ret;
   return ret;
 }
 
@@ -9752,16 +9751,18 @@ int JoinPath::cost_nest_loop_join(int64_t join_parallel,
 {
   int ret = OB_SUCCESS;
   ObLogPlan* plan = NULL;
+  ObQueryCtx* query_ctx = NULL;
   int64_t in_parallel = 0;
   int64_t left_out_parallel = 0;
   int64_t right_out_parallel = 0;
   ObJoinOrder *left_join_order = NULL;
   ObJoinOrder *right_join_order = NULL;
   if (OB_ISNULL(parent_) || OB_ISNULL(plan = parent_->get_plan()) ||
+      OB_ISNULL(query_ctx = plan->get_optimizer_context().get_query_ctx()) ||
       OB_ISNULL(right_path_) || OB_ISNULL(right_join_order = right_path_->parent_) ||
       OB_ISNULL(left_path_) || OB_ISNULL(left_join_order = left_path_->parent_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(parent_), K(left_path_),
+    LOG_WARN("get unexpected null", K(ret), K(parent_), K(plan), K(query_ctx), K(left_path_),
         K(left_join_order), K(right_path_), K(right_join_order));
   } else if (OB_UNLIKELY((in_parallel = join_parallel) < 1) ||
              OB_UNLIKELY((left_out_parallel = left_path_->parallel_) < 1) ||
@@ -9811,6 +9812,16 @@ int JoinPath::cost_nest_loop_join(int64_t join_parallel,
       right_rows /= right_part_cnt;
       const int64_t right_real_parallel = is_partition_wise() ? in_parallel : right_out_parallel;
       right_cost = right_cost * right_real_parallel / right_part_cnt;
+    }
+    if (query_ctx->check_opt_compat_version(COMPAT_VERSION_4_2_5_BP7, COMPAT_VERSION_4_3_0,
+                                            COMPAT_VERSION_4_3_5_BP4)) {
+      if (1.0 > left_rows
+          && (!right_path_->is_access_path()
+              || ObJoinOrder::PRUNING_ROW_COUNT_THRESHOLD <= static_cast<const AccessPath*>(right_path_)->get_phy_query_range_row_count())) {
+        left_rows = 1.0;
+      }
+    } else {
+      left_rows = max(left_rows, 1.0);
     }
     ObCostNLJoinInfo est_join_info(left_rows,
                                    left_cost,

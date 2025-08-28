@@ -2271,35 +2271,35 @@ int ObLogTableScan::explain_index_selection_info(char *buf,
     } else if (OB_FAIL(BUF_PRINTF(OUTPUT_PREFIX))) {
       LOG_WARN("BUF_PRINTF fails", K(ret));
     } else if (OB_FAIL(BUF_PRINTF("table_rows:%ld",
-                            static_cast<int64_t>(get_table_row_count())))) {
+                            static_cast<int64_t>(ceil(get_table_row_count()))))) {
       LOG_WARN("BUF_PRINTF fails", K(ret));
     } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {
       LOG_WARN("BUF_PRINTF fails", K(ret));
     } else if (OB_FAIL(BUF_PRINTF(OUTPUT_PREFIX))) {
       LOG_WARN("BUF_PRINTF fails", K(ret));
     } else if (OB_FAIL(BUF_PRINTF("physical_range_rows:%ld",
-                            static_cast<int64_t>(get_phy_query_range_row_count())))) {
+                            static_cast<int64_t>(ceil(get_phy_query_range_row_count()))))) {
       LOG_WARN("BUF_PRINTF fails", K(ret));
     } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {
       LOG_WARN("BUF_PRINTF fails", K(ret));
     } else if (OB_FAIL(BUF_PRINTF(OUTPUT_PREFIX))) {
       LOG_WARN("BUF_PRINTF fails", K(ret));
     } else if (OB_FAIL(BUF_PRINTF("logical_range_rows:%ld",
-                            static_cast<int64_t>(get_logical_query_range_row_count())))) {
+                            static_cast<int64_t>(ceil(get_logical_query_range_row_count()))))) {
       LOG_WARN("BUF_PRINTF fails", K(ret));
-    } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {
+    } else if (index_back_ && OB_FAIL(BUF_PRINTF(NEW_LINE))) {
       LOG_WARN("BUF_PRINTF fails", K(ret));
-    } else if (OB_FAIL(BUF_PRINTF(OUTPUT_PREFIX))) {
+    } else if (index_back_ && OB_FAIL(BUF_PRINTF(OUTPUT_PREFIX))) {
       LOG_WARN("BUF_PRINTF fails", K(ret));
-    } else if (OB_FAIL(BUF_PRINTF("index_back_rows:%ld",
-                            static_cast<int64_t>(get_index_back_row_count())))) {
+    } else if (index_back_ && OB_FAIL(BUF_PRINTF("index_back_rows:%ld",
+                            static_cast<int64_t>(ceil(get_index_back_row_count()))))) {
       LOG_WARN("BUF_PRINTF fails", K(ret));
     } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {
       LOG_WARN("BUF_PRINTF fails", K(ret));
     } else if (OB_FAIL(BUF_PRINTF(OUTPUT_PREFIX))) {
       LOG_WARN("BUF_PRINTF fails", K(ret));
     } else if (OB_FAIL(BUF_PRINTF("output_rows:%ld",
-                            static_cast<int64_t>(get_output_row_count())))) {
+                            static_cast<int64_t>(ceil(get_output_row_count()))))) {
       LOG_WARN("BUF_PRINTF fails", K(ret));
     } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {
       LOG_WARN("BUF_PRINTF fails", K(ret));

@@ -33,8 +33,8 @@ Query Plan
 ======================================================================================
 |ID|OPERATOR          |NAME                                    |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------------------------------
-|0 |HASH GROUP BY     |                                        |1       |8           |
-|1 |└─TABLE RANGE SCAN|astc_asset_price_daily_fa_77(idx_ad_aid)|1       |8           |
+|0 |HASH GROUP BY     |                                        |1       |5           |
+|1 |└─TABLE RANGE SCAN|astc_asset_price_daily_fa_77(idx_ad_aid)|1       |5           |
 ======================================================================================
 Outputs & filters:
 -------------------------------------
@@ -137,9 +137,9 @@ Outputs & filters:
        [trade_dispute.multiple], [trade_dispute.gmt_agreement_modified], [trade_dispute.dispute_end_time], [trade_dispute.gmt_timeout], [trade_dispute.timeout_type],
        [trade_dispute.dispute_desc], [trade_dispute.attributes], [trade_dispute.attribute_cc], [trade_dispute.dispute_status], [trade_dispute.goods_status], [trade_dispute.goods_needs],
        [trade_dispute.goods_count], [trade_dispute.advance_status], [trade_dispute.cs_status], [trade_dispute.proof_status], [trade_dispute.step_id], [trade_dispute.gmt_modified],
-       [trade_dispute.dispute_request]), filter([trade_dispute.gmt_create > str_to_date('1969-12-31 \n16:01:41.0', '%Y-%m-%d %H:%i:%s')], [trade_dispute.gmt_create 
-      < str_to_date('1969-12-31 16:01:41.0', '%Y-%m-%d \n%H:%i:%s')], [trade_dispute.from_group != 101], [trade_dispute.buyer_id = 100], [trade_dispute.seller_id 
-      = 100], [trade_dispute.dispute_type = 100]), rowset=16
+       [trade_dispute.dispute_request]), filter([trade_dispute.buyer_id = 100], [trade_dispute.seller_id = 100], [trade_dispute.dispute_type = 100], [trade_dispute.gmt_create 
+      > str_to_date('1969-12-31 \n16:01:41.0', '%Y-%m-%d %H:%i:%s')], [trade_dispute.gmt_create < str_to_date('1969-12-31 16:01:41.0', '%Y-%m-%d \n%H:%i:%s')],
+       [trade_dispute.from_group != 101]), rowset=16
       access([trade_dispute.dispute_id], [trade_dispute.buyer_id], [trade_dispute.seller_id], [trade_dispute.dispute_type], [trade_dispute.from_group], 
       [trade_dispute.gmt_create], [trade_dispute.buyer_nick], [trade_dispute.seller_nick], [trade_dispute.biz_order_id], [trade_dispute.pay_order_id], [trade_dispute.biz_type],
        [trade_dispute.out_biz_id], [trade_dispute.auction_id], [trade_dispute.auction_title], [trade_dispute.auction_url], [trade_dispute.refund_fee], [trade_dispute.refund_type],
@@ -195,8 +195,8 @@ Query Plan
 ==========================================================================================
 |ID|OPERATOR          |NAME                                        |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------------------------------------
-|0 |UPDATE            |                                            |1       |42          |
-|1 |└─TABLE RANGE SCAN|luna_core_bidword_diagnose(idx_cu_ca_update)|1       |10          |
+|0 |UPDATE            |                                            |1       |29          |
+|1 |└─TABLE RANGE SCAN|luna_core_bidword_diagnose(idx_cu_ca_update)|1       |5           |
 ==========================================================================================
 Outputs & filters:
 -------------------------------------
@@ -241,8 +241,8 @@ Query Plan
 ==========================================================================================
 |ID|OPERATOR          |NAME                                        |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------------------------------------
-|0 |UPDATE            |                                            |1       |42          |
-|1 |└─TABLE RANGE SCAN|luna_core_bidword_diagnose(idx_cu_ca_update)|1       |10          |
+|0 |UPDATE            |                                            |1       |29          |
+|1 |└─TABLE RANGE SCAN|luna_core_bidword_diagnose(idx_cu_ca_update)|1       |5           |
 ==========================================================================================
 Outputs & filters:
 -------------------------------------
@@ -287,8 +287,8 @@ Query Plan
 =======================================================================
 |ID|OPERATOR         |NAME                      |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------------
-|0 |UPDATE           |                          |1       |35          |
-|1 |└─TABLE FULL SCAN|luna_core_bidword_diagnose|1       |4           |
+|0 |UPDATE           |                          |1       |27          |
+|1 |└─TABLE FULL SCAN|luna_core_bidword_diagnose|1       |3           |
 =======================================================================
 Outputs & filters:
 -------------------------------------
@@ -313,8 +313,8 @@ Outputs & filters:
        [luna_core_bidword_diagnose.preprice], [luna_core_bidword_diagnose.preprerank], [luna_core_bidword_diagnose.prerank], [luna_core_bidword_diagnose.impression_p_1d],
        [luna_core_bidword_diagnose.click_p_1d], [luna_core_bidword_diagnose.rankdown_cnt], [luna_core_bidword_diagnose.subtype], [luna_core_bidword_diagnose.imp_factor],
        [luna_core_bidword_diagnose.click_factor]), filter([luna_core_bidword_diagnose.custid = 1], [luna_core_bidword_diagnose.campaignid = 2], [luna_core_bidword_diagnose.adgroupid 
-      = 3], [luna_core_bidword_diagnose.bidwordid = 5], [cast(luna_core_bidword_diagnose.originalword, DECIMAL(-1, -1)) = cast(5, DECIMAL(20, 0))], [luna_core_bidword_diagnose.type 
-      = 6], [luna_core_bidword_diagnose.platform = 7]), rowset=16
+      = 3], [luna_core_bidword_diagnose.bidwordid = 5], [luna_core_bidword_diagnose.type = 6], [luna_core_bidword_diagnose.platform = 7], [cast(luna_core_bidword_diagnose.originalword,
+       DECIMAL(-1, -1)) = cast(5, DECIMAL(20, 0))]), rowset=16
       access([luna_core_bidword_diagnose.id], [luna_core_bidword_diagnose.custid], [luna_core_bidword_diagnose.gmt_modified], [luna_core_bidword_diagnose.updatepricetag],
        [luna_core_bidword_diagnose.gmt_create], [luna_core_bidword_diagnose.platform], [luna_core_bidword_diagnose.type], [luna_core_bidword_diagnose.realtimefilter],
        [luna_core_bidword_diagnose.offlineprice], [luna_core_bidword_diagnose.impression_p_7d], [luna_core_bidword_diagnose.impression_1d], [luna_core_bidword_diagnose.click_p_7d],
@@ -366,7 +366,7 @@ Query Plan
 ================================================
 |ID|OPERATOR |NAME       |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------
-|0 |TABLE GET|app_content|1       |8           |
+|0 |TABLE GET|app_content|1       |5           |
 ================================================
 Outputs & filters:
 -------------------------------------
@@ -388,7 +388,7 @@ Query Plan
 ================================================
 |ID|OPERATOR |NAME       |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------
-|0 |TABLE GET|app_content|1       |8           |
+|0 |TABLE GET|app_content|1       |5           |
 ================================================
 Outputs & filters:
 -------------------------------------
@@ -410,7 +410,7 @@ Query Plan
 ================================================
 |ID|OPERATOR |NAME       |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------
-|0 |TABLE GET|app_content|1       |8           |
+|0 |TABLE GET|app_content|1       |5           |
 ================================================
 Outputs & filters:
 -------------------------------------
@@ -432,7 +432,7 @@ Query Plan
 ================================================
 |ID|OPERATOR |NAME       |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------
-|0 |TABLE GET|app_content|1       |8           |
+|0 |TABLE GET|app_content|1       |5           |
 ================================================
 Outputs & filters:
 -------------------------------------
@@ -454,7 +454,7 @@ Query Plan
 ================================================
 |ID|OPERATOR |NAME       |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------
-|0 |TABLE GET|app_content|1       |8           |
+|0 |TABLE GET|app_content|1       |5           |
 ================================================
 Outputs & filters:
 -------------------------------------
@@ -476,7 +476,7 @@ Query Plan
 ================================================
 |ID|OPERATOR |NAME       |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------
-|0 |TABLE GET|app_content|1       |8           |
+|0 |TABLE GET|app_content|1       |5           |
 ================================================
 Outputs & filters:
 -------------------------------------
@@ -597,8 +597,8 @@ Outputs & filters:
       access([a.card_no])
   3 - output([pcb_common_bill_01.CARD_NO]), filter(nil), rowset=16
       distinct([pcb_common_bill_01.CARD_NO])
-  4 - output([pcb_common_bill_01.CARD_NO]), filter([pcb_common_bill_01.PRODUCT_ID != '9302'], [(T_OP_LIKE, pcb_common_bill_01.CARD_NO, '5001____________',
-       '\\')]), rowset=16
+  4 - output([pcb_common_bill_01.CARD_NO]), filter([(T_OP_LIKE, pcb_common_bill_01.CARD_NO, '5001____________', '\\')], [pcb_common_bill_01.PRODUCT_ID != 
+      '9302']), rowset=16
       access([pcb_common_bill_01.PRODUCT_ID], [pcb_common_bill_01.CARD_NO]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([pcb_common_bill_01.CARD_NO], [pcb_common_bill_01.ATTRIBUTE_INST], [pcb_common_bill_01.PRODUCT_ID], [pcb_common_bill_01.OUT_BILL_NO], [pcb_common_bill_01.shadow_pk_0]),
@@ -661,7 +661,7 @@ Query Plan
 ==========================================================================================
 |ID|OPERATOR        |NAME                                          |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------------------------------------
-|0 |TABLE RANGE SCAN|pcb_installment_00(IDX_STATUS_BILLDATE_CARDNO)|1       |9           |
+|0 |TABLE RANGE SCAN|pcb_installment_00(IDX_STATUS_BILLDATE_CARDNO)|1       |5           |
 ==========================================================================================
 Outputs & filters:
 -------------------------------------
@@ -719,12 +719,12 @@ Query Plan
 =====================================================================================
 |ID|OPERATOR                     |NAME                        |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------------------
-|0 |LIMIT                        |                            |1       |137         |
-|1 |└─PX COORDINATOR MERGE SORT  |                            |1       |137         |
-|2 |  └─EXCHANGE OUT DISTR       |:EX10000                    |1       |136         |
-|3 |    └─SORT                   |                            |1       |134         |
-|4 |      └─PX PARTITION ITERATOR|                            |1       |133         |
-|5 |        └─TABLE RANGE SCAN   |wfsydp(WSJJDM_LOCAL,Reverse)|1       |133         |
+|0 |LIMIT                        |                            |1       |131         |
+|1 |└─PX COORDINATOR MERGE SORT  |                            |1       |131         |
+|2 |  └─EXCHANGE OUT DISTR       |:EX10000                    |1       |131         |
+|3 |    └─SORT                   |                            |1       |131         |
+|4 |      └─PX PARTITION ITERATOR|                            |1       |131         |
+|5 |        └─TABLE RANGE SCAN   |wfsydp(WSJJDM_LOCAL,Reverse)|1       |131         |
 =====================================================================================
 Outputs & filters:
 -------------------------------------

@@ -260,6 +260,7 @@ int ObLogSubPlanFilter::do_re_est_cost(EstimateCostInfo &param, double &card, do
     ObBasicCostInfo &cost_info = cost_infos.at(0);
     card = cost_info.rows_ * sel;
     cost_info.rows_ = ObJoinOrder::calc_single_parallel_rows(cost_info.rows_, param.need_parallel_);
+    cost_info.rows_ = max(cost_info.rows_, 1.0);
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
     ObSubplanFilterCostInfo info(cost_infos, get_onetime_idxs(), get_initplan_idxs());
     if (OB_FAIL(ObOptEstCost::cost_subplan_filter(info, op_cost, opt_ctx))) {

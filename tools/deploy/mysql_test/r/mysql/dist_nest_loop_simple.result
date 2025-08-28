@@ -622,43 +622,35 @@ Outputs & filters:
       range_key([t12.c1]), range(MIN ; MAX)always true
 explain  select * from t11 where c1 in (select c1 from t12 where (1 = 0 or c1 > 5));
 Query Plan
-=====================================================================
-|ID|OPERATOR                         |NAME    |EST.ROWS|EST.TIME(us)|
----------------------------------------------------------------------
-|0 |PX COORDINATOR                   |        |1       |19          |
-|1 |└─EXCHANGE OUT DISTR             |:EX10001|1       |19          |
-|2 |  └─HASH JOIN                    |        |1       |18          |
-|3 |    ├─EXCHANGE IN DISTR          |        |1       |7           |
-|4 |    │ └─EXCHANGE OUT DISTR (PKEY)|:EX10000|1       |7           |
-|5 |    │   └─PX PARTITION ITERATOR  |        |1       |7           |
-|6 |    │     └─TABLE RANGE SCAN     |t12     |1       |7           |
-|7 |    └─PX PARTITION ITERATOR      |        |1       |11          |
-|8 |      └─TABLE RANGE SCAN         |t11     |1       |11          |
-=====================================================================
+===============================================================
+|ID|OPERATOR                   |NAME    |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------
+|0 |PX COORDINATOR             |        |1       |8           |
+|1 |└─EXCHANGE OUT DISTR       |:EX10000|1       |8           |
+|2 |  └─NESTED-LOOP JOIN       |        |1       |8           |
+|3 |    ├─PX PARTITION ITERATOR|        |1       |7           |
+|4 |    │ └─TABLE RANGE SCAN   |t12     |1       |7           |
+|5 |    └─DISTRIBUTED TABLE GET|t11     |1       |77          |
+===============================================================
 Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(t11.c1, t11.c2)]), filter(nil), rowset=16
   1 - output([INTERNAL_FUNCTION(t11.c1, t11.c2)]), filter(nil), rowset=16
       dop=1
   2 - output([t11.c1], [t11.c2]), filter(nil), rowset=16
-      equal_conds([t11.c1 = t12.c1]), other_conds(nil)
+      conds(nil), nl_params_([t12.c1(:0)]), use_batch=true
   3 - output([t12.c1]), filter(nil), rowset=16
-  4 - output([t12.c1]), filter(nil), rowset=16
-      (#keys=1, [t12.c1]), dop=1
-  5 - output([t12.c1]), filter(nil), rowset=16
       force partition granule
-  6 - output([t12.c1]), filter(nil), rowset=16
+  4 - output([t12.c1]), filter(nil), rowset=16
       access([t12.c1]), partitions(p[0-2])
       is_index_back=false, is_global_index=false, 
       range_key([t12.c1]), range(5 ; MAX), 
       range_cond([t12.c1 > 5])
-  7 - output([t11.c1], [t11.c2]), filter(nil), rowset=16
-      affinitize, force partition granule
-  8 - output([t11.c1], [t11.c2]), filter(nil), rowset=16
-      access([t11.c1], [t11.c2]), partitions(p[0-4])
+  5 - output([t11.c1], [t11.c2]), filter(nil), rowset=16
+      access([GROUP_ID], [t11.c1], [t11.c2]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, 
-      range_key([t11.c1]), range(5 ; MAX), 
-      range_cond([t11.c1 > 5])
+      range_key([t11.c1]), range(MIN ; MAX), 
+      range_cond([t11.c1 = :0])
 create table t4 (c1 int, c2 int, c3 date, c4 int, primary key(c1,c2,c3)) partition by hash(c1) subpartition by range columns(c3)
 subpartition template( subpartition p_2016_11_02_00 values less than ('2016-11-02'),
 subpartition p_2016_11_03_00 values less than ('2016-11-03'),
