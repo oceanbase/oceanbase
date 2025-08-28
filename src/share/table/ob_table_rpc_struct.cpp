@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX CLIENT
 #include "ob_table_rpc_struct.h"
+#include "ob_table_object.h"
 using namespace oceanbase::common;
 using namespace oceanbase::table;
 
@@ -69,24 +70,97 @@ OB_SERIALIZE_MEMBER(ObTableBatchOperationRequest,
                     batch_operation_as_atomic_,
                     binlog_row_image_type_);
 
-OB_SERIALIZE_MEMBER(ObTableQueryRequest,
-                    credential_,
-                    table_name_,
-                    table_id_,
-                    tablet_id_,
-                    entity_type_,
-                    consistency_level_,
-                    query_
-                    );
+OB_DEF_DESERIALIZE(ObTableQueryRequest,)
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_DECODE,
+              credential_,
+              table_name_,
+              table_id_,
+              tablet_id_,
+              entity_type_,
+              consistency_level_,
+              query_);
+  if (OB_SUCC(ret) && pos < data_len) {
+    OB_UNIS_DECODE(option_flag_);
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE(ObTableQueryRequest)
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_ENCODE,
+              credential_,
+              table_name_,
+              table_id_,
+              tablet_id_,
+              entity_type_,
+              consistency_level_,
+              query_,
+              option_flag_);
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObTableQueryRequest)
+{
+  int64_t len = 0;
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+              credential_,
+              table_name_,
+              table_id_,
+              tablet_id_,
+              entity_type_,
+              consistency_level_,
+              query_,
+              option_flag_);
+  return len;
+}
 ////////////////////////////////////////////////////////////////
-OB_SERIALIZE_MEMBER(ObTableQueryAndMutateRequest,
-                    credential_,
-                    table_name_,
-                    table_id_,
-                    tablet_id_,
-                    entity_type_,
-                    query_and_mutate_,
-                    binlog_row_image_type_);
+OB_DEF_DESERIALIZE(ObTableQueryAndMutateRequest,)
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_DECODE,
+              credential_,
+              table_name_,
+              table_id_,
+              tablet_id_,
+              entity_type_,
+              query_and_mutate_,
+              binlog_row_image_type_);
+  if (OB_SUCC(ret) && pos < data_len) {
+    OB_UNIS_DECODE(option_flag_);
+  }
+  return ret;
+}
+OB_DEF_SERIALIZE(ObTableQueryAndMutateRequest)
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_ENCODE,
+              credential_,
+              table_name_,
+              table_id_,
+              tablet_id_,
+              entity_type_,
+              query_and_mutate_,
+              binlog_row_image_type_,
+              option_flag_);
+  return ret;
+}
+OB_DEF_SERIALIZE_SIZE(ObTableQueryAndMutateRequest)
+{
+  int64_t len = 0;
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+              credential_,
+              table_name_,
+              table_id_,
+              tablet_id_,
+              entity_type_,
+              query_and_mutate_,
+              binlog_row_image_type_,
+              option_flag_);
+  return len;
+}
 
 OB_SERIALIZE_MEMBER((ObTableQueryAsyncRequest, ObTableQueryRequest),
                     query_session_id_,
@@ -237,3 +311,133 @@ OB_SERIALIZE_MEMBER(ObRedisRpcRequest,
                     table_id_,
                     reserved_,
                     resp_str_);
+
+OB_UNIS_DEF_SERIALIZE(ObHbaseRpcRequest, credential_, table_name_);
+
+OB_DEF_SERIALIZE_SIZE(ObHbaseRpcRequest)
+{
+  return 0;
+}
+
+OB_DEF_DESERIALIZE(ObHbaseRpcRequest,)
+{
+  int ret = OB_SUCCESS;
+  // credential_ + table_name_ + option_flag_ + op_type_
+  LST_DO_CODE(OB_UNIS_DECODE,
+              credential_,
+              table_name_,
+              option_flag_,
+              op_type_);
+  if (OB_SUCC(ret)) {
+    if (op_type_ != ObTableOperationType::INSERT_OR_UPDATE) { // HBase Put
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "operation not HBase Put");
+      LOG_WARN("operation not HBase Put is not supported yet", K(ret), K_(op_type));
+    } else {
+      // decode keys
+      int64_t now_ms = -(ObTimeUtility::current_time() / 1000);
+      int64_t key_num = 0;
+      keys_.set_allocator(deserialize_allocator_);
+      cf_rows_.set_allocator(deserialize_allocator_);
+      OB_UNIS_DECODE(key_num);
+      if (OB_SUCC(ret)) {
+        if (OB_ISNULL(deserialize_allocator_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("deserialize_allocator_ is null", K(ret));
+        } else if (OB_FAIL(keys_.prepare_allocate(key_num))) {
+          LOG_WARN("fail to prepare allocate keys", K(ret), K(key_num));
+        } else {
+          for (int64_t i = 0; OB_SUCC(ret) && i < key_num; i++) {
+            if (OB_FAIL(ObTableSerialUtil::deserialize(buf, data_len, pos, keys_.at(i)))) {
+              LOG_WARN("fail to deserialize table object", K(ret), K(buf), K(data_len), K(pos));
+            }
+          }
+          // decode cf_rows_
+          if (OB_SUCC(ret)) {
+            int64_t cf_rows_num = 0;
+            OB_UNIS_DECODE(cf_rows_num);
+            if (OB_FAIL(cf_rows_.prepare_allocate(cf_rows_num))) {
+              LOG_WARN("fail to prepare allocate same_cf_rows", K(ret), K(cf_rows_num));
+            }
+            for (int i = 0; OB_SUCC(ret) && i < cf_rows_num; ++i) {
+              ObHCfRows &same_cf_rows = cf_rows_.at(i);
+              same_cf_rows.deserialize_alloc_ = deserialize_allocator_;
+              same_cf_rows.rows_.set_allocator(deserialize_allocator_);
+              same_cf_rows.set_keys(&keys_);
+              same_cf_rows.now_ms_ = now_ms;
+              OB_UNIS_DECODE(same_cf_rows);
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObHbaseResult)
+{
+  int ret = OB_SUCCESS;
+  OB_UNIS_DECODE(op_type_);
+  if (OB_SUCC(ret)) {
+    int64_t res_num = 0;
+    OB_UNIS_DECODE(res_num);
+    char *tmp_buf = nullptr;
+    if (OB_ISNULL(deserialize_allocator_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("deserialize allocator is NULL", K(ret));
+    } else if (FALSE_IT(cell_results_.set_allocator(deserialize_allocator_))) {
+      // do nothgin
+    } else if (OB_FAIL(cell_results_.prepare_allocate(res_num))) {
+      LOG_WARN("fail to prepare allocate cell results", K(ret));
+    } else if (OB_ISNULL(tmp_buf = reinterpret_cast<char*>(deserialize_allocator_->alloc(sizeof(ObHBaseCellResult) * res_num)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc memory", K(ret));
+    }
+    for (int i = 0; OB_SUCC(ret) && i < res_num; ++i) {
+       cell_results_.at(i) = new (tmp_buf + sizeof(ObHBaseCellResult) * i) ObHBaseCellResult();
+       OB_UNIS_DECODE(*cell_results_.at(i));
+    }
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE(ObHbaseResult)
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_ENCODE, errno_, sqlstate_, msg_, op_type_);
+  if (OB_SUCC(ret)) {
+    OB_UNIS_ENCODE(cell_results_.count());
+    for (int i = 0; OB_SUCC(ret) && i < cell_results_.count(); ++i) {
+      ObHBaseCellResult *cell_res = cell_results_.at(i);
+      if (OB_ISNULL(cell_res)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("cell result is NULL", K(ret));
+      } else {
+        OB_UNIS_ENCODE(*cell_res);
+      }
+    }
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObHbaseResult)
+{
+  int ret = OB_SUCCESS;
+  int64_t len = 0;
+  LST_DO_CODE(OB_UNIS_ADD_LEN, errno_, sqlstate_, msg_, op_type_);
+  if (OB_SUCC(ret)) {
+    int64_t res_len = cell_results_.count();
+    OB_UNIS_ADD_LEN(res_len);
+    for (int i = 0; OB_SUCC(ret) && i < res_len; ++i) {
+      ObHBaseCellResult *cell_res = cell_results_.at(i);
+      if (OB_ISNULL(cell_res)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("cell result is NULL", K(ret));
+      } else {
+        OB_UNIS_ADD_LEN(*cell_res);
+      }
+    }
+  }
+  return len;
+}

@@ -16,6 +16,9 @@
 #include "observer/table/tableapi/ob_table_api_service.h"
 #include "ob_normal_adapter_iter.h"
 
+using namespace oceanbase::common;
+using namespace oceanbase::share::schema;
+
 namespace oceanbase
 {
 namespace table
@@ -44,14 +47,61 @@ int ObHNormalAdapter::put(ObTableExecCtx &ctx, const ObITableEntity &cell)
   return ret;
 }
 
-int ObHNormalAdapter::multi_put(ObTableExecCtx &ctx, const ObIArray<ObITableEntity *> &cells)
+int ObHNormalAdapter::put(ObTableCtx &ctx, const ObHCfRows &rows)
+{
+  int ret = OB_SUCCESS;
+  ObFixedArray<ObTabletID, ObIAllocator> tablet_ids;
+  ObFixedArray<const ObITableEntity*, ObIAllocator> entities;
+  tablet_ids.set_allocator(&ctx.get_allocator());
+  entities.set_allocator(&ctx.get_allocator());
+  ctx.set_batch_tablet_ids(&tablet_ids);
+  ctx.set_batch_entities(&entities);
+
+  if (OB_FAIL(tablet_ids.init(rows.get_cell_count()))) {
+    LOG_WARN("fail to init tablet ids", K(ret), K(rows.get_cell_count()));
+  } else if (OB_FAIL(entities.init(rows.get_cell_count()))) {
+    LOG_WARN("fail to init entities", K(ret), K(rows.get_cell_count()));
+  }
+
+  for (int64_t i = 0; i < rows.count() && OB_SUCC(ret); i++) {
+    const ObHCfRow &row = rows.get_cf_row(i);
+    for (int64_t j = 0; j < row.cells_.count() && OB_SUCC(ret); j++) {
+      const ObHCell &cell = row.cells_.at(j);
+      ctx.set_entity(&cell);
+      if (OB_FAIL(ctx.adjust_entity())) {
+        LOG_WARN("fail to adjust entity", K(ret), K(cell));
+      } else if (OB_FAIL(entities.push_back(&cell))) {
+        LOG_WARN("fail to push back entity", K(ret), K(cell));
+      } else if (OB_FAIL(tablet_ids.push_back(cell.get_tablet_id()))) {
+        LOG_WARN("fail to push back tablet id", K(ret), K(cell));
+      }
+      ctx.set_entity(nullptr);
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    ObTableApiCacheGuard cache_guard;
+    ObTableApiSpec *spec = nullptr;
+    if (OB_FAIL(ObTableApiService::get_appropriate_spec(ctx, cache_guard, spec))) {
+      LOG_WARN("fail to get appropriate spec", K(ret), K(ctx));
+    } else if (OB_FAIL(ObTableApiService::execute_batch_put(ctx, spec))) {
+      LOG_WARN("fail to execute batch put", K(ret));
+    }
+    // cache is release, avoid others to visit it
+    ctx.set_expr_info(nullptr);
+  }
+
+  return ret;
+}
+
+int ObHNormalAdapter::multi_put(ObTableExecCtx &ctx, const ObIArray<const ObITableEntity *> &cells)
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = MTL_ID();
   ObSEArray<ObTabletID, 16> tablet_ids;
   tablet_ids.set_attr(ObMemAttr(tenant_id, "TmpTbltIds"));
   for (int64_t i = 0; i < cells.count() && OB_SUCC(ret); i++) {
-    ObITableEntity *cell = cells.at(i);
+    const ObITableEntity *cell = cells.at(i);
     if (OB_ISNULL(cell)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("cell is null", K(ret));

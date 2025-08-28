@@ -283,6 +283,7 @@ public:
   inline bool require_rerouting() const;
   inline bool is_kv_request() const;
   inline void set_kv_request();
+  inline void set_kv_route_meta_error();
 
   inline bool ratelimit_enabled() const;
   inline void enable_ratelimit();
@@ -514,6 +515,12 @@ bool ObRpcPacket::is_kv_request() const
 
 void ObRpcPacket::set_kv_request()
 {
+  hdr_.flags_ |= ObRpcPacketHeader::IS_KV_REQUEST_FALG;
+}
+
+void ObRpcPacket::set_kv_route_meta_error()
+{
+  // reuse IS_KV_REQUEST_FALG flag when returning packet to refresh table_entry meta information
   hdr_.flags_ |= ObRpcPacketHeader::IS_KV_REQUEST_FALG;
 }
 

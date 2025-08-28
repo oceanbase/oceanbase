@@ -2858,8 +2858,8 @@ DEF_BOOL(_enable_numa_aware, OB_CLUSTER_PARAMETER, "False",
          "NUMA awareness switch, which, when enabled, allows threads to bind cores with NUMA affinity.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
 
-DEF_BOOL(_obkv_enable_distributed_execution, OB_TENANT_PARAMETER, "False",
-    "Specifies whether to enable distributed execution in OBKV. The default value is false.",
+DEF_BOOL(_obkv_enable_distributed_execution, OB_TENANT_PARAMETER, "True",
+    "Specifies whether to enable distributed execution in OBKV. The default value is true.",
     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_BOOL(_ob_enable_pl_dynamic_stack_check, OB_CLUSTER_PARAMETER, "False",

@@ -125,7 +125,7 @@ int ObTableApiInsertExecutor::get_next_row()
   return ret;
 }
 
-int ObTableApiInsertExecutor::process_single_operation(const ObTableEntity *entity)
+int ObTableApiInsertExecutor::process_single_operation(const ObITableEntity *entity)
 {
   int ret = OB_SUCCESS;
   // clean all rt_exprs evaluated flag before each operation refresh value
@@ -153,12 +153,12 @@ int ObTableApiInsertExecutor::process_single_operation(const ObTableEntity *enti
 int ObTableApiInsertExecutor::get_next_row_from_child()
 {
   int ret = OB_SUCCESS;
-  const ObIArray<ObITableEntity*> *batch_entities = tb_ctx_.get_batch_entities();
+  const ObIArray<const ObITableEntity*> *batch_entities = tb_ctx_.get_batch_entities();
   bool is_batch = batch_entities != nullptr;
 
   // single operation
   if (!is_batch) {
-    const ObTableEntity *entity = static_cast<const ObTableEntity *>(tb_ctx_.get_entity());
+    const ObITableEntity *entity = tb_ctx_.get_entity();
     if (cur_idx_ >= 1) {
       ret = OB_ITER_END;
     } else if (OB_FAIL(process_single_operation(entity))) {
@@ -171,7 +171,7 @@ int ObTableApiInsertExecutor::get_next_row_from_child()
     if (cur_idx_ >= batch_entities->count()) {
       ret = OB_ITER_END;
     } else {
-      const ObTableEntity *entity = static_cast<const ObTableEntity *>(batch_entities->at(cur_idx_));
+      const ObITableEntity *entity = batch_entities->at(cur_idx_);
       if (OB_ISNULL(entity)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("entity is NULL", K(ret), K(cur_idx_));
@@ -183,6 +183,8 @@ int ObTableApiInsertExecutor::get_next_row_from_child()
           ObTabletID tablet_id = tablet_ids->at(cur_idx_);
           tb_ctx_.set_tablet_id(tablet_id);
         }
+      } else if (entity->get_entity_type() == ObTableEntityType::ET_HKV_V2) { // for tmp use
+        tb_ctx_.set_tablet_id(entity->get_tablet_id());
       }
 
       if (OB_FAIL(ret)) {

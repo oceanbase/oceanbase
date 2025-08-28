@@ -57,15 +57,15 @@ public:
     release_map();
   }
 
-  virtual int multi_put(ObTableExecCtx &ctx, const ObIArray<ObITableEntity *> &cells) override;
+  virtual int multi_put(ObTableExecCtx &ctx, const ObIArray<const ObITableEntity *> &cells) override;
   virtual int put(ObTableExecCtx &ctx, const ObITableEntity &cell) override;
+  virtual int put(ObTableCtx &ctx, const ObHCfRows &rows) override;
   virtual int del(ObTableExecCtx &ctx, const ObITableEntity &cell) override;
   virtual int scan(ObIAllocator &alloc, ObTableExecCtx &ctx, const ObTableQuery &query, ObHbaseICellIter *&iter) override;
   int convert_normal_to_series(const ObITableEntity &cell, ObITableEntity &series_cell);
-  int convert_normal_to_series(const ObIArray<ObITableEntity *> &cells,
-                               ObIArray<ObITableEntity *> &series_cells,
+  int convert_normal_to_series(const ObIArray<const ObITableEntity *> &cells,
+                               ObIArray<const ObITableEntity *> &series_cells,
                                ObIArray<common::ObTabletID> &real_tablet_ids);
-
 private:
   int save_and_adjust_range(ObHbaseSeriesCellIter *&iter, ObIAllocator &alloc);
   int construct_series_value(ObIAllocator &allocator, ObJsonNode &json, ObObj &value_obj);
@@ -80,8 +80,14 @@ private:
                      const ObITableEntity &entity,
                      ObTableCtx &scan_ctx,
                      ObTableApiRowIterator &tb_row_iter);
-  int get_normal_rowkey(const ObITableEntity &normal_cell, ObObj &rowkey_obj, ObObj &qualifier_obj, ObObj &timestamp_obj);
-  int add_series_rowkey(ObITableEntity &series_cell, ObObj &rowkey_obj, ObObj &timestamp_obj, ObObj &seq_obj);
+  int get_normal_rowkey(const ObITableEntity &normal_cell,
+                        ObObj &rowkey_obj,
+                        ObObj &qualifier_obj,
+                        ObObj &timestamp_obj);
+  int add_series_rowkey(ObITableEntity &series_cell,
+                        const ObObj &rowkey_obj,
+                        const ObObj &timestamp_obj,
+                        const ObObj &seq_obj);
   int release_map();
 
 private:

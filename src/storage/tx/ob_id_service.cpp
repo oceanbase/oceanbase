@@ -15,6 +15,7 @@
 #include "ob_trans_id_service.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "sql/das/ob_das_id_service.h"
+#include "observer/table/common/ob_table_query_session_id_service.h"
 
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/incremental/ob_shared_meta_service.h"
@@ -552,6 +553,9 @@ int ObIDService::get_id_service(const int64_t id_service_type, ObIDService *&id_
     break;
   }
 #endif
+  case transaction::ObIDService::TableSessIDService:
+    id_service = (ObIDService *)MTL(observer::ObTableSessIDService *);
+    break;
   default:
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "get wrong id_service_type", K(ret), K(MTL_ID()), K(id_service_type));
@@ -736,6 +740,16 @@ int ObPresistIDLogCb::serialize_ls_log(ObPresistIDLog &ls_log, int64_t service_t
       break;
     }
 #endif
+    case ObIDService::ServiceType::TableSessIDService: {
+      logservice::ObLogBaseHeader
+              base_header(logservice::ObLogBaseType::TABLE_SESS_ID_LOG_BASE_TYPE,
+                          logservice::ObReplayBarrierType::NO_NEED_BARRIER,
+                          service_type);
+      if (OB_FAIL(base_header.serialize(log_buf_, MAX_LOG_BUFF_SIZE, pos_))) {
+        TRANS_LOG(WARN, "ObPresistIDLogCb serialize base header error", KR(ret), KP(log_buf_), K(pos_));
+      }
+      break;
+    }
     default: {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "unknown service type", K(service_type));
@@ -846,6 +860,22 @@ int ObPresistIDLogCb::on_success()
       break;
     }
 #endif
+    case ObIDService::ServiceType::TableSessIDService: {
+      observer::ObTableSessIDService *table_sess_id_service = nullptr;
+      if (OB_ISNULL(table_sess_id_service = MTL(observer::ObTableSessIDService *))) {
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(WARN, "table session id service is null", K(ret));
+      } else {
+        table_sess_id_service->test_lock();
+        timeguard.click();
+        if (OB_FAIL(table_sess_id_service->handle_submit_callback(true, limited_id_, log_ts_))) {
+          TRANS_LOG(WARN, "table session id service handle log callback fail", K(ret), K_(limited_id), K_(log_ts));
+        }
+        timeguard.click();
+        TRANS_LOG(INFO, "table session id service handle log callback", K(ret), K_(limited_id), K_(log_ts));
+      }
+      break;
+    }
     default: {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "unknown service type", K(*this));
@@ -928,6 +958,19 @@ int ObPresistIDLogCb::on_failure()
       break;
     }
 #endif
+    case ObIDService::ServiceType::TableSessIDService: {
+      observer::ObTableSessIDService *table_sess_id_service = nullptr;
+      if (OB_ISNULL(table_sess_id_service = MTL(observer::ObTableSessIDService *))) {
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(WARN, "table session id service is null", K(ret));
+      } else {
+        if (OB_FAIL(table_sess_id_service->handle_submit_callback(false, limited_id_, log_ts_))) {
+          TRANS_LOG(WARN, "table session id service handle log callback fail", K(ret), K_(limited_id), K_(log_ts));
+        }
+        TRANS_LOG(INFO, "table session id service handle log callback", K(ret), K_(limited_id), K_(log_ts));
+      }
+      break;
+    }
     default: {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "unknown service type", K(*this));

@@ -190,6 +190,34 @@ int ObTableExprCgService::generate_count_expr(ObTableCtx &ctx, ObAggFunRawExpr *
   return ret;
 }
 
+int ObTableExprCgService::generate_heap_table_hidden_pk_increment_expr(ObTableCtx &ctx,
+                                                                       const ObTableColumnItem &item,
+                                                                       ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  ObPseudoColumnRawExpr *func_expr = nullptr;
+  ObSQLSessionInfo &sess_info = ctx.get_session_info();
+  ObRawExprFactory &expr_factory = ctx.get_expr_factory();
+  const ObColumnRefRawExpr *ref_expr = item.expr_;
+  if (OB_ISNULL(ref_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ref_expr is NULL", K(ret));
+  } else if (OB_FAIL(expr_factory.create_raw_expr(T_TABLET_AUTOINC_NEXTVAL, func_expr))) {
+    LOG_WARN("create nextval failed", K(ret));
+  } else {
+    func_expr->set_expr_name(ObString::make_string("pk_tablet_seq"));
+    func_expr->set_accuracy(ref_expr->get_accuracy());
+    func_expr->set_result_flag(ref_expr->get_result_flag());
+    func_expr->set_data_type(ref_expr->get_data_type());
+    if (OB_FAIL(func_expr->formalize(&sess_info))) {
+      LOG_WARN("failed to extract info", K(ret));
+    } else {
+      expr = func_expr;
+    }
+  }
+  return ret;
+}
+
 /*
   expr tree:
       autoinc_nextval expr
@@ -447,6 +475,10 @@ int ObTableExprCgService::resolve_exprs(ObTableCtx &ctx)
               if (OB_FAIL(ObTableFtsExprCgService::fill_doc_id_expr_param(ctx, doc_id_expr))) {
                 LOG_WARN("fail to fill doc_id expr param", K(ret));
               }
+            }
+          } else if (column_info->column_id_ == OB_HIDDEN_PK_INCREMENT_COLUMN_ID) {
+            if (OB_FAIL(generate_heap_table_hidden_pk_increment_expr(ctx, item, expr))) {
+              LOG_WARN("fail to generate hidden pk increment expr", K(ret), K(item));
             }
           } else {
             expr = item.expr_;
@@ -1162,39 +1194,121 @@ int ObTableExprCgService::refresh_update_exprs_frame(ObTableCtx &ctx,
 
 int ObTableExprCgService::refresh_ttl_exprs_frame(ObTableCtx &ctx,
                                                   const ObIArray<ObExpr *> &ins_new_row,
-                                                  const ObTableEntity &entity)
+                                                  const ObITableEntity &entity)
 {
   return refresh_insert_up_exprs_frame(ctx, ins_new_row, entity);
 }
 
 int ObTableExprCgService::refresh_insert_up_exprs_frame(ObTableCtx &ctx,
                                                         const ObIArray<ObExpr *> &ins_new_row,
-                                                        const ObTableEntity &entity)
+                                                        const ObITableEntity &entity)
 {
   int ret = OB_SUCCESS;
-  const ObIArray<ObObj> &rowkey = entity.get_rowkey_objs();
-
-  if (OB_FAIL(refresh_rowkey_exprs_frame(ctx, ins_new_row, rowkey))) {
-    LOG_WARN("fail to init rowkey exprs frame", K(ret), K(ctx), K(rowkey));
-  } else if (OB_FAIL(refresh_properties_exprs_frame(ctx, ins_new_row, entity))) {
-    LOG_WARN("fail to init properties exprs frame", K(ret), K(ctx), K(ins_new_row), K(entity));
+  if (ObTableEntityType::ET_HKV_V2 == ctx.get_entity_type()) {
+    const ObHCell &hcell = static_cast<const ObHCell &>(entity);
+    return refresh_hbase_exprs_frame(ctx, ins_new_row, hcell);
+  } else {
+    const ObTableEntity &table_entity = static_cast<const ObTableEntity &>(entity);
+    ObRowkey rowkey = table_entity.get_rowkey();
+    if (OB_FAIL(refresh_rowkey_exprs_frame(ctx, ins_new_row, rowkey))) {
+      LOG_WARN("fail to init rowkey exprs frame", K(ret), K(ctx), K(rowkey));
+    } else if (OB_FAIL(refresh_properties_exprs_frame(ctx, ins_new_row, table_entity))) {
+      LOG_WARN("fail to init properties exprs frame", K(ret), K(ctx), K(ins_new_row), K(table_entity));
+    }
   }
 
   return ret;
 }
 
+int ObTableExprCgService::refresh_hbase_exprs_frame(ObTableCtx &ctx,
+                                                    const ObIArray<ObExpr *> &exprs,
+                                                    const ObHCell &hcell)
+{
+  int ret = OB_SUCCESS;
+  ObEvalCtx eval_ctx(ctx.get_exec_ctx());
+  const ObIArray<ObTableColumnInfo *> &col_info_array = ctx.get_column_info_array();
+  if (col_info_array.count() != exprs.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("col info array count is not equal to exprs count", K(ret), K(col_info_array.count()), K(exprs.count()));
+  }
+  for (int64_t i = 0; i < col_info_array.count() && OB_SUCC(ret); i++) {
+    const ObTableColumnInfo *col_info = col_info_array.at(i);
+    ObExpr *expr = exprs.at(i);
+    if (OB_ISNULL(col_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("col info is NULL", K(ret), K(i));
+    } else if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("expr is NULL", K(ret), K(i));
+    } else if (col_info->rowkey_position_ > 0) {
+      ObObj obj;
+      if (OB_FAIL(hcell.get_rowkey_value(col_info->rowkey_position_ - 1, obj))) {
+        LOG_WARN("fail to get rowkey value", K(ret), K(i));
+      } else if (OB_FAIL(write_datum(ctx, ctx.get_allocator(), *col_info, *expr, eval_ctx, obj))) {
+        LOG_WARN("fail to write datum", K(ret), K(i), K(obj));
+      }
+    } else if (col_info->is_generated_column()) {
+      ObDatum *tmp_datum = nullptr;
+      if (OB_FAIL(expr->eval(eval_ctx, tmp_datum))) {
+        LOG_WARN("fail to eval generate expr", K(ret));
+      }
+    } else {
+      ObObj obj;
+      if (col_info->column_name_.case_compare(ObHTableConstants::VALUE_CNAME) == 0) {
+        if (OB_FAIL(hcell.get_cell_obj(ObHTableConstants::COL_IDX_V, obj))) {
+          LOG_WARN("fail to get cell obj", K(ret), K(i));
+        } else if (OB_FAIL(write_datum(ctx, ctx.get_allocator(), *col_info, *expr, eval_ctx, obj))) {
+          LOG_WARN("fail to write datum", K(ret), K(i), K(obj));
+        }
+      } else if (col_info->column_name_.case_compare(ObHTableConstants::TTL_CNAME) == 0) {
+        if (hcell.count() <= ObHTableConstants::COL_IDX_TTL) {
+          obj = col_info->default_value_;
+          if (!col_info->is_nullable_ && obj.is_null()) {
+            ret = OB_ERR_NO_DEFAULT_FOR_FIELD;
+            ObCStringHelper helper;
+            LOG_USER_ERROR(OB_ERR_NO_DEFAULT_FOR_FIELD, helper.convert(col_info->column_name_));
+            LOG_WARN("column can not be null", K(ret), KPC(col_info));
+          }
+        } else if (OB_FAIL(hcell.get_cell_obj(ObHTableConstants::COL_IDX_TTL, obj))) {
+          LOG_WARN("fail to get cell obj", K(ret), K(i));
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(write_datum(ctx, ctx.get_allocator(), *col_info, *expr, eval_ctx, obj))) {
+          LOG_WARN("fail to write datum", K(ret), K(i), K(obj));
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected column name", K(ret), K(col_info->column_name_));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTableExprCgService::refresh_insert_exprs_frame(ObTableCtx &ctx,
                                                      const ObIArray<ObExpr *> &exprs,
-                                                     const ObTableEntity &entity)
+                                                     const ObITableEntity &entity)
 {
-  return refresh_exprs_frame(ctx, exprs, entity);
+  if (ObTableEntityType::ET_HKV_V2 == ctx.get_entity_type()) {
+    const ObHCell &hcell = static_cast<const ObHCell &>(entity);
+    return refresh_hbase_exprs_frame(ctx, exprs, hcell);
+  } else {
+    const ObTableEntity &table_entity = static_cast<const ObTableEntity &>(entity);
+    return refresh_exprs_frame(ctx, exprs, table_entity);
+  }
 }
 
 int ObTableExprCgService::refresh_replace_exprs_frame(ObTableCtx &ctx,
                                                       const ObIArray<ObExpr *> &exprs,
-                                                      const ObTableEntity &entity)
+                                                      const ObITableEntity &entity)
 {
-  return refresh_exprs_frame(ctx, exprs, entity);
+  if (ObTableEntityType::ET_HKV_V2 == ctx.get_entity_type()) {
+    const ObHCell &hcell = static_cast<const ObHCell &>(entity);
+    return refresh_hbase_exprs_frame(ctx, exprs, hcell);
+  } else {
+    const ObTableEntity &table_entity = static_cast<const ObTableEntity &>(entity);
+    return refresh_exprs_frame(ctx, exprs, table_entity);
+  }
 }
 
 // only for htable
@@ -1203,7 +1317,8 @@ int ObTableExprCgService::refresh_delete_exprs_frame(ObTableCtx &ctx,
                                                      const ObTableEntity &entity)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObObj, 3> rowkey;
+  ObObj tmp_objs[3];
+  ObRowkey rowkey(const_cast<ObObj*>(tmp_objs), 3);
   if (ObTableEntityType::ET_HKV == ctx.get_entity_type()) {
     ObObj k_obj;
     ObObj q_obj;
@@ -1217,21 +1332,15 @@ int ObTableExprCgService::refresh_delete_exprs_frame(ObTableCtx &ctx,
       LOG_WARN("fail to get Q", K(ret));
     } else if (OB_FAIL(entity.get_property(ObHTableConstants::VERSION_CNAME_STR, t_obj))) {
       LOG_WARN("fail to get T", K(ret));
-    } else if (OB_FAIL(rowkey.push_back(k_obj))) {
-      LOG_WARN("fail to push back k_obj", K(ret), K(k_obj));
-    } else if (OB_FAIL(rowkey.push_back(q_obj))) {
-      LOG_WARN("fail to push back q_obj", K(ret), K(q_obj));
-    } else if (FALSE_IT(time = t_obj.get_int())) {
-      // do nothing
-    } else if (FALSE_IT(t_obj.set_int(-1 * time))) {
-      // do nothing
-    } else if (OB_FAIL(rowkey.push_back(t_obj))) {
-      LOG_WARN("fail to push back t_obj", K(ret), K(t_obj));
+    }  else {
+      tmp_objs[0] = k_obj;
+      tmp_objs[1] = q_obj;
+      time = t_obj.get_int();
+      t_obj.set_int(-1 * time);
+      tmp_objs[2] = t_obj;
     }
   } else {
-    if (OB_FAIL(rowkey.assign(entity.get_rowkey_objs()))) {
-      LOG_WARN("fail to assign", K(ret), K(entity.get_rowkey_objs()));
-    }
+    rowkey = entity.get_rowkey();
   }
 
   if (OB_SUCC(ret)) {
@@ -1342,7 +1451,7 @@ int ObTableExprCgService::refresh_exprs_frame(ObTableCtx &ctx,
                                               const ObTableEntity &entity)
 {
   int ret = OB_SUCCESS;
-  const ObIArray<ObObj> &rowkey = entity.get_rowkey_objs();
+  ObRowkey rowkey = entity.get_rowkey();
 
   if (OB_FAIL(refresh_rowkey_exprs_frame(ctx, exprs, rowkey))) {
     LOG_WARN("fail to init rowkey exprs frame", K(ret), K(ctx), K(rowkey));
@@ -1364,7 +1473,7 @@ int ObTableExprCgService::refresh_exprs_frame(ObTableCtx &ctx,
 */
 int ObTableExprCgService::refresh_rowkey_exprs_frame(ObTableCtx &ctx,
                                                      const ObIArray<ObExpr *> &exprs,
-                                                     const ObIArray<ObObj> &rowkey)
+                                                     ObRowkey &rowkey)
 {
   int ret = OB_SUCCESS;
   const ObIArray<ObTableColumnInfo *> &col_info_array = ctx.get_column_info_array();
@@ -1377,7 +1486,7 @@ int ObTableExprCgService::refresh_rowkey_exprs_frame(ObTableCtx &ctx,
   } else if (OB_FAIL(schema_cache_guard->get_rowkey_column_num(schema_rowkey_cnt))) {
     LOG_WARN("get rowkey column num failed", K(ret));
   } else {
-    const int64_t entity_rowkey_cnt = rowkey.count();
+    const int64_t entity_rowkey_cnt = rowkey.get_obj_cnt();
     bool is_full_filled = (schema_rowkey_cnt == entity_rowkey_cnt); // did user fill all rowkey columns or not
     ObEvalCtx eval_ctx(ctx.get_exec_ctx());
     int64_t skip_pos = 0; // skip columns that do not need to be filled
@@ -1414,13 +1523,14 @@ int ObTableExprCgService::refresh_rowkey_exprs_frame(ObTableCtx &ctx,
               tmp_obj = &null_obj;
               skip_pos++;
             } else {
-              tmp_obj = &rowkey.at(rowkey_position-1);
+              tmp_obj = &rowkey.get_obj_ptr()[rowkey_position-1];
             }
             if (OB_FAIL(write_autoinc_datum(ctx, *expr, eval_ctx, *tmp_obj))) {
               LOG_WARN("fail to write auto increment datum", K(ret), K(is_full_filled), K(*expr), K(*tmp_obj));
             }
           }
-        } else if (!is_full_filled && IS_DEFAULT_NOW_OBJ(col_info->default_value_)) {
+        } else if ((!is_full_filled && IS_DEFAULT_NOW_OBJ(col_info->default_value_))
+            || (col_info->column_id_ == OB_HIDDEN_PK_INCREMENT_COLUMN_ID && !ctx.is_ttl_delete())) { // ttl delete need refresh datum with entity
           ObDatum *tmp_datum = nullptr;
           expr->get_eval_info(eval_ctx).clear_evaluated_flag();
           if (OB_FAIL(expr->eval(eval_ctx, tmp_datum))) {
@@ -1430,14 +1540,15 @@ int ObTableExprCgService::refresh_rowkey_exprs_frame(ObTableCtx &ctx,
           }
         } else {
           int64_t pos = rowkey_position - 1 - skip_pos;
+          ObObj tmp_obj = rowkey.get_obj_ptr()[pos];
           if (pos >= entity_rowkey_cnt) {
             ret = OB_INDEX_OUT_OF_RANGE;
             LOG_WARN("idx out of range", K(ret), K(i), K(entity_rowkey_cnt), K(rowkey_position), K(skip_pos));
           } else if (OB_ISNULL(expr)) {
             ret = OB_ERR_UNDEFINED;
             LOG_WARN("expr is null", K(ret));
-          } else if (OB_FAIL(write_datum(ctx, ctx.get_allocator(), *col_info, *expr, eval_ctx, rowkey.at(pos)))) {
-            LOG_WARN("fail to write datum", K(ret), K(rowkey_position), K(rowkey.at(pos)), K(*expr), K(pos));
+          } else if (OB_FAIL(write_datum(ctx, ctx.get_allocator(), *col_info, *expr, eval_ctx, tmp_obj))) {
+            LOG_WARN("fail to write datum", K(ret), K(rowkey_position), K(tmp_obj), K(*expr), K(pos));
           }
         }
       }

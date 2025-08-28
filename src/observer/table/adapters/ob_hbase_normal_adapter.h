@@ -27,7 +27,8 @@ public:
   virtual ~ObHNormalAdapter() {}
 
   virtual int put(ObTableExecCtx &ctx, const ObITableEntity &cell) override;
-  virtual int multi_put(ObTableExecCtx &ctx, const ObIArray<ObITableEntity *> &cells) override;
+  virtual int put(ObTableCtx &ctx, const ObHCfRows &rows) override;
+  virtual int multi_put(ObTableExecCtx &ctx, const ObIArray<const ObITableEntity *> &cells) override;
   virtual int del(ObTableExecCtx &ctx, const ObITableEntity &cell) override;
   virtual int scan(ObIAllocator &alloc, ObTableExecCtx &ctx, const ObTableQuery &query, ObHbaseICellIter *&iter) override;
 

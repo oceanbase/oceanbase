@@ -47,6 +47,7 @@ protected:
   virtual bool is_kv_processor() override { return true; }
 private:
   int32_t get_stat_process_type(bool is_hkv, bool is_check_and_execute, table::ObTableOperationType::Type type);
+  int check_heap_table();
   int old_try_process();
   int new_try_process();
   virtual bool is_new_try_process() override;

@@ -103,7 +103,7 @@ class ListCommandOperator : public CommandOperator
 {
 public:
   using ListElement = std::pair<int64_t, ObObj>;
-  using ListElemEntity = std::pair<int64_t, ObITableEntity*>;
+  using ListElemEntity = std::pair<int64_t, const ObITableEntity*>;
 
 public:
   explicit ListCommandOperator(ObRedisCtx &redis_ctx) : CommandOperator(redis_ctx)

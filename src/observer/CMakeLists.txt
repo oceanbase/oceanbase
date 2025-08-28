@@ -229,6 +229,7 @@ ob_set_subtarget(ob_server table
   table/ob_table_multi_batch_common.cpp
   table/ob_table_multi_batch_service.cpp
   table/ob_redis_execute_processor_v2.cpp
+  table/ob_hbase_execute_processor.cpp
   table/fts/ob_table_fts_cg_service.cpp
   table/adapters/ob_hbase_cell_iter.cpp
   table/adapters/ob_normal_adapter_iter.cpp
@@ -262,6 +263,8 @@ ob_set_subtarget(ob_server table
   table/utils/ob_table_trans_utils.cpp
   table/utils/ob_table_json_utils.cpp
   table/utils/ob_table_convert_utils.cpp
+  table/common/ob_table_query_session_id_service.cpp
+  table/common/ob_table_query_session_id_rpc.cpp
 )
 
 ob_set_subtarget(ob_server table_load

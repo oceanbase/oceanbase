@@ -49,7 +49,7 @@ int ObTableRpcResponseSender::serialize()
   return ret;
 }
 
-int ObTableRpcResponseSender::do_response(ObRpcPacket *response_pkt, bool require_rerouting)
+int ObTableRpcResponseSender::do_response(ObRpcPacket *response_pkt, bool require_rerouting, bool require_refresh_kv_meta)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(req_)) {
@@ -91,6 +91,9 @@ int ObTableRpcResponseSender::do_response(ObRpcPacket *response_pkt, bool requir
       packet->set_process_end_response_diff(req_->get_process_end_response_diff());
       if (require_rerouting) {
         packet->set_require_rerouting();
+      }
+      if (require_refresh_kv_meta) {
+        packet->set_kv_route_meta_error(); // reuse IS_KV_REQUEST_FALG flag as KV_ROUTE_META_ERROR_FLAG
       }
       packet->calc_checksum();
     }
@@ -191,11 +194,22 @@ int ObTableRpcResponseSender::response(const int cb_param)
     // rerouting: whether client should refresh location cache and retry
     // Now, following the same logic as in ../mysql/ob_query_retry_ctrl.cpp
     bool require_rerouting = false;
+    bool require_refresh_kv_meta = false;
     if (OB_SUCC(ret)) {
-      if (OB_SUCCESS != retcode
-          && observer::ObTableRpcProcessorUtil::is_require_rerouting_err(retcode)) {
-        require_rerouting = true;
-        RPC_OBRPC_LOG(DEBUG, "require rerouting", K(retcode), K(require_rerouting));
+      if (OB_SUCCESS != retcode) {
+        if (observer::ObTableRpcProcessorUtil::is_require_rerouting_err(retcode)) {
+          require_rerouting = true;
+          RPC_OBRPC_LOG(DEBUG, "require rerouting", K(retcode), K(require_rerouting));
+        }
+        if (observer::ObTableRpcProcessorUtil::is_need_refresh_route_meta_error(retcode)) {
+          require_refresh_kv_meta = true;
+          RPC_OBRPC_LOG(DEBUG, "need refresh route meta", K(retcode), K(require_refresh_kv_meta));
+        }
+      } else {
+        // informing client or odp of refreshing table_entry after retry successfully in server
+        require_rerouting = require_rerouting_;
+        require_refresh_kv_meta = require_refresh_kv_meta_;
+        RPC_OBRPC_LOG(DEBUG, "set require_rerouting or require_refresh_kv_meta when retry successfully", K(retcode), K(require_rerouting), K(require_refresh_kv_meta));
       }
     }
 
@@ -203,7 +217,7 @@ int ObTableRpcResponseSender::response(const int cb_param)
       ObRpcPacket *pkt = new (pkt_buf) ObRpcPacket();
       //Response rsp(sessid, is_stream_, is_last, pkt);
       pkt->set_content(using_buffer_->get_data(), using_buffer_->get_position());
-      if (OB_FAIL(do_response(pkt, require_rerouting))) {
+      if (OB_FAIL(do_response(pkt, require_rerouting, require_refresh_kv_meta))) {
         RPC_OBRPC_LOG(WARN, "response data fail", K(ret), K(retcode));
       }
     }

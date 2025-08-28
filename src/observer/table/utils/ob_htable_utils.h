@@ -454,15 +454,24 @@ public:
   static int int64_to_java_bytes(int64_t val, char bytes[8]);
   // lock all rows of mutations in the given lock mode with the given lock handle,
   // for put, delete, mutations in check_and_xxx
-  static int lock_htable_rows(uint64_t table_id, const ObIArray<table::ObTableOperation> &ops, ObHTableLockHandle &handle, ObHTableLockMode lock_mode);
-  static int lock_htable_rows(uint64_t table_id, const ObIArray<table::ObTableSingleOp> &ops, ObHTableLockHandle &handle, ObHTableLockMode lock_mode);
+  static int lock_htable_rows(uint64_t table_id,
+                              const ObIArray<table::ObTableOperation> &ops,
+                              ObHTableLockHandle &handle,
+                              ObHTableLockMode lock_mode);
+  static int lock_htable_rows(uint64_t table_id,
+                              const ObIArray<table::ObTableSingleOp> &ops,
+                              ObHTableLockHandle &handle,
+                              ObHTableLockMode lock_mode);
+  static int lock_htable_rows(const ObIArray<ObHCfRows> &cf_rows,
+                              ObHTableLockHandle &handle,
+                              ObHTableLockMode lock_mode);
   // lock the check row in the given lock mode with the given lock hanle,
   // for increment, append, and check operation in check_and_xxx
   static int lock_htable_row(uint64_t table_id, const ObTableQuery &htable_query, ObHTableLockHandle &handle, ObHTableLockMode lock_mode);
   static int lock_redis_key(uint64_t table_id, const ObString &lock_key, ObHTableLockHandle &handle, ObHTableLockMode lock_mode);
   static OB_INLINE bool is_tablegroup_req(const ObString &table_name, ObTableEntityType entity_type)
   {
-    return entity_type == ObTableEntityType::ET_HKV && table_name.find('$') == nullptr;
+    return (entity_type == ObTableEntityType::ET_HKV) && table_name.find('$') == nullptr;
   }
 
   static int get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos, const char *name);
@@ -495,13 +504,15 @@ public:
   static int init_tablegroup_schema(share::schema::ObSchemaGetterGuard &schema_guard,
                                     ObTableApiCredential &credential,
                                     const ObString &arg_tablegroup_name,
+                                    uint64_t arg_table_id,
                                     const share::schema::ObSimpleTableSchemaV2 *&simple_table_schema);
   static int init_schema_info(const ObString &arg_table_name,
                               ObTableApiCredential &credential,
                               bool is_tablegroup_req,
                               share::schema::ObSchemaGetterGuard &schema_guard,
                               const share::schema::ObSimpleTableSchemaV2 *&simple_table_schema,
-                              ObKvSchemaCacheGuard &schema_cache_guard);
+                              ObKvSchemaCacheGuard &schema_cache_guard,
+                              uint64_t arg_table_id = OB_INVALID_ID);
   static int init_schema_info(const ObString &arg_table_name,
                               uint64_t arg_table_id,
                               ObTableApiCredential &credential,
@@ -512,13 +523,15 @@ public:
   static int init_tablegroup_schema(share::schema::ObSchemaGetterGuard &schema_guard,
                                   ObTableApiCredential &credential,
                                   const ObString &arg_tablegroup_name,
+                                  uint64_t arg_table_id,
                                   const share::schema::ObTableSchema *&table_schema);
   static int init_schema_info(const ObString &arg_table_name,
                               ObTableApiCredential &credential,
                               bool is_tablegroup_req,
                               share::schema::ObSchemaGetterGuard &schema_guard,
                               const share::schema::ObTableSchema *&table_schema,
-                              ObKvSchemaCacheGuard &schema_cache_guard);
+                              ObKvSchemaCacheGuard &schema_cache_guard,
+                              uint64_t arg_table_id = OB_INVALID_ID);
   static int init_schema_info(const ObString &arg_table_name,
                               uint64_t arg_table_id,
                               ObTableApiCredential &credential,

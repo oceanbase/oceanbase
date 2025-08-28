@@ -181,7 +181,7 @@ int ObTableBatchService::multi_op_in_executor(ObTableBatchCtx &ctx,
   int ret = OB_SUCCESS;
   ObTableCtx &tb_ctx = ctx.tb_ctx_;
   ObTableApiExecutor *executor = nullptr;
-  ObSEArray<ObITableEntity*, 16> entities;
+  ObSEArray<const ObITableEntity*, 16> entities;
   entities.set_attr(ObMemAttr(MTL_ID(), "MulOpEntArr"));
   tb_ctx.set_batch_tablet_ids(&ctx.tablet_ids_);
   tb_ctx.set_batch_entities(&entities);
@@ -220,7 +220,7 @@ int ObTableBatchService::multi_op_in_executor(ObTableBatchCtx &ctx,
 
 int ObTableBatchService::adjust_entities(ObTableBatchCtx &ctx,
                                         const ObIArray<ObTableOperation> &ops,
-                                        ObIArray<ObITableEntity*> &entities)
+                                        ObIArray<const ObITableEntity*> &entities)
 {
   int ret = OB_SUCCESS;
   ObTableCtx &tb_ctx = ctx.tb_ctx_;
@@ -246,7 +246,7 @@ int ObTableBatchService::adjust_entities(ObTableBatchCtx &ctx,
 
 int ObTableBatchService::multi_get_fuse_key_range(ObTableBatchCtx &ctx,
                                                   ObTableApiSpec &spec,
-                                                  const ObIArray<ObITableEntity *> &entities,
+                                                  const ObIArray<const ObITableEntity *> &entities,
                                                   ObIArray<ObTableOperationResult> &results,
                                                   int64_t &got_row_count)
 {
@@ -320,7 +320,7 @@ int ObTableBatchService::multi_get_fuse_key_range(ObTableBatchCtx &ctx,
                     K(ret), K(index), K(results), K(entity_count), KPC(row), K(ops));
               } else if (OB_FAIL(results.at(index).get_entity(result_entity))) {
                 LOG_WARN("fail to get result entity", K(ret));
-              } else if (OB_ISNULL(requset_entity = static_cast<ObTableEntity *>(entities.at(index)))) {
+              } else if (OB_ISNULL(requset_entity = static_cast<ObTableEntity *>(const_cast<ObITableEntity*>(entities.at(index))))) {
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("entity is null", K(ret), K(index));
               } else if (OB_FAIL(ObTableApiUtil::construct_entity_from_row(allocator, row,
@@ -396,7 +396,7 @@ int ObTableBatchService::multi_get(ObTableBatchCtx &ctx,
   observer::ObReqTimeGuard req_time_guard;
   ObTableApiCacheGuard cache_guard;
   ObTableCtx &tb_ctx = ctx.tb_ctx_;
-  ObSEArray<ObITableEntity*, 16> entities;
+  ObSEArray<const ObITableEntity*, 16> entities;
   entities.set_attr(ObMemAttr(MTL_ID(), "MGetEntArr"));
   tb_ctx.set_read_latest(false);
   tb_ctx.set_batch_entities(&entities);

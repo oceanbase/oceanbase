@@ -114,7 +114,7 @@ private:
     return insert_up_spec_.get_ctdefs().at(0)->ins_ctdef_.new_row_;
   }
   int generate_insert_up_rtdefs();
-  int refresh_exprs_frame(const ObTableEntity *entity);
+  int refresh_exprs_frame(const ObITableEntity *entity);
   int get_next_row_from_child();
   int try_insert_row();
   int insert_row_to_das();

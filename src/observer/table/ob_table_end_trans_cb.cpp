@@ -113,6 +113,50 @@ ObTableAPITransCb* ObTableBatchExecuteCreateCbFunctor::new_callback()
   return cb;
 }
 
+int ObHbaseExecuteCreateCbFunctor::init(ObRequest *req, const ObHbaseResult *result)
+{
+  int ret = OB_SUCCESS;
+
+  if (!is_inited_) {
+    if (OB_ISNULL(req)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("request is null", K(ret));
+    } else if (OB_ISNULL(result)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("result is null", K(ret));
+    } else {
+      req_ = req;
+      result_ = result;
+      is_inited_ = true;
+    }
+  }
+
+  return ret;
+}
+
+ObTableAPITransCb* ObHbaseExecuteCreateCbFunctor::new_callback()
+{
+  ObHbaseExecuteEndTransCb *cb = nullptr;
+  if (is_inited_) {
+    cb = OB_NEW(ObHbaseExecuteEndTransCb,
+                ObMemAttr(MTL_ID(), "HbaseExuTnCb"),
+                req_);
+    if (NULL != cb) {
+      int ret = OB_SUCCESS;
+      if (OB_ISNULL(result_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result is null", K(ret));
+      } else if (OB_FAIL(cb->assign_hbase_execute_result(*result_))) {
+        LOG_WARN("fail to assign result", K(ret));
+        cb->~ObHbaseExecuteEndTransCb();
+        cb = NULL;
+        ob_free(cb);
+      }
+    }
+  }
+  return cb;
+}
+
 int ObTableLSExecuteCreateCbFunctor::init(ObRequest *req)
 {
   int ret = OB_SUCCESS;
@@ -149,6 +193,8 @@ ObTableAPITransCb* ObTableLSExecuteCreateCbFunctor::new_callback()
 ObTableAPITransCb::ObTableAPITransCb()
     : tx_desc_(nullptr),
       lock_handle_(nullptr),
+      require_rerouting_(false),
+      require_refresh_kv_meta_(false),
       ref_count_(2)
 {
   create_ts_ = common::ObClockGenerator::getClock();
@@ -220,6 +266,8 @@ void ObTableExecuteEndTransCb::callback(int cb_param)
     result_.set_affected_rows(0);
     result_entity_.reset();
   }
+  response_sender_.set_require_rerouting(require_rerouting_);
+  response_sender_.set_require_refresh_kv_meta(require_refresh_kv_meta_);
   if (OB_FAIL(response_sender_.response(cb_param))) {
     LOG_WARN("failed to send response", K(ret), K(cb_param));
   } else {
@@ -286,6 +334,8 @@ void ObTableBatchExecuteEndTransCb::callback(int cb_param)
     }
   }
   if (OB_SUCC(ret)) {
+    response_sender_.set_require_rerouting(require_rerouting_);
+    response_sender_.set_require_refresh_kv_meta(require_refresh_kv_meta_);
     if (OB_FAIL(response_sender_.response(cb_param))) {
       LOG_WARN("failed to send response", K(ret), K(cb_param));
     } else {
@@ -353,6 +403,8 @@ void ObTableLSExecuteEndTransCb::callback(int cb_param)
     }
   }
   if (OB_SUCC(ret)) {
+    response_sender_.set_require_rerouting(require_rerouting_);
+    response_sender_.set_require_refresh_kv_meta(require_refresh_kv_meta_);
     if (OB_FAIL(response_sender_.response(cb_param))) {
       LOG_WARN("failed to send response", K(ret), K(cb_param));
     } else {
@@ -382,4 +434,52 @@ void ObTableLSExecuteEndTransCb::callback(int cb_param, const transaction::ObTra
 {
   UNUSED(trans_id);
   this->callback(cb_param);
+}
+
+////////////////////////////////////////////////////////////////
+void ObHbaseExecuteEndTransCb::callback(int cb_param)
+{
+  int ret = OB_SUCCESS;
+  check_callback_timeout();
+  if (OB_UNLIKELY(!has_set_need_rollback_)) {
+    LOG_ERROR("is_need_rollback_ has not been set",
+              K(has_set_need_rollback_),
+              K(is_need_rollback_));
+  } else if (OB_UNLIKELY(ObExclusiveEndTransCallback::END_TRANS_TYPE_INVALID == end_trans_type_)) {
+    LOG_WARN("end trans type is invalid", K(cb_param), K(end_trans_type_));
+  } else if (OB_NOT_NULL(tx_desc_)) {
+    MTL(transaction::ObTransService*)->release_tx(*tx_desc_);
+    tx_desc_ = NULL;
+  }
+  if (lock_handle_ != nullptr) {
+    HTABLE_LOCK_MGR->release_handle(*lock_handle_);
+  }
+  this->handin();
+  CHECK_BALANCE("[hbase async callback]");
+  if (cb_param != OB_SUCCESS) {
+    // commit failed - for hbase result, we don't need to set error since it's not implemented
+    // The error will be handled by the response sender
+  }
+  response_sender_.set_require_rerouting(require_rerouting_);
+  response_sender_.set_require_refresh_kv_meta(require_refresh_kv_meta_);
+  if (OB_FAIL(response_sender_.response(cb_param))) {
+    LOG_WARN("failed to send hbase response", K(ret), K(cb_param));
+  } else {
+    LOG_DEBUG("async send hbase execute response", K(cb_param));
+  }
+
+  this->destroy_cb_if_no_ref();
+}
+
+void ObHbaseExecuteEndTransCb::callback(int cb_param, const transaction::ObTransID &trans_id)
+{
+  UNUSED(trans_id);
+  this->callback(cb_param);
+}
+
+int ObHbaseExecuteEndTransCb::assign_hbase_execute_result(const ObHbaseResult &result)
+{
+  int ret = OB_SUCCESS;
+  result_ = result;
+  return ret;
 }

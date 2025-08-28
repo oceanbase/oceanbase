@@ -46,6 +46,11 @@ public:
   virtual int put(const ObHbaseTableCells &table_cells, ObTableExecCtx &exec_ctx) override;
   virtual int del(const ObHbaseTableCells &table_cells, ObTableExecCtx &exec_ctx) override;
   virtual int query(const ObHbaseQuery &query, ObTableExecCtx &exec_ctx, ObHbaseQueryResultIterator *&result_iter) override;
+public:
+  static int construct_table_name(common::ObIAllocator &allocator,
+                                  const common::ObString &table_group_name,
+                                  const common::ObString &family_name,
+                                  common::ObString &table_name);
 private:
   int delete_all_family(const ObITableEntity &del_cell, const ObString &table_group_name,
                         ObTableExecCtx &exec_ctx, const uint64_t table_id, const ObTabletID &tablet_id);
@@ -68,10 +73,6 @@ private:
   static int get_family_from_cell(const ObNewRow &cell, ObString &family);
   static int remove_family_from_qualifier(const ObITableEntity &entity);
   static int remove_family_from_qualifier(const ObNewRow &cell);
-  static int construct_table_name(common::ObIAllocator &allocator,
-                                  const common::ObString &table_group_name,
-                                  const common::ObString &family_name,
-                                  common::ObString &table_name);
 };
 
 class ObHbaseCfServiceGuard

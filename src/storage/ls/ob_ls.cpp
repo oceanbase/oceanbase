@@ -61,6 +61,7 @@
 #include "close_modules/shared_storage/storage/incremental/sslog/notify/ob_sslog_notify_adapter.h"
 #include "close_modules/shared_storage/storage/incremental/share/ob_shared_ls_meta.h"
 #endif
+#include "observer/table/common/ob_table_query_session_id_service.h"
 
 namespace oceanbase
 {
@@ -1080,6 +1081,7 @@ int ObLS::register_common_service()
     REGISTER_TO_LOGSERVICE(TRANS_ID_LOG_BASE_TYPE, MTL(ObTransIDService *));
   }
   if (ls_id == IDS_LS) {
+    REGISTER_TO_LOGSERVICE(TABLE_SESS_ID_LOG_BASE_TYPE, MTL(observer::ObTableSessIDService *));
 #ifdef OB_BUILD_SHARED_STORAGE
     if (GCTX.is_shared_storage_mode()) {
       // REGISTER_TO_LOGSERVICE(SHARE_STORAGE_PUBLIC_BLOCK_GC_SERVICE_LOG_BASE_TYPE, MTL(ObPublicBlockGCService *));
@@ -1268,6 +1270,8 @@ void ObLS::unregister_common_service_()
   if (ls_meta_.ls_id_ == IDS_LS) {
     // temporary fix of
     MTL(sql::ObDASIDService *)->reset_ls();
+    MTL(observer::ObTableSessIDService*)->reset_ls();
+    UNREGISTER_FROM_LOGSERVICE(TABLE_SESS_ID_LOG_BASE_TYPE, MTL(observer::ObTableSessIDService *));
 #ifdef OB_BUILD_SHARED_STORAGE
     if (GCTX.is_shared_storage_mode()) {
       // UNREGISTER_FROM_LOGSERVICE(SHARE_STORAGE_PUBLIC_BLOCK_GC_SERVICE_LOG_BASE_TYPE, MTL(ObPublicBlockGCService *));

@@ -34,7 +34,7 @@ public:
 public:
   ObRpcProcessorBase()
       : rpc_pkt_(NULL), sh_(NULL), sc_(NULL), is_stream_(false), is_stream_end_(false),
-        require_rerouting_(false), preserve_recv_data_(false), preserved_buf_(NULL),
+        require_rerouting_(false), kv_route_meta_error_(false), preserve_recv_data_(false), preserved_buf_(NULL),
         uncompressed_buf_(NULL), timeout_(0), using_buffer_(NULL), send_timestamp_(0), pkt_size_(0), tenant_id_(0),
         result_compress_type_(common::INVALID_COMPRESSOR)
   {}
@@ -82,12 +82,10 @@ protected:
     Response(int64_t sessid,
              bool is_stream,
              bool is_stream_last,
-             bool require_rerouting,
              ObRpcPacket *pkt)
         : sessid_(sessid),
           is_stream_(is_stream),
           is_stream_last_(is_stream_last),
-          require_rerouting_(require_rerouting),
           pkt_(pkt)
     { }
 
@@ -96,12 +94,9 @@ protected:
     bool is_stream_;
     bool is_stream_last_;
 
-    // for routing check
-    bool require_rerouting_;
-
     ObRpcPacket *pkt_;
 
-    TO_STRING_KV(K_(sessid), K_(is_stream), K_(is_stream_last), K_(require_rerouting));
+    TO_STRING_KV(K_(sessid), K_(is_stream), K_(is_stream_last));
   };
 
   void reuse();
@@ -155,7 +150,8 @@ protected:
 
   // For rerouting in obkv
   bool require_rerouting_;
-
+  // For informing whether to refresh table meta information in obkv
+  bool kv_route_meta_error_;
   // The flag marks received data must copy out from `easy buffer'
   // before we response packet back. Typical case is when we use
   // shadow copy when deserialize the argument but response before

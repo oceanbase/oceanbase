@@ -72,18 +72,22 @@ public:
   : allow_retry_(true),
     allow_rpc_retry_(true),
     local_retry_interval_us_(10),
-    max_local_retry_count_(5)
+    max_local_retry_count_(5),
+    allow_route_retry_(false)
   {}
   virtual ~ObTableRetryPolicy() {}
   bool allow_retry() const { return allow_retry_; }
   // rpc retry will receate the processor,
   // so there is no retry count limit for now.
   bool allow_rpc_retry() const { return allow_retry_ && allow_rpc_retry_; }
+  // allow route retry means can retry routing errors
+  bool allow_route_retry() const { return allow_retry_ && allow_route_retry_; }
 public:
   bool allow_retry_;
   bool allow_rpc_retry_;
   int64_t local_retry_interval_us_;
   int64_t max_local_retry_count_;
+  bool allow_route_retry_;
 };
 
 class ObTableApiUtils
@@ -171,7 +175,7 @@ protected:
                                             bool is_same_type,
                                             bool is_same_properties_names,
                                             table::ObTableOperationType::Type op_type);
-  bool can_retry(int retcode);
+  bool can_retry(const int retcode, bool &did_local_retry);
   virtual bool is_new_try_process() { return false; };
 protected:
   common::ObArenaAllocator allocator_;
@@ -192,6 +196,8 @@ protected:
   ObTableRetryPolicy retry_policy_;
   bool need_retry_in_queue_;
   bool is_tablegroup_req_; // is table name a tablegroup name
+  bool require_rerouting_;
+  bool kv_route_meta_error_;
   int32_t retry_count_;
   uint64_t table_id_;
   ObTabletID tablet_id_;

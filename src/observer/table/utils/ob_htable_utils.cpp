@@ -599,6 +599,34 @@ int ObHTableUtils::lock_htable_rows(uint64_t table_id, const ObIArray<ObTableSin
   return ret;
 }
 
+int ObHTableUtils::lock_htable_rows(const ObIArray<ObHCfRows> &cf_rows,
+                                    ObHTableLockHandle &handle,
+                                    ObHTableLockMode lock_mode)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < cf_rows.count(); ++i) {
+    const ObHCfRows &cf_row = cf_rows.at(i);
+    uint64_t table_id = cf_row.get_table_schema()->get_table_id();
+    const ObIArray<ObObj> *keys = cf_row.keys_;
+    if (OB_ISNULL(keys)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null keys", K(ret));
+    } else {
+      for (int64_t j = 0; OB_SUCC(ret) && j < keys->count(); ++j) {
+        const ObObj &key = keys->at(j);
+        ObString key_str = key.get_string();
+        if (key_str.empty()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null key", K(ret));
+        } else if (OB_FAIL(HTABLE_LOCK_MGR->lock_row(table_id, key_str, lock_mode, handle))) {
+          LOG_WARN("fail to lock htable row", K(ret), K(table_id), K(key_str), K(lock_mode));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObHTableUtils::lock_htable_row(uint64_t table_id, const ObTableQuery &htable_query, ObHTableLockHandle &handle, ObHTableLockMode lock_mode)
 {
   int ret = OB_SUCCESS;
@@ -1069,7 +1097,7 @@ int ObHTableUtils::check_family_existence_with_base_name(const ObString& table_n
       }
     }
     if (OB_SUCC(ret)) {
-      if (table_name == tmp_name.string()) {
+      if (table_name.case_compare(tmp_name.string()) == 0) {
         flag = family_addfamily_flag;
         is_found = true;
       }
@@ -1116,15 +1144,9 @@ int ObHTableUtils::init_schema_info(const ObString &arg_table_name,
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(init_schema_info(arg_table_name, credential, is_tablegroup_req, schema_guard,
-                               simple_table_schmea, schema_cache_guard))) {
+                               simple_table_schmea, schema_cache_guard, arg_table_id))) {
     LOG_WARN("fail to init schema info", K(ret), K(arg_table_name), K(credential), K(is_tablegroup_req));
   }
-  // TODO: @dazhi
-  // else if (simple_table_schmea->get_table_id() != arg_table_id) {
-  //   ret = OB_SCHEMA_ERROR;
-  //   LOG_WARN("arg table id is not equal to schema table id", K(ret), K(arg_table_id),
-  //           K(simple_table_schmea->get_table_id()));
-  // }
   return ret;
 }
 
@@ -1133,7 +1155,8 @@ int ObHTableUtils::init_schema_info(const ObString &arg_table_name,
                                     bool is_tablegroup_req,
                                     share::schema::ObSchemaGetterGuard &schema_guard,
                                     const ObSimpleTableSchemaV2 *&simple_table_schema,
-                                    ObKvSchemaCacheGuard &schema_cache_guard)
+                                    ObKvSchemaCacheGuard &schema_cache_guard,
+                                    uint64_t arg_table_id /* OB_INVALID_ID */)
 {
 int ret = OB_SUCCESS;
 if (schema_cache_guard.is_inited()) {
@@ -1146,7 +1169,7 @@ if (schema_cache_guard.is_inited()) {
 /*When is_tablegroup_req is true, simple_table_schema is not properly initialized.
   Defaulting to use the first element (index 0). */
 } else if (is_tablegroup_req &&
-           OB_FAIL(init_tablegroup_schema(schema_guard, credential, arg_table_name, simple_table_schema))) {
+           OB_FAIL(init_tablegroup_schema(schema_guard, credential, arg_table_name, arg_table_id, simple_table_schema))) {
   LOG_WARN("fail to get table schema from table group name", K(ret), K(credential.tenant_id_),
             K(credential.database_id_), K(arg_table_name));
 } else if (!is_tablegroup_req
@@ -1167,6 +1190,13 @@ if (schema_cache_guard.is_inited()) {
   LOG_USER_ERROR(OB_ERR_OPERATION_ON_RECYCLE_OBJECT);
   LOG_WARN("table is in recycle bin, not allow to do operation", K(ret), K(credential.tenant_id_),
               K(credential.database_id_), K(arg_table_name));
+} else if (arg_table_id != OB_INVALID_ID
+           && !is_tablegroup_req
+           && simple_table_schema->get_table_id() != arg_table_id) {
+  // tablegroup req has checked arg_table_id inside init_tablegroup_schema
+  ret = OB_SCHEMA_ERROR;
+  LOG_WARN("arg table id is not equal to schema table id", K(ret), K(arg_table_id),
+          K(simple_table_schema->get_table_id()));
 } else if (OB_FAIL(schema_cache_guard.init(credential.tenant_id_,
                                            simple_table_schema->get_table_id(),
                                            simple_table_schema->get_schema_version(),
@@ -1181,6 +1211,7 @@ return ret;
 int ObHTableUtils::init_tablegroup_schema(share::schema::ObSchemaGetterGuard &schema_guard,
                                           ObTableApiCredential &credential,
                                           const ObString &arg_tablegroup_name,
+                                          uint64_t arg_table_id,
                                           const ObSimpleTableSchemaV2 *&simple_table_schema)
 {
   int ret = OB_SUCCESS;
@@ -1198,9 +1229,35 @@ int ObHTableUtils::init_tablegroup_schema(share::schema::ObSchemaGetterGuard &sc
       // ret = OB_NOT_SUPPORTED;
       // LOG_USER_ERROR(OB_NOT_SUPPORTED, "each Table has not one Family currently");
       // LOG_WARN("number of table in table gourp must be equal to one now", K(arg_tablegroup_name), K(table_schemas.count()), K(ret));
-      simple_table_schema = table_schemas.at(0);
+      if (arg_table_id != OB_INVALID_ID) {
+        const ObSimpleTableSchemaV2 *tmp_schema = nullptr;
+        for (int i = 0; i < table_schemas.count(); ++i) {
+          if (table_schemas.at(i)->get_table_id() == arg_table_id) {
+            tmp_schema = table_schemas.at(i);
+            break;
+          }
+        }
+        if (OB_ISNULL(tmp_schema)) {
+          ret = OB_SCHEMA_ERROR;
+          LOG_WARN("arg table id is not equal to any schema table id", K(ret), K(arg_table_id));
+        } else {
+          simple_table_schema = tmp_schema;
+        }
+      } else {
+        simple_table_schema = table_schemas.at(0);
+      }
     } else {
       simple_table_schema = table_schemas.at(0);
+      if (arg_table_id != OB_INVALID_ID) {
+        if (OB_ISNULL(simple_table_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("simple table schema is null", K(ret));
+        } else if (simple_table_schema->get_table_id() != arg_table_id) {
+          ret = OB_SCHEMA_ERROR;
+          LOG_WARN("arg table id is not equal to schema table id", K(ret), K(arg_table_id),
+                  K(simple_table_schema->get_table_id()));
+        }
+      }
     }
   }
   return ret;
@@ -1210,6 +1267,7 @@ int ObHTableUtils::init_tablegroup_schema(share::schema::ObSchemaGetterGuard &sc
 int ObHTableUtils::init_tablegroup_schema(share::schema::ObSchemaGetterGuard &schema_guard,
                                           ObTableApiCredential &credential,
                                           const ObString &arg_tablegroup_name,
+                                          uint64_t arg_table_id,
                                           const ObTableSchema *&table_schema)
 {
   int ret = OB_SUCCESS;
@@ -1223,9 +1281,35 @@ int ObHTableUtils::init_tablegroup_schema(share::schema::ObSchemaGetterGuard &sc
               K(credential.database_id_), K(arg_tablegroup_name), K(tablegroup_id));
   } else {
     if (table_schemas.count() != 1) {
-      table_schema = table_schemas.at(0);
+      if (arg_table_id != OB_INVALID_ID) {
+        const ObTableSchema *tmp_schema = nullptr;
+        for (int i = 0; i < table_schemas.count(); ++i) {
+          if (table_schemas.at(i)->get_table_id() == arg_table_id) {
+            tmp_schema = table_schemas.at(i);
+            break;
+          }
+        }
+        if (OB_ISNULL(tmp_schema)) {
+          ret = OB_SCHEMA_ERROR;
+          LOG_WARN("arg table id is not equal to any schema table id", K(ret), K(arg_table_id));
+        } else {
+          table_schema = tmp_schema;
+        }
+      } else {
+        table_schema = table_schemas.at(0);
+      }
     } else {
       table_schema = table_schemas.at(0);
+      if (arg_table_id != OB_INVALID_ID) {
+        if (OB_ISNULL(table_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("table schema is null", K(ret));
+        } else if (table_schema->get_table_id() != arg_table_id) {
+          ret = OB_SCHEMA_ERROR;
+          LOG_WARN("arg table id is not equal to schema table id", K(ret), K(arg_table_id),
+                  K(table_schema->get_table_id()));
+        }
+      }
     }
   }
   return ret;
@@ -1242,7 +1326,7 @@ int ObHTableUtils::init_schema_info(const ObString &arg_table_name,
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(init_schema_info(arg_table_name, credential, is_tablegroup_req, schema_guard,
-                               table_schmea, schema_cache_guard))) {
+                               table_schmea, schema_cache_guard, arg_table_id))) {
     LOG_WARN("fail to init schema info", K(ret), K(arg_table_name), K(credential), K(is_tablegroup_req));
   }
 
@@ -1254,7 +1338,8 @@ int ObHTableUtils::init_schema_info(const ObString &arg_table_name,
                                     bool is_tablegroup_req,
                                     share::schema::ObSchemaGetterGuard &schema_guard,
                                     const ObTableSchema *&table_schema,
-                                    ObKvSchemaCacheGuard &schema_cache_guard)
+                                    ObKvSchemaCacheGuard &schema_cache_guard,
+                                    uint64_t arg_table_id /* OB_INVALID_ID */)
 {
   int ret = OB_SUCCESS;
   if (schema_cache_guard.is_inited()) {
@@ -1267,7 +1352,7 @@ int ObHTableUtils::init_schema_info(const ObString &arg_table_name,
   /*When is_tablegroup_req is true, table_schema is not properly initialized.
     Defaulting to use the first element (index 0). */
   } else if (is_tablegroup_req &&
-            OB_FAIL(init_tablegroup_schema(schema_guard, credential, arg_table_name, table_schema))) {
+            OB_FAIL(init_tablegroup_schema(schema_guard, credential, arg_table_name, arg_table_id, table_schema))) {
     LOG_WARN("fail to get table schema from table group name", K(ret), K(credential.tenant_id_),
               K(credential.database_id_), K(arg_table_name));
   } else if (!is_tablegroup_req
@@ -1288,6 +1373,13 @@ int ObHTableUtils::init_schema_info(const ObString &arg_table_name,
     LOG_USER_ERROR(OB_ERR_OPERATION_ON_RECYCLE_OBJECT);
     LOG_WARN("table is in recycle bin, not allow to do operation", K(ret), K(credential.tenant_id_),
                 K(credential.database_id_), K(arg_table_name));
+  } else if (arg_table_id != OB_INVALID_ID
+      && !is_tablegroup_req
+      && table_schema->get_table_id() != arg_table_id) {
+    // tablegroup req has checked arg_table_id inside init_tablegroup_schema
+    ret = OB_SCHEMA_ERROR;
+    LOG_WARN("arg table id is not equal to schema table id", K(ret), K(arg_table_id),
+      K(table_schema->get_table_id()));
   } else if (OB_FAIL(schema_cache_guard.init(credential.tenant_id_,
                                              table_schema->get_table_id(),
                                              table_schema->get_schema_version(),

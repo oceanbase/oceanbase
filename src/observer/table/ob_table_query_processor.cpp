@@ -71,6 +71,7 @@ void ObTableQueryP::reset_ctx()
   result_row_count_ = 0;
   ObTableApiProcessorBase::reset_ctx();
   tb_ctx_.reset();
+  result_.reset(); // need to reset property_name considering retry
 }
 
 int ObTableQueryP::init_tb_ctx(ObTableApiCacheGuard &cache_guard)
@@ -223,6 +224,7 @@ int ObTableQueryP::query_and_result(ObTableApiScanExecutor *executor)
 int ObTableQueryP::before_process()
 {
   is_tablegroup_req_ = ObHTableUtils::is_tablegroup_req(arg_.table_name_, arg_.entity_type_);
+  retry_policy_.allow_route_retry_ = arg_.server_can_retry();
   // In HBase model, scan range columns only for odp routing, useless in server
   if (arg_.entity_type_ == ObTableEntityType::ET_HKV) {
     arg_.query_.get_scan_range_columns().reset();

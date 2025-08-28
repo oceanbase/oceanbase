@@ -45,7 +45,7 @@ ObHbaseTabletMergeIterator::ObHbaseTabletMergeIterator(ObTableExecCtx &exec_ctx,
       allocator_(ObMemAttr(MTL_ID(), "HbaseTbltMerge")),
       exec_ctx_(exec_ctx), query_(query),
       compare_(nullptr), merge_iter_(nullptr),
-      adapter_guard_(allocator_, exec_ctx)
+      adapter_guard_(allocator_)
 {
   cell_iters_.set_attr(ObMemAttr(MTL_ID(), "HbaseCellIters"));
 }
@@ -137,7 +137,8 @@ int ObHbaseTabletMergeIterator::init_cell_iters()
     ObHbaseCellRowIter *tmp_cell_row_iter = nullptr;
     if (OB_FAIL(query_tablet_ids.push_back(tablet_ids.at(i)))) {
       LOG_WARN("fail to add tablet id", K(ret), K(tablet_ids.at(i)));
-    } else if (OB_FAIL(adapter_guard_.get_hbase_adapter(hbase_adapter))) {
+    } else if (OB_FAIL(adapter_guard_.get_hbase_adapter(hbase_adapter,
+        exec_ctx_.get_schema_cache_guard().get_hbase_mode_type()))) {
       LOG_WARN("fail to get hbase adapter", K(ret));
     } else if (OB_FAIL(hbase_adapter->scan(allocator_, exec_ctx_, query_, tmp_cell_iter))) {
       LOG_WARN("fail to scan", K(ret), K_(query));

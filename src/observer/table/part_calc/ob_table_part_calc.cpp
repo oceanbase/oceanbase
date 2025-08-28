@@ -109,7 +109,7 @@ int ObTablePartCalculator::eval(const ObIArray<ObExpr *> &new_row,
                                 ObTabletID &tablet_id)
 {
   int ret = OB_SUCCESS;
-  const ObIArray<ObObj> &rowkey = static_cast<const ObTableEntity&>(entity).get_rowkey_objs();
+  ObRowkey rowkey = entity.get_rowkey();
 
   if (OB_ISNULL(tb_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -533,6 +533,84 @@ int ObTablePartCalculator::calc(const ObString table_name,
   return ret;
 }
 
+int ObTablePartCalculator::calc(const share::schema::ObSimpleTableSchemaV2 *simple_schema,
+                                ObHCfRows &same_cf_rows,
+                                bool &is_same_ls,
+                                ObLSID &ls_id)
+{
+  int ret = OB_SUCCESS;
+  ObTabletID tablet_id(ObTabletID::INVALID_TABLET_ID);
+  bool is_partitioned_table = true;
+  bool is_secondary_table = false;
+  is_same_ls = true;
+  ObLSID first_ls_id(ObLSID::INVALID_LS_ID);
+  if (!simple_schema->is_partitioned_table()) {
+    tablet_id = simple_schema->get_tablet_id();
+    is_partitioned_table = false;
+  } else if (simple_schema->get_part_level() == PARTITION_LEVEL_TWO) {
+    is_secondary_table = true;
+  }
+  // ObHCfRows -> [ObHCfRow, ...]  ObHCfRow -> [ObHCell, ...]
+  for (int i = 0; OB_SUCC(ret) && i < same_cf_rows.count(); i++) {
+    ObHCfRow &cf_row = same_cf_rows.get_cf_row(i);
+    if (!cf_row.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("cf row is invalid", K(ret));
+    } else {
+      bool is_same_timestamp = cf_row.is_same_timestamp_;
+      bool can_use_first_tablet_id = (is_partitioned_table && !is_secondary_table)
+                                     || (is_secondary_table && is_same_timestamp);
+      bool is_cache_hit = false;
+      ObLSID sec_ls_id(ObLSID::INVALID_LS_ID);
+      for (int j = 0; OB_SUCC(ret) && j < cf_row.cells_.count(); j++) {
+        // calculate or reuse tablet_id for this cell
+        bool need_get_ls_id = false;
+        bool reuse_tablet_id = false;
+        ObHCell &hcell = cf_row.cells_.at(j);
+        if (!hcell.is_valid()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("hcell is invalid", K(ret));
+        } else if (!is_partitioned_table) {
+          // do nothing
+        } else if (j > 0 && can_use_first_tablet_id) {
+          reuse_tablet_id = true;
+          tablet_id = cf_row.cells_.at(0).get_tablet_id();
+        } else if (OB_FAIL(calc(*simple_schema, hcell, tablet_id))) {
+          LOG_WARN("fail to calc part", K(ret), K(hcell));
+        }
+        if (OB_SUCC(ret)) {
+          hcell.set_tablet_id(tablet_id);
+          // situations that need to get ls_id
+            // 1. non-partitioned table first to get ls_id, this cf_rows will access only one tablet
+            // 2. partitioned table and this cell does not reuse the tablet_id calculated before
+          need_get_ls_id = is_same_ls && ((!is_partitioned_table && !first_ls_id.is_valid())
+                           || (is_partitioned_table && !reuse_tablet_id));
+          if (need_get_ls_id) {
+            if (OB_FAIL(GCTX.location_service_->get(MTL_ID(),
+                                                   tablet_id,
+                                                   0, /* expire_renew_time */
+                                                   is_cache_hit,
+                                                   sec_ls_id))) {
+              LOG_WARN("fail to get ls id", K(ret), K(MTL_ID()), K(tablet_id));
+            } else {
+              if (!first_ls_id.is_valid()) {
+                first_ls_id = sec_ls_id;
+              } else if (sec_ls_id != first_ls_id) {
+                is_same_ls = false;
+              }
+            }
+          }
+        }
+      } // end for
+    }
+  } // end for
+
+  if (OB_SUCC(ret) && is_same_ls) {
+    ls_id = first_ls_id;
+  }
+  return ret;
+}
+
 int ObTablePartCalculator::calc(const ObTableSchema &table_schema,
                                 const ObIArray<ObITableEntity*> &entities,
                                 ObIArray<ObTabletID> &tablet_ids)
@@ -555,13 +633,13 @@ int ObTablePartCalculator::calc(const ObTableSchema &table_schema,
 }
 
 int ObTablePartCalculator::calc(const ObSimpleTableSchemaV2 &simple_schema,
-                                const ObIArray<ObITableEntity*> &entities,
+                                const ObIArray<const ObITableEntity*> &entities,
                                 ObIArray<ObTabletID> &tablet_ids)
 {
   int ret = OB_SUCCESS;
   ObTabletID tablet_id(ObTabletID::INVALID_TABLET_ID);
   for (int i = 0; i < entities.count() && OB_SUCC(ret); i++) {
-    ObITableEntity *entity = entities.at(i);
+    const ObITableEntity *entity = entities.at(i);
     if (OB_ISNULL(entity)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("entity is null", K(ret));
@@ -576,12 +654,12 @@ int ObTablePartCalculator::calc(const ObSimpleTableSchemaV2 &simple_schema,
 }
 
 int ObTablePartCalculator::calc(uint64_t table_id,
-                                const ObIArray<ObITableEntity*> &entities,
+                                const ObIArray<const ObITableEntity*> &entities,
                                 ObIArray<ObTabletID> &tablet_ids)
 {
   int ret = OB_SUCCESS;
   const ObTableSchema *table_schema = nullptr;
-
+  tablet_ids.reset();
   if (OB_FAIL(get_table_schema(table_id, table_schema))) {
     LOG_WARN("fail to get table schema", K(ret), K(table_id));
   } else if (!table_schema->is_partitioned_table()) {
@@ -596,12 +674,12 @@ int ObTablePartCalculator::calc(uint64_t table_id,
 }
 
 int ObTablePartCalculator::calc(const ObString table_name,
-                                const ObIArray<ObITableEntity*> &entities,
+                                const ObIArray<const ObITableEntity*> &entities,
                                 ObIArray<ObTabletID> &tablet_ids)
 {
   int ret = OB_SUCCESS;
   const ObTableSchema *table_schema = nullptr;
-
+  tablet_ids.reset();
   if (OB_FAIL(get_table_schema(table_name, table_schema))) {
     LOG_WARN("fail to get table schema", K(ret), K(table_name));
   } else if (!table_schema->is_partitioned_table()) {
@@ -683,7 +761,7 @@ int ObTablePartCalculator::construct_entity(const ObObj *objs,
 
 int ObTablePartCalculator::check_param(const ObTableColumnInfo &col_info,
                                        const ObIArray<ObExpr *> &new_row,
-                                       const ObIArray<ObObj> &rowkey,
+                                       ObRowkey &rowkey,
                                        bool &is_min,
                                        bool &is_max)
 {
@@ -715,12 +793,12 @@ int ObTablePartCalculator::check_param(const ObTableColumnInfo &col_info,
         } else if (OB_ISNULL(tmp_datum)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("tmp_datum is null", K(ret), K(new_row), K(col_info->col_idx_));
-        } else if (col_info->col_idx_ >= rowkey.count()) {
+        } else if (col_info->col_idx_ >= rowkey.get_obj_cnt()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected column idx", K(ret), K(col_info), K(rowkey));
-        } else if (rowkey.at(col_info->col_idx_).is_min_value()) {
+        } else if (rowkey.get_obj_ptr()[col_info->col_idx_].is_min_value()) {
           is_min = true;
-        } else if (rowkey.at(col_info->col_idx_).is_max_value()) {
+        } else if (rowkey.get_obj_ptr()[col_info->col_idx_].is_max_value()) {
           is_max = true;
         }
         clear_evaluated_flag();
@@ -740,7 +818,7 @@ int ObTablePartCalculator::eval(const ObIArray<ObExpr *> &new_row,
   int ret = OB_SUCCESS;
   bool is_min = false;
   bool is_max = false;
-  const ObIArray<ObObj> &rowkey = static_cast<const ObTableEntity&>(entity).get_rowkey_objs();
+  ObRowkey rowkey = entity.get_rowkey();
 
   if (OB_ISNULL(tb_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1092,7 +1170,7 @@ int ObTablePartCalculator::calc(const ObTableSchema &table_schema,
   subpart_range.border_flag_ = range.border_flag_;
   ObDASTabletMapper tablet_mapper;
   tablet_mapper.set_table_schema(&table_schema);
-
+  tablet_ids.reset();
   if (ObPartitionLevel::PARTITION_LEVEL_ZERO == part_level) {
     if (OB_FAIL(tablet_ids.push_back(table_schema.get_tablet_id()))) {
       LOG_WARN("fail to push back tablet id", K(ret), K(tablet_ids));
@@ -1134,7 +1212,7 @@ int ObTablePartCalculator::calc(uint64_t table_id,
 {
   int ret = OB_SUCCESS;
   const ObTableSchema *table_schema = nullptr;
-
+  tablet_ids.reset();
   if (OB_FAIL(get_table_schema(table_id, table_schema))) {
     LOG_WARN("fail to get table schema", K(ret), K(table_id));
   } else if (!table_schema->is_partitioned_table()) {
@@ -1157,7 +1235,7 @@ int ObTablePartCalculator::calc(const ObString table_name,
 {
   int ret = OB_SUCCESS;
   const ObTableSchema *table_schema = nullptr;
-
+  tablet_ids.reset();
   if (OB_FAIL(get_table_schema(table_name, table_schema))) {
     LOG_WARN("fail to get table schema", K(ret), K(table_name));
   } else if (!table_schema->is_partitioned_table()) {
@@ -1179,7 +1257,7 @@ int ObTablePartCalculator::calc(uint64_t table_id,
 {
   int ret = OB_SUCCESS;
   const ObTableSchema *table_schema = nullptr;
-
+  tablet_ids.reset();
   if (OB_FAIL(get_table_schema(table_id, table_schema))) {
     LOG_WARN("fail to get table schema", K(ret), K(table_id));
   } else if (!table_schema->is_partitioned_table()) {
@@ -1209,7 +1287,7 @@ int ObTablePartCalculator::calc(const ObString table_name,
 {
   int ret = OB_SUCCESS;
   const ObTableSchema *table_schema = nullptr;
-
+  tablet_ids.reset();
   if (OB_FAIL(get_table_schema(table_name, table_schema))) {
     LOG_WARN("fail to get table schema", K(ret), K(table_name));
   } else if (!table_schema->is_partitioned_table()) {

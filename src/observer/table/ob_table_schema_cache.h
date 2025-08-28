@@ -149,7 +149,8 @@ union ObTableSchemaFlags{
     bool has_fts_index_         : 1;
     bool has_hbase_ttl_column_  : 1;
     bool is_secondary_part_     : 1;
-    uint64_t reserved_          : 54;
+    bool is_heap_table_         : 1;
+    uint64_t reserved_          : 53;
   };
 };
 
@@ -235,6 +236,7 @@ public:
   OB_INLINE const ObString& get_ttl_definition() { return ttl_definition_; }
   OB_INLINE int64_t get_auto_inc_cache_size() { return auto_inc_cache_size_; }
   OB_INLINE ObHbaseModeType get_hbase_mode_type() { return hbase_mode_type_; }
+  OB_INLINE void set_is_heap_table(bool is_heap_table) { flags_.is_heap_table_ = is_heap_table; }
 private:
   int build_index_map();
 private:
@@ -297,6 +299,7 @@ public:
   int create_schema_cache_obj(ObSchemaGetterGuard &schema_guard);
   int is_redis_ttl_table(bool &is_redis_ttl_table);
   int get_all_column_name(common::ObIArray<common::ObString> &col_names);
+  int get_hbase_column_infos(ObIArray<const ObTableColumnInfo *> &col_infos);
   int is_secondary_part_table(bool &is_secondary_part_table);
   void reset();
   OB_INLINE bool is_use_cache() { return is_use_cache_; }

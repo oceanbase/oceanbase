@@ -447,7 +447,7 @@ int ObTableLSExecuteP::HTableLSExecuteIter::find_real_table_id(const ObString &f
   int ret = OB_SUCCESS;
   real_table_id = OB_INVALID_ID;
   for (int i = 0; i < hbase_infos_.count(); ++i) {
-    if (family_name == hbase_infos_.at(i)->real_table_name_.after('$')) {
+    if (family_name.case_compare(hbase_infos_.at(i)->real_table_name_.after('$'))) {
       real_table_id = hbase_infos_.at(i)->table_id_;
       break;
     }
@@ -891,6 +891,7 @@ int ObTableLSExecuteP::before_process()
     LOG_WARN("ls op is null", K(ret));
   } else {
     is_tablegroup_req_ = ObHTableUtils::is_tablegroup_req(ls_op->get_table_name(), arg_.entity_type_);
+    retry_policy_.allow_route_retry_ = ls_op->server_can_retry();
     ret = ParentType::before_process();
   }
 
@@ -920,6 +921,10 @@ int ObTableLSExecuteP::check_arg_for_query_and_mutate(const ObTableSingleOp &sin
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "single op type is not check and insert up");
     LOG_WARN("invalid single op type", KR(ret), "single op type", single_op.get_op_type());
+  } else if (OB_NOT_NULL(simple_table_schema_) && !simple_table_schema_->is_table_with_pk()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "heap table use checkAndInsUp");
+    LOG_WARN("heap table use checkAndInsUp is not supported", K(ret));
   } else if (OB_ISNULL(query = single_op.get_query()) || OB_ISNULL(hfilter = &(query->htable_filter()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("query or htable filter is NULL", K(ret), KP(query));
@@ -1056,7 +1061,7 @@ int ObTableLSExecuteP::old_try_process()
     LOG_WARN("unexpected null callback", K(ret));
   } else if (FALSE_IT(cb_result = &cb_->get_result())) {
   } else if (!is_hkv) { // table api
-    if (OB_FAIL(init_schema_info(table_id, arg_table_name))) {
+    if (OB_FAIL(init_schema_info(arg_table_name, table_id))) {
       if (ret == OB_TABLE_NOT_EXIST) {
         ObString db("");
         const ObString &table_name = ls_op.get_table_name();
@@ -1114,8 +1119,7 @@ int ObTableLSExecuteP::new_try_process()
   if (OB_ISNULL(arg_.ls_op_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls op is null", K(ret));
-  } else if (OB_FAIL(init_table_schema_info(arg_.ls_op_->get_table_id(),
-      arg_.ls_op_->get_table_name(), !is_tablegroup_req_))) {
+  } else if (OB_FAIL(init_table_schema_info(arg_.ls_op_->get_table_name(), arg_.ls_op_->get_table_id()))) {
     if (ret == OB_TABLE_NOT_EXIST) {
       ObString db("");
       ObCStringHelper helper;
@@ -1223,10 +1227,10 @@ int ObTableLSExecuteP::try_process()
   if (OB_FAIL(ret)) {
   } else if (is_new_try_process()) {
     if (OB_FAIL(new_try_process())) {
-      LOG_WARN("fail to new try process", K(ret));
+      LOG_WARN("fail to new try process", K(ret), K_(retry_count));
     }
   } else if (OB_FAIL(old_try_process())) {
-    LOG_WARN("fail to old try process", K(ret));
+    LOG_WARN("fail to old try process", K(ret), K_(retry_count));
   }
 
 #ifndef NDEBUG

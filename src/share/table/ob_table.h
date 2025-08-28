@@ -28,10 +28,13 @@
 #include "rpc/obrpc/ob_poc_rpc_server.h"
 
 #include "share/table/ob_table_ttl_common.h"
+#include "share/schema/ob_table_schema.h"
 #include "common/rowkey/ob_rowkey.h"
 #include "common/ob_role.h"
 #include "common/row/ob_row.h"
 #include "lib/oblog/ob_warning_buffer.h"
+#include "share/schema/ob_table_schema.h"
+
 namespace oceanbase
 {
 namespace common
@@ -46,6 +49,7 @@ namespace table
 #define OB_TABLE_OPTION_RETURNING_ROWKEY (INT64_C(1) << 0)
 #define OB_TABLE_OPTION_USE_PUT (INT64_C(1) << 1)
 #define OB_TABLE_OPTION_RETURN_ONE_RES (INT64_C(1) << 2)
+#define OB_TABLE_OPTION_SERVER_CAN_RETRY (INT64_C(1) << 3)
 
 using common::ObString;
 using common::ObRowkey;
@@ -69,7 +73,8 @@ enum class ObTableEntityType
   ET_DYNAMIC = 0,
   ET_KV = 1,
   ET_HKV = 2,
-  ET_REDIS = 3
+  ET_REDIS = 3,
+  ET_HKV_V2 = 4
 };
 class ObHTableCellEntity;
 
@@ -205,7 +210,7 @@ public:
   virtual int get_property(const ObString &prop_name, ObObj &prop_value) const = 0;
   virtual int get_properties(ObIArray<std::pair<ObString, ObObj> > &properties) const = 0; // @todo property iterator
   virtual int get_properties_names(ObIArray<ObString> &properties) const = 0;
-  virtual int get_properties_values(ObIArray<ObObj> &properties_values) const = 0;
+  virtual int get_properties_values(ObIArray<ObObj*> &properties_values) const = 0;
   virtual const ObObj &get_properties_value(int64_t idx) const = 0;
   virtual int64_t get_properties_count() const = 0;
   virtual void set_dictionary(const ObIArray<ObString> *all_rowkey_names, const ObIArray<ObString> *all_properties_names) = 0;
@@ -220,7 +225,7 @@ public:
   int deep_copy_rowkey(common::ObIAllocator &allocator, const ObITableEntity &other);
   int deep_copy_properties(common::ObIAllocator &allocator, const ObITableEntity &other);
   virtual int add_retrieve_property(const ObString &prop_name);
-  void set_allocator(common::ObIAllocator *alloc) { alloc_ = alloc; }
+  virtual void set_allocator(common::ObIAllocator *alloc) { alloc_ = alloc; }
   common::ObIAllocator *get_allocator() { return alloc_; }
   virtual common::ObTabletID get_tablet_id() const { return common::ObTabletID(ObTabletID::INVALID_TABLET_ID); }
   virtual void set_tablet_id(common::ObTabletID tablet_id) { UNUSED(tablet_id); }
@@ -263,7 +268,7 @@ public:
   virtual int push_value(const ObObj &prop_value);
   virtual int get_properties(ObIArray<std::pair<ObString, ObObj> > &properties) const override;
   virtual int get_properties_names(ObIArray<ObString> &properties_names) const override;
-  virtual int get_properties_values(ObIArray<ObObj> &properties_values) const override;
+  virtual int get_properties_values(ObIArray<ObObj*> &properties_values) const override;
   virtual const ObObj &get_properties_value(int64_t idx) const override;
   virtual int64_t get_properties_count() const override;
   virtual void set_dictionary(const ObIArray<ObString> *all_rowkey_names, const ObIArray<ObString> *all_properties_names) override;
@@ -1458,7 +1463,7 @@ public:
   void reset_except_property();
   void rewind();
   virtual int get_next_entity(const ObITableEntity *&entity) override;
-  virtual int get_htable_all_entity(ObIArray<ObITableEntity*> &entities);
+  virtual int get_htable_all_entity(ObIArray<const ObITableEntity*> &entities);
   int add_property_name(const ObString &name);
   int assign_property_names(const common::ObIArray<common::ObString> &other);
   // for aggregation
@@ -1773,7 +1778,8 @@ public:
   TO_STRING_KV(K_(index_name),
                K_(scan_range_columns),
                K_(key_ranges),
-               K_(filter_string));
+               K_(filter_string),
+               K_(tablet_ids));
 private:
   ObTableBitMap scan_range_cols_bp_;
   const ObIArray<ObString> *all_rowkey_names_; // do not serialize
@@ -2113,6 +2119,7 @@ public:
   OB_INLINE const ObIArray<ObString>& get_all_properties_names() {return properties_names_; }
   OB_INLINE bool is_same_type() const { return is_same_type_; }
   OB_INLINE bool is_same_properties_names() const { return is_same_properties_names_; }
+  OB_INLINE bool server_can_retry() const { return server_can_retry_; }
   OB_INLINE bool return_one_result() const { return return_one_result_; }
   OB_INLINE bool need_all_prop_bitmap() const { return need_all_prop_bitmap_; }
   void shaddow_copy_without_op(const ObTableLSOp &other);
@@ -2195,6 +2202,195 @@ private:
   int ret_;
   common::ObIAllocator *allocator_;
   ObString msg_;
+};
+
+class ObHCell : public ObITableEntity
+{
+  OB_UNIS_VERSION_V(1);
+public:
+  ObHCell()
+    : ObITableEntity(),
+      tablet_id_()
+  {}
+  ~ObHCell()
+  {
+    reset();
+  }
+  TO_STRING_KV(K_(tablet_id), K_(objs));
+public:
+  virtual void set_allocator(common::ObIAllocator *alloc) override { objs_.set_allocator(alloc); }
+  virtual ObTableEntityType get_entity_type() const override;
+  virtual void reset() override;
+  virtual int set_rowkey(const ObRowkey &rowkey) override;
+  virtual int set_rowkey(const ObITableEntity &other) override;
+  virtual int set_rowkey_value(int64_t idx, const ObObj &value) override;
+  virtual int add_rowkey_value(const ObObj &value) override;
+  virtual int64_t get_rowkey_size() const override;
+  virtual int get_rowkey_value(int64_t idx, ObObj &value) const override;
+  virtual ObRowkey get_rowkey() const override;
+  virtual int64_t hash_rowkey() const override;
+  virtual int set_property(const ObString &prop_name, const ObObj &prop_value) override;
+  virtual int get_property(const ObString &prop_name, ObObj &prop_value) const override;
+  virtual int get_properties(ObIArray<std::pair<ObString, ObObj> > &properties) const override;
+  virtual int get_properties_names(ObIArray<ObString> &properties) const override;
+  virtual int get_properties_values(ObIArray<ObObj*> &properties_values) const override;
+  virtual const ObObj &get_properties_value(int64_t idx) const override;
+  virtual int64_t get_properties_count() const override;
+  virtual void set_dictionary(const ObIArray<ObString> *all_rowkey_names, const ObIArray<ObString> *all_properties_names) override;
+  virtual void set_is_same_properties_names(bool is_same_properties_names) override;
+  virtual int construct_names_bitmap(const ObITableEntity& req_entity) override;
+  virtual const ObTableBitMap *get_rowkey_names_bitmap() const override;
+  virtual const ObTableBitMap *get_properties_names_bitmap() const override;
+  virtual const ObIArray<ObString>* get_all_rowkey_names() const override;
+  virtual const ObIArray<ObString>* get_all_properties_names() const override;
+  virtual common::ObTabletID get_tablet_id() const override;
+  virtual void set_tablet_id(common::ObTabletID tablet_id) override;
+public:
+  bool is_valid() { return objs_.count() > 0; }
+  int64_t count() const { return objs_.count(); }
+  int get_cell_obj(int64_t idx, ObObj &obj) const;
+  ObObj* get_cell_obj(int64_t idx)
+  {
+    ObObj *obj = nullptr;
+    if (idx < 0 || idx >= objs_.count()) {
+    } else {
+      obj = &objs_[idx];
+    }
+    return obj;
+  }
+private:
+  ObTabletID tablet_id_; // do not serialize
+  common::ObFixedArray<ObObj, ObIAllocator> objs_; // K Q T V (TTL)
+};
+
+class ObHCfRow
+{
+public:
+  ObHCfRow()
+    : flags_(0),
+      real_table_name_(),
+      key_index_(-1),
+      cells_()
+  {}
+
+  ObHCfRow(const ObString &real_table_name, int64_t key_index, common::ObIAllocator &allocator)
+    : flags_(0),
+      real_table_name_(real_table_name),
+      key_index_(key_index),
+      cells_(allocator)
+  {}
+  ~ObHCfRow() {
+    reset();
+  }
+  void reset()
+  {
+    flags_ = 0;
+    real_table_name_.reset();
+    key_index_ = -1;
+    cells_.reset();
+  }
+  OB_INLINE void set_key_index(int64_t key_index) { key_index_ = key_index; }
+  bool is_valid() const
+  {
+    return real_table_name_ != ObString::make_empty_string()
+           && key_index_ != -1
+           && cells_.count() > 0;
+  }
+  TO_STRING_KV(K_(real_table_name), K_(flags), K_(key_index), K_(cells));
+public:
+  union {
+    uint64_t flags_;
+    bool is_same_timestamp_ : 1; // set for the same T cells
+    uint64_t reserve_   : 63;
+  };
+  ObString real_table_name_;
+  int64_t key_index_;
+  common::ObFixedArray<ObHCell, ObIAllocator> cells_; // same Row cells
+};
+
+class ObHCfRows
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObHCfRows()
+    : deserialize_alloc_(nullptr),
+      now_ms_(-1),
+      simple_table_schema_(nullptr),
+      keys_(nullptr),
+      real_table_name_()
+  {}
+
+  ObHCfRows(const ObString &real_table_name, int64_t now_ms, common::ObIAllocator &allocator)
+    : deserialize_alloc_(&allocator),
+      now_ms_(now_ms),
+      simple_table_schema_(nullptr),
+      keys_(nullptr),
+      real_table_name_(real_table_name),
+      rows_(allocator)
+  {}
+  ~ObHCfRows() {
+    reset();
+  }
+  void reset()
+  {
+    deserialize_alloc_ = nullptr;
+    now_ms_ = -1;
+    simple_table_schema_ = nullptr;
+    keys_ = nullptr;
+    real_table_name_.reset();
+    rows_.reset();
+  }
+  OB_INLINE void set_keys(common::ObFixedArray<ObObj, ObIAllocator> *keys)
+  {
+    keys_ = keys;
+  }
+  OB_INLINE void set_table_schema(const share::schema::ObSimpleTableSchemaV2 *simple_table_schema)
+  {
+    simple_table_schema_ = simple_table_schema;
+  }
+  OB_INLINE int64_t count() const { return rows_.count(); }
+  OB_INLINE const share::schema::ObSimpleTableSchemaV2 *get_table_schema() const { return simple_table_schema_; }
+  OB_INLINE ObObj &get_key(int64_t idx) const { return keys_->at(idx); }
+  OB_INLINE const ObHCfRow &get_cf_row(int64_t idx) const { return rows_[idx]; }
+  OB_INLINE ObHCfRow &get_cf_row(int64_t idx) { return rows_[idx]; }
+  OB_INLINE int64_t get_cell_count() const
+  {
+    int64_t cell_cnt = 0;
+    for (int64_t i = 0; i < rows_.count(); i++) {
+      cell_cnt += rows_[i].cells_.count();
+    }
+    return cell_cnt;
+  }
+  TO_STRING_KV(K_(now_ms), K_(real_table_name), K_(rows));
+public:
+  common::ObIAllocator *deserialize_alloc_; // do not serialize
+  int64_t now_ms_; // used for unify timestamp, do not serialize
+  const share::schema::ObSimpleTableSchemaV2 *simple_table_schema_; // do not serialize
+  common::ObFixedArray<ObObj, ObIAllocator> *keys_; // used for constructing ObHCfRow, do not serialize
+  ObString real_table_name_;
+  common::ObFixedArray<ObHCfRow, ObIAllocator> rows_;
+};
+
+class ObHBaseCellResult final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObHBaseCellResult()
+    : key_index_(-1)
+  {
+    properties_values_.set_attr(ObMemAttr(MTL_ID(), "HTbCellPV"));
+  }
+
+  ObHBaseCellResult(int64_t key_index)
+    : key_index_(key_index)
+  {
+    properties_values_.set_attr(ObMemAttr(MTL_ID(), "HTbCellPV"));
+  }
+  ~ObHBaseCellResult() = default;
+  TO_STRING_KV(K_(key_index), K_(properties_values));
+private:
+  int64_t key_index_; // used for mapping to the right HBase operation in client
+  ObSEArray<ObObj, 32> properties_values_;
 };
 
 class ObTableMetaRequest final
