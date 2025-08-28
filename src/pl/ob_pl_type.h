@@ -956,7 +956,8 @@ public:
     ref_count_(0),
     is_scrollable_(false),
     last_execute_time_(0),
-    last_stream_cursor_(false)
+    last_stream_cursor_(false),
+    cursor_total_exec_time_(0)
   {
     reset();
   }
@@ -975,7 +976,8 @@ public:
     snapshot_(),
     is_need_check_snapshot_(false),
     last_execute_time_(0),
-    last_stream_cursor_(false)
+    last_stream_cursor_(false),
+    cursor_total_exec_time_(0)
   {
     reset();
   }
@@ -1028,6 +1030,7 @@ public:
     is_need_check_snapshot_ = false;
     sql_trace_id_.reset();
     is_packed_ = false;
+    cursor_total_exec_time_ = 0;
   }
 
   void reset()
@@ -1180,6 +1183,9 @@ public:
   inline void set_packed(bool is_packed) { is_packed_ = is_packed; }
   inline bool is_packed() { return is_packed_; }
 
+  inline int64_t get_cursor_total_exec_time() const { return cursor_total_exec_time_; }
+  inline void add_cursor_exec_time(int64_t time) { cursor_total_exec_time_ += time; }
+
   TO_STRING_KV(K_(id),
                K_(is_explicit),
                K_(for_update),
@@ -1206,7 +1212,8 @@ public:
                K_(is_need_check_snapshot),
                K_(last_execute_time),
                K_(sql_trace_id),
-               K_(is_packed));
+               K_(is_packed),
+               K_(cursor_total_exec_time));
 
 protected:
   int64_t id_;            // Cursor ID
@@ -1243,6 +1250,7 @@ protected:
   bool last_stream_cursor_; // cursor复用场景下，记录上一次是否是流式cursor
   ObCurTraceId::TraceId sql_trace_id_; // trace id of cursor sql statement
   bool is_packed_;
+  int64_t cursor_total_exec_time_;
 };
 
 class ObPLGetCursorAttrInfo

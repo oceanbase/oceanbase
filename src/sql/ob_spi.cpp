@@ -3795,7 +3795,7 @@ int ObSPIService::streaming_cursor_open(ObPLExecCtx *ctx,
         ObPLSubPLSqlTimeGuard guard(ctx);
         ObPLSPITraceIdGuard trace_id_guard(sql, ps_sql, session_info, ret);
         ObPLSqlAuditGuard audit_guard(
-          *(ctx->exec_ctx_), session_info, *spi_result, audit_record, ret, (sql != NULL ? sql : ps_sql), retry_ctrl, trace_id_guard, static_cast<stmt::StmtType>(type));
+          *(ctx->exec_ctx_), session_info, *spi_result, audit_record, ret, (sql != NULL ? sql : ps_sql), retry_ctrl, trace_id_guard, static_cast<stmt::StmtType>(type), &cursor);
         ObSPIRetryCtrlGuard retry_guard(retry_ctrl, *spi_result, session_info, ret);
 
         if (OB_FAIL(ret)) {
@@ -4335,7 +4335,7 @@ int ObSPIService::do_cursor_fetch(ObPLExecCtx *ctx,
       ObPLSPITraceIdGuard trace_id_guard(sql, ps_sql, *session, ret, cursor->get_sql_trace_id()); \
       ObPLSubPLSqlTimeGuard guard(ctx);                                               \
       ObPLSqlAuditGuard audit_guard(                                                  \
-        *(ctx->exec_ctx_), *session, *spi_result, audit_record, ret, ps_sql, retry_ctrl, trace_id_guard, spi_result->get_sql_ctx().stmt_type_); \
+        *(ctx->exec_ctx_), *session, *spi_result, audit_record, ret, ps_sql, retry_ctrl, trace_id_guard, spi_result->get_sql_ctx().stmt_type_, cursor); \
       if (cursor->get_sql_trace_id()->is_invalid()                                    \
             && OB_NOT_NULL(ObCurTraceId::get_trace_id())) {                           \
         cursor->get_sql_trace_id()->set(*ObCurTraceId::get_trace_id());               \
