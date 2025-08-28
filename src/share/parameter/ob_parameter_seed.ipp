@@ -2981,6 +2981,11 @@ DEF_BOOL(_extend_sql_plan_monitor_metrics, OB_TENANT_PARAMETER, "True",
         "Extend sql plan monitor metrics.",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+ERRSIM_DEF_INT(errsim_backup_clean_override_expired_time, OB_CLUSTER_PARAMETER, "0", "[0,)",
+        "override backup clean expired_time or expired_scn in errsim"
+        "Range: [0,) in integer",
+        ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_BOOL(_enable_insertup_column_store_opt, OB_TENANT_PARAMETER, "True",
         "Enable or disable insert up optimization path for column store.",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

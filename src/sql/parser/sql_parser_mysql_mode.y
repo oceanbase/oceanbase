@@ -270,7 +270,7 @@ END_P SET_VAR DELIMITER
         ACCESS ACCESS_INFO ACCESSID ACCESSKEY ACCESSTYPE ACCOUNT ACTION ACTIVE ADDDATE AFTER AGAINST AGGREGATE AI ALGORITHM ALL_META ALL_USER ALWAYS ALLOW ANALYSE ANY
         APPID APPROX_COUNT_DISTINCT APPROX_COUNT_DISTINCT_SYNOPSIS APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE
         ARBITRATION ARRAY ASCII ASIS AT ATTRIBUTE AUTHORS AUTO AUTOEXTEND_SIZE AUTO_INCREMENT AUTO_INCREMENT_MODE AUTO_INCREMENT_CACHE_SIZE
-        AVG AVG_ROW_LENGTH ACTIVATE AVAILABILITY ARCHIVELOG ASYNCHRONOUS AUDIT ADMIN AUTO_REFRESH API_MODE APPROX APPROXIMATE ARRAY_AGG ARRAY_FILTER ARRAY_FIRST ARRAY_MAP ARRAY_SORTBY
+        AVG AVG_ROW_LENGTH ACTIVATE AVAILABILITY ARCHIVELOG ARCHIVELOG_PIECE ASYNCHRONOUS AUDIT ADMIN AUTO_REFRESH API_MODE APPROX APPROXIMATE ARRAY_AGG ARRAY_FILTER ARRAY_FIRST ARRAY_MAP ARRAY_SORTBY
 
         BACKUP BACKUP_COPIES BALANCE BANDWIDTH BASE BASELINE BASELINE_ID BASIC BEGI BINDING SHARDING BINARY_FORMAT BINLOG BIT BIT_AND
         BIT_OR BIT_XOR BLOCK BLOCK_INDEX BLOCK_SIZE BLOOM_FILTER BOOL BOOLEAN BOOTSTRAP BTREE BYTE
@@ -509,7 +509,7 @@ END_P SET_VAR DELIMITER
 %type <node> set_transaction_stmt transaction_characteristics transaction_access_mode isolation_level
 %type <node> lock_tables_stmt unlock_tables_stmt lock_type lock_table_list lock_table opt_local
 %type <node> flashback_stmt purge_stmt opt_flashback_rename_table opt_flashback_rename_database opt_flashback_rename_tenant
-%type <node> tenant_name_list opt_tenant_list tenant_list_tuple cache_type flush_scope opt_zone_list
+%type <node> tenant_name_list opt_tenant_list tenant_list_tuple cache_type flush_scope opt_zone_list backup_id_list delete_backup_all_type
 %type <node> into_opt into_clause field_opt field_term field_term_list line_opt line_term line_term_list into_var_list into_var file_partition_opt file_opt file_option_list file_option file_size_const binary_format
 %type <node> string_list text_string string_val_list ulong_num
 %type <node> balance_task_type opt_balance_task_type balance_job_op
@@ -535,7 +535,7 @@ END_P SET_VAR DELIMITER
 %type <node> permanent_tablespace permanent_tablespace_options permanent_tablespace_option alter_tablespace_actions alter_tablespace_action alter_tablespace_options opt_force_purge
 %type <node> opt_tablespace_option opt_tablespace_options opt_tablespace_engine opt_alter_tablespace_option opt_alter_tablespace_options
 %type <node> opt_sql_throttle_for_priority opt_sql_throttle_using_cond sql_throttle_one_or_more_metrics sql_throttle_metric
-%type <node> opt_copy_id opt_backup_dest opt_backup_backup_dest opt_tenant_info opt_with_active_piece get_format_unit opt_backup_tenant_list opt_backup_to opt_description policy_name opt_recovery_window opt_redundancy opt_backup_copies opt_restore_until opt_encrypt_key
+%type <node> opt_copy_id opt_backup_dest backup_dest opt_backup_backup_dest opt_tenant_info opt_with_active_piece get_format_unit opt_backup_tenant_list opt_backup_to opt_description policy_name opt_recovery_window opt_redundancy opt_backup_copies opt_restore_until opt_encrypt_key
 %type <node> opt_recover_tenant recover_table_list recover_table_relation_name restore_remap_list remap_relation_name table_relation_name opt_recover_remap_item_list restore_remap_item_list restore_remap_item remap_item remap_table_val opt_tenant
 %type <node> opt_restore_with_config_list restore_with_config_list restore_with_config restore_with_item ls_attr_list
 %type <node> new_or_old new_or_old_column_ref diagnostics_info_ref
@@ -21083,32 +21083,31 @@ alter_with_opt_hint SYSTEM CANCEL ALL BACKUP FORCE
   malloc_non_terminal_node($$, result->malloc_pool_, T_BACKUP_MANAGE, 2, type, value);
 }
 |
-alter_with_opt_hint SYSTEM DELETE BACKUPSET INTNUM opt_copy_id opt_backup_tenant_list opt_description
+alter_with_opt_hint SYSTEM DELETE delete_backup_all_type backup_id_list opt_backup_tenant_list opt_description
 {
   (void)($1);
   ParseNode *type = NULL;
   malloc_terminal_node(type, result->malloc_pool_, T_INT);
-  type->value_ = 1;
+  type->value_ = $4->value_;
 
   ParseNode *value = NULL;
-  malloc_terminal_node(value, result->malloc_pool_, T_INT);
-  value->value_ = $5->value_;
-
-  malloc_non_terminal_node($$, result->malloc_pool_, T_BACKUP_CLEAN, 5, type, value, $8, $6, $7);
+  value = $5; // backup_id_list
+  malloc_non_terminal_node($$, result->malloc_pool_, T_BACKUP_CLEAN, 4, type, value, $7, $6);
 }
 |
-alter_with_opt_hint SYSTEM DELETE BACKUPPIECE INTNUM opt_copy_id opt_backup_tenant_list opt_description
+alter_with_opt_hint SYSTEM DELETE BACKUP ALL backup_dest opt_backup_tenant_list opt_description
 {
   (void)($1);
+  (void)($7);
   ParseNode *type = NULL;
   malloc_terminal_node(type, result->malloc_pool_, T_INT);
-  type->value_ = 2;
+  type->value_ = 3;
 
-  ParseNode *value = NULL;
-  malloc_terminal_node(value, result->malloc_pool_, T_INT);
-  value->value_ = $5->value_;
-
-  malloc_non_terminal_node($$, result->malloc_pool_, T_BACKUP_CLEAN, 5, type, value, $8, $6, $7);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_BACKUP_CLEAN, 4,
+                           type,   // -> children_[0] (type)
+                           $6,     // -> children_[1] (dest_path)
+                           $8,     // -> children_[2] (opt_description)
+                           $7);    // -> children_[3] (opt_backup_tenant_list)
 }
 |
 alter_with_opt_hint SYSTEM DELETE OBSOLETE BACKUP opt_backup_tenant_list opt_description
@@ -21795,6 +21794,28 @@ relation_name_or_string
 }
 ;
 
+backup_id_list:
+INTNUM {
+  $$ = $1;
+}
+| backup_id_list ',' INTNUM {
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+}
+;
+
+delete_backup_all_type:
+  BACKUPSET
+  {
+    malloc_terminal_node($$, result->malloc_pool_, T_INT);
+    $$->value_ = 1; // 1 represents BACKUPSET
+  }
+| ARCHIVELOG_PIECE
+  {
+    malloc_terminal_node($$, result->malloc_pool_, T_INT);
+    $$->value_ = 2; // 2 represents BACKUPPIECE
+  }
+;
+
 flush_scope:
 GLOBAL
 {
@@ -21941,6 +21962,18 @@ STRING_VALUE
 | server_list ',' STRING_VALUE
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+}
+;
+
+backup_dest:
+NAME_OB opt_equal_mark STRING_VALUE
+{
+  (void)($2);
+  ParseNode *dest_info = NULL;
+  malloc_non_terminal_node(dest_info, result->malloc_pool_, T_LINK_NODE, 1, $3);
+  dest_info->str_value_ = $1->str_value_;
+  dest_info->str_len_ = $1->str_len_;
+  $$ = dest_info;
 }
 ;
 
@@ -26019,6 +26052,7 @@ ACCESS_INFO
 |       APPROX_COUNT_DISTINCT_SYNOPSIS
 |       APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE
 |       ARCHIVELOG
+|       ARCHIVELOG_PIECE
 |       ARBITRATION
 |       ARRAY
 |       ASIS

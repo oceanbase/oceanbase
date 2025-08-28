@@ -332,6 +332,13 @@ public:
 
   bool is_valid() const override;
 
+  void reset() {
+    dest_id_ = 0;
+    round_id_ = 0;
+    piece_id_ = 0;
+    filelist_.reset();
+  }
+
   INHERIT_TO_STRING_KV("ObExternArchiveDesc", ObExternArchiveDesc, K_(dest_id), K_(round_id), K_(piece_id), K_(filelist));
 };
 

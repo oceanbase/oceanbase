@@ -2630,7 +2630,6 @@ int ObBackupCleanExecutor::execute(ObExecContext &ctx, ObBackupCleanStmt &stmt)
   ObTaskExecutorCtx *task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx);
   ObCommonRpcProxy *common_proxy = NULL;
   common::ObCurTraceId::mark_user_request();
-
   if (OB_ISNULL(task_exec_ctx)) {
     ret = OB_NOT_INIT;
     LOG_WARN("get task executor context failed");
@@ -2640,19 +2639,24 @@ int ObBackupCleanExecutor::execute(ObExecContext &ctx, ObBackupCleanStmt &stmt)
   } else {
     LOG_INFO("ObBackupCleanExecutor::execute", K(stmt), K(ctx));
     obrpc::ObBackupCleanArg arg;
+    arg.tenant_id_ = stmt.get_tenant_id();
     arg.initiator_tenant_id_ = stmt.get_tenant_id();
     arg.type_ = stmt.get_type();
-    arg.value_ = stmt.get_value();
-    arg.dest_id_ = stmt.get_copy_id();
+    arg.dest_type_ = stmt.get_dest_type();
+    arg.dest_id_ = 0;  // TODO(yuhan): copy_id is not used for now, I will deal it later
     if (OB_FAIL(arg.description_.assign(stmt.get_description()))) {
       LOG_WARN("set clean description failed", K(ret));
     } else if (OB_FAIL(arg.clean_tenant_ids_.assign(stmt.get_clean_tenant_ids()))) {
       LOG_WARN("set clean tenant ids failed", K(ret));
+    } else if (OB_FAIL(arg.set_value_array(stmt.get_value()))) {
+      LOG_WARN("set clean value failed", K(ret));
+    } else if (OB_FAIL(arg.dest_path_.assign(stmt.get_dest_path()))) {
+      LOG_WARN("set dest path failed", K(ret));
     } else if (OB_FAIL(common_proxy->backup_delete(arg))) {
       LOG_WARN("backup clean rpc failed", K(ret), K(arg), "dst", common_proxy->get_server());
     }
   }
-  FLOG_INFO("ObBackupCleanExecutor::execute");
+  LOG_INFO("clean execute end", K(ret), K(stmt));
   return ret;
 }
 

@@ -70,6 +70,7 @@ public:
   static int calc_start_replay_scn(const share::ObBackupSetTaskAttr &set_task_attr,
       const storage::ObBackupLSMetaInfosDesc &ls_meta_infos, const share::ObTenantArchiveRoundAttr &round_attr,
       share::SCN &start_replay_scn);
+  static int check_tenant_backup_dest_exists(const uint64_t tenant_id, bool &exists, common::ObISQLClient &sql_proxy);
 private:
   static int check_tablet_minor_sstable_validity_(const storage::ObTabletHandle &tablet_handle,
       const common::ObIArray<storage::ObSSTableWrapper> &minor_sstable_array);
@@ -96,6 +97,8 @@ private:
       const share::SCN &mview_dep_scn,
       const storage::ObSSTableArray *major_sstable_array_ptr,
       common::ObIArray<storage::ObSSTableWrapper> &sstable_array);
+  static int lock_policy_table_then_check(
+      common::ObMySQLTransaction &trans, const uint64_t tenant_id, bool &policy_exists, bool log_only);
 };
 
 struct ObBackupTabletCtx final {

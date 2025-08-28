@@ -19,7 +19,10 @@
 #include "ob_backup_connectivity.h"
 #include "share/backup/ob_backup_connectivity.h"
 #include "share/backup/ob_tenant_archive_mgr.h"
+#include "share/backup/ob_backup_clean_util.h"
+#include "share/ob_rpc_struct.h"
 #include "share/ob_license_utils.h"
+
 
 using namespace oceanbase;
 using namespace share;
@@ -431,7 +434,6 @@ int ObDataBackupDestConfigParser::check_before_update_inner_config(obrpc::ObSrvR
   int ret = OB_SUCCESS;
   bool is_doing = false;
   ObBackupDest dest;
-  bool is_exist = false;
   share::ObBackupPathString backup_dest;
   share::ObBackupStore store;
   int64_t dest_id = 0;
@@ -535,7 +537,6 @@ int ObDataBackupDestConfigParser::update_inner_config_table(common::ObISQLClient
       LOG_WARN("fail to assign backup dest", K(ret), K_(tenant_id));
     }
   }
-  
   if (FAILEDx(update_data_backup_dest_config_(trans))) {
     LOG_WARN("fail to update data backup dest config", K(ret), K_(tenant_id));
   } else {
@@ -1203,5 +1204,88 @@ int ObChangeExternalStorageDestMgr::set_attribute(const common::ObString &attrib
     LOG_WARN("failed to parse attribute", K(ret), K(attribute));
   }
 
+  return ret;
+}
+
+int ObBackupConfigUtil::admin_set_backup_config(
+    common::ObMySQLProxy &sql_proxy,
+    obrpc::ObSrvRpcProxy &rpc_proxy,
+    share::schema::ObMultiVersionSchemaService &schema_service,
+    const obrpc::ObAdminSetConfigArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (!arg.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid backup config arg", K(ret));
+  } else if (!arg.is_backup_config_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("admin set config type not backup config", K(ret), K(arg));
+  }
+  share::BackupConfigItemPair config_item;
+  share::ObBackupConfigParserMgr config_parser_mgr;
+  ARRAY_FOREACH_X(arg.items_, i , cnt, OB_SUCC(ret)) {
+    const obrpc::ObAdminSetConfigItem &item = arg.items_.at(i);
+    uint64_t exec_tenant_id = OB_INVALID_TENANT_ID;
+    ObMySQLTransaction trans;
+    config_parser_mgr.reset();
+    if ((common::is_sys_tenant(item.exec_tenant_id_) && item.tenant_name_.is_empty())
+        || (common::is_user_tenant(item.exec_tenant_id_) && !item.tenant_name_.is_empty())
+        || common::is_meta_tenant(item.exec_tenant_id_)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("backup config only support user tenant", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "backup config only support user tenant");
+    } else if (!item.tenant_name_.is_empty()) {
+      schema::ObSchemaGetterGuard guard;
+      if (OB_FAIL(schema_service.get_tenant_schema_guard(OB_SYS_TENANT_ID, guard))) {
+        LOG_WARN("fail to get tenant schema guard", K(ret));
+      } else if (OB_FAIL(guard.get_tenant_id(ObString(item.tenant_name_.ptr()), exec_tenant_id))) {
+        LOG_WARN("fail to get tenant id", K(ret));
+      }
+    } else {
+      exec_tenant_id = item.exec_tenant_id_;
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(trans.start(&sql_proxy, gen_meta_tenant_id(exec_tenant_id)))) {
+      LOG_WARN("fail to start trans", K(ret));
+    } else {
+      // Only lock policy table and check log_only policy when setting backup_dest
+      bool need_lock_and_check = (0 == strcmp(item.name_.ptr(), share::OB_STR_DATA_BACKUP_DEST));
+      if (need_lock_and_check) {
+        bool exists = false;
+        if (OB_FAIL(ObBackupCleanUtil::lock_policy_table_then_check(trans, exec_tenant_id, exists, true/*log_only*/))) {
+          LOG_WARN("fail to check log only policy exist", K(ret));
+        } else if (exists) {
+          ret = OB_BACKUP_DEST_NOT_ALLOWED_TO_SET;
+          LOG_WARN("log_only policy exists, cannot set backup_dest", K(ret), K(exec_tenant_id));
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        common::ObSqlString name;
+        common::ObSqlString value;
+        if (OB_FAIL(name.assign(item.name_.ptr()))) {
+          LOG_WARN("fail to assign name", K(ret));
+        } else if (OB_FAIL(value.assign(item.value_.ptr()))) {
+          LOG_WARN("fail to assign value", K(ret));
+        } else if (OB_FAIL(config_parser_mgr.init(name, value, exec_tenant_id))) {
+          LOG_WARN("fail to init backup config parser mgr", K(ret), K(item));
+        } else if (OB_FAIL(config_parser_mgr.update_inner_config_table(rpc_proxy, trans))) {
+          LOG_WARN("fail to update inner config table", K(ret));
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(trans.end(true))) {
+          LOG_WARN("fail to commit trans", K(ret));
+        }
+      } else {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_SUCCESS != (tmp_ret = trans.end(false))) {
+          LOG_WARN("fail to rollback trans", K(tmp_ret));
+        }
+      }
+    }
+  }
   return ret;
 }

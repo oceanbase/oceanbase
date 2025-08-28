@@ -14,6 +14,7 @@ ob_set_subtarget(ob_rootserver backup
   backup/ob_backup_clean_ls_task_mgr.cpp
   backup/ob_backup_clean_scheduler.cpp
   backup/ob_backup_clean_task_mgr.cpp
+  backup/ob_backup_clean_selector.cpp
   backup/ob_backup_service.cpp
   backup/ob_backup_schedule_task.cpp
   backup/ob_backup_task_scheduler.cpp

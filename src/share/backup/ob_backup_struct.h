@@ -104,6 +104,7 @@ const int64_t OB_MAX_RESTORE_TYPE_LEN = 8; // LOCATION/SERVICE/RAWPATH
 const int64_t OB_MAX_BACKUP_SET_NUM = 1000000;
 const int64_t OB_MAX_BACKUP_DEST_COUNT = 256;
 const int64_t OB_MAX_BACKUP_PIECE_NUM = 1000000;
+const int64_t OB_MAX_BACKUP_DELETE_IDS_COUNT = 32;
 const int64_t MIN_LAG_TARGET_FOR_S3 = 60 * 1000 * 1000UL/*60s*/;
 
 static constexpr const int64_t MAX_FAKE_PROVIDE_ITEM_COUNT = 128;
@@ -192,6 +193,8 @@ const char *const OB_BACKUP_STR_JOB_LEVEL = "job_level";
 const char *const OB_STR_DESCRIPTION = "description";
 const char *const OB_STR_CLEAN_TYPE = "type";
 const char *const OB_STR_CLEAN_PARAMETER = "parameter";
+const char *const OB_STR_DATA_BACKUP_PATH_LIST = "data_backup_path_list";
+const char *const OB_STR_LOG_ARCHIVE_PATH_LIST = "log_archive_path_list";
 const char *const OB_STR_ID = "id";
 const char *const OB_STR_TOTAL_BYTES = "total_bytes";
 const char *const OB_STR_DELETE_BYTES = "delete_bytes";
@@ -206,6 +209,9 @@ const char *const OB_STR_MIN_RESTORE_SCN = "min_restore_scn";
 
 const char *const OB_STR_LOG_ARCHIVE_STATUS = "log_archive_status";
 const char *const OB_STR_DATA_BACKUP_DEST = "data_backup_dest";
+const char *const OB_STR_LOG_ARCHIVE_DEST = "log_archive_dest";
+const char *const OB_STR_BACKUP_CLEAN_POLICY_NAME_DEFAULT = "default";
+const char *const OB_STR_BACKUP_CLEAN_POLICY_NAME_LOG_ONLY = "log_only";
 const char *const OB_STR_BACKUP_BACKUP_DEST = "backup_backup_dest";
 const char *const OB_STR_BACKUP_DEST_OPT = "backup_dest_option";
 const char *const OB_STR_BACKUP_BACKUP_DEST_OPT = "backup_backup_dest_option";

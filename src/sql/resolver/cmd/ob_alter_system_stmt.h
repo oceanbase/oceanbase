@@ -1115,56 +1115,68 @@ public:
       ObSystemCmdStmt(stmt::T_BACKUP_CLEAN),
       initiator_tenant_id_(OB_INVALID_TENANT_ID),
       type_(share::ObNewBackupCleanType::MAX),
-      value_(0),
-      copy_id_(0),
       description_(),
-      clean_tenant_ids_()
+      clean_tenant_ids_(),
+      value_(),
+      dest_path_(),
+      dest_type_(share::ObBackupDestType::DEST_TYPE_MAX)
   {
   }
   virtual ~ObBackupCleanStmt() {}
   share::ObNewBackupCleanType::TYPE get_type() const { return type_; }
-  int64_t get_value() const { return value_; }
+  const common::ObSArray<int64_t> &get_value() const { return value_; }
   uint64_t get_tenant_id() const { return initiator_tenant_id_; }
-  int64_t get_copy_id() const { return copy_id_; }
   const share::ObBackupDescription &get_description() const { return description_; }
   const common::ObSArray<uint64_t> &get_clean_tenant_ids() const { return clean_tenant_ids_; }
+  const share::ObBackupPathString &get_dest_path() const { return dest_path_; }
+  share::ObBackupDestType::TYPE get_dest_type() const { return dest_type_; }
   int set_param(
       const uint64_t tenant_id, 
       const int64_t type, 
-      const int64_t value, 
-      const int64_t copy_id, 
+      const ObSArray<int64_t> &value,
       const share::ObBackupDescription &description,
-      const ObSArray<uint64_t> &clean_tenant_ids)
+      const ObSArray<uint64_t> &clean_tenant_ids,
+      const share::ObBackupPathString &dest_path,
+      const share::ObBackupDestType::TYPE dest_type)
   {
     int ret = common::OB_SUCCESS;
-
+    bool all_non_negative = true;
+    for (int64_t i = 0; all_non_negative && i < value.count(); ++i) {
+      if (value.at(i) < 0) {
+        all_non_negative = false;
+      }
+    }
     if (OB_INVALID_ID == tenant_id || type <= 0 || type >= share::ObNewBackupCleanType::MAX
-        || value < 0) {
+        || !all_non_negative) {
       ret = OB_INVALID_ARGUMENT;
       COMMON_LOG(WARN, "invalid args", K(tenant_id), K(type), K(value));
     } else if (OB_FAIL(description_.assign(description))) {
       COMMON_LOG(WARN, "set description failed", K(description));
     } else if (OB_FAIL(append(clean_tenant_ids_, clean_tenant_ids))) {
       COMMON_LOG(WARN, "append clean tenant ids failed", K(clean_tenant_ids));
+    } else if (OB_FAIL(append(value_, value))) {
+      COMMON_LOG(WARN, "append clean values failed", K(value));
+    } else if (OB_FAIL(dest_path_.assign(dest_path))) {
+      COMMON_LOG(WARN, "set dest path failed", K(dest_path));
     } else {
       type_ = static_cast<share::ObNewBackupCleanType::TYPE>(type);
-      value_ = value;
       initiator_tenant_id_ = tenant_id;
-      copy_id_ = copy_id;
+      dest_type_ = dest_type;
     }
 
     return ret;
   }
 
-  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(initiator_tenant_id), K_(type), K_(value), K_(copy_id), K_(description), K_(clean_tenant_ids));
+  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(initiator_tenant_id), K_(type), K_(value), K_(description), K_(clean_tenant_ids), K_(dest_path), K_(dest_type));
 
 private:
   uint64_t initiator_tenant_id_;
   share::ObNewBackupCleanType::TYPE type_;
-  int64_t value_;
-  int64_t copy_id_;
   share::ObBackupDescription description_; 
   common::ObSArray<uint64_t> clean_tenant_ids_; 
+  common::ObSArray<int64_t> value_;
+  share::ObBackupPathString dest_path_;
+  share::ObBackupDestType::TYPE dest_type_;
 };
 
 class ObDeletePolicyStmt : public ObSystemCmdStmt
@@ -1194,7 +1206,7 @@ public:
       const uint64_t tenant_id, 
       const int64_t type,
       const ObString &policy_name,
-      const ObSArray<uint64_t> &clean_tenant_ids)
+      const ObIArray<uint64_t> &clean_tenant_ids)
   {
     int ret = common::OB_SUCCESS;
     if (!is_valid_tenant_id(tenant_id) || type < 0 || type >= share::ObPolicyOperatorType::MAX) {

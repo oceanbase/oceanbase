@@ -101,8 +101,8 @@ public:
 
   int handle_backup_delete(const obrpc::ObBackupCleanArg &arg);
   int handle_delete_policy(const obrpc::ObDeletePolicyArg &arg);
-  int handle_backup_delete_obsolete(const obrpc::ObBackupCleanArg &arg);
 private:
+  int handle_backup_delete_(const obrpc::ObBackupCleanArg &arg);
   virtual int sub_init(common::ObMySQLProxy &sql_proxy, obrpc::ObSrvRpcProxy &rpc_proxy,
                   share::schema::ObMultiVersionSchemaService &schema_service,
                   share::ObLocationService &loacation_service,

@@ -42,6 +42,7 @@ public:
               || share::OB_FT_DICT_IK_UTF8_TID == inner_table_id
               || share::OB_FT_STOPWORD_IK_UTF8_TID == inner_table_id
               || share::OB_FT_QUANTIFIER_IK_UTF8_TID == inner_table_id
+              || share::OB_ALL_BACKUP_DELETE_POLICY_TID == inner_table_id
               || share::OB_ALL_AI_MODEL_ENDPOINT_TID == inner_table_id;
     return b_ret;
   }

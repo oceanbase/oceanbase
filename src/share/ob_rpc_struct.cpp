@@ -8712,7 +8712,36 @@ OB_SERIALIZE_MEMBER(ObBackupCleanArg, tenant_id_, initiator_tenant_id_, initiato
                     value_, dest_id_, description_, clean_tenant_ids_, batch_values_, dest_path_, dest_type_);
 bool ObBackupCleanArg::is_valid() const
 {
-  return OB_INVALID_ID != initiator_tenant_id_ && value_ >= 0;
+  bool valid = true;
+  if (OB_INVALID_ID == initiator_tenant_id_) {
+    valid = false;
+  } else {
+    switch (type_) {
+    case ObNewBackupCleanType::DELETE_BACKUP_ALL:
+        valid = (!dest_path_.is_empty() && share::ObBackupDestType::is_clean_valid(dest_type_));
+        break;
+    case ObNewBackupCleanType::CANCEL_DELETE:
+        valid = (1 == batch_values_.count() && 0 == batch_values_.at(0));
+        break;
+    case ObNewBackupCleanType::DELETE_OBSOLETE_BACKUP:
+        break;
+    case ObNewBackupCleanType::DELETE_BACKUP_SET:
+    case ObNewBackupCleanType::DELETE_BACKUP_PIECE:
+        for (int64_t i = 0; valid && i < batch_values_.count(); ++i) {
+          if (batch_values_.at(i) < 0) {
+            valid = false;
+            break;
+          }
+        }
+        if (valid && batch_values_.empty() && value_ < 0) {
+          valid = false;
+        }
+        break;
+    default:
+        valid = false;
+    }
+  }
+  return valid;
 }
 
 int ObBackupCleanArg::assign(const ObBackupCleanArg &arg)
@@ -8722,6 +8751,8 @@ int ObBackupCleanArg::assign(const ObBackupCleanArg &arg)
     LOG_WARN("fail to assign clean_tenant_ids_", K(ret));
   } else if (OB_FAIL(batch_values_.assign(arg.batch_values_))) {
     LOG_WARN("fail to assign clean arg value", K(ret), "batch_values", arg.batch_values_);
+  } else if (OB_FAIL(dest_path_.assign(arg.dest_path_))) {
+    LOG_WARN("fail to assign dest path", K(ret), "dest_path", arg.dest_path_);
   } else {
     tenant_id_ = arg.tenant_id_;
     initiator_tenant_id_ = arg.initiator_tenant_id_;
@@ -8730,6 +8761,39 @@ int ObBackupCleanArg::assign(const ObBackupCleanArg &arg)
     value_ = arg.value_;
     dest_id_ = arg.dest_id_;
     description_ = arg.description_;
+    dest_type_ = arg.dest_type_;
+  }
+  return ret;
+}
+
+
+int ObBackupCleanArg::get_value_array(common::ObIArray<int64_t> &value_array) const
+{
+  int ret = OB_SUCCESS;
+  value_array.reset();
+
+  // backward compatibility: if the array is not empty, use the array, otherwise use the single value
+  if (!batch_values_.empty()) {
+    if (OB_FAIL(value_array.assign(batch_values_))) {
+      LOG_WARN("fail to assign value array", K(ret));
+    }
+  } else if (value_ > 0) {
+    if (OB_FAIL(value_array.push_back(value_))) {
+      LOG_WARN("fail to push back single value", K(ret));
+    }
+  }
+
+  return ret;
+}
+
+// backward compatibility: should set value_array to batch_values_, and set value_ to the first element of value_array
+int ObBackupCleanArg::set_value_array(const common::ObIArray<int64_t> &value_array)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(batch_values_.assign(value_array))) {
+    LOG_WARN("fail to assign value array", K(ret));
+  } else {
+    value_ = value_array.empty() ? 0 : value_array.at(0);
   }
   return ret;
 }

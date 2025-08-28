@@ -10246,12 +10246,18 @@ public:
   }
   bool is_valid() const;
   int assign(const ObBackupCleanArg &arg);
-  TO_STRING_KV(K_(type), K_(tenant_id), K_(initiator_tenant_id), K_(initiator_job_id), K_(value), K_(dest_id), K_(description), K_(clean_tenant_ids), K_(batch_values), K_(dest_path), K_(dest_type));
+
+  // backward compatibility: if the array is empty and the single value is valid, add the single value to the array
+  int get_value_array(common::ObIArray<int64_t> &value_array) const;
+  int set_value_array(const common::ObIArray<int64_t> &value_array);
+
+  TO_STRING_KV(K_(type), K_(tenant_id), K_(initiator_tenant_id), K_(initiator_job_id),
+               K_(value), K_(dest_id), K_(description), K_(clean_tenant_ids), K_(batch_values), K_(dest_path), K_(dest_type));
   uint64_t tenant_id_;
   uint64_t initiator_tenant_id_;
   int64_t initiator_job_id_;
   share::ObNewBackupCleanType::TYPE type_;
-  int64_t value_;
+  int64_t value_;  // keep for backward compatibility
   int64_t dest_id_;
   share::ObBackupDescription description_;
   common::ObSArray<uint64_t> clean_tenant_ids_;

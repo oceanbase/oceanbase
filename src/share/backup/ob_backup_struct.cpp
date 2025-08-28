@@ -1890,6 +1890,7 @@ int ObBackupDest::get_backup_path_str(char *buf, const int64_t buf_size) const
       LOG_WARN("failed to set backup path", K(ret), K(storage_info_->endpoint_));
     }
   }
+  LOG_INFO("[backup]get_backup_path_str ret", K(ret), K(buf), K(buf_size));
   return ret;
 }
 

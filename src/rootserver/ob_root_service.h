@@ -840,7 +840,6 @@ public:
   int admin_upgrade_cmd(const obrpc::Bool &arg);
   int admin_rolling_upgrade_cmd(const obrpc::ObAdminRollingUpgradeArg &arg);
   int admin_set_tracepoint(const obrpc::ObAdminSetTPArg &arg);
-  int admin_set_backup_config(const obrpc::ObAdminSetConfigArg &arg);
   /* physical restore */
   int physical_restore_tenant(const obrpc::ObPhysicalRestoreTenantArg &arg, obrpc::Int64 &job_id);
   int check_restore_tenant_valid(const share::ObPhysicalRestoreJob &job_info,

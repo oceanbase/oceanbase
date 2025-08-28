@@ -102,6 +102,7 @@
 #include "sql/resolver/cmd/ob_anonymous_block_resolver.h"
 #include "sql/resolver/cmd/ob_call_procedure_resolver.h"
 #include "sql/resolver/cmd/ob_load_data_resolver.h"
+#include "sql/resolver/cmd/ob_backup_clean_resolver.h"
 #include "sql/resolver/prepare/ob_execute_resolver.h"
 #include "sql/resolver/prepare/ob_deallocate_resolver.h"
 #include "sql/resolver/ddl/ob_flashback_resolver.h"

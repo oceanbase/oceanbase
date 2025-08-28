@@ -56,6 +56,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"approx_count_distinct_synopsis_merge", APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE},
   {"arbitration", ARBITRATION},
   {"archivelog", ARCHIVELOG},
+  {"archivelog_piece", ARCHIVELOG_PIECE},
   {"array", ARRAY},
   {"array_first", ARRAY_FIRST},
   {"array_map", ARRAY_MAP},

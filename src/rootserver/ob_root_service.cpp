@@ -80,6 +80,7 @@
 #include "share/table/ob_ttl_util.h"
 #include "share/ob_license_utils.h"
 #include "parallel_ddl/ob_drop_table_helper.h" // ObDropTableHelper
+#include "share/backup/ob_backup_clean_util.h"
 
 namespace oceanbase
 {
@@ -8914,7 +8915,10 @@ int ObRootService::admin_set_config(obrpc::ObAdminSetConfigArg &arg)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
   } else if (arg.is_backup_config_) {
-    if (OB_FAIL(admin_set_backup_config(arg))) {
+    if (OB_ISNULL(schema_service_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("schema service must not be null", K(ret));
+    } else if (OB_FAIL(share::ObBackupConfigUtil::admin_set_backup_config(sql_proxy_, rpc_proxy_, *schema_service_, arg))) {
       LOG_WARN("fail to set backup config", K(ret), K(arg));
     }
   } else {
@@ -11581,72 +11585,6 @@ int ObRootService::clean_global_context()
   return ret;
 }
 
-int ObRootService::admin_set_backup_config(const obrpc::ObAdminSetConfigArg &arg)
-{
-  int ret = OB_SUCCESS;
-  if (!arg.is_valid()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid backup config arg", K(ret));
-  } else if (!arg.is_backup_config_) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("admin set config type not backup config", K(ret), K(arg));
-  }
-  share::BackupConfigItemPair config_item;
-  share::ObBackupConfigParserMgr config_parser_mgr;
-  ARRAY_FOREACH_X(arg.items_, i , cnt, OB_SUCC(ret)) {
-    const ObAdminSetConfigItem &item = arg.items_.at(i);
-    uint64_t exec_tenant_id = OB_INVALID_TENANT_ID;
-    ObMySQLTransaction trans;
-    config_parser_mgr.reset();
-    if ((common::is_sys_tenant(item.exec_tenant_id_) && item.tenant_name_.is_empty())
-        || (common::is_user_tenant(item.exec_tenant_id_) && !item.tenant_name_.is_empty())
-        || common::is_meta_tenant(item.exec_tenant_id_)) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("backup config only support user tenant", K(ret));
-    } else if (!item.tenant_name_.is_empty()) {
-      schema::ObSchemaGetterGuard guard;
-      if (OB_ISNULL(schema_service_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("schema service must not be null", K(ret));
-      } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, guard))) {
-        LOG_WARN("fail to get tenant schema guard", K(ret));
-      } else if (OB_FAIL(guard.get_tenant_id(ObString(item.tenant_name_.ptr()), exec_tenant_id))) {
-        LOG_WARN("fail to get tenant id", K(ret));
-      }
-    } else {
-      exec_tenant_id = item.exec_tenant_id_;
-    }
-
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(trans.start(&sql_proxy_, gen_meta_tenant_id(exec_tenant_id)))) {
-      LOG_WARN("fail to start trans", K(ret));
-    } else {
-      common::ObSqlString name;
-      common::ObSqlString value;
-      if (OB_FAIL(name.assign(item.name_.ptr()))) {
-        LOG_WARN("fail to assign name", K(ret));
-      } else if (OB_FAIL(value.assign(item.value_.ptr()))) {
-        LOG_WARN("fail to assign value", K(ret));
-      } else if (OB_FAIL(config_parser_mgr.init(name, value, exec_tenant_id))) {
-        LOG_WARN("fail to init backup config parser mgr", K(ret), K(item));
-      } else if (OB_FAIL(config_parser_mgr.update_inner_config_table(rpc_proxy_, trans))) {
-        LOG_WARN("fail to update inner config table", K(ret));
-      }
-
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(trans.end(true))) {
-          LOG_WARN("fail to commit trans", K(ret));
-        }
-      } else {
-        int tmp_ret = OB_SUCCESS;
-        if (OB_SUCCESS != (tmp_ret = trans.end(false))) {
-          LOG_WARN("fail to rollback trans", K(tmp_ret));
-        }
-      }
-    }
-  }
-  return ret;
-}
 
 int ObRootService::cancel_ddl_task(const ObCancelDDLTaskArg &arg)
 {

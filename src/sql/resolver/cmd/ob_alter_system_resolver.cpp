@@ -24,6 +24,7 @@
 #include "sql/resolver/ddl/ob_create_table_resolver.h"
 #include "sql/resolver/ddl/ob_drop_table_stmt.h"
 #include "sql/resolver/cmd/ob_variable_set_stmt.h"
+#include "sql/resolver/cmd/ob_backup_clean_resolver.h"
 #include "observer/ob_server.h"
 #include "share/backup/ob_backup_config.h"
 #include "observer/mysql/ob_query_response_time.h"
@@ -5668,82 +5669,6 @@ int ObBackupManageResolver::resolve(const ParseNode &parse_tree)
   return ret;
 }
 
-int ObBackupCleanResolver::resolve(const ParseNode &parse_tree)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(T_BACKUP_CLEAN != parse_tree.type_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("type is not T_BACKUP_CLEAN", "type", get_type_name(parse_tree.type_));
-  } else if (OB_UNLIKELY(NULL == parse_tree.children_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("children should not be null", K(ret));
-  } else if (OB_UNLIKELY(4 != parse_tree.num_child_ && 5 != parse_tree.num_child_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("children num not match", K(ret), "num_child", parse_tree.num_child_);
-  } else if (OB_ISNULL(session_info_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("session info should not be null", K(ret));
-  } else {
-    const uint64_t tenant_id = session_info_->get_login_tenant_id();
-    const int64_t type = parse_tree.children_[0]->value_;
-    const int64_t value = parse_tree.children_[1]->value_;
-    ObBackupDescription description;
-    ParseNode *t_node = NULL;
-    common::ObSArray<uint64_t> clean_tenant_ids;
-    int64_t copy_id = 0;
-    ObBackupCleanStmt *stmt = create_stmt<ObBackupCleanStmt>();
-    if (share::ObNewBackupCleanType::TYPE::CANCEL_DELETE != static_cast<share::ObNewBackupCleanType::TYPE>(type)) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("unsupported function ", K(ret), K(type));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "function is");
-    } else if (5 == parse_tree.num_child_) {
-      copy_id = NULL == parse_tree.children_[3]
-                  ? 0 : parse_tree.children_[3]->children_[0]->value_;
-      t_node = parse_tree.children_[4];
-    } else {
-      t_node = parse_tree.children_[3];
-    }
-
-    if (NULL == stmt) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("create ObBackupCleanResolver failed");
-    } else if (NULL != parse_tree.children_[2] && OB_FAIL(description.assign(parse_tree.children_[2]->str_value_))) {
-      LOG_WARN("failed to assign description", K(ret));
-    } else if (NULL != t_node && OB_SYS_TENANT_ID != tenant_id) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("user tenant cannot specify tenant names", K(ret), K(tenant_id));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "user tenant cannot specify tenant names");
-    } else if (NULL != t_node && OB_SYS_TENANT_ID == tenant_id) {
-      if (OB_FAIL(Util::get_tenant_ids(*t_node, clean_tenant_ids))) {
-        LOG_WARN("failed to get tenant ids", K(ret));
-      } else if (clean_tenant_ids.empty()) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("No valid tenant name given", K(ret), K(tenant_id));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "No valid tenant name given");
-      } else if (5 == parse_tree.num_child_ && clean_tenant_ids.count() > 1) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("To initiate cleanup set or piece under the system tenant, only one tenant name can be specified", K(ret), K(tenant_id), K(clean_tenant_ids));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Too many tenant names specified, only one tenant name can be specified");
-      }
-    } else if (NULL == t_node && OB_SYS_TENANT_ID == tenant_id) {
-      if (1 == type || 2 == type) { // type=1 is BACKUPSET and type=2 is BACKUPPIECE
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("To initiate cleanup set or piece under the system tenant, need to specify one tenant name", K(ret), K(tenant_id), K(clean_tenant_ids));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "need to specify a tenant name");
-      }
-    }
-
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(stmt->set_param(tenant_id, type, value, copy_id, description, clean_tenant_ids))) {
-      LOG_WARN("Failed to set param", K(ret), K(tenant_id), K(type), K(value), K(copy_id));
-    } else {
-      stmt_ = stmt;
-    }
-  }
-  return ret;
-}
-
-
 int ObDeletePolicyResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
@@ -5770,10 +5695,22 @@ int ObDeletePolicyResolver::resolve(const ParseNode &parse_tree)
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("no policy name is specified", K(ret));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "delete policy name is not specified, which is");
-    } else if (0 != STRCMP(policy_name.ptr(), "default")) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("the policy name is not \'default\'", K(ret), K(policy_name));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "The policy name is not \'default\', it is");
+    } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_1_0) {
+      if (0 != STRCMP(policy_name.ptr(), OB_STR_BACKUP_CLEAN_POLICY_NAME_DEFAULT)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("the policy name is not \'default\'", K(ret), K(policy_name));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "The policy name is not \'default\', it is");
+      }
+    } else {
+      if (0 != STRCMP(policy_name.ptr(), OB_STR_BACKUP_CLEAN_POLICY_NAME_DEFAULT)
+          && 0 != STRCMP(policy_name.ptr(), OB_STR_BACKUP_CLEAN_POLICY_NAME_LOG_ONLY)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("the policy name is not \'default\' or \'log_only\'", K(ret), K(policy_name));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "The policy name is not \'default\' or \'log_only\', it is");
+      }
+    }
+
+    if (OB_FAIL(ret)) {
     } else if (NULL == stmt) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("create ObDeletePolicyStmt failed");

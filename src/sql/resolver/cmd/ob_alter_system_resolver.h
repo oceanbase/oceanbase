@@ -58,7 +58,7 @@ public:
   static int resolve_server_or_zone(const ParseNode *parse_tree, RPC_ARG &arg);
   // resolve opt_backup_tenant_list
   static int get_tenant_ids(const ParseNode &t_node, common::ObIArray<uint64_t> &tenant_ids);
-
+  // resolve opt_backup_id_list
 
   static int resolve_tablet_id(const ParseNode *opt_tablet_id, ObTabletID &tablet_id);
   static int resolve_tenant(const ParseNode &tenants_node, 
@@ -301,7 +301,6 @@ private:
 
 DEF_SIMPLE_CMD_RESOLVER(ObBackupDatabaseResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObBackupManageResolver);
-DEF_SIMPLE_CMD_RESOLVER(ObBackupCleanResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObDeletePolicyResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObBackupKeyResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObBackupClusterParamResolver);

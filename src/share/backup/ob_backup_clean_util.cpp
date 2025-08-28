@@ -13,6 +13,10 @@
 #define USING_LOG_PREFIX SHARE
 #include "share/backup/ob_backup_clean_util.h"
 #include "share/backup/ob_backup_io_adapter.h"
+#include "storage/tablelock/ob_lock_utils.h"
+#include "storage/tablelock/ob_table_lock_common.h"
+#include "share/ob_debug_sync.h"
+#include "lib/mysqlclient/ob_mysql_transaction.h"
 
 using namespace oceanbase;
 using namespace share;
@@ -250,6 +254,59 @@ int ObBackupCleanUtil::delete_backup_dir(
   return ret;
 }
 
+int ObBackupCleanUtil::lock_policy_table_then_check(
+      common::ObMySQLTransaction &trans, const uint64_t tenant_id, bool &policy_exists, bool log_only) {
+  int ret = OB_SUCCESS;
+  ObSqlString check_sql;
+  if (OB_FAIL(oceanbase::transaction::tablelock::ObInnerTableLockUtil::lock_inner_table_in_trans(
+      trans,
+      gen_meta_tenant_id(tenant_id),
+      share::OB_ALL_BACKUP_DELETE_POLICY_TID,
+      log_only ? transaction::tablelock::SHARE : transaction::tablelock::SHARE_ROW_EXCLUSIVE,
+      /*if log_only is true, this lock is used when setting backup_dest, will not modify this policy table*/
+      false))) {
+    COMMON_LOG(WARN, "failed to lock inner table", K(ret), K(tenant_id));
+  } else {
+    if (log_only) {
+      DEBUG_SYNC(BACKUP_DELETE_AFTER_LOCK_POLICY_TABLE_LOG_ONLY);
+      if (OB_FAIL(check_sql.assign_fmt("SELECT COUNT(*) as cnt FROM %s WHERE %s=%lu AND %s='%s'",
+      share::OB_ALL_BACKUP_DELETE_POLICY_TNAME, share::OB_STR_TENANT_ID, tenant_id,
+      share::OB_STR_POLICY_NAME, share::OB_STR_BACKUP_CLEAN_POLICY_NAME_LOG_ONLY))) {
+        LOG_WARN("failed to generate check sql", K(ret), K(tenant_id));
+      }
+    } else {
+      if (OB_FAIL(check_sql.assign_fmt("SELECT COUNT(*) as cnt FROM %s WHERE %s=%lu",
+      share::OB_ALL_BACKUP_DELETE_POLICY_TNAME, share::OB_STR_TENANT_ID, tenant_id))) {
+        LOG_WARN("failed to generate check sql", K(ret), K(tenant_id));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    HEAP_VAR(ObMySQLProxy::ReadResult, res) {
+      ObMySQLResult *result = NULL;
+      if (OB_FAIL(trans.read(res, gen_meta_tenant_id(tenant_id), check_sql.ptr()))) {
+        LOG_WARN("failed to check log only policy", K(ret), K(check_sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result is null", K(ret), K(check_sql));
+      } else if (OB_FAIL(result->next())) {
+        LOG_WARN("failed to get next row", K(ret), K(check_sql));
+      } else {
+        int64_t policy_count = 0;
+        EXTRACT_INT_FIELD_MYSQL(*result, "cnt", policy_count, int64_t);
+        policy_exists = (policy_count > 0);
+        if (policy_count > 1) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected result", K(ret), K(policy_count), K(policy_exists), K(tenant_id));
+        }
+        LOG_INFO("query result", K(policy_count), K(policy_exists), K(tenant_id));
+      }
+    }
+  }
+  LOG_INFO("check log only policy exist", K(ret), K(tenant_id), K(policy_exists));
+  return ret;
+}
+
 int ObBackupCleanUtil::delete_backup_file(
     const ObBackupPath &path,
     const share::ObBackupStorageInfo *storage_info)
@@ -325,4 +382,55 @@ void ObBackupCleanUtil::check_need_retry(
       need_retry = false;
     }
   }
+}
+
+int ObBackupCleanUtil::string_to_number_(const char *token, char *&p_end, int64_t &value)
+{
+  return ob_strtoll(token, p_end, value);
+}
+
+int ObBackupCleanUtil::string_to_number_(const char *token, char *&p_end, uint64_t &value)
+{
+  return ob_strtoull(token, p_end, value);
+}
+
+int ObBackupCleanUtil::parse_int64_list(const ObString &str, ObIArray<int64_t> &value_list)
+{
+  return parse_list<int64_t>(str, value_list);
+}
+
+int ObBackupCleanUtil::parse_uint64_list(const ObString &str, ObIArray<uint64_t> &value_list)
+{
+  return parse_list<uint64_t>(str, value_list);
+}
+
+int ObBackupCleanUtil::format_int64_list(const ObIArray<int64_t> &value_list, char *buffer,
+                                         int64_t buffer_size, int64_t &cur_pos)
+{
+  return format_list<int64_t>(value_list, buffer, buffer_size, cur_pos);
+}
+
+int ObBackupCleanUtil::format_uint64_list(const ObIArray<uint64_t> &value_list, char *buffer,
+                                         int64_t buffer_size, int64_t &cur_pos)
+{
+  return format_list<uint64_t>(value_list, buffer, buffer_size, cur_pos);
+}
+
+int ObBackupCleanUtil::parse_time_interval(const char *str, int64_t &val)
+{
+  int ret = OB_SUCCESS;
+  bool is_valid = true;
+  val = 0;
+
+  if (OB_ISNULL(str)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret), KP(str));
+  } else {
+    val = ObConfigTimeParser::get(str, is_valid);
+    if (!is_valid) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid time interval str", K(ret), K(str));
+    }
+  }
+  return ret;
 }
