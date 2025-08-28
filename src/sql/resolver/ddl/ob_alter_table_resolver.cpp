@@ -471,6 +471,8 @@ int ObAlterTableResolver::set_table_options()
       SQL_RESV_LOG(WARN, "Write kv_attributes to alter_table_schema failed!", K(ret));
     } else if (OB_FAIL(alter_table_schema.set_dynamic_partition_policy(dynamic_partition_policy_))) {
       SQL_RESV_LOG(WARN, "Write dynamic_partition_policy to alter_table_schema failed!", K(ret));
+    } else if (OB_FAIL(alter_table_schema.set_semistruct_properties(semistruct_properties_))) {
+      SQL_RESV_LOG(WARN, "Write semistruct_properties to alter_table_schema failed!", K(ret));
     } else {
       alter_table_schema.alter_option_bitset_ = alter_table_bitset_;
     }
@@ -7653,12 +7655,19 @@ int ObAlterTableResolver::add_new_indexkey_for_oracle_temp_table(obrpc::ObCreate
 int ObAlterTableResolver::check_semistruct_encoding_type(const ObTableSchema &origin_schema, const ObTableSchema &alter_schema)
 {
   int ret = OB_SUCCESS;
+  uint64_t alter_encoding_type = 0;
+  bool alter_contain_encoding_type = false;
+  // alter 0 (alter_change) skip
+  // alter 0 (origin 0 && alter_not_change) skip
   // skip check if not modify semistruct encoding options and store format
-  if (! alter_table_bitset_.has_member(obrpc::ObAlterTableArg::SEMISTRUCT_ENCODING_TYPE)
-      && ! alter_table_bitset_.has_member(obrpc::ObAlterTableArg::STORE_FORMAT)) {
-  // skip check if semistruct_encoding is disable
-  } else if ((alter_table_bitset_.has_member(obrpc::ObAlterTableArg::SEMISTRUCT_ENCODING_TYPE) && ! alter_schema.get_semistruct_encoding_type().is_enable_semistruct_encoding())
-    || (! alter_table_bitset_.has_member(obrpc::ObAlterTableArg::SEMISTRUCT_ENCODING_TYPE) && ! origin_schema.get_semistruct_encoding_type().is_enable_semistruct_encoding())) {
+  if (!alter_table_bitset_.has_member(obrpc::ObAlterTableArg::SEMISTRUCT_PROPERTIES) &&
+      !alter_table_bitset_.has_member(obrpc::ObAlterTableArg::STORE_FORMAT)) {
+    // skip check if semistruct_encoding is disable
+  } else if (OB_FAIL(ObSemistructProperties::check_alter_encoding_type(alter_schema.get_semistruct_properties(),
+          alter_contain_encoding_type, alter_encoding_type))) {
+    LOG_WARN("get semistruct encoding type failed", K(ret));
+  } else if ((alter_contain_encoding_type && alter_encoding_type == ObSemistructProperties::Mode::NONE)) {
+  } else if (!alter_contain_encoding_type && !origin_schema.get_semistruct_encoding_type().is_enable_semistruct_encoding()) {
   } else if (alter_table_bitset_.has_member(obrpc::ObAlterTableArg::STORE_FORMAT)) {
     if (alter_schema.get_row_store_type() != CS_ENCODING_ROW_STORE) {
       ret = OB_NOT_SUPPORTED;

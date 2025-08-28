@@ -27,12 +27,13 @@ public:
   static const int MAX_SCHEMA_NOT_MATCH_COUNT = 8;
   static const int MAX_NOT_ENCODE_COUNT = 16;
 public:
-  ObSemiStructColumnEncodeCtx():
+  ObSemiStructColumnEncodeCtx(ObMicroBlockEncodingCtx &ctx):
     allocator_("SemiEnc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+    schema_allocator_("SemiSchemAlloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
     column_index_(-1),
     col_desc_(),
     datums_(nullptr),
-    sub_schema_(),
+    sub_schema_(nullptr),
     sub_col_datums_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator("SemiEnc", MTL_ID())),
     hashtables_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator("SemiEnc", MTL_ID())),
     hashtable_factory_(),
@@ -40,12 +41,13 @@ public:
     sub_encoders_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator("SemiEnc", MTL_ID())),
     sub_col_ctxs_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator("SemiEnc", MTL_ID())),
     previous_cs_encoding_(),
-    encoding_ctx_(nullptr),
+    encoding_ctx_(ctx),
     all_string_buf_writer_(nullptr),
     schema_not_match_block_count_(0),
     not_encode_block_count_(0),
     encounter_outrow_block_cnt_(0),
-    is_enable_(true)
+    is_enable_(true),
+    freq_threshold_(share::ObSemistructProperties::DEFAULT_SEMISTRUCT_FREQ_THRESHOLD)
   {}
 
   ~ObSemiStructColumnEncodeCtx() { reset(); }
@@ -58,7 +60,6 @@ public:
   int init_sub_column_encoders();
   bool is_enable() const { return is_enable_; }
   void disable_encoding() { is_enable_ = false; }
-  int get_sub_column_type(const int64_t column_idx, ObObjType &type) const;
   int get_sub_column_type(const int64_t column_idx, ObObjMeta &type) const;
   int64_t get_store_column_count() const;
   int64_t get_sub_schema_serialize_size() const;
@@ -73,6 +74,7 @@ private:
   int init_sub_column_datums();
   int fill_sub_column_datums();
   int scan_sub_column_datums();
+  int build_sub_schema(ObJsonSchemaFlatter &flatter, ObString &schema_buf);
   int scan_sub_column_datums(const int64_t column_index, const ObObjType obj_type, const ObColDatums &datums, ObColumnCSEncodingCtx &sub_col_ctx);
   int init_sub_column_encode_ctxs();
   int check_has_outrow(bool &has_outrow);
@@ -88,10 +90,11 @@ private:
 
 public:
   ObArenaAllocator allocator_;
+  ObArenaAllocator schema_allocator_;
   int64_t column_index_;
   ObColDesc col_desc_;
   const ObColDatums *datums_;
-  ObSemiStructSubSchema sub_schema_;
+  ObSemiSchemaAbstract *sub_schema_;
   ObArray<ObColDatums *> sub_col_datums_;
   ObArray<ObDictEncodingHashTable *> hashtables_;
   ObDictEncodingHashTableFactory hashtable_factory_;
@@ -99,12 +102,13 @@ public:
   ObArray<ObIColumnCSEncoder *> sub_encoders_;
   ObArray<ObColumnCSEncodingCtx> sub_col_ctxs_;
   ObPreviousCSEncoding previous_cs_encoding_;
-  const ObMicroBlockEncodingCtx *encoding_ctx_;
+  const ObMicroBlockEncodingCtx &encoding_ctx_;
   ObMicroBufferWriter *all_string_buf_writer_;
   int32_t schema_not_match_block_count_;
   int32_t not_encode_block_count_;
   int32_t encounter_outrow_block_cnt_;
   bool is_enable_;
+  uint8_t freq_threshold_;
 };
 
 class ObSemiStructEncodeCtx
@@ -132,7 +136,7 @@ public:
   void reset();
   void reuse();
 
-  int get_col_ctx(const int64_t column_index, ObSemiStructColumnEncodeCtx *&res);
+  int get_col_ctx(const int64_t column_index, ObMicroBlockEncodingCtx &ctx, ObSemiStructColumnEncodeCtx *&res);
 
 private:
   ObArenaAllocator allocator_;
@@ -147,38 +151,39 @@ public:
   virtual ~ObSemiStructDecodeBaseHandler() {};
 
   virtual void reset() = 0;
-  virtual ObDatumRow& get_sub_row() = 0;
   virtual int serialize(const ObDatumRow &row, ObString &result) = 0;
   virtual int check_can_pushdown(
       const sql::ObSemiStructWhiteFilterNode &filter_node,
-      bool &can_pushdown, int64_t &sub_col_idx) const = 0;
+      bool &can_pushdown, uint16_t &sub_col_idx) const = 0;
 
 };
 
 class ObSemiStructDecodeHandler : public ObSemiStructDecodeBaseHandler
 {
 public:
-  ObSemiStructDecodeHandler():
+  ObSemiStructDecodeHandler(common::ObArenaAllocator &allocator):
       sub_schema_(nullptr),
-      reassembler_(nullptr)
+      reassembler_(nullptr),
+      allocator_(allocator)
    {}
   virtual ~ObSemiStructDecodeHandler() {}
 
   int init(ObIAllocator &allocator, const char* sub_schema_data_ptr, const int64_t sub_schema_data_len);
   void reuse();
   virtual void reset();
-  virtual ObDatumRow& get_sub_row();
+  ObDatumRow& get_sub_row() { return sub_row_; }
   virtual int serialize(const ObDatumRow &row, ObString &result);
   virtual int check_can_pushdown(
       const sql::ObSemiStructWhiteFilterNode &filter_node,
-      bool &can_pushdown, int64_t &sub_col_idx) const;
+      bool &can_pushdown, uint16_t &sub_col_idx) const;
 
   TO_STRING_KV(KPC_(sub_schema), KP_(reassembler));
 
 public:
-  ObSemiStructSubSchema *sub_schema_;
+  ObSemiSchemaAbstract *sub_schema_;
   ObJsonReassembler *reassembler_;
-
+  common::ObArenaAllocator &allocator_;
+  ObDatumRow sub_row_;
 };
 
 }  // namespace blocksstable

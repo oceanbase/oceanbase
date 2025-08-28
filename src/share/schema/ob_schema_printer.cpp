@@ -6403,13 +6403,25 @@ int ObSchemaPrinter::print_semistruct_encodng_options(const ObTableSchema &table
                                                        int64_t& pos) const
 {
   int ret = OB_SUCCESS;
-  const ObSemiStructEncodingType& type = table_schema.get_semistruct_encoding_type();
-  if (type.mode_ == ObSemistructProperties::Mode::ENCODING) {
-    if (OB_FAIL(databuff_printf(buf, buf_len, pos, "SEMISTRUCT_ENCODING_TYPE='ENCODING' "))) {
+  const ObSemiStructEncodingType &type = table_schema.get_semistruct_encoding_type();
+  if (type.is_enable_semistruct_encoding()) {
+    ObSemistructProperties properties;
+    if (OB_FAIL(properties.resolve_semistruct_properties(type.mode_, table_schema.get_semistruct_properties()))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to resolve semistruct properties", K(ret), K(table_schema));
+    } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "SEMISTRUCT_PROPERTIES=(ENCODING_TYPE="))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print semistruct encoding type", K(ret), K(table_schema));
+    } else if (type.mode_ == ObSemistructProperties::Mode::ENCODING) {
+      if (OB_FAIL(databuff_printf(buf, buf_len, pos, "ENCODING"))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print semistruct encoding type", K(ret), K(table_schema));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, ", FREQ_THRESHOLD=%2d))", properties.get_freq_threshold()))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to print semistruct freq column threshold", K(ret), K(table_schema));
     }
   }
-    return ret;
+  return ret;
 }
 
 int ObSchemaPrinter::print_dynamic_partition_policy(

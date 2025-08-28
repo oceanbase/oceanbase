@@ -1335,6 +1335,10 @@ int ObDDLService::generate_schema(
     LOG_WARN("fail to generate schema, not support semistruct encoding for this version",
              KR(ret), K(tenant_id), K(compat_version), K(arg));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "this version not support semistruct encoding");
+  } else if (compat_version < DATA_VERSION_4_4_1_0 && !arg.schema_.get_semistruct_properties().empty()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("fail to generate schema, not support semistruc properties for this version",
+              KR(ret), K(tenant_id), K(compat_version), K(arg));
   } else if (compat_version < DATA_VERSION_4_3_5_2 && arg.schema_.is_delete_insert_merge_engine()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("fail to generate schema, not support delete insert merge engine for this version", K(ret), K(tenant_id), K(compat_version), K(arg));
@@ -3483,16 +3487,31 @@ int ObDDLService::set_raw_table_options(
           }
           break;
         }
-        case ObAlterTableArg::SEMISTRUCT_ENCODING_TYPE: {
+        case ObAlterTableArg::SEMISTRUCT_PROPERTIES: {
           uint64_t compat_version = OB_INVALID_VERSION;
+          uint64_t semistruct_flags = 0;
+          ObString tmp_properties;
+          bool contain_encoding_type = false;
           if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
             LOG_WARN("get min data_version failed", K(ret), K(tenant_id));
-          } else if (compat_version < DATA_VERSION_4_3_5_2) {
+          } else if (compat_version < DATA_VERSION_4_4_1_0 &&
+                        !alter_table_schema.get_semistruct_properties().empty()) {
             ret = OB_NOT_SUPPORTED;
-            LOG_WARN("semistruct_encoding_type less than 4.3.5.2 not support", K(ret), K(compat_version));
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "semistruct_encoding_types less than 4.3.5.2");
-          } else {
-            new_table_schema.set_semistruct_encoding_type(alter_table_schema.get_semistruct_encoding_type());
+            LOG_WARN("semistruct properties less than 4.4.1.0 not support", K(ret), K(compat_version));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "semistruct properties less than 4.4.1.0");
+          } else if (OB_FAIL(ObSemistructProperties::merge_new_semistruct_properties(
+                                  *new_table_schema.get_allocator(),
+                                  alter_table_schema.get_semistruct_properties(),
+                                  new_table_schema.get_semistruct_properties(),
+                                  tmp_properties))) {
+            LOG_WARN("fail to merge to new semistruct encoding type", K(ret),
+                K(new_table_schema.get_semistruct_encoding_type()), K(alter_table_schema.get_semistruct_encoding_type()));
+          } else if (OB_FAIL(ObSemistructProperties::check_alter_encoding_type(tmp_properties,
+                                  contain_encoding_type, semistruct_flags))) {
+            LOG_WARN("fail to resolve semistruct properties", K(ret), K(tmp_properties));
+          } else if (contain_encoding_type && FALSE_IT(new_table_schema.set_semistruct_encoding_type(semistruct_flags))) {
+          } else if (OB_FAIL(new_table_schema.set_semistruct_properties(tmp_properties))) {
+            LOG_WARN("fail to set semistruct properties", K(ret), K(tmp_properties));
           }
           break;
         }

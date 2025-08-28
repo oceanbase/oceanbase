@@ -78,6 +78,8 @@ TEST_F(TestCSEncoder, test_integer_encoder)
   ASSERT_EQ(false, int_col_encoder->enc_ctx_.meta_.is_use_null_replace_value());
   ASSERT_EQ(true, int_col_encoder->enc_ctx_.meta_.is_use_base()); // raw encoding also use base
   ASSERT_EQ(-50, int_col_encoder->enc_ctx_.meta_.base_value_);
+  ASSERT_EQ(false, e->get_column_header().has_nop_bitmap());
+  ASSERT_EQ(false, e->get_column_header().has_nop());
 
   // <2> write 3 row: INT32_MIN/-1/NULL
   // row count less than ObCSEncodingUtil::ENCODING_ROW_COUNT_THRESHOLD,
@@ -109,6 +111,8 @@ TEST_F(TestCSEncoder, test_integer_encoder)
   ASSERT_EQ(true, int_col_encoder->enc_ctx_.meta_.is_use_base()); // raw encoding also use base
   ASSERT_EQ(INT32_MIN, int_col_encoder->enc_ctx_.meta_.base_value());
   ASSERT_EQ(0, int_col_encoder->enc_ctx_.meta_.null_replaced_value_);
+  ASSERT_EQ(false, e->get_column_header().has_nop_bitmap());
+  ASSERT_EQ(false, e->get_column_header().has_nop());
 
   // <3> write 3 row: INT32_MIN/INT32_MAX/NULL + 200 rows
   encoder.reuse();
@@ -141,7 +145,9 @@ TEST_F(TestCSEncoder, test_integer_encoder)
   ASSERT_EQ(false, int_col_encoder->enc_ctx_.meta_.is_use_null_replace_value());
   ASSERT_EQ(true, int_col_encoder->enc_ctx_.meta_.is_use_base());
   ASSERT_EQ(INT32_MIN, int_col_encoder->enc_ctx_.meta_.base_value());
-  ASSERT_EQ(true, e->get_column_header().has_null_bitmap());
+  ASSERT_EQ(true, e->get_column_header().has_null_or_nop_bitmap());
+  ASSERT_EQ(false, e->get_column_header().has_nop_bitmap());
+  ASSERT_EQ(false, e->get_column_header().has_nop());
 
   // <4> write 3 row: 0/INT32_MAX/NULL
   // row count less than ObCSEncodingUtil::ENCODING_ROW_COUNT_THRESHOLD,
@@ -161,6 +167,8 @@ TEST_F(TestCSEncoder, test_integer_encoder)
   int_col_encoder = reinterpret_cast<ObIntegerColumnEncoder *>(e);
   ASSERT_EQ(true, int_col_encoder->enc_ctx_.meta_.is_use_null_replace_value());
   ASSERT_EQ(-1, int_col_encoder->enc_ctx_.meta_.null_replaced_value_);
+  ASSERT_EQ(false, e->get_column_header().has_nop_bitmap());
+  ASSERT_EQ(false, e->get_column_header().has_nop());
 
   // <5> write 3 row: 0/INT32_MAX - 1/NULL
   // row count less than ObCSEncodingUtil::ENCODING_ROW_COUNT_THRESHOLD,
@@ -180,6 +188,8 @@ TEST_F(TestCSEncoder, test_integer_encoder)
   int_col_encoder = reinterpret_cast<ObIntegerColumnEncoder *>(e);
   ASSERT_EQ(true, int_col_encoder->enc_ctx_.meta_.is_use_null_replace_value());
   ASSERT_EQ(INT32_MAX, int_col_encoder->enc_ctx_.meta_.null_replaced_value());
+  ASSERT_EQ(false, e->get_column_header().has_nop_bitmap());
+  ASSERT_EQ(false, e->get_column_header().has_nop());
 
   // <6> write 1000 row, and monotonic increase
   encoder.reuse();
@@ -197,8 +207,10 @@ TEST_F(TestCSEncoder, test_integer_encoder)
   int_col_encoder = reinterpret_cast<ObIntegerColumnEncoder *>(e);
   ASSERT_EQ(2, int_col_encoder->enc_ctx_.meta_.get_uint_width_size());
   ASSERT_EQ(false, int_col_encoder->enc_ctx_.meta_.is_use_null_replace_value());
-  ASSERT_EQ(false, e->get_column_header().has_null_bitmap());
+  ASSERT_EQ(false, e->get_column_header().has_null_or_nop_bitmap());
   ASSERT_EQ(false, int_col_encoder->enc_ctx_.meta_.is_use_base());
+  ASSERT_EQ(false, e->get_column_header().has_nop_bitmap());
+  ASSERT_EQ(false, e->get_column_header().has_nop());
 
   //<7> write all null
   encoder.reuse();
@@ -214,8 +226,120 @@ TEST_F(TestCSEncoder, test_integer_encoder)
   ASSERT_EQ(1, int_col_encoder->enc_ctx_.meta_.get_uint_width_size());
   ASSERT_EQ(true, int_col_encoder->enc_ctx_.meta_.is_use_null_replace_value());
   ASSERT_EQ(0, int_col_encoder->enc_ctx_.meta_.null_replaced_value());
-  ASSERT_EQ(false, e->get_column_header().has_null_bitmap());
+  ASSERT_EQ(false, e->get_column_header().has_null_or_nop_bitmap());
   ASSERT_EQ(false, int_col_encoder->enc_ctx_.meta_.is_use_base());
+  ASSERT_EQ(false, e->get_column_header().has_nop_bitmap());
+
+  //<8> write all nop
+  encoder.reuse();
+  row_cnt = 1000;
+  row.storage_datums_[0].set_nop();
+  for (int64_t i = 0; i < row_cnt; ++i) {
+    ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
+  }
+  ASSERT_EQ(OB_SUCCESS, encoder.build_block(buf, buf_size));
+  e = encoder.encoders_[0];
+  ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::INTEGER);
+  int_col_encoder = reinterpret_cast<ObIntegerColumnEncoder *>(e);
+  ASSERT_EQ(1, int_col_encoder->enc_ctx_.meta_.get_uint_width_size());
+  ASSERT_EQ(true, int_col_encoder->enc_ctx_.meta_.is_use_null_replace_value());
+  ASSERT_EQ(0, int_col_encoder->enc_ctx_.meta_.null_replaced_value());
+  ASSERT_EQ(true, e->get_column_header().has_nop());
+  ASSERT_EQ(false, e->get_column_header().has_null_or_nop_bitmap());
+  ASSERT_EQ(false, int_col_encoder->enc_ctx_.meta_.is_use_base());
+  ASSERT_EQ(false, e->get_column_header().has_nop_bitmap());
+
+  //<9> write nop null
+  encoder.reuse();
+  row_cnt = 1000;
+  row.storage_datums_[0].set_nop();
+  for (auto i = 0; i < row_cnt / 2; ++i) {
+    ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
+  }
+  row.storage_datums_[0].set_null();
+  for (auto i = row_cnt / 2; i < row_cnt; ++i) {
+    ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
+  }
+  ASSERT_EQ(OB_SUCCESS, encoder.build_block(buf, buf_size));
+  e = encoder.encoders_[0];
+  ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::INTEGER);
+  int_col_encoder = reinterpret_cast<ObIntegerColumnEncoder *>(e);
+  ASSERT_EQ(1, int_col_encoder->enc_ctx_.meta_.get_uint_width_size());
+  ASSERT_EQ(true, int_col_encoder->enc_ctx_.meta_.is_use_null_replace_value());
+  ASSERT_EQ(0, int_col_encoder->enc_ctx_.meta_.null_replaced_value());
+  ASSERT_EQ(true, e->get_column_header().has_nop());
+  ASSERT_EQ(false, e->get_column_header().has_null_or_nop_bitmap());
+  ASSERT_EQ(false, int_col_encoder->enc_ctx_.meta_.is_use_base());
+  ASSERT_EQ(true, e->get_column_header().has_nop_bitmap());
+  ASSERT_EQ(true, e->get_column_header().has_nop());
+
+  // <10> write 4 row: INT32_MIN/INT32_MAX/NULL/NOP + 200 rows
+  encoder.reuse();
+  seed = INT32_MIN;
+  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(seed, row));
+  ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
+  seed = INT32_MAX;
+  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(seed, row));
+  ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
+  row.storage_datums_[0].set_null();
+  ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
+  row.storage_datums_[0].set_nop();
+  ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
+
+  row_cnt = 200;
+  for (int64_t i = 0; i < row_cnt; ++i) {
+    seed = i - 100;
+    ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(seed, row));
+    ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
+  }
+
+  ASSERT_EQ(OB_SUCCESS, encoder.build_block(buf, buf_size));
+  e = encoder.encoders_[0];
+  ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::INTEGER);
+  ASSERT_EQ(INT32_MIN, (int64_t)e->ctx_->integer_min_);
+  ASSERT_EQ(INT32_MAX, (int64_t)e->ctx_->integer_max_);
+
+  int_col_encoder = reinterpret_cast<ObIntegerColumnEncoder *>(e);
+  ASSERT_EQ(4, int_col_encoder->enc_ctx_.meta_.get_uint_width_size());
+  ASSERT_EQ(false, int_col_encoder->enc_ctx_.meta_.is_use_null_replace_value());
+  ASSERT_EQ(true, int_col_encoder->enc_ctx_.meta_.is_use_base());
+  ASSERT_EQ(INT32_MIN, int_col_encoder->enc_ctx_.meta_.base_value());
+  ASSERT_EQ(true, e->get_column_header().has_null_or_nop_bitmap());
+  ASSERT_EQ(true, e->get_column_header().has_nop_bitmap());
+  ASSERT_EQ(true, e->get_column_header().has_nop());
+
+  // <11> write 3 row: INT32_MIN/INT32_MAX/NOP + 200 rows
+  encoder.reuse();
+  seed = INT32_MIN;
+  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(seed, row));
+  ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
+  seed = INT32_MAX;
+  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(seed, row));
+  ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
+  row.storage_datums_[0].set_nop();
+  ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
+
+  row_cnt = 200;
+  for (int64_t i = 0; i < row_cnt; ++i) {
+    seed = i - 100;
+    ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(seed, row));
+    ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
+  }
+
+  ASSERT_EQ(OB_SUCCESS, encoder.build_block(buf, buf_size));
+  e = encoder.encoders_[0];
+  ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::INTEGER);
+  ASSERT_EQ(INT32_MIN, (int64_t)e->ctx_->integer_min_);
+  ASSERT_EQ(INT32_MAX, (int64_t)e->ctx_->integer_max_);
+
+  int_col_encoder = reinterpret_cast<ObIntegerColumnEncoder *>(e);
+  ASSERT_EQ(4, int_col_encoder->enc_ctx_.meta_.get_uint_width_size());
+  ASSERT_EQ(false, int_col_encoder->enc_ctx_.meta_.is_use_null_replace_value());
+  ASSERT_EQ(true, int_col_encoder->enc_ctx_.meta_.is_use_base());
+  ASSERT_EQ(INT32_MIN, int_col_encoder->enc_ctx_.meta_.base_value());
+  ASSERT_EQ(true, e->get_column_header().has_null_or_nop_bitmap());
+  ASSERT_EQ(false, e->get_column_header().has_nop_bitmap());
+  ASSERT_EQ(true, e->get_column_header().has_nop());
 
   reuse();
 }
@@ -308,7 +432,7 @@ TEST_F(TestCSEncoder, test_string_encoder)
   ASSERT_EQ(64, e->ctx_->fix_data_size_);
   ASSERT_EQ(64 * row_cnt, e->ctx_->var_data_size_);
   ASSERT_EQ(64 * row_cnt, e->ctx_->dict_var_data_size_);
-  ASSERT_EQ(true, e->get_column_header().has_null_bitmap());
+  ASSERT_EQ(true, e->get_column_header().has_null_or_nop_bitmap());
 
   ASSERT_EQ((8 + 64 + 8) * row_cnt + 16, encoder.ctx_.estimate_block_size_);
   ASSERT_EQ(buf_size, encoder.ctx_.real_block_size_ + encoder.all_headers_size_);
@@ -343,7 +467,7 @@ TEST_F(TestCSEncoder, test_string_encoder)
   ASSERT_EQ(-1, e->ctx_->fix_data_size_);
   ASSERT_EQ(sum_len, e->ctx_->var_data_size_);
   ASSERT_EQ(sum_len, e->ctx_->dict_var_data_size_);
-  ASSERT_EQ(false, e->get_column_header().has_null_bitmap());
+  ASSERT_EQ(false, e->get_column_header().has_null_or_nop_bitmap());
   LOG_INFO("print ObMicroBlockEncodingCtx", K_(ctx));
 
   str_col_encoder = reinterpret_cast<ObStringColumnEncoder *>(e);
@@ -368,7 +492,7 @@ TEST_F(TestCSEncoder, test_string_encoder)
   e = encoder.encoders_[1];
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::STRING);
   ASSERT_EQ(-1, e->ctx_->fix_data_size_);
-  ASSERT_EQ(true, e->get_column_header().has_null_bitmap());
+  ASSERT_EQ(true, e->get_column_header().has_null_or_nop_bitmap());
   LOG_INFO("print ObMicroBlockEncodingCtx", K_(ctx));
 
   str_col_encoder = reinterpret_cast<ObStringColumnEncoder *>(e);
@@ -388,7 +512,7 @@ TEST_F(TestCSEncoder, test_string_encoder)
   e = encoder.encoders_[1];
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::STRING);
   ASSERT_EQ(-1, e->ctx_->fix_data_size_);
-  ASSERT_EQ(false, e->get_column_header().has_null_bitmap());
+  ASSERT_EQ(false, e->get_column_header().has_null_or_nop_bitmap());
   LOG_INFO("print ObMicroBlockEncodingCtx", K_(ctx));
 
   str_col_encoder = reinterpret_cast<ObStringColumnEncoder *>(e);
@@ -408,7 +532,7 @@ TEST_F(TestCSEncoder, test_string_encoder)
   e = encoder.encoders_[1];
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::STRING);
   ASSERT_EQ(0, e->ctx_->fix_data_size_);
-  ASSERT_EQ(false, e->get_column_header().has_null_bitmap());
+  ASSERT_EQ(false, e->get_column_header().has_null_or_nop_bitmap());
   LOG_INFO("print ObMicroBlockEncodingCtx", K_(ctx));
 
   str_col_encoder = reinterpret_cast<ObStringColumnEncoder *>(e);
@@ -433,13 +557,177 @@ TEST_F(TestCSEncoder, test_string_encoder)
   e = encoder.encoders_[1];
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::STRING);
   ASSERT_EQ(0, e->ctx_->fix_data_size_);
-  ASSERT_EQ(true, e->get_column_header().has_null_bitmap());
+  ASSERT_EQ(true, e->get_column_header().has_null_or_nop_bitmap());
   LOG_INFO("print ObMicroBlockEncodingCtx", K_(ctx));
 
   str_col_encoder = reinterpret_cast<ObStringColumnEncoder *>(e);
   ASSERT_EQ(true, str_col_encoder->enc_ctx_.meta_.is_fixed_len_string());
   ASSERT_EQ(false, str_col_encoder->enc_ctx_.meta_.is_use_zero_len_as_null());
   ASSERT_EQ(false, str_col_encoder->enc_ctx_.info_.raw_encoding_str_offset_);
+
+  // <6> 100 fixed len string and has one nop
+  row_cnt = 100;
+  encoder.reuse();
+  for (int64_t i = 0; i < row_cnt; ++i) {
+    ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(i, row));
+    ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
+  }
+  for (int64_t i = 0; i < col_cnt; i++) {
+    row.storage_datums_[i].set_nop();
+  }
+  ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
+
+  ASSERT_EQ(OB_SUCCESS, encoder.build_block(buf, buf_size));
+  e = encoder.encoders_[1];
+  ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::STRING);
+  ASSERT_EQ(64, e->ctx_->fix_data_size_);
+  ASSERT_EQ(64 * row_cnt, e->ctx_->var_data_size_);
+  ASSERT_EQ(64 * row_cnt, e->ctx_->dict_var_data_size_);
+  ASSERT_EQ(true, e->get_column_header().has_null_or_nop_bitmap());
+
+  str_col_encoder = reinterpret_cast<ObStringColumnEncoder *>(e);
+  ASSERT_EQ(true, str_col_encoder->enc_ctx_.meta_.is_fixed_len_string());
+  ASSERT_EQ(64, str_col_encoder->enc_ctx_.meta_.get_fixed_string_len());
+  ASSERT_EQ(false, str_col_encoder->enc_ctx_.meta_.is_use_zero_len_as_null());
+  ASSERT_EQ(false, str_col_encoder->enc_ctx_.info_.raw_encoding_str_offset_);
+  ASSERT_TRUE(e->get_column_header().has_nop());
+  ASSERT_FALSE(e->get_column_header().has_nop_bitmap());
+
+  // <7> var length string and has nop and has no zero length string
+  row_cnt = 100;
+  encoder.reuse();
+  sum_len = 0;
+  for (int64_t i = 0; i < row_cnt; i++) {
+    char *varchar_data = static_cast<char *>(allocator_.alloc(i + 1));
+    ASSERT_TRUE(nullptr != varchar_data);
+    MEMSET(varchar_data, 0xf, i + 1);
+    row.storage_datums_[0].set_int(i);
+    row.storage_datums_[1].set_string(varchar_data, i + 1);
+    ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
+    sum_len += i + 1;
+  }
+  row.storage_datums_[0].set_nop();
+  row.storage_datums_[1].set_nop();
+  ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
+  ASSERT_EQ(OB_SUCCESS, encoder.build_block(buf, buf_size));
+
+  e = encoder.encoders_[1];
+  ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::STRING);
+  ASSERT_EQ(-1, e->ctx_->fix_data_size_);
+  ASSERT_EQ(sum_len, e->ctx_->var_data_size_);
+  ASSERT_EQ(sum_len, e->ctx_->dict_var_data_size_);
+  ASSERT_EQ(false, e->get_column_header().has_null_or_nop_bitmap());
+  LOG_INFO("print ObMicroBlockEncodingCtx", K_(ctx));
+
+  str_col_encoder = reinterpret_cast<ObStringColumnEncoder *>(e);
+  ASSERT_EQ(false, str_col_encoder->enc_ctx_.meta_.get_fixed_string_len());
+  ASSERT_EQ(true, str_col_encoder->enc_ctx_.meta_.is_use_zero_len_as_null());
+  ASSERT_EQ(false, str_col_encoder->enc_ctx_.info_.raw_encoding_str_offset_);
+  ASSERT_TRUE(e->get_column_header().has_nop());
+  ASSERT_FALSE(e->get_column_header().has_nop_bitmap());
+
+  // <8> var length string and has nop and has zero length string
+  encoder.reuse();
+  for (int64_t i = 0; i < ObCSEncodingUtil::ENCODING_ROW_COUNT_THRESHOLD - 2; i++) {
+    char *varchar_data = static_cast<char *>(allocator_.alloc(i + 1));
+    ASSERT_TRUE(nullptr != varchar_data);
+    MEMSET(varchar_data, 0xf, i + 1);
+    row.storage_datums_[0].set_int(i);
+    row.storage_datums_[1].set_string(varchar_data, i);
+    ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
+  }
+  row.storage_datums_[0].set_nop();
+  row.storage_datums_[1].set_nop();
+  ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
+  ASSERT_EQ(OB_SUCCESS, encoder.build_block(buf, buf_size));
+  e = encoder.encoders_[1];
+  ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::STRING);
+  ASSERT_EQ(-1, e->ctx_->fix_data_size_);
+  ASSERT_EQ(true, e->get_column_header().has_null_or_nop_bitmap());
+  LOG_INFO("print ObMicroBlockEncodingCtx", K_(ctx));
+
+  str_col_encoder = reinterpret_cast<ObStringColumnEncoder *>(e);
+  ASSERT_EQ(false, str_col_encoder->enc_ctx_.meta_.is_fixed_len_string());
+  ASSERT_EQ(false, str_col_encoder->enc_ctx_.meta_.is_use_zero_len_as_null());
+  ASSERT_EQ(false, str_col_encoder->enc_ctx_.info_.raw_encoding_str_offset_);
+  ASSERT_TRUE(e->get_column_header().has_nop());
+  ASSERT_FALSE(e->get_column_header().has_nop_bitmap());
+
+  // <9> write all nop
+  row_cnt = 100;
+  encoder.reuse();
+  for (int64_t i = 0; i < row_cnt; i++) {
+    row.storage_datums_[0].set_int(i);
+    row.storage_datums_[1].set_nop();
+    ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
+  }
+  ASSERT_EQ(OB_SUCCESS, encoder.build_block(buf, buf_size));
+  e = encoder.encoders_[1];
+  ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::STRING);
+  ASSERT_EQ(-1, e->ctx_->fix_data_size_);
+  ASSERT_EQ(false, e->get_column_header().has_null_or_nop_bitmap());
+  LOG_INFO("print ObMicroBlockEncodingCtx", K_(ctx));
+
+  str_col_encoder = reinterpret_cast<ObStringColumnEncoder *>(e);
+  ASSERT_EQ(false, str_col_encoder->enc_ctx_.meta_.is_fixed_len_string());
+  ASSERT_EQ(true, str_col_encoder->enc_ctx_.meta_.is_use_zero_len_as_null());
+  ASSERT_EQ(false, str_col_encoder->enc_ctx_.info_.raw_encoding_str_offset_);
+  ASSERT_TRUE(e->get_column_header().has_nop());
+  ASSERT_FALSE(e->get_column_header().has_nop_bitmap());
+
+  // <10> write all nop and null
+  row_cnt = 100;
+  encoder.reuse();
+  for (int64_t i = 0; i < row_cnt / 2; i++) {
+    row.storage_datums_[0].set_int(i);
+    row.storage_datums_[1].set_null();
+    ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
+  }
+  for (int64_t i = row_cnt / 2; i < row_cnt; i++) {
+    row.storage_datums_[0].set_int(i);
+    row.storage_datums_[1].set_nop();
+    ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
+  }
+  ASSERT_EQ(OB_SUCCESS, encoder.build_block(buf, buf_size));
+  e = encoder.encoders_[1];
+  ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::STRING);
+  ASSERT_EQ(-1, e->ctx_->fix_data_size_);
+  ASSERT_EQ(false, e->get_column_header().has_null_or_nop_bitmap());
+  LOG_INFO("print ObMicroBlockEncodingCtx", K_(ctx));
+
+  str_col_encoder = reinterpret_cast<ObStringColumnEncoder *>(e);
+  ASSERT_EQ(false, str_col_encoder->enc_ctx_.meta_.is_fixed_len_string());
+  ASSERT_EQ(true, str_col_encoder->enc_ctx_.meta_.is_use_zero_len_as_null());
+  ASSERT_EQ(false, str_col_encoder->enc_ctx_.info_.raw_encoding_str_offset_);
+  ASSERT_TRUE(e->get_column_header().has_nop());
+  ASSERT_TRUE(e->get_column_header().has_nop_bitmap());
+
+  // <11> write all zero length datum and nop
+  row_cnt = 200;
+  encoder.reuse();
+  for (int64_t i = 0; i < row_cnt - 100; i++) {
+    row.storage_datums_[0].set_int(i);
+    row.storage_datums_[1].set_string(nullptr, 0);
+    ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
+  }
+  for (int64_t i = row_cnt - 100; i < row_cnt; i++) {
+    row.storage_datums_[0].set_int(i);
+    row.storage_datums_[1].set_nop();
+    ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
+  }
+  ASSERT_EQ(OB_SUCCESS, encoder.build_block(buf, buf_size));
+  e = encoder.encoders_[1];
+  ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::STRING);
+  ASSERT_EQ(0, e->ctx_->fix_data_size_);
+  ASSERT_EQ(true, e->get_column_header().has_null_or_nop_bitmap());
+  LOG_INFO("print ObMicroBlockEncodingCtx", K_(ctx));
+
+  str_col_encoder = reinterpret_cast<ObStringColumnEncoder *>(e);
+  ASSERT_EQ(true, str_col_encoder->enc_ctx_.meta_.is_fixed_len_string());
+  ASSERT_EQ(false, str_col_encoder->enc_ctx_.meta_.is_use_zero_len_as_null());
+  ASSERT_EQ(false, str_col_encoder->enc_ctx_.info_.raw_encoding_str_offset_);
+  ASSERT_TRUE(e->get_column_header().has_nop());
+  ASSERT_FALSE(e->get_column_header().has_nop_bitmap());
 
   reuse();
 }
@@ -486,7 +774,7 @@ TEST_F(TestCSEncoder, test_dict_encoder)
   ASSERT_EQ(-50, (int64_t)e->ctx_->integer_min_);
   ASSERT_EQ(49, (int64_t)e->ctx_->integer_max_);
   //ASSERT_EQ(true, e->ctx_->need_sort_);
-  ASSERT_EQ(false, e->get_column_header().has_null_bitmap());
+  ASSERT_EQ(false, e->get_column_header().has_null_or_nop_bitmap());
 
   ObIntDictColumnEncoder *dict_encoder = reinterpret_cast<ObIntDictColumnEncoder *>(e);
   ASSERT_EQ(1, dict_encoder->integer_dict_enc_ctx_.meta_.get_uint_width_size());
@@ -503,7 +791,7 @@ TEST_F(TestCSEncoder, test_dict_encoder)
   //ASSERT_EQ(true, e->ctx_->need_sort_);
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::STR_DICT);
   ASSERT_EQ(-1, e->ctx_->fix_data_size_);
-  ASSERT_EQ(false, e->get_column_header().has_null_bitmap());
+  ASSERT_EQ(false, e->get_column_header().has_null_or_nop_bitmap());
   LOG_INFO("print ObMicroBlockEncodingCtx", K_(ctx));
   ObStrDictColumnEncoder *str_dict_encoder = reinterpret_cast<ObStrDictColumnEncoder *>(e);
   ASSERT_EQ(false, str_dict_encoder->string_dict_enc_ctx_.meta_.is_fixed_len_string());
@@ -698,7 +986,7 @@ TEST_F(TestCSEncoder, test_decimal_int_encoder)
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::INTEGER);
   ASSERT_EQ(INT32_MIN, (int64_t)e->ctx_->integer_min_);
   ASSERT_EQ(INT32_MAX, (int64_t)e->ctx_->integer_max_);
-  ASSERT_EQ(false, e->get_column_header().has_null_bitmap());
+  ASSERT_EQ(false, e->get_column_header().has_null_or_nop_bitmap());
   ObIntegerColumnEncoder *int_encoder = reinterpret_cast<ObIntegerColumnEncoder *>(e);
   ASSERT_EQ(8, int_encoder->enc_ctx_.meta_.get_uint_width_size());
   ASSERT_EQ(true, int_encoder->enc_ctx_.meta_.is_use_null_replace_value());
@@ -709,7 +997,7 @@ TEST_F(TestCSEncoder, test_decimal_int_encoder)
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::INTEGER);
   ASSERT_EQ(INT64_MIN, (int64_t)e->ctx_->integer_min_);
   ASSERT_EQ(INT64_MAX, (int64_t)e->ctx_->integer_max_);
-  ASSERT_EQ(true, e->get_column_header().has_null_bitmap());
+  ASSERT_EQ(true, e->get_column_header().has_null_or_nop_bitmap());
   int_encoder = reinterpret_cast<ObIntegerColumnEncoder *>(e);
   ASSERT_EQ(8, int_encoder->enc_ctx_.meta_.get_uint_width_size());
   ASSERT_EQ(false, int_encoder->enc_ctx_.meta_.is_use_null_replace_value());
@@ -728,7 +1016,7 @@ TEST_F(TestCSEncoder, test_decimal_int_encoder)
   e = encoder.encoders_[3]; // int128_t, use fix length has less storage cost
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::STRING);
   ASSERT_EQ(sizeof(int128_t), e->ctx_->fix_data_size_);
-  ASSERT_EQ(true, e->get_column_header().has_null_bitmap());
+  ASSERT_EQ(true, e->get_column_header().has_null_or_nop_bitmap());
   ObStringColumnEncoder *str_encoder = reinterpret_cast<ObStringColumnEncoder *>(e);
   ASSERT_EQ(true, str_encoder->enc_ctx_.meta_.is_fixed_len_string());
   ASSERT_EQ(false, str_encoder->enc_ctx_.meta_.is_use_zero_len_as_null());
@@ -736,7 +1024,7 @@ TEST_F(TestCSEncoder, test_decimal_int_encoder)
   e = encoder.encoders_[4]; // int128_t, use var length has less storage cost
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::STRING);
   ASSERT_EQ(sizeof(int128_t), e->ctx_->fix_data_size_);
-  ASSERT_EQ(false, e->get_column_header().has_null_bitmap());
+  ASSERT_EQ(false, e->get_column_header().has_null_or_nop_bitmap());
   str_encoder = reinterpret_cast<ObStringColumnEncoder *>(e);
   ASSERT_EQ(false, str_encoder->enc_ctx_.meta_.is_fixed_len_string());
   ASSERT_EQ(true, str_encoder->enc_ctx_.meta_.is_use_zero_len_as_null());

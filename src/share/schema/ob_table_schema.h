@@ -545,10 +545,13 @@ public:
 
   ~ObSemiStructEncodingType() { reset(); }
 
-  void reset() { flags_ = 0;}
-  bool is_enable_semistruct_encoding() const { return ObSemistructProperties::ENCODING == mode_; }
+  void reset() { flags_ = 0; }
+  bool is_enable_semistruct_encoding() const {
+    return ObSemistructProperties::MAX_MODE > mode_ && ObSemistructProperties::NONE < mode_;
+  }
   int64_t get_deep_copy_size() const { return sizeof(ObSemiStructEncodingType); }
 
+public:
   union
   {
     int64_t flags_;
@@ -558,6 +561,7 @@ public:
       uint64_t reserved_ : 56;
     };
   };
+
   TO_STRING_KV(K_(mode), K_(reserved));
 };
 
@@ -2190,19 +2194,29 @@ public:
   {
     mv_mode_.table_referenced_by_fast_lsm_mv_flag_ = flag;
   }
-  void set_semistruct_encoding_type(const int64_t type) { semistruct_encoding_type_.flags_ = type; }
-  void set_semistruct_encoding_type(const ObSemiStructEncodingType& type) { semistruct_encoding_type_ = type; }
-  const ObSemiStructEncodingType& get_semistruct_encoding_type() const { return semistruct_encoding_type_; }
-  int64_t get_semistruct_encoding_flags() const { return semistruct_encoding_type_.flags_; }
-  virtual int get_semistruct_encoding_type(ObSemiStructEncodingType& type) const
+  inline int set_semistruct_properties(const common::ObString &semistruct_properties)
   {
-    type = semistruct_encoding_type_;
-    return OB_SUCCESS;
+    return deep_copy_str(semistruct_properties, semistruct_properties_);
   }
   virtual const common::ObString& get_semistruct_properties() const override
   {
     return semistruct_properties_;
   }
+  void set_semistruct_encoding_type(const uint64_t &flags)
+  {
+    semistruct_encoding_type_.flags_ = flags;
+  }
+  inline void set_semistruct_encoding_type(const ObSemiStructEncodingType &type)
+  {
+    semistruct_encoding_type_ = type;
+  }
+  virtual int get_semistruct_encoding_type(ObSemiStructEncodingType& type) const override
+  {
+    type = semistruct_encoding_type_;
+    return OB_SUCCESS;
+  }
+  int64_t get_semistruct_encoding_flags() const { return semistruct_encoding_type_.flags_; }
+  inline const ObSemiStructEncodingType& get_semistruct_encoding_type() const { return semistruct_encoding_type_; }
   inline int set_dynamic_partition_policy(const common::ObString &dynamic_partition_policy)
   {
     return deep_copy_str(dynamic_partition_policy, dynamic_partition_policy_);

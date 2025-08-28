@@ -409,29 +409,30 @@ int ObVecIndexBuilderUtil::append_vec_delta_buffer_arg(
     ObIArray<obrpc::ObCreateIndexArg> &index_arg_list)
 {
   int ret = OB_SUCCESS;
-  ObCreateIndexArg vec_delta_buffer_arg;
-  char* buf = nullptr;
-  int64_t pos = 0;
-  ObString domain_index_name = index_arg.index_name_;
-  if (OB_ISNULL(allocator) || OB_ISNULL(session_info) || !(is_vec_index(index_arg.index_type_))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("allocator is nullptr", K(ret), K(index_arg.index_type_));
-  } else if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator->alloc(sizeof(char) * OB_MAX_PROC_ENV_LENGTH)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to alloc buffer", KR(ret), K(OB_MAX_PROC_ENV_LENGTH));
-  } else if (OB_FAIL(ObExecEnv::gen_exec_env(*session_info, buf, OB_MAX_PROC_ENV_LENGTH, pos))) {
-    LOG_WARN("fail to gen exec env", KR(ret));
-  } else if (OB_FAIL(vec_delta_buffer_arg.assign(index_arg))) {
-    LOG_WARN("failed to assign to vec delta buffer arg", K(ret));
-  } else if (FALSE_IT(vec_delta_buffer_arg.index_type_ = INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL)) {
-  } else if (OB_FAIL(generate_vec_index_name(allocator,
-                                             vec_delta_buffer_arg.index_type_,
-                                             domain_index_name,
-                                             vec_delta_buffer_arg.index_name_))) {
-    LOG_WARN("failed to generate vec index name", K(ret));
-  } else if (FALSE_IT(vec_delta_buffer_arg.vidx_refresh_info_.exec_env_.assign_ptr(buf, pos))) {
-  } else if (OB_FAIL(index_arg_list.push_back(vec_delta_buffer_arg))) {
-    LOG_WARN("failed to push back vec delta buffer arg", K(ret));
+  SMART_VAR(ObCreateIndexArg, vec_delta_buffer_arg) {
+    char* buf = nullptr;
+    int64_t pos = 0;
+    ObString domain_index_name = index_arg.index_name_;
+    if (OB_ISNULL(allocator) || OB_ISNULL(session_info) || !(is_vec_index(index_arg.index_type_))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("allocator is nullptr", K(ret), K(index_arg.index_type_));
+    } else if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator->alloc(sizeof(char) * OB_MAX_PROC_ENV_LENGTH)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc buffer", KR(ret), K(OB_MAX_PROC_ENV_LENGTH));
+    } else if (OB_FAIL(ObExecEnv::gen_exec_env(*session_info, buf, OB_MAX_PROC_ENV_LENGTH, pos))) {
+      LOG_WARN("fail to gen exec env", KR(ret));
+    } else if (OB_FAIL(vec_delta_buffer_arg.assign(index_arg))) {
+      LOG_WARN("failed to assign to vec delta buffer arg", K(ret));
+    } else if (FALSE_IT(vec_delta_buffer_arg.index_type_ = INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL)) {
+    } else if (OB_FAIL(generate_vec_index_name(allocator,
+                                              vec_delta_buffer_arg.index_type_,
+                                              domain_index_name,
+                                              vec_delta_buffer_arg.index_name_))) {
+      LOG_WARN("failed to generate vec index name", K(ret));
+    } else if (FALSE_IT(vec_delta_buffer_arg.vidx_refresh_info_.exec_env_.assign_ptr(buf, pos))) {
+    } else if (OB_FAIL(index_arg_list.push_back(vec_delta_buffer_arg))) {
+      LOG_WARN("failed to push back vec delta buffer arg", K(ret));
+    }
   }
   return ret;
 }

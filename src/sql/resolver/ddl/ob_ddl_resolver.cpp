@@ -118,7 +118,8 @@ ObDDLResolver::ObDDLResolver(ObResolverParams &params)
     vec_index_type_(INDEX_TYPE_MAX),
     enable_macro_block_bloom_filter_(false),
     semistruct_encoding_type_(),
-    dynamic_partition_policy_()
+    dynamic_partition_policy_(),
+    semistruct_properties_()
 {
   table_mode_.reset();
 }
@@ -3112,8 +3113,8 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
         }
         break;
       }
-      case T_SEMISTRUCT_ENCODING_TYPE: {
-        ret = resolve_semistruct_encoding_type(option_node, is_index_option);
+      case T_SEMISTRUCT_PROPERTIES: {
+        ret = resolve_semistruct_properties(option_node, is_index_option);
         break;
       }
       case T_MERGE_ENGINE: {
@@ -5735,6 +5736,7 @@ void ObDDLResolver::reset() {
   enable_macro_block_bloom_filter_ = false;
   semistruct_encoding_type_.reset();
   dynamic_partition_policy_.reset();
+  semistruct_properties_.reset();
 }
 
 void ObDDLResolver::reset_index()
@@ -14134,7 +14136,7 @@ bool ObDDLResolver::is_column_group_supported() const
   return is_supported;
 }
 
-int ObDDLResolver::resolve_semistruct_encoding_type(const ParseNode *option_node, const bool is_index_option)
+int ObDDLResolver::resolve_semistruct_properties(const ParseNode *option_node, const bool is_index_option)
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = 0;
@@ -14145,10 +14147,6 @@ int ObDDLResolver::resolve_semistruct_encoding_type(const ParseNode *option_node
   } else if (OB_FALSE_IT(tenant_id = session_info_->get_effective_tenant_id())) {
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
     LOG_WARN("get tenant data version failed", K(ret));
-  } else if (tenant_data_version < DATA_VERSION_4_3_5_2) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("semistruct encoding is not supported in data version less than 4.3.5.2", K(ret), K(tenant_data_version));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "semistruct encoding in data version less than 4.3.5.2");
   } else if (is_index_option) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("index option should not specify semistruct encoding", K(ret));
@@ -14158,27 +14156,98 @@ int ObDDLResolver::resolve_semistruct_encoding_type(const ParseNode *option_node
   } else if (OB_ISNULL(option_node->children_)) {
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(WARN, "the children of option_node is null", K(option_node->children_), K(ret));
-  } else if (OB_ISNULL(option_node->children_[0])) {
-    ret = OB_ERR_UNEXPECTED;
-    SQL_RESV_LOG(WARN,"children can't be null", K(ret));
   } else if (OB_ISNULL(stmt_)) {
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(WARN,"stmt_ is null", K(ret));
+  } else if (option_node->num_child_ == 0) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_RESV_LOG(WARN, "semistruct params is empty", K(ret));
   } else {
-    ObString type_str(static_cast<int32_t>(option_node->children_[0]->str_len_), (char *)(option_node->children_[0]->str_value_));
-    if (type_str.empty()) {
-      semistruct_encoding_type_.mode_ = ObSemistructProperties::Mode::NONE;
-    } else if (0 == type_str.case_compare("encoding")) {
-      semistruct_encoding_type_.mode_ = ObSemistructProperties::Mode::ENCODING;
-    } else {
-      ret = OB_INVALID_ARGUMENT;
-      SQL_RESV_LOG(WARN, "failed to resolve semistruct encoding type str", K(ret), K(type_str));
-      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "semistruct encoding type, should be none or encoding");
+    ObArenaAllocator semi_allocator;
+    ObIJsonBase *root = nullptr;
+    if (OB_ISNULL(root = OB_NEWx(ObJsonObject, allocator_, allocator_))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to new ObJsonObject", K(ret));
     }
-    if (OB_SUCC(ret) && stmt::T_ALTER_TABLE == stmt_->get_stmt_type()) {
-      if (OB_FAIL(alter_table_bitset_.add_member(ObAlterTableArg::SEMISTRUCT_ENCODING_TYPE))) {
+    for (int i = 0; OB_SUCC(ret) && i < option_node->num_child_; ++i) {
+      if (OB_ISNULL(option_node->children_[i])) {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_RESV_LOG(WARN, "list node can't be null", K(ret));
+      } else if (OB_ISNULL(option_node->children_[i]->children_[0])) {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_RESV_LOG(WARN, "children node can't be null", K(ret));
+      } else if (OB_FAIL(resolve_semistruct_child_node(semi_allocator, option_node->children_[i], tenant_data_version, root))) {
+        SQL_RESV_LOG(WARN, "failed to resolve semistruct child node", K(ret));
+      }
+    }
+    ObJsonBuffer j_buf(allocator_);
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(root->print(j_buf, false))) {
+      LOG_WARN("Fail to print json", K(ret));
+    } else if (OB_FAIL(j_buf.get_result_string(semistruct_properties_))) {
+      LOG_WARN("Fail to get result string", K(ret));
+    } else if (stmt::T_ALTER_TABLE == stmt_->get_stmt_type()) {
+      if (OB_FAIL(alter_table_bitset_.add_member(ObAlterTableArg::SEMISTRUCT_PROPERTIES))) {
         SQL_RESV_LOG(WARN, "failed to add member to bitset!", K(ret));
       }
+    }
+  }
+  return ret;
+}
+
+int ObDDLResolver::resolve_semistruct_child_node(ObArenaAllocator &semi_allocator, const ParseNode *option_node, const uint64_t tenant_data_version, ObIJsonBase *&root) {
+  int ret = OB_SUCCESS;
+  switch (option_node->type_) {
+    case T_SEMISTRUCT_ENCODING_TYPE: {
+      const int64_t encoding_type = option_node->children_[0]->value_;
+      if (OB_UNLIKELY(tenant_data_version < DATA_VERSION_4_4_1_0)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("semistruct encoding is not supported in data version less than 4.4.1.0", K(ret), K(tenant_data_version));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "semistruct encoding in data version less than 4.4.1.0");
+      } else if (ObSemistructProperties::is_mode_valid(encoding_type)) {
+        ObJsonInt *encoding_type_node = nullptr;
+        if (OB_ISNULL(encoding_type_node = OB_NEWx(ObJsonInt, &semi_allocator, encoding_type))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("Fail to new ObJsonInt", K(ret));
+        } else if (OB_FAIL(root->object_add(ObString("encoding_type"), encoding_type_node))) {
+          LOG_WARN("Fail to add encoding_type str", K(ret));
+        } else {
+          semistruct_encoding_type_.mode_ = encoding_type;
+        }
+      } else {
+        ret = OB_INVALID_ARGUMENT;
+        SQL_RESV_LOG(WARN, "failed to resolve semistruct encoding type str", K(ret), K(encoding_type));
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "semistruct encoding type, should be none or encoding");
+      }
+      break;
+    }
+    case T_FREQ_THRESHOLD: {
+      const int64_t semistruct_freq_threshold = option_node->children_[0]->value_;
+      if (OB_UNLIKELY(semistruct_freq_threshold > 100 || semistruct_freq_threshold <= 0)) {
+        ret = OB_INVALID_ARGUMENT;
+        SQL_RESV_LOG(
+            WARN, "failed to resolve semistruct freq threshold value", K(ret), K(semistruct_freq_threshold));
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT,
+            "semistruct freq threshold, should be greater than 0 and less than or equal to 100");
+      } else if (OB_UNLIKELY(tenant_data_version < DATA_VERSION_4_4_1_0)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("semistruct freq threshold is not supported in data version less than 4.4.1.0", K(ret), K(tenant_data_version));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "semistruct freq threshold in data version less than 4.4.1.0");
+      } else {
+        ObJsonInt *freq_threshold = nullptr;
+        if (OB_ISNULL(freq_threshold = OB_NEWx(ObJsonInt, &semi_allocator, semistruct_freq_threshold))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("Fail to new ObJsonInt", K(ret));
+        } else if (OB_FAIL(root->object_add(ObString("freq_threshold"), freq_threshold))) {
+          LOG_WARN("Fail to add freq_threshold", K(ret));
+        }
+      }
+      break;
+    }
+    default: {
+      ret = OB_INVALID_ARGUMENT;
+      SQL_RESV_LOG(WARN, "failed to resolve semistruct encoding type str", K(ret), K(option_node->type_));
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "semistruct encoding type, should be semistruct_freq_threshold");
     }
   }
   return ret;

@@ -59,6 +59,7 @@ const char *ObJsonNode::get_data() const
   const char* data;
   ObJsonNodeType type = json_type();
   bool is_string_type = (type == ObJsonNodeType::J_STRING ||
+                         type == ObJsonNodeType::J_SEMI_BIN ||
                          type == ObJsonNodeType::J_OBINARY ||
                          type == ObJsonNodeType::J_OOID ||
                          type == ObJsonNodeType::J_ORAWHEX ||
@@ -78,6 +79,7 @@ uint64_t ObJsonNode::get_data_length() const
   size_t len;
   ObJsonNodeType type = json_type();
   bool is_string_type = (type == ObJsonNodeType::J_STRING ||
+                         type == ObJsonNodeType::J_SEMI_BIN ||
                          type == ObJsonNodeType::J_OBINARY ||
                          type == ObJsonNodeType::J_OOID ||
                          type == ObJsonNodeType::J_ORAWHEX ||
@@ -139,7 +141,7 @@ int ObJsonNode::check_valid_array_op(ObIJsonBase *value) const
   if (OB_ISNULL(value)) { // check param
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("param value is NULL", K(ret));
-  } else if (json_type() != ObJsonNodeType::J_ARRAY) { // check json node type
+  } else if (json_type() != ObJsonNodeType::J_ARRAY && json_type() != ObJsonNodeType::J_SEMI_HETE_COL) { // check json node type
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("unexpected json type", K(ret), K(json_type()));
   } else if (value->is_bin()) {
@@ -176,6 +178,22 @@ int ObJsonNode::check_valid_array_op(uint64_t index) const
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid json node type", K(ret), K(json_type()));
   } 
+
+  return ret;
+}
+
+int ObJsonNode::object_add_v0(const common::ObString &key, ObIJsonBase *value, bool with_unique_key, bool is_lazy_sort, bool need_overwrite, bool is_schema)
+{
+  INIT_SUCC(ret);
+
+  if (OB_FAIL(check_valid_object_op(value))) {
+    LOG_WARN("invalid json object operation", K(ret), K(key));
+  } else {
+    ObJsonObject *j_obj = static_cast<ObJsonObject *>(this);
+    if (OB_FAIL(j_obj->add(key, static_cast<ObJsonNode *>(value), with_unique_key, is_lazy_sort, need_overwrite, is_schema))) {
+      LOG_WARN("fail to add value to object by key", K(ret), K(key));
+    }
+  }
 
   return ret;
 }

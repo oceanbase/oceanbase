@@ -218,5 +218,17 @@ void ObColumnCSEncodingCtx::try_set_need_sort(const ObCSColumnHeader::Type type,
   }
 }
 
+void ObBaseColumnDecoderCtx::set_nop_if_is_null(const int32_t row_id, ObStorageDatum &datum) const
+{
+  if (ObBaseColumnDecoderCtx::ObNopFlag::HAS_NO_NOP == nop_flag_) {
+  } else if (ObBaseColumnDecoderCtx::ObNopFlag::HAS_NOP_BITMAP == nop_flag_) {
+    if (ObCSDecodingUtil::test_bit(nop_bitmap_, row_id)) {
+      datum.set_nop();
+    }
+  } else if (ObBaseColumnDecoderCtx::ObNopFlag::IS_NOP_REPLACED == nop_flag_) {
+    datum.set_nop();
+  }
+}
+
 }
 }

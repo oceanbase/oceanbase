@@ -115,6 +115,8 @@ public:
   int array_append(ObIJsonBase *value) override;
   int array_insert(uint64_t index, ObIJsonBase *value) override;
   int object_add(const common::ObString &key, ObIJsonBase *value) override;
+  virtual int object_add_v0(const common::ObString &key, ObIJsonBase *value, bool with_unique_key = false,
+                      bool is_lazy_sort = false, bool need_overwrite = true, bool is_schema = false);
 private:
   int check_valid_object_op(ObIJsonBase *value) const;
   int check_valid_array_op(ObIJsonBase *value) const;
@@ -419,6 +421,18 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObJsonArray);
 };
 
+class ObJsonHeteCol : public ObJsonArray
+{
+public:
+  explicit ObJsonHeteCol(ObIAllocator *allocator)
+      : ObJsonArray(allocator)
+  {}
+  virtual ~ObJsonHeteCol() {}
+
+public:
+  OB_INLINE ObJsonNodeType json_type() const override { return ObJsonNodeType::J_SEMI_HETE_COL; }
+};
+
 // json scalar include(number(decimal, double, int, uint), string, null, datetime, opaque, boolean)
 class ObJsonScalar : public ObJsonNode
 {
@@ -587,21 +601,21 @@ public:
   {
   }
   virtual ~ObJsonString() {}
-  int64_t to_string(char *buf, const int64_t buf_len) const
+  virtual int64_t to_string(char *buf, const int64_t buf_len) const
   {
     int64_t pos = 0;
     databuff_printf(buf, buf_len, pos, "json string ");
     pos += str_.to_string(buf + pos, buf_len - pos);
     return pos;
   }
-  OB_INLINE ObJsonNodeType json_type() const override { return ObJsonNodeType::J_STRING; }
+  OB_INLINE virtual ObJsonNodeType json_type() const override { return ObJsonNodeType::J_STRING; }
   OB_INLINE void set_value(const char *str, uint64_t length) { str_.assign_ptr(str, length); }
   OB_INLINE const common::ObString &value() const { return str_; }
   OB_INLINE void set_is_null_to_str(bool value) { is_null_to_str_ = value; }
   OB_INLINE bool get_is_null_to_str() const { return is_null_to_str_; }
   OB_INLINE uint64_t length() const { return str_.length(); }
   OB_INLINE ObString get_str() const { return str_; }
-  OB_INLINE uint64_t get_serialize_size()
+  OB_INLINE virtual uint64_t get_serialize_size()
   {
     return sizeof(uint8_t)/*ObJBVerType*/ + serialization::encoded_length_vi64(length()) + length();
   }
@@ -613,6 +627,36 @@ private:
   uint64_t ext_;
   bool is_null_to_str_;
   DISALLOW_COPY_AND_ASSIGN(ObJsonString);
+};
+
+
+class ObJsonSemiBin : public ObJsonString
+{
+public:
+  explicit ObJsonSemiBin()
+      : ObJsonString(nullptr, 0),
+        real_json_type_(ObJsonNodeType::J_ERROR)
+  {}
+
+  virtual ~ObJsonSemiBin() {}
+  int64_t to_string(char *buf, const int64_t buf_len) const override
+  {
+    int64_t pos = 0;
+    databuff_printf(buf, buf_len, pos, "json semi bin ");
+    pos += get_str().to_string(buf + pos, buf_len - pos);
+    return pos;
+  }
+  OB_INLINE ObJsonNodeType json_type() const override { return ObJsonNodeType::J_SEMI_BIN; }
+  OB_INLINE ObJsonNodeType real_json_type() const { return real_json_type_; }
+  OB_INLINE void set_json_type(ObJsonNodeType json_type) { real_json_type_ = json_type; }
+  OB_INLINE uint64_t get_serialize_size()
+  {
+    return length();
+  }
+
+private:
+  ObJsonNodeType real_json_type_;
+
 };
 
 class ObJsonNull : public ObJsonScalar

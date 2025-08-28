@@ -99,9 +99,14 @@ DEFINE_GET_SERIALIZE_SIZE(ObIntegerStreamMeta)
 }
 
 int ObIntegerStreamEncoderCtx::build_signed_stream_meta(
-    const int64_t min, const int64_t max, const bool is_replace_null,
-    const int64_t replace_value, const int64_t precision_width_size,
-    const bool force_raw, const int64_t major_working_cluster_version, uint64_t &range)
+    const int64_t min,
+    const int64_t max,
+    const bool is_replace_null,
+    const int64_t replace_value,
+    const int64_t precision_width_size,
+    const bool force_raw,
+    const int64_t major_working_cluster_version,
+    uint64_t &range)
 {
   int ret = OB_SUCCESS;
 
@@ -145,9 +150,14 @@ int ObIntegerStreamEncoderCtx::build_signed_stream_meta(
   return ret;
 }
 
-int ObIntegerStreamEncoderCtx::build_unsigned_stream_meta(const uint64_t min,
-    const uint64_t max, const bool is_replace_null, const uint64_t replace_value,
-    const bool force_raw, const int64_t major_working_cluster_version, uint64_t &range)
+int ObIntegerStreamEncoderCtx::build_unsigned_stream_meta(
+    const uint64_t min,
+    const uint64_t max,
+    const bool is_replace_null,
+    const uint64_t replace_value,
+    const bool force_raw,
+    const int64_t major_working_cluster_version,
+    uint64_t &range)
 {
   int ret = OB_SUCCESS;
 

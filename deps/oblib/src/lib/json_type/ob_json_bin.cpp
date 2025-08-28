@@ -122,7 +122,7 @@ int ObJsonBin::check_valid_array_op(uint64_t index) const
   if (index >= element_count()) { // check param
     ret = OB_OUT_OF_ELEMENT;
     LOG_WARN("index is out of range in array", K(ret), K(index), K(element_count()));
-  } else if (json_type() != ObJsonNodeType::J_ARRAY) { // check json node type
+  } else if (json_type() != ObJsonNodeType::J_ARRAY && json_type() != ObJsonNodeType::J_SEMI_HETE_COL) { // check json node type
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid json node type", K(ret), K(json_type()));
   }
@@ -283,7 +283,8 @@ int ObJsonBin::create_new_binary(ObIJsonBase *value, ObJsonBin *&new_bin) const
 
   if (OB_FAIL(ret)) {
   } else if (OB_FALSE_IT(new_bin = new (buf) ObJsonBin(allocator))) {
-  } else if (!(json_type() == ObJsonNodeType::J_ARRAY || json_type() == ObJsonNodeType::J_OBJECT || ObJsonVerType::is_opaque_or_string(json_type()))) {
+  } else if (!(json_type() == ObJsonNodeType::J_ARRAY || json_type() == ObJsonNodeType::J_OBJECT
+                || json_type() == ObJsonNodeType::J_SEMI_HETE_COL || ObJsonVerType::is_opaque_or_string(json_type()))) {
     if (OB_FAIL(reset_child(*new_bin, meta_.type_, pos_, meta_.entry_size_))) {
       LOG_WARN("reset child value fail", K(ret), K(meta_));
     } else {
@@ -486,6 +487,8 @@ int ObJsonBinSerializer::serialize_json_object(ObJsonNode *object, ObJsonBuffer 
     meta.set_type(ObJsonBin::get_object_vertype(), false);
   } else if (ObJsonNodeType::J_ARRAY == json_type) {
     meta.set_type(ObJsonBin::get_array_vertype(), false);
+  } else if (ObJsonNodeType::J_SEMI_HETE_COL == json_type) {
+    meta.set_type(ObJsonBin::get_semi_hete_vertype(), false);
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("input is not object or array", K(ret), K(json_type));
@@ -541,15 +544,23 @@ int ObJsonBinSerializer::serialize_json_object(ObJsonNode *object, ObJsonBuffer 
       LOG_WARN("try_update_inline fail", K(ret), K(i));
     } else if (is_update_inline) {
       LOG_DEBUG("try_update_inline success", K(i));
-    } else if (OB_FALSE_IT(value_type = ObJsonVerType::get_json_vertype(value->json_type()))) {
-    } else if (OB_FAIL(set_value_entry(meta, buf_ptr, i, value_offset, value_type, !enable_reserialize/*check*/))) {
-      LOG_WARN("set_value_entry fail", K(ret), K(value_offset), K(value_type));
-    } else if (OB_FAIL(serialize_json_value(value, result))) {
-      LOG_WARN("serialize_json_value fail", K(ret));
+    } else if (value->json_type() == ObJsonNodeType::J_SEMI_BIN) {
+      value_type = ObJsonVerType::get_json_vertype(dynamic_cast<ObJsonSemiBin*>(value)->real_json_type());
+      if (OB_FAIL(set_value_entry(meta, buf_ptr, i, value_offset, value_type, !enable_reserialize/*check*/))) {
+        LOG_WARN("set_value_entry fail", K(ret), K(value_offset), K(value_type));
+      } else if (OB_FAIL(result.append(value->get_data(), value->get_data_length()))) {
+        LOG_WARN("append value fail", K(ret), K(value));
+      }
     } else {
-      // result may realloc, so need ensure point same memory
-      buf_ptr = result.ptr() + start_pos;
+      value_type = ObJsonVerType::get_json_vertype(value->json_type());
+      if (OB_FAIL(set_value_entry(meta, buf_ptr, i, value_offset, value_type, !enable_reserialize/*check*/))) {
+        LOG_WARN("set_value_entry fail", K(ret), K(value_offset), K(value_type));
+      } else if (OB_FAIL(serialize_json_value(value, result))) {
+        LOG_WARN("serialize_json_value fail", K(ret));
+      }
     }
+    // result may realloc, so need ensure point same memory
+    buf_ptr = result.ptr() + start_pos;
   }
 
   // fill header obj size
@@ -719,7 +730,8 @@ int ObJsonBinSerializer::serialize_json_value(ObJsonNode *json_tree, ObJsonBuffe
       break;
     }
     case ObJsonNodeType::J_OBJECT:
-    case ObJsonNodeType::J_ARRAY: {
+    case ObJsonNodeType::J_ARRAY:
+    case ObJsonNodeType::J_SEMI_HETE_COL: {
       if (OB_FAIL(SMART_CALL(serialize_json_object(json_tree, result, enable_reserialize)))) {
         LOG_WARN("failed to append object json obj", K(ret), KPC(json_tree));
       }
@@ -2094,6 +2106,7 @@ int ObJsonBin::skip_type_byte_()
   ObJBVerType vertype = get_vertype();
   if (ObJsonVerType::is_array(vertype)
       || ObJsonVerType::is_object(vertype)
+      || ObJsonVerType::is_semi_hete_col(vertype)
       || ObJsonVerType::is_opaque_or_string(vertype)) {
   } else {
     pos_ += sizeof(uint8_t);
@@ -2381,7 +2394,8 @@ int ObJsonBin::init_bin_data()
         break;
       }
       case ObJsonNodeType::J_OBJECT:
-      case ObJsonNodeType::J_ARRAY: {
+      case ObJsonNodeType::J_ARRAY:
+      case ObJsonNodeType::J_SEMI_HETE_COL: {
         if (OB_FAIL(init_meta())) {
           LOG_WARN("init meta fail", K(ret));
         } else {
@@ -2472,14 +2486,14 @@ int ObJsonBin::element(size_t index)
 {
   INIT_SUCC(ret);
   ObJsonNodeType node_type = this->json_type();
-  if (node_type != ObJsonNodeType::J_ARRAY && node_type != ObJsonNodeType::J_OBJECT) {
+  if (node_type != ObJsonNodeType::J_ARRAY && node_type != ObJsonNodeType::J_OBJECT && node_type != ObJsonNodeType::J_SEMI_HETE_COL) {
     ret = OB_OBJ_TYPE_ERROR;
     LOG_WARN("wrong node_type.", K(ret), K(node_type));
   } else if (index >= get_element_count()) {
     ret = OB_OUT_OF_ELEMENT;
     LOG_WARN("index out of range.", K(ret), K(index), K(get_element_count()));
   } else {
-    if (node_type == ObJsonNodeType::J_ARRAY) {
+    if (node_type == ObJsonNodeType::J_ARRAY || node_type == ObJsonNodeType::J_SEMI_HETE_COL) {
       ret = get_element_in_array(index);
     } else { // ObJsonNodeType::J_OBJECTs
       ret = get_element_in_object(index);
@@ -2628,6 +2642,7 @@ int ObJsonBin::get_element_in_array(size_t index, uint64_t *get_addr_only)
   switch (vertype)
   {
     case ObJBVerType::J_ARRAY_V0:
+    case ObJBVerType::J_SEMI_HETE_COL_V0:
     {
       ret = get_element_v0(index, get_addr_only);
       break;
@@ -4107,6 +4122,10 @@ ObJBVerType ObJsonVerType::get_json_vertype(ObJsonNodeType in_type)
       ret_type = ObJsonBin::get_array_vertype();
       break;
     }
+    case ObJsonNodeType::J_SEMI_HETE_COL: {
+      ret_type = ObJsonBin::get_semi_hete_vertype();
+      break;
+    }
     case ObJsonNodeType::J_BOOLEAN: {
       ret_type = ObJsonBin::get_boolean_vertype();
       break;
@@ -4245,6 +4264,10 @@ ObJsonNodeType ObJsonVerType::get_json_type(ObJBVerType type)
       ret_type = ObJsonNodeType::J_ARRAY;
       break;
     }
+    case ObJBVerType::J_SEMI_HETE_COL_V0: {
+      ret_type = ObJsonNodeType::J_SEMI_HETE_COL;
+      break;
+    }
     case ObJBVerType::J_BOOLEAN_V0: {
       ret_type = ObJsonNodeType::J_BOOLEAN;
       break;
@@ -4349,6 +4372,11 @@ ObJsonNodeType ObJsonVerType::get_json_type(ObJBVerType type)
 bool ObJsonVerType::is_array(ObJBVerType type)
 {
   return (type == J_ARRAY_V0);
+}
+
+bool ObJsonVerType::is_semi_hete_col(ObJBVerType type)
+{
+  return (type == J_SEMI_HETE_COL_V0);
 }
 
 bool ObJsonVerType::is_object(ObJBVerType type)
@@ -5351,7 +5379,7 @@ int ObJsonBinMeta::to_header(ObJsonBuffer &buffer)
   ObJsonBinHeader header;
   uint64_t key_entry_size = 0;
   uint64_t value_entry_size = 0;
-  if (OB_UNLIKELY(ObJsonNodeType::J_OBJECT != json_type() && ObJsonNodeType::J_ARRAY != json_type())) {
+  if (OB_UNLIKELY(ObJsonNodeType::J_OBJECT != json_type() && ObJsonNodeType::J_ARRAY != json_type() && ObJsonNodeType::J_SEMI_HETE_COL != json_type())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("type not object or array", K(ret), "json type", json_type());
   } else if (OB_FAIL(to_header(header))) {
@@ -5453,8 +5481,10 @@ int ObJsonBinMetaParser::parse_type_()
 int ObJsonBinMetaParser::parse_header_()
 {
   INIT_SUCC(ret);
-  if (ObJsonNodeType::J_OBJECT != meta_.json_type() && ObJsonNodeType::J_ARRAY != meta_.json_type()) {
-  } else if (ObJBVerType::J_OBJECT_V0 == meta_.vertype() || ObJBVerType::J_ARRAY_V0 == meta_.vertype()) {
+  if (ObJsonNodeType::J_OBJECT != meta_.json_type() && ObJsonNodeType::J_ARRAY != meta_.json_type()
+         && ObJsonNodeType::J_SEMI_HETE_COL != meta_.json_type()) {
+  } else if (ObJBVerType::J_OBJECT_V0 == meta_.vertype() || ObJBVerType::J_ARRAY_V0 == meta_.vertype()
+         || ObJBVerType::J_SEMI_HETE_COL_V0 == meta_.vertype()) {
     ret = parse_header_v0_();
   } else {
     ret = OB_ERR_UNEXPECTED;

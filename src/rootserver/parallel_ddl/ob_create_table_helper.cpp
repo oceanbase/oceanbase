@@ -853,6 +853,10 @@ int ObCreateTableHelper::generate_table_schema_()
     LOG_WARN("fail to generate schema, not support semistruct encoding for this version",
              KR(ret), K(tenant_id_), K(compat_version), K(arg_));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "this version not support semistruct encoding");
+  } else if (compat_version < DATA_VERSION_4_4_1_0 && !arg_.schema_.get_semistruct_properties().empty()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("fail to generate schema, not support semistruct properties for this version",
+             KR(ret), K_(tenant_id), K(compat_version), K(arg_));
   } else if (arg_.schema_.is_duplicate_table()) { // check compatibility for duplicate table
     bool is_compatible = false;
     if (OB_FAIL(ObShareUtil::check_compat_version_for_readonly_replica(tenant_id_, is_compatible))) {

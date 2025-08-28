@@ -2289,7 +2289,7 @@ int ObMacroBlockWriter::build_micro_writer(const ObDataStoreDesc *data_store_des
     encoding_ctx.compressor_type_ = data_store_desc->get_compressor_type();
     encoding_ctx.encoding_granularity_ = data_store_desc->static_desc_->encoding_granularity_ > 0 ?
                     data_store_desc->static_desc_->encoding_granularity_ : UINT64_MAX;
-    encoding_ctx.semistruct_encoding_type_ = data_store_desc->get_semistruct_encoding_type();
+    encoding_ctx.semistruct_properties_ = data_store_desc->get_semistruct_properties();
     if (data_store_desc->is_for_index_or_meta()) {
       /* single row index micro block will cause infinite recursion when building index tree and meta tree */
       encoding_ctx.minimum_rows_ = 2;

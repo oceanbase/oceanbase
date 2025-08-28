@@ -73,7 +73,7 @@ ObColumnCSDecoderCtx ObMicroBlockCSDecoder::none_exist_column_decoder_ctx_;
 ObNewColumnCSDecoder ObMicroBlockCSDecoder::new_column_decoder_;
 
 // performance critical, do not check parameters
-int ObColumnCSDecoder::decode(const int64_t row_id, common::ObDatum &datum)
+int ObColumnCSDecoder::decode(const int64_t row_id, ObStorageDatum &datum)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(decoder_->decode(*ctx_, row_id, datum))) {
@@ -1735,7 +1735,8 @@ int ObMicroBlockCSDecoder::get_column_datum(
     datum.reuse();
     if (OB_FAIL(decoders_[col_offset].decode(row_index, datum))) {
       LOG_WARN("Decode cell failed", K(ret));
-    } else if (col_param.get_meta_type().is_lob_storage() && !datum.is_null() && !datum.get_lob_data().in_row_) {
+    } else if (col_param.get_meta_type().is_lob_storage() && !datum.is_null()
+               && !datum.is_nop() && !datum.get_lob_data().in_row_) {
       if (OB_FAIL(context.lob_locator_helper_->fill_lob_locator_v2(datum, col_param, iter_param, context))) {
         LOG_WARN("Failed to fill lob loactor", K(ret), K(datum), K(context), K(iter_param));
       }
@@ -1874,10 +1875,16 @@ int ObMicroBlockCSDecoder::get_col_datums(
   if (!decoders_[col_id].decoder_->can_vectorized()) {
     // normal path
     int64_t row_id = common::OB_INVALID_INDEX;
+    int64_t col_idx = nullptr == read_info_ || typeid(ObRowkeyReadInfo) == typeid(*read_info_) ? col_id : read_info_->get_columns_index().at(col_id);
+    const ObObjType obj_type = static_cast<ObObjType>(transform_helper_.get_column_header(col_idx).obj_type_);
+    const ObObjDatumMapType map_type = ObDatum::get_obj_datum_map_type(obj_type);
     for (int64_t idx = 0; OB_SUCC(ret) && (idx < row_cap); idx++) {
       row_id = row_ids[idx];
-      if (OB_FAIL(decoders_[col_id].decode(row_id, col_datums[idx]))) {
+      ObStorageDatum storage_datum;
+      if (OB_FAIL(decoders_[col_id].decode(row_id, storage_datum))) {
         LOG_WARN("fail to decode cell", KR(ret), K(idx), K(row_id));
+      } else if (OB_FAIL(col_datums[idx].from_storage_datum(storage_datum, map_type))) {
+        LOG_WARN("from storage datum fail", K(ret), K(idx), K(row_id), K(storage_datum));
       }
     }
   } else if (OB_FAIL(decoders_[col_id].batch_decode(row_ids, row_cap, col_datums))) {
@@ -2192,7 +2199,7 @@ int ObSemiStructDecodeCtx::build_decode_handler(ObSemiStructColumnDecoderCtx &se
 {
   int ret = OB_SUCCESS;
   ObSemiStructDecodeHandler* handler = nullptr;
-  if (OB_ISNULL(handler = OB_NEWx(ObSemiStructDecodeHandler, &allocator_))) {
+  if (OB_ISNULL(handler = OB_NEWx(ObSemiStructDecodeHandler, &allocator_, allocator_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("alloc semsitruct decode handler fail", K(ret), "size", sizeof(ObSemiStructDecodeHandler));
   } else if (OB_FAIL(handlers_.push_back(handler))) {

@@ -106,7 +106,7 @@ int ObStringStreamEncoder::do_convert_datum_to_stream_(ObIDatumIter &iter)
   int64_t i = 0;
   T *offset_arr = static_cast<T*>(offset_arr_);
   while (OB_SUCC(ret) && OB_SUCC(iter.get_next(datum))) {
-    if (datum->is_null()) {
+    if (datum->is_null_or_nop()) {
       if (is_fixed_len) {
         // if fixed len, fill 0 for placeholders
         tmp_len = ctx_->meta_.get_fixed_string_len();
@@ -144,7 +144,7 @@ int ObStringStreamEncoder::do_convert_datum_to_stream_(ObIDatumIter &iter)
   if (OB_SUCC(ret)) {
     if (OB_UNLIKELY(i != iter.size() || pos != umcompress_len)) {
       ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "unexpected datum count and bytes len", K(ret), K(i), K(iter.size()), K(pos), K(umcompress_len));
+      STORAGE_LOG(WARN, "unexpected datum count and bytes len", K(ret), K(i), K(iter.size()), K(pos), K(umcompress_len), K(is_fixed_len));
     } else if (OB_FAIL(all_string_writer_->advance(umcompress_len))) {
       STORAGE_LOG(WARN, "fail to advance all_string_writer_", K(ret), K(umcompress_len));
     }

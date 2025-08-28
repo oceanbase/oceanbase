@@ -3932,6 +3932,7 @@ int ObIJsonBase::print(ObJsonBuffer &j_buf, bool is_quoted, uint64_t reserve_len
         break;
       }
 
+      case ObJsonNodeType::J_SEMI_HETE_COL:
       case ObJsonNodeType::J_ARRAY: {
         ++depth;
         if (OB_FAIL(SMART_CALL(print_array(j_buf, depth, is_pretty)))) {
@@ -6521,6 +6522,13 @@ int ObJsonBaseFactory::alloc_node(ObIAllocator &allocator, const ObJsonNodeType 
       if (OB_ISNULL(j_node = OB_NEWx(ObJsonOFloat, &allocator, 0))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to alloc memory for float json node", K(ret), "size", sizeof(ObJsonOFloat));
+      }
+      break;
+    }
+    case ObJsonNodeType::J_SEMI_BIN: {
+      if (OB_ISNULL(j_node = OB_NEWx(ObJsonSemiBin, &allocator))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc memory for semi json node", K(ret));
       }
       break;
     }

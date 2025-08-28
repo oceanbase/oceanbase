@@ -34,7 +34,7 @@ public:
 
   virtual bool can_vectorized() const override { return true; }
 
-  virtual int decode(const ObColumnCSDecoderCtx &ctx, const int32_t row_id, common::ObDatum &datum) const override
+  virtual int decode(const ObColumnCSDecoderCtx &ctx, const int32_t row_id, ObStorageDatum &datum) const override
   {
     UNUSEDx(row_id);
     return common_decoder_.decode(ctx.get_col_param(), ctx.get_allocator(), datum);
@@ -87,7 +87,7 @@ public:
       const ObPushdownRowIdCtx &pd_row_id_ctx,
       storage::ObAggCellBase &agg_cell) const override;
 
-  virtual int get_null_count(
+  virtual int inner_get_null_count(
       const ObColumnCSDecoderCtx &ctx,
       const int32_t *row_ids,
       const int64_t row_cap,

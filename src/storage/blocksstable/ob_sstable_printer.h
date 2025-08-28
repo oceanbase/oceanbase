@@ -109,7 +109,7 @@ public:
 
   void print_semistruct_column_meta(const char *start, const int64_t len,
                                     const ObCSColumnHeader &col_header, const uint32_t row_cnt);
-  void print_sub_schema(const ObSemiStructSubSchema &sub_schema);
+  void print_sub_schema(const ObSemiStructEncodeMetaDesc &semistruct_desc);
   void print_freq_column_info(const ObIArray<ObSemiStructSubColumn>& freq_columns);
   void print_spare_column_info(const ObIArray<ObSemiStructSubColumn>& spare_columns);
   void print_sub_column_path(const share::ObSubColumnPath &sub_col_path);
