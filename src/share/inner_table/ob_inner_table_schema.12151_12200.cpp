@@ -6175,7 +6175,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monito
       false, //is_autoincrement
       false, //is_on_update_for_timestamp
       false, //is_hidden
-      true);//is_storing_column 
+      true);//is_storing_column
   }
 
   if (OB_SUCC(ret)) {
@@ -6193,7 +6193,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monito
       false, //is_autoincrement
       false, //is_on_update_for_timestamp
       false, //is_hidden
-      true);//is_storing_column 
+      true);//is_storing_column
   }
 
   if (OB_SUCC(ret)) {
@@ -6211,7 +6211,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monito
       false, //is_autoincrement
       false, //is_on_update_for_timestamp
       false, //is_hidden
-      true);//is_storing_column 
+      true);//is_storing_column
   }
 
   if (OB_SUCC(ret)) {
@@ -6229,7 +6229,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monito
       false, //is_autoincrement
       false, //is_on_update_for_timestamp
       false, //is_hidden
-      true);//is_storing_column 
+      true);//is_storing_column
   }
 
   if (OB_SUCC(ret)) {

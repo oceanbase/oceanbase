@@ -96,7 +96,7 @@ protected:
 class ObNotCoreTableLoadInfoConstructor : public ObLoadInnerTableSchemaInfoConstructor
 {
 public:
-  ObNotCoreTableLoadInfoConstructor(const ObString &table_name, const uint64_t table_id, ObIAllocator &allocator) 
+  ObNotCoreTableLoadInfoConstructor(const ObString &table_name, const uint64_t table_id, ObIAllocator &allocator)
     : ObLoadInnerTableSchemaInfoConstructor(table_name, table_id, allocator) {}
   virtual int add_lines(const uint64_t table_id, ObDMLSqlSplicer &splicer) override;
 };
@@ -125,7 +125,7 @@ private:
 class ObMergeLoadInfoConstructor : public ObLoadInnerTableSchemaInfoConstructor
 {
 public:
-  ObMergeLoadInfoConstructor(const ObString &table_name, const uint64_t table_id, ObIAllocator &allocator) 
+  ObMergeLoadInfoConstructor(const ObString &table_name, const uint64_t table_id, ObIAllocator &allocator)
     : ObLoadInnerTableSchemaInfoConstructor(table_name, table_id, allocator) {}
   virtual int add_lines(const uint64_t table_id, ObDMLSqlSplicer &splicer) override;
   int add_constructor(ObLoadInnerTableSchemaInfoConstructor &constructor);
@@ -158,7 +158,7 @@ template <typename T, T (schema::ObSimpleTableSchemaV2::*func)() const>
 class TableSchemaCmp
 {
 public:
-  bool operator()(const schema::ObTableSchema *left, const schema::ObTableSchema *right) const 
+  bool operator()(const schema::ObTableSchema *left, const schema::ObTableSchema *right) const
   {
     bool ret = false;
     static_assert(func != nullptr, "func should not be null");

@@ -42,7 +42,7 @@ int ObDumpInnerTableSchemaUtils::upper(ObSqlString &str)
   return ret;
 }
 
-int ObDumpInnerTableSchemaUtils::replace(ObSqlString &str, const char a, const char b) 
+int ObDumpInnerTableSchemaUtils::replace(ObSqlString &str, const char a, const char b)
 {
   int ret = OB_SUCCESS;
   ObSqlString tmp;
@@ -333,7 +333,7 @@ int ObInnerTableSchemaDumper::get_all_ddl_operation_info_(const ObIArray<schema:
       OZ (dml.add_column("ddl_stmt_str", ""));
       OZ (dml.add_function_call("exec_tenant_id", "effective_tenant_id()"));
       const int64_t line_end = __LINE__;
-      if (OB_SUCC(ret) && table->get_table_id() == OB_ALL_DDL_OPERATION_TID && 
+      if (OB_SUCC(ret) && table->get_table_id() == OB_ALL_DDL_OPERATION_TID &&
           table->get_column_count() != line_end - line_begin - 1) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("__all_ddl_operation table schema is changed", KR(ret),
@@ -574,8 +574,8 @@ int ObMergeLoadInfoConstructor::add_lines(const uint64_t table_id, ObDMLSqlSplic
 int ObMergeLoadInfoConstructor::add_constructor(ObLoadInnerTableSchemaInfoConstructor &constructor)
 {
   int ret = OB_SUCCESS;
-  if (constructor.get_table_id() != table_id_ || constructor.get_table_name() != table_name_ 
-      || &constructor.get_allocator() != &allocator_ || (!header_.empty() && constructor.get_header() != header_) 
+  if (constructor.get_table_id() != table_id_ || constructor.get_table_name() != table_name_
+      || &constructor.get_allocator() != &allocator_ || (!header_.empty() && constructor.get_header() != header_)
       || !is_valid() || !constructor.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("two construct is not same, cannot merge", KR(ret), KPC(this), K(constructor));
@@ -658,7 +658,7 @@ int ObInnerTableSchemaPrinter::get_schema_version_enum_code_(ObSqlString &code)
     LOG_WARN("failed to append schema version tail", KR(ret));
   } else if (OB_FAIL(code.append_fmt(R"__(int64_t get_hard_code_schema_count()
 {
-  return static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::MAX_HARD_CODE_SCHEMA_VERSION) - 
+  return static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::MAX_HARD_CODE_SCHEMA_VERSION) -
     static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::HARD_CODE_SCHEMA_VERSION_BEGIN) - 1;
 }
 )__"))) {
