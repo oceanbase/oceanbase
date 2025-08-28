@@ -381,9 +381,6 @@ int ObKillSession::kill_session(const ObKillSessionArg &arg, ObSQLSessionMgr &se
   } else if (OB_ISNULL(sess_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info is NULL", K(ret), K(arg));
-  } else if (sess_info->is_real_inner_session()) {
-    ret = OB_ERR_KILL_DENIED;
-    LOG_WARN("It is not allowed to close the inner session", K(ret), K(arg));
   } else if (OB_FAIL(arg.check_auth_for_kill(sess_info->get_priv_tenant_id(), sess_info->get_user_id()))) {
     ret = OB_ERR_KILL_DENIED;
     LOG_WARN("no permissions for kill", K(ret), K(arg.sess_id_));
