@@ -328,6 +328,38 @@ int ObVectorIndexUtil::is_int_val(const ObString &str, bool &is_int)
   return ret;
 }
 
+int ObVectorIndexParam::print_to_string(char *buf, int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  #define PRINT_PARAM(fmt, val)                                        \
+    if (OB_SUCC(ret)) {                                                \
+      if (OB_FAIL(databuff_printf(buf, buf_len, pos, fmt, val))) {     \
+        LOG_WARN("fail to print param", K(ret), K(fmt), K(val));       \
+      }                                                                \
+    }
+  PRINT_PARAM("type=%d,", type_);
+  PRINT_PARAM("lib=%d,", lib_);
+  PRINT_PARAM("dist_algorithm=%d,", dist_algorithm_);
+  PRINT_PARAM("dim=%ld,", dim_);
+  PRINT_PARAM("m=%ld,", m_);
+  PRINT_PARAM("ef_construction=%ld,", ef_construction_);
+  PRINT_PARAM("ef_search=%ld,", ef_search_);
+  PRINT_PARAM("nlist=%ld,", nlist_);
+  PRINT_PARAM("sample_per_nlist=%ld,", sample_per_nlist_);
+  PRINT_PARAM("extra_info_max_size=%ld,", extra_info_max_size_);
+  PRINT_PARAM("extra_info_actual_size=%ld,", extra_info_actual_size_);
+  PRINT_PARAM("refine_type=%d,", static_cast<int>(refine_type_));
+  PRINT_PARAM("bq_bits_query=%d,", static_cast<int>(bq_bits_query_));
+  PRINT_PARAM("refine_k=%f,", refine_k_);
+  PRINT_PARAM("bq_use_fht=%d,", static_cast<int>(bq_use_fht_));
+  PRINT_PARAM("sync_interval_type=%d,", static_cast<int>(sync_interval_type_));
+  PRINT_PARAM("sync_interval_value=%ld,", sync_interval_value_);
+  PRINT_PARAM("endpoint=%s,", endpoint_);
+  PRINT_PARAM("nbits=%ld", nbits_);
+  #undef PRINT_PARAM
+  return ret;
+}
+
 int ObVectorIndexParam::build_search_param(const ObVectorIndexParam &index_param,
                                            const ObVectorIndexQueryParam &query_param,
                                            ObVectorIndexParam &search_param)

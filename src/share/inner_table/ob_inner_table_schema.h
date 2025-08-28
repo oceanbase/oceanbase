@@ -2114,6 +2114,10 @@ public:
   static int v_ob_ss_sstables_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_vector_memory_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_vector_memory_schema(share::schema::ObTableSchema &table_schema);
+  static int gv_ob_hnsw_index_info_schema(share::schema::ObTableSchema &table_schema);
+  static int v_ob_hnsw_index_info_schema(share::schema::ObTableSchema &table_schema);
+  static int gv_ob_ivf_index_info_schema(share::schema::ObTableSchema &table_schema);
+  static int v_ob_ivf_index_info_schema(share::schema::ObTableSchema &table_schema);
   static int cdb_ob_ss_space_usage_schema(share::schema::ObTableSchema &table_schema);
   static int dba_ob_ss_space_usage_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_hms_client_pool_stat_schema(share::schema::ObTableSchema &table_schema);
@@ -5485,6 +5489,10 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::v_ob_ss_sstables_schema,
   ObInnerTableSchema::gv_ob_vector_memory_schema,
   ObInnerTableSchema::v_ob_vector_memory_schema,
+  ObInnerTableSchema::gv_ob_hnsw_index_info_schema,
+  ObInnerTableSchema::v_ob_hnsw_index_info_schema,
+  ObInnerTableSchema::gv_ob_ivf_index_info_schema,
+  ObInnerTableSchema::v_ob_ivf_index_info_schema,
   ObInnerTableSchema::cdb_ob_ss_space_usage_schema,
   ObInnerTableSchema::dba_ob_ss_space_usage_schema,
   ObInnerTableSchema::gv_ob_hms_client_pool_stat_schema,
@@ -7525,6 +7533,10 @@ const uint64_t tenant_space_tables [] = {
   OB_V_OB_SS_SSTABLES_TID,
   OB_GV_OB_VECTOR_MEMORY_TID,
   OB_V_OB_VECTOR_MEMORY_TID,
+  OB_GV_OB_HNSW_INDEX_INFO_TID,
+  OB_V_OB_HNSW_INDEX_INFO_TID,
+  OB_GV_OB_IVF_INDEX_INFO_TID,
+  OB_V_OB_IVF_INDEX_INFO_TID,
   OB_DBA_OB_SS_SPACE_USAGE_TID,
   OB_GV_OB_HMS_CLIENT_POOL_STAT_TID,
   OB_V_OB_HMS_CLIENT_POOL_STAT_TID,
@@ -10658,6 +10670,10 @@ const char* const tenant_space_table_names [] = {
   OB_V_OB_SS_SSTABLES_TNAME,
   OB_GV_OB_VECTOR_MEMORY_TNAME,
   OB_V_OB_VECTOR_MEMORY_TNAME,
+  OB_GV_OB_HNSW_INDEX_INFO_TNAME,
+  OB_V_OB_HNSW_INDEX_INFO_TNAME,
+  OB_GV_OB_IVF_INDEX_INFO_TNAME,
+  OB_V_OB_IVF_INDEX_INFO_TNAME,
   OB_DBA_OB_SS_SPACE_USAGE_TNAME,
   OB_GV_OB_HMS_CLIENT_POOL_STAT_TNAME,
   OB_V_OB_HMS_CLIENT_POOL_STAT_TNAME,
@@ -15438,10 +15454,10 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 const int64_t OB_CORE_TABLE_COUNT = 4;
 const int64_t OB_SYS_TABLE_COUNT = 344;
 const int64_t OB_VIRTUAL_TABLE_COUNT = 976;
-const int64_t OB_SYS_VIEW_COUNT = 1097;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 2422;
+const int64_t OB_SYS_VIEW_COUNT = 1101;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 2426;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 2425;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 2429;
 
 } // end namespace share
 } // end namespace oceanbase

@@ -199,7 +199,8 @@ int ObVecITaskExecutor::update_status_and_ret_code(ObVecIndexAsyncTaskCtx *task_
       if (OB_FAIL(trans.start(GCTX.sql_proxy_, tenant_id_))) {
         LOG_WARN("fail start transaction", K(ret), K(tenant_id_));
       } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::update_vec_task(
-          tenant_id_, OB_ALL_VECTOR_INDEX_TASK_TNAME, trans, key, update_fields))) {
+          tenant_id_, OB_ALL_VECTOR_INDEX_TASK_TNAME, trans, key,
+          update_fields, task_ctx->task_status_.progress_info_))) {
         LOG_WARN("fail to update task status", K(ret));
       } else {
         LOG_DEBUG("success to update_status_and_ret_code", KPC(task_ctx));

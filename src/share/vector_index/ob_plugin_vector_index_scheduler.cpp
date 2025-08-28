@@ -1591,18 +1591,13 @@ int ObVectorIndexTask::process_one()
 
   if (OB_SUCC(ret)) {
     task_ctx_->err_code_ = OB_SUCCESS;
-    new_adpt_guard.get_adatper()->sync_finish();
-    new_adpt_guard.get_adatper()->reset_sync_idle_count();
+    new_adpt_guard.get_adatper()->sync_succ();
   } else {
     task_ctx_->err_code_ = ret;
     if (OB_NOT_NULL(new_adpt_guard.get_adatper())) {
-      new_adpt_guard.get_adatper()->sync_finish();
-      new_adpt_guard.get_adatper()->sync_fail();
-      new_adpt_guard.get_adatper()->reset_sync_idle_count();
+      new_adpt_guard.get_adatper()->sync_fail(ret);
     } else if (OB_NOT_NULL(adpt_guard.get_adatper())) {
-      adpt_guard.get_adatper()->sync_finish();
-      adpt_guard.get_adatper()->sync_fail();
-      adpt_guard.get_adatper()->reset_sync_idle_count();
+      adpt_guard.get_adatper()->sync_fail(ret);
     }
   }
 

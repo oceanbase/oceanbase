@@ -218,58 +218,54 @@ int ObIvfCacheMgr::fill_cache_info(ObVectorIndexInfo &info){
   int ret = OB_SUCCESS;
   info.rowkey_vid_tablet_id_ = cache_mgr_key_.id();
   info.rowkey_vid_table_id_ = table_id_;
+  info.index_type_ = vec_param_.type_;
   ObVectorIndexParam *param;
   int64_t pos = 0;
-  ObCStringHelper helper;
-  if (OB_FAIL(databuff_printf(
-          info.statistics_, sizeof(info.statistics_), pos, "actual_memory_used=%ld;", get_actual_memory_used()))) {
-    LOG_WARN("failed to fill statistics", K(ret), K(this));
-  } else if (OB_FAIL(databuff_printf(info.statistics_, sizeof(info.statistics_), pos, "ref_cnt=%ld;", ref_cnt_))) {
-    LOG_WARN("failed to fill statistics", K(ret), K(this));
-  } else if (OB_FAIL(databuff_printf(
-                 info.statistics_, sizeof(info.statistics_), pos, "is_reach_limit=%d;", is_reach_limit_))) {
-    LOG_WARN("failed to fill statistics", K(ret), K(this));
-  } else if (OB_FAIL(databuff_printf(
-                 info.statistics_, sizeof(info.statistics_), pos, "reach_limit_cnt=%d;", reach_limit_cnt_))) {
-    LOG_WARN("failed to fill statistics", K(ret), K(this));
-  } else if (OB_FAIL(databuff_printf(info.statistics_, sizeof(info.statistics_), pos, "is_inited=%d;", is_inited_))) {
-    LOG_WARN("failed to fill statistics", K(ret), K(this));
-  } else if (OB_FAIL(databuff_printf(
-                 info.statistics_, sizeof(info.statistics_), pos, "index_param=%s;", helper.convert(vec_param_)))) {
-    LOG_WARN("failed to fill statistics", K(ret), K(this));
-  } else {
-    if (OB_FAIL(databuff_printf(info.statistics_, sizeof(info.statistics_), pos, "["))) {
-      LOG_WARN("failed to fill statistics", K(ret), K(this));
+  #define STAT_PRINT(...) \
+  if (OB_SUCC(ret)) { \
+    if (OB_FAIL(databuff_printf(info.statistics_, sizeof(info.statistics_), pos, __VA_ARGS__))) { \
+      LOG_WARN("failed to fill statistics", K(ret)); \
+    } \
+  }
+  STAT_PRINT("{");
+  STAT_PRINT("\"actual_memory_used\":%ld", get_actual_memory_used());
+  STAT_PRINT(",\"ref_cnt\":%ld", ref_cnt_);
+  STAT_PRINT(",\"is_reach_limit\":%d", is_reach_limit_);
+  STAT_PRINT(",\"reach_limit_cnt\":%d", reach_limit_cnt_);
+  STAT_PRINT(",\"is_inited\":%d", is_inited_);
+  STAT_PRINT(",\"param\":\"");
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(vec_param_.print_to_string(info.statistics_, sizeof(info.statistics_), pos))) {
+      LOG_WARN("failed to print param", K(ret));
     }
+  }
+  STAT_PRINT("\"");
+  // print cache_objs_info
+  STAT_PRINT(",\"cache_objs_info\":[");
+  if (OB_SUCC(ret)) {
+    bool first_obj = true;
     FOREACH_X(iter, cache_objs_, OB_SUCC(ret))
     {
       IvfCacheType cache_type = iter->first.type_;
-      if (OB_FAIL(databuff_printf(info.statistics_, sizeof(info.statistics_), pos, "{cache_type=%d;", cache_type))) {
-        LOG_WARN("failed to fill statistics", K(ret), K(this));
+      if (!first_obj) {
+        STAT_PRINT(",");
       }
+      first_obj = false;
+      STAT_PRINT("{\"cache_type\":%d", cache_type);
+      STAT_PRINT(",\"mem_used\":%lu", iter->second->get_actual_memory_used());
+      STAT_PRINT(",\"mem_hold\":%lu", iter->second->get_memory_hold());
       switch (cache_type) {
         case IvfCacheType::IVF_CENTROID_CACHE:
         case IvfCacheType::IVF_PQ_PRECOMPUTE_TABLE_CACHE:
         case IvfCacheType::IVF_PQ_CENTROID_CACHE:
         {
           ObIvfCentCache *cache = dynamic_cast<ObIvfCentCache*>(iter->second);
-          if (OB_FAIL(databuff_printf(info.statistics_,
-                  sizeof(info.statistics_), pos,
-                  "capacity=%ld;", cache->get_capacity()))) {
-              LOG_WARN("failed to fill statistics", K(ret), K(this));
-          } else if (OB_FAIL(databuff_printf(info.statistics_,
-                  sizeof(info.statistics_), pos,
-                  "cent_vec_dim=%d;", cache->cent_vec_dim_))) {
-              LOG_WARN("failed to fill statistics", K(ret), K(this));
-          } else if (OB_FAIL(databuff_printf(info.statistics_,
-                  sizeof(info.statistics_), pos,
-                  "count=%d;", cache->count_))) {
-              LOG_WARN("failed to fill statistics", K(ret), K(this));
-          } else if (OB_FAIL(databuff_printf(info.statistics_,
-                  sizeof(info.statistics_), pos,
-                  "nlist=%d;} ", cache->nlist_))) {
-              LOG_WARN("failed to fill statistics", K(ret), K(this));
-          }
+          STAT_PRINT(",\"cache_info\":{");
+          STAT_PRINT("\"capacity\":%ld", cache->get_capacity());
+          STAT_PRINT(",\"cent_vec_dim\":%d", cache->cent_vec_dim_);
+          STAT_PRINT(",\"count\":%d", cache->count_);
+          STAT_PRINT(",\"nlist\":%d", cache->nlist_);
+          STAT_PRINT("}");
           break;
         }
         case IvfCacheType::IVF_CACHE_MAX:
@@ -278,17 +274,18 @@ int ObIvfCacheMgr::fill_cache_info(ObVectorIndexInfo &info){
           LOG_WARN("not supported cache for __all_virtual_vector_index_info", K(cache_type));
           break;
       }
-    }
-    if (OB_FAIL(databuff_printf(info.statistics_, sizeof(info.statistics_), pos, "]"))) {
-      LOG_WARN("failed to fill statistics", K(ret), K(this));
+      STAT_PRINT("}");
     }
   }
+  STAT_PRINT("]");
+  STAT_PRINT("}");
+  #undef STAT_PRINT
   return ret;
 }
 
-int64_t ObIvfCacheMgr::get_actual_memory_used()
+uint64_t ObIvfCacheMgr::get_actual_memory_used()
 {
-  int64_t used = 0;
+  uint64_t used = 0;
   FOREACH(iter, cache_objs_)
   {
     ObIvfICache *cache = dynamic_cast<ObIvfICache *>(iter->second);
@@ -298,9 +295,9 @@ int64_t ObIvfCacheMgr::get_actual_memory_used()
   return used;
 }
 
-int64_t ObIvfCacheMgr::get_memory_hold()
+uint64_t ObIvfCacheMgr::get_memory_hold()
 {
-  int64_t hold = 0;
+  uint64_t hold = 0;
   FOREACH(iter, cache_objs_)
   {
     ObIvfICache *cache = dynamic_cast<ObIvfICache *>(iter->second);

@@ -49,7 +49,7 @@ public:
                K_(vbitmap_table_id), K_(snapshot_index_table_id), K_(data_table_id),
                K_(rowkey_vid_tablet_id), K_(vid_rowkey_tablet_id), K_(inc_index_tablet_id),
                K_(vbitmap_tablet_id), K_(snapshot_index_tablet_id), K_(data_tablet_id),
-               K_(statistics), K_(sync_info));
+               K_(statistics), K_(sync_info), K_(index_type));
 public:
   int64_t ls_id_;
   // table_id
@@ -68,6 +68,7 @@ public:
   int64_t data_tablet_id_;
   char statistics_[OB_VECTOR_INDEX_STATISTICS_SIZE];
   char sync_info_[OB_VECTOR_INDEX_SYNC_INFO_SIZE];
+  ObVectorIndexAlgorithmType index_type_;
 };
 
 typedef common::ObArray<int64_t>  ObVecIdxVidArray;
@@ -463,7 +464,10 @@ public:
       snap_count_(0),
       sync_count_(0),
       sync_fail_(0),
-      idle_count_(0)
+      idle_count_(0),
+      last_succ_time_(0),
+      last_fail_time_(0),
+      last_fail_code_(0)
   {}
   void reset() {
     incr_count_ = 0;
@@ -472,6 +476,9 @@ public:
     sync_count_ = 0;
     sync_fail_ = 0;
     idle_count_ = 0;
+    last_succ_time_ = 0;
+    last_fail_time_ = 0;
+    last_fail_code_ = 0;
   }
   TO_STRING_KV(K_(incr_count), K_(vbitmap_count), K_(snap_count),
                K_(sync_count), K_(sync_fail), K_(idle_count));
@@ -482,6 +489,9 @@ public:
   int64_t sync_count_;
   int64_t sync_fail_;
   int64_t idle_count_; // loops not receive sync
+  int64_t last_succ_time_;
+  int64_t last_fail_time_;
+  int last_fail_code_;
 };
 
 struct ObVectorIndexSharedTableInfo
@@ -685,7 +695,18 @@ public:
   int check_need_sync_to_follower_or_do_opt_task(bool &need_sync);
 
   void sync_finish() { follower_sync_statistics_.sync_count_++; }
-  void sync_fail() { follower_sync_statistics_.sync_fail_++; }
+  void sync_succ() {
+    sync_finish();
+    reset_sync_idle_count();
+    follower_sync_statistics_.last_succ_time_ = ObTimeUtility::current_time();
+  }
+  void sync_fail(int ret) {
+    sync_finish();
+    reset_sync_idle_count();
+    follower_sync_statistics_.sync_fail_++;
+    follower_sync_statistics_.last_fail_time_ = ObTimeUtility::current_time();
+    follower_sync_statistics_.last_fail_code_ = ret;
+  }
 
   void inc_sync_idle_count() { follower_sync_statistics_.idle_count_++; }
   void reset_sync_idle_count() { follower_sync_statistics_.idle_count_ = 0;}

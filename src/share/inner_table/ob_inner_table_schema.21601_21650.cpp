@@ -1692,7 +1692,7 @@ int ObInnerTableSchema::dba_ob_vector_index_tasks_schema(ObTableSchema &table_sc
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT       table_id as TABLE_ID,       tablet_id as TABLET_ID,       task_id as TASK_ID,       gmt_create as START_TIME,       gmt_modified as MODIFY_TIME,       case trigger_type         when 0 then "USER"         when 1 then "MANUAL"         else "INVALID" END AS TRIGGER_TYPE,       case status         when 0 then "PREPARED"         when 1 then "RUNNING"         when 2 then "PENDING"         when 3 then "FINISHED"         else "INVALID" END AS STATUS,       task_type as TASK_TYPE,       target_scn as TASK_SCN,       ret_code as RET_CODE,       trace_id as TRACE_ID   FROM oceanbase.__all_vector_index_task )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT       table_id as TABLE_ID,       tablet_id as TABLET_ID,       task_id as TASK_ID,       gmt_create as START_TIME,       gmt_modified as MODIFY_TIME,       case trigger_type         when 0 then "USER"         when 1 then "MANUAL"         else "INVALID" END AS TRIGGER_TYPE,       case status         when 0 then "PREPARED"         when 1 then "RUNNING"         when 2 then "PENDING"         when 3 then "FINISHED"         else "INVALID" END AS STATUS,       task_type as TASK_TYPE,       target_scn as TASK_SCN,       ret_code as RET_CODE,       trace_id as TRACE_ID,       progress_info as PROGRESS_INFO   FROM oceanbase.__all_vector_index_task )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1743,7 +1743,7 @@ int ObInnerTableSchema::cdb_ob_vector_index_tasks_schema(ObTableSchema &table_sc
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT       tenant_id as TENANT_ID,       table_id as TABLE_ID,       tablet_id as TABLET_ID,       task_id as TASK_ID,       gmt_create as START_TIME,       gmt_modified as MODIFY_TIME,       case trigger_type         when 0 then "USER"         when 1 then "MANUAL"         else "INVALID" END AS TRIGGER_TYPE,       case status         when 0 then "PREPARED"         when 1 then "RUNNING"         when 2 then "PENDING"         when 3 then "FINISHED"         else "INVALID" END AS STATUS,       task_type as TASK_TYPE,       target_scn as TASK_SCN,       ret_code as RET_CODE,       trace_id as TRACE_ID   FROM oceanbase.__all_virtual_vector_index_task )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT       tenant_id as TENANT_ID,       table_id as TABLE_ID,       tablet_id as TABLET_ID,       task_id as TASK_ID,       gmt_create as START_TIME,       gmt_modified as MODIFY_TIME,       case trigger_type         when 0 then "USER"         when 1 then "MANUAL"         else "INVALID" END AS TRIGGER_TYPE,       case status         when 0 then "PREPARED"         when 1 then "RUNNING"         when 2 then "PENDING"         when 3 then "FINISHED"         else "INVALID" END AS STATUS,       task_type as TASK_TYPE,       target_scn as TASK_SCN,       ret_code as RET_CODE,       trace_id as TRACE_ID,       progress_info as PROGRESS_INFO   FROM oceanbase.__all_virtual_vector_index_task )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
