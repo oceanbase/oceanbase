@@ -849,6 +849,8 @@ int ObTransformRule::transform_self(common::ObIArray<ObParentDMLStmt> &parent_st
     LOG_WARN("failed to update implicit distinct", K(ret));
   } else if (OB_FAIL(update_max_table_num(stmt))) {
       LOG_WARN("failed to update max table num", K(ret));
+  } else if (OB_FAIL(stmt->check_stmt_valid())) {
+    LOG_WARN("failed to check stmt valid or stmt invalid", K(ret));
   } else if ((!stmt->is_delete_stmt() && !stmt->is_update_stmt())
               || stmt->has_instead_of_trigger()) {
     // do nothing

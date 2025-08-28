@@ -2120,6 +2120,73 @@ int ObDMLStmt::check_pseudo_column_valid()
   return ret;
 }
 
+
+int ObDMLStmt::check_stmt_valid()
+{
+  int ret = OB_SUCCESS;
+  int64_t tmp_ret = (OB_E(EventTable::EN_CHECK_STMT_VALID) OB_SUCCESS);
+  bool check_stmt_valid = OB_SUCCESS != tmp_ret;
+  if (check_stmt_valid) {
+    if (OB_FAIL(recursively_check_stmt_valid())) {
+      if (ret == OB_NOT_SUPPORTED) {
+        LOG_WARN("stmt is not valid after formalize", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "invalid stmt occured after transform");
+      } else {
+        LOG_WARN("failed to check stmt valid", K(ret));
+      }
+    } else { /* do nothing */ }
+  }
+  return ret;
+}
+
+int ObDMLStmt::recursively_check_stmt_valid()
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObSelectStmt*, 4> child_stmts;
+  if (OB_FAIL(check_unpivot_valid())) {
+    LOG_WARN("check unpivot valid failed", K(ret));
+  } else if (OB_FAIL(get_child_stmts(child_stmts))) {
+    LOG_WARN("get child stmts failed", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); ++i) {
+      if (OB_ISNULL(child_stmts.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("child stmt is null", K(ret));
+      } else if (OB_FAIL(SMART_CALL(child_stmts.at(i)->recursively_check_stmt_valid()))) {
+        LOG_WARN("check child stmt valid failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDMLStmt::check_unpivot_valid()
+{
+  int ret = OB_SUCCESS;
+  if (!is_unpivot_select()) {
+    // do nothing
+  } else if (!is_select_stmt()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("unpivot stmt is not select stmt", K(ret));
+  } else {
+    bool has_rownum = false;
+    ObSelectStmt *sel_stmt = static_cast<ObSelectStmt *>(this);
+    if (OB_UNLIKELY(sel_stmt->has_group_by() || sel_stmt->has_having() ||
+                    sel_stmt->has_window_function() ||
+                    sel_stmt->has_distinct() || sel_stmt->has_order_by() ||
+                    sel_stmt->has_limit())) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("unpivot stmt contains unexpected expr", K(ret));
+    } else if (OB_FAIL(sel_stmt->has_rownum(has_rownum))) {
+      LOG_WARN("failed to check rownum", K(ret));
+    } else if (OB_UNLIKELY(has_rownum)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("unpivot stmt contains unexpected expr", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObDMLStmt::set_sharable_expr_reference(ObRawExpr &expr, ExplicitedRefType ref_type)
 {
   int ret = OB_SUCCESS;

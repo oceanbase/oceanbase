@@ -375,6 +375,8 @@ int ObTransformViewMerge::check_semi_right_table_can_be_merged(ObDMLStmt *stmt,
              || (ref_query->is_values_table_query() &&
                  !ObTransformUtils::is_enable_values_table_rewrite(stmt->get_query_ctx()->optimizer_features_enable_version_))) {
     can_be = false;
+  } else if (stmt->is_unpivot_select() || ref_query->is_unpivot_select()) {
+    can_be = false;
   } else if (OB_FAIL(ref_query->has_rownum(has_rownum))) {
     LOG_WARN("failed to check has rownum expr", K(ret));
   } else if (has_rownum) {
@@ -523,6 +525,9 @@ int ObTransformViewMerge::check_basic_validity(ObDMLStmt *parent_stmt,
                  !ObTransformUtils::is_enable_values_table_rewrite(parent_stmt->get_query_ctx()->optimizer_features_enable_version_))) {
     can_be = false;
     OPT_TRACE("not a valid view");
+  } else if (parent_stmt->is_unpivot_select() || child_stmt->is_unpivot_select()) {
+    can_be = false;
+    OPT_TRACE("unpivot view can not be merged");
   } else if (!force_merge && parent_stmt->get_table_size() > 1 && child_stmt->get_table_size() > 1 &&
               parent_stmt->get_table_size() + child_stmt->get_table_size() - 1 > 10) {
     // More than 10 tables may result in the inability to enumerate a valid join order.

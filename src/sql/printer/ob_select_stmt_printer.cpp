@@ -270,8 +270,6 @@ int ObSelectStmtPrinter::print_select()
       bool is_oracle_mode = lib::is_oracle_mode();
       if (OB_FAIL(print_hint())) { // hint
         LOG_WARN("fail to print hint", K(ret), K(*select_stmt));
-      } else if (select_stmt->is_unpivot_select()) {
-        DATA_PRINTF(" * ");
       } else {
         if (select_stmt->is_select_straight_join()) { // straight_join
           DATA_PRINTF("straight_join ");

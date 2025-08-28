@@ -978,7 +978,8 @@ bool ObSelectStmt::is_spj() const
            || is_contains_assignment()
            || has_window_function()
            || has_sequence()
-           || is_hierarchical_query());
+           || is_hierarchical_query()
+           || is_unpivot_select());
   if (!bret) {
     // do nothing
   } else if (OB_FAIL(has_rownum(has_rownum_expr))) {
@@ -1005,7 +1006,8 @@ bool ObSelectStmt::is_spjg() const
            || is_contains_assignment()
            || has_window_function()
            || has_sequence()
-           || is_hierarchical_query());
+           || is_hierarchical_query()
+           || is_unpivot_select());
   if (!bret) {
     // do nothing
   } else if (OB_FAIL(has_rownum(has_rownum_expr))) {
@@ -1536,7 +1538,8 @@ int ObSelectStmt::check_is_simple_lock_stmt(bool &is_valid) const
       !is_contains_assignment() &&
       !has_window_function() &&
       !has_sequence() &&
-      !is_hierarchical_query()) {
+      !is_hierarchical_query() &&
+      !is_unpivot_select()) {
     bool contain_lock_expr = false;
     for (int64_t i = 0; !contain_lock_expr && i < select_items_.count(); i ++) {
       if (OB_FAIL(ObRawExprUtils::check_contain_lock_exprs(select_items_.at(i).expr_, contain_lock_expr))) {
@@ -1585,7 +1588,7 @@ int ObSelectStmt::check_from_dup_insensitive(bool &is_from_dup_insens) const
   bool is_dup_insens_aggr = false;
   is_from_dup_insens = false;
   // basic validity check
-  if (is_set_stmt() || is_hierarchical_query()) {
+  if (is_set_stmt() || is_hierarchical_query() || is_unpivot_select()) {
     is_valid = false;
   } else if (OB_FAIL(check_relation_exprs_deterministic(is_valid))) {
     LOG_WARN("failed to check relation exprs deterministic", K(ret));
