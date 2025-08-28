@@ -74,8 +74,17 @@ int ObExprIntDiv::calc_result_type2(ObExprResType &type, ObExprResType &type1, O
   if (OB_FAIL(ObArithExprOperator::calc_result_type2(type, type1, type2, type_ctx))) {
     LOG_WARN("fail to calc result type", K(ret), K(type), K(type1), K(type2));
   } else {
-    type.set_precision(static_cast<ObPrecision>(MAX(type1.get_precision(), 0)));
-    type.set_scale(0);
+    if (ob_is_int_uint_tc(type.get_type())) {
+      ObAccuracy type_max_accuracy = ObAccuracy::MAX_ACCURACY2[MYSQL_MODE][type.get_type()];
+      type.set_precision(type_max_accuracy.get_precision());
+      type.set_scale(type_max_accuracy.get_scale());
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("calc_result_type2", K(type.get_accuracy()), K(type1.get_accuracy()),
+            K(type2.get_accuracy()), K(type1.get_calc_accuracy()), K(type2.get_calc_accuracy()));
+    }
+    LOG_DEBUG("calc_result_type2", K(type.get_accuracy()), K(type1.get_accuracy()),
+            K(type2.get_accuracy()), K(type1.get_calc_accuracy()), K(type2.get_calc_accuracy()));
   }
   return ret;
 }
