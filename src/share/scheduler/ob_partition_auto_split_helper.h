@@ -14,10 +14,12 @@
 #define OCEABASE_STORAGE_PARTITION_AUTO_SPLIT_HELPER_
 
 #include "logservice/ob_log_base_type.h"
+#include "lib/mysqlclient/ob_single_connection_proxy.h"
 #include "share/schema/ob_part_mgr_util.h"
 #include "share/schema/ob_table_schema.h"
 #include "share/ob_ls_id.h"
 #include "common/ob_tablet_id.h"
+
 
 namespace oceanbase
 {
@@ -402,6 +404,7 @@ private:
                         const ObIArray<ObNewRange> &column_ranges,
                         const int range_num, const double sample_pct,
                         const bool is_oracle_mode,
+                        const bool query_index,
                         ObSqlString &sql);
   int add_sample_condition_sqls_(const ObIArray<ObString> &columns,
                                  const ObIArray<ObNewRange> &column_ranges,
@@ -421,6 +424,8 @@ private:
                                common::ObRowkey &low_bound_val,
                                common::ObRowkey &high_bound_val,
                                common::ObArenaAllocator &allocator);
+  int set_lower_case_table_names_(const uint64_t tenant_id,
+                                  ObSingleConnectionProxy &single_conn_proxy);
 };
 }
 
