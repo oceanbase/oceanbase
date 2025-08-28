@@ -221,6 +221,13 @@ int ObRawExprDeduceType::try_add_cast_expr(RawExprType &parent,
     if (OB_SUCC(ret) && child_ptr != new_expr) { // cast expr added
       ObObjTypeClass ori_tc = ob_obj_type_class(child_ptr->get_data_type());
       ObObjTypeClass expect_tc = ob_obj_type_class(input_type.get_calc_type());
+      if (lib::is_mysql_mode() && parent.get_expr_type() == T_FUN_UDF) {
+        if (is_strict_mode(my_session_->get_sql_mode())) {
+          new_expr->set_cast_mode(new_expr->get_cast_mode() & ~CM_WARN_ON_FAIL);
+        } else {
+          new_expr->set_cast_mode(new_expr->get_cast_mode() | CM_WARN_ON_FAIL);
+        }
+      }
       if (T_FUN_UDF == parent.get_expr_type()
           && ObNumberTC == ori_tc
           && ((ObTextTC == expect_tc && lib::is_oracle_mode()) || ObLobTC == expect_tc)) {
