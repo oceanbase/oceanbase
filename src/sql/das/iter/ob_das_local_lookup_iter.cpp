@@ -388,7 +388,7 @@ int ObDASLocalLookupIter::init_rowkey_exprs_for_compat()
     }
     if (OB_FAIL(ret)) {
     } else if (OB_NOT_NULL(ir_ctdef)) {
-      if (OB_FAIL(rowkey_exprs_.push_back(ir_ctdef->inv_scan_doc_id_col_))) {
+      if (OB_FAIL(rowkey_exprs_.push_back(ir_ctdef->inv_scan_domain_id_col_))) {
         LOG_WARN("gailed to add rowkey exprs", K(ret));
       }
     } else if (OB_NOT_NULL(vec_idx_ctdef)) {

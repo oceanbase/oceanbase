@@ -56,7 +56,7 @@ OB_DEF_SERIALIZE(ObDASIRScanCtDef)
   LST_DO_CODE(OB_UNIS_ENCODE,
     flags_,
     search_text_,
-    inv_scan_doc_id_col_,
+    inv_scan_domain_id_col_, // FARM COMPAT WHITELIST
     inv_scan_doc_length_col_,
     match_filter_,
     relevance_expr_,
@@ -65,7 +65,8 @@ OB_DEF_SERIALIZE(ObDASIRScanCtDef)
     mode_flag_,
     topk_limit_expr_,
     topk_offset_expr_,
-    token_col_);
+    token_col_,
+    field_boost_expr_);
   if (OB_SUCC(ret) && has_block_max_scan_) {
     OB_UNIS_ENCODE(block_max_spec_);
   }
@@ -81,7 +82,7 @@ OB_DEF_DESERIALIZE(ObDASIRScanCtDef)
   LST_DO_CODE(OB_UNIS_DECODE,
     flags_,
     search_text_,
-    inv_scan_doc_id_col_,
+    inv_scan_domain_id_col_, // FARM COMPAT WHITELIST
     inv_scan_doc_length_col_,
     match_filter_,
     relevance_expr_,
@@ -90,7 +91,8 @@ OB_DEF_DESERIALIZE(ObDASIRScanCtDef)
     mode_flag_,
     topk_limit_expr_,
     topk_offset_expr_,
-    token_col_);
+    token_col_,
+    field_boost_expr_);
   if (OB_SUCC(ret) && has_block_max_scan_) {
     OB_UNIS_DECODE(block_max_spec_);
   }
@@ -104,7 +106,7 @@ OB_DEF_SERIALIZE_SIZE(ObDASIRScanCtDef)
   LST_DO_CODE(OB_UNIS_ADD_LEN,
     flags_,
     search_text_,
-    inv_scan_doc_id_col_,
+    inv_scan_domain_id_col_, // FARM COMPAT WHITELIST
     inv_scan_doc_length_col_,
     match_filter_,
     relevance_expr_,
@@ -113,7 +115,8 @@ OB_DEF_SERIALIZE_SIZE(ObDASIRScanCtDef)
     mode_flag_,
     topk_limit_expr_,
     topk_offset_expr_,
-    token_col_);
+    token_col_,
+    field_boost_expr_);
   if (has_block_max_scan_) {
     OB_UNIS_ADD_LEN(block_max_spec_);
   }

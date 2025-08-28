@@ -2519,7 +2519,7 @@ int ObTscCgService::generate_text_ir_ctdef(const ObLogTableScan &op,
         partition_row_cnt = est_cost_info->table_meta_info_->table_row_count_ / est_cost_info->table_meta_info_->part_count_;
       }
       ir_scan_ctdef->estimated_total_doc_cnt_ = partition_row_cnt;
-      index_back_doc_id_column = ir_scan_ctdef->inv_scan_doc_id_col_;
+      index_back_doc_id_column = ir_scan_ctdef->inv_scan_domain_id_col_;
     }
   }
 
@@ -3708,11 +3708,11 @@ int ObTscCgService::generate_text_ir_spec_exprs(const ObTextRetrievalInfo &tr_in
       LOG_WARN("unexpected doc id not found in inverted index scan access columns",
           K(ret), K(text_ir_scan_ctdef), K(doc_id_col_idx), K(doc_length_col_idx));
     } else {
-      text_ir_scan_ctdef.inv_scan_doc_id_col_ =
+      text_ir_scan_ctdef.inv_scan_domain_id_col_ =
           text_ir_scan_ctdef.get_inv_idx_scan_ctdef()->pd_expr_spec_.access_exprs_.at(doc_id_col_idx);
       text_ir_scan_ctdef.inv_scan_doc_length_col_ =
           text_ir_scan_ctdef.get_inv_idx_scan_ctdef()->pd_expr_spec_.access_exprs_.at(doc_length_col_idx);
-      if (OB_FAIL(result_output.push_back(text_ir_scan_ctdef.inv_scan_doc_id_col_))) {
+      if (OB_FAIL(result_output.push_back(text_ir_scan_ctdef.inv_scan_domain_id_col_))) {
         LOG_WARN("failed to append output exprs", K(ret));
       }
     }

@@ -626,7 +626,7 @@ int ObDASTextRetrievalIter::get_next_doc_token_cnt(const bool use_fwd_idx_agg)
 int ObDASTextRetrievalIter::get_inv_idx_scan_doc_id(ObDocId &doc_id)
 {
   int ret = OB_SUCCESS;
-  sql::ObExpr *doc_id_expr = ir_ctdef_->inv_scan_doc_id_col_;
+  sql::ObExpr *doc_id_expr = ir_ctdef_->inv_scan_domain_id_col_;
   sql::ObEvalCtx *eval_ctx = ir_rtdef_->get_inv_idx_scan_rtdef()->eval_ctx_;
   ObDatum &doc_id_datum = doc_id_expr->locate_expr_datum(*eval_ctx);
   if (OB_FAIL(doc_id.from_string(doc_id_datum.get_string()))) {
@@ -1143,7 +1143,7 @@ int ObDASTRCacheIter::save_relevances_and_docids()
 {
   int ret = OB_SUCCESS;
   sql::ObExpr *relevance_expr = ir_ctdef_->relevance_expr_;
-  ObExpr *doc_id_expr = ir_ctdef_->inv_scan_doc_id_col_;
+  ObExpr *doc_id_expr = ir_ctdef_->inv_scan_domain_id_col_;
   if (OB_ISNULL(relevance_expr) || OB_ISNULL(doc_id_expr)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid relevance or doc id expr", K(ret));
@@ -1166,7 +1166,7 @@ int ObDASTRCacheIter::save_relevances_and_docids()
 int ObDASTRCacheIter::save_docids()
 {
   int ret = OB_SUCCESS;
-  ObExpr *doc_id_expr = ir_ctdef_->inv_scan_doc_id_col_;
+  ObExpr *doc_id_expr = ir_ctdef_->inv_scan_domain_id_col_;
   if (OB_ISNULL(doc_id_expr)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid relevance or doc id expr", K(ret));

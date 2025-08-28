@@ -2936,7 +2936,8 @@ typedef enum ObItemType
   T_CACHE_REFRESH_INTERVAL_SEC = 4910,
   T_BACKUP_VALIDATE = 4911,
   T_TRANSITION = 4912,
-
+  T_FUN_ES_SCORE = 4913, // fulltext index for ES SQL
+  T_FUN_ES_MATCH = 4914, // fulltext index for ES SQL
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

@@ -47,7 +47,7 @@ public:
   ObDASIRScanCtDef(common::ObIAllocator &alloc)
     : ObDASAttachCtDef(alloc, DAS_OP_IR_SCAN),
       search_text_(nullptr),
-      inv_scan_doc_id_col_(nullptr),
+      inv_scan_domain_id_col_(nullptr),
       inv_scan_doc_length_col_(nullptr),
       match_filter_(nullptr),
       relevance_expr_(nullptr),
@@ -58,7 +58,8 @@ public:
       token_col_(nullptr),
       block_max_spec_(alloc),
       mode_flag_(NATURAL_LANGUAGE_MODE),
-      flags_(0) {}
+      flags_(0),
+      field_boost_expr_(nullptr) {}
   bool need_calc_relevance() const { return nullptr != relevance_expr_; }
   bool need_proj_relevance_score() const { return nullptr != relevance_proj_col_; }
   bool need_fwd_idx_agg() const { return has_fwd_agg_ && need_calc_relevance(); }
@@ -116,16 +117,17 @@ public:
   INHERIT_TO_STRING_KV("ObDASBaseCtDef", ObDASBaseCtDef,
                        K_(flags),
                        KPC_(search_text),
-                       KPC_(inv_scan_doc_id_col),
+                       KPC_(inv_scan_domain_id_col),
                        KPC_(inv_scan_doc_length_col),
                        KPC_(match_filter),
                        KPC_(relevance_expr),
                        KPC_(relevance_proj_col),
                        K_(estimated_total_doc_cnt),
-                       K_(mode_flag));
+                       K_(mode_flag),
+                       KPC_(field_boost_expr));
 
   ObExpr *search_text_;
-  ObExpr *inv_scan_doc_id_col_;
+  ObExpr *inv_scan_domain_id_col_;
   ObExpr *inv_scan_doc_length_col_;
   ObExpr *match_filter_;
   ObExpr *relevance_expr_;
@@ -148,6 +150,7 @@ public:
       uint8_t reserved_:4;
     };
   };
+  ObExpr *field_boost_expr_;
 };
 
 struct ObDASIRScanRtDef : ObDASAttachRtDef
