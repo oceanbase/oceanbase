@@ -175,6 +175,10 @@ void oceanbase::observer::init_srv_xlator_for_migration(ObSrvRpcXlator *xlator)
   RPC_PROCESSOR(ObGetMigrationCacheJobInfoP);
   RPC_PROCESSOR(ObNotifySSWriterDoBackfillP);
   RPC_PROCESSOR(ObCheckTransferOutTabletStatusP);
+  RPC_PROCESSOR(ObHAGetLocalCacheInfoP);
+  RPC_PROCESSOR(ObHAGetCacheJobInfoP);
+  RPC_PROCESSOR(ObGetLocalCacheKeyP);
+  RPC_PROCESSOR(ObFetchLocalCacheBlockP, gctx_.bandwidth_throttle_);
 #endif
 
   //rebuild tablet

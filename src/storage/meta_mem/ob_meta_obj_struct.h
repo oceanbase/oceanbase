@@ -161,18 +161,18 @@ public:
   ObMetaObjGuard(const ObMetaObjGuard<T> &other);
   virtual ~ObMetaObjGuard();
 
-  virtual void reset();
-  OB_INLINE virtual T *get_obj() const;
-  OB_INLINE virtual void get_obj(ObMetaObj<T> &obj) const;
+  void reset();
+  OB_INLINE T *get_obj() const;
+  OB_INLINE void get_obj(ObMetaObj<T> &obj) const;
 
-  virtual bool is_valid() const;
-  virtual bool need_hold_time_check() const;
+  bool is_valid() const;
+  bool need_hold_time_check() const;
 
-  virtual void set_obj(ObMetaObj<T> &obj);
-  virtual void set_obj(T *obj, common::ObIAllocator *allocator, ObTenantMetaMemMgr *t3m);
+  void set_obj(ObMetaObj<T> &obj);
+  void set_obj(T *obj, common::ObIAllocator *allocator, ObTenantMetaMemMgr *t3m);
   ObMetaObjGuard<T> &operator = (const ObMetaObjGuard<T> &other);
 
-  VIRTUAL_TO_STRING_KV(KP_(obj), KP_(obj_pool), KP_(allocator), KP_(t3m));
+  TO_STRING_KV(KP_(obj), KP_(obj_pool), KP_(allocator), KP_(t3m));
 
 protected:
   static const int64_t HOLD_OBJ_MAX_TIME = 2 * 60 * 60 * 1000 * 1000L; // 2h

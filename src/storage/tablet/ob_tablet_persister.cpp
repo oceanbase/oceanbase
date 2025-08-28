@@ -150,6 +150,9 @@ bool ObTabletPersisterParam::is_valid() const
   #endif
   } else {// private
     valid = ls_id_.is_valid() && ls_epoch_ >= 0 && 0 == start_macro_seq_;
+  #ifdef OB_BUILD_SHARED_STORAGE
+    valid = valid && meta_version_ >= 0;
+  #endif
   }
   return valid;
 }
@@ -296,7 +299,6 @@ void ObTabletPersister::print_time_stats(
     ObStorageObjectOpt &opt)
 {
   int ret = OB_SUCCESS;
-  uint64_t meta_version = 0;
   if (OB_UNLIKELY(!persist_param.is_valid() || !old_tablet_addr.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("persist param is invalid", K(ret), K(persist_param), K(old_tablet_addr));
@@ -309,24 +311,10 @@ void ObTabletPersister::print_time_stats(
     } else { // private
       const ObLSID &ls_id = persist_param.ls_id_;
       const ObTabletID &tablet_id = persist_param.tablet_id_;
+      ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
+      ObTabletMapKey tablet_key(ls_id, tablet_id);
       // persist a tmp tablet or full mds tablet
-      if (old_tablet_addr.is_none() || old_tablet_addr.is_memory()) {
-        if (OB_FAIL(TENANT_SEQ_GENERATOR.get_private_object_seq(meta_version))) {
-          LOG_WARN("fail to get initial tablet meta version", K(ret), K(ls_id), K(tablet_id));
-        }
-      } else if (old_tablet_addr.is_block()) {
-        meta_version = old_tablet_addr.block_id().meta_version_id() + 1;
-      } else {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected old tablet addr", K(ret), K(tablet_id), K(old_tablet_addr));
-      }
-      if (OB_FAIL(ret)) {
-      } else if (OB_UNLIKELY(0 == meta_version)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected tablet meta version", K(ret), K(meta_version));
-      } else {
-        opt.set_ss_private_tablet_meta_object_opt(ls_id.id(), tablet_id.id(), meta_version, persist_param.tablet_transfer_seq_);
-      }
+      opt.set_ss_private_tablet_meta_object_opt(ls_id.id(), tablet_id.id(), persist_param.meta_version_, persist_param.tablet_transfer_seq_);
     }
 #endif
   } else {
@@ -466,12 +454,12 @@ int ObTabletPersister::persist_ss_aggregated_meta(
     int64_t tablet_persisted_size = -1;
     const int64_t secondary_meta_size = macro_info.get_serialize_size();
     if (OB_FAIL(ret)) {
-    } else if(OB_FAIL(ObAtomicTypeHelper::generate_file_obj_opt(ObAtomicFileType::TABLET_META,
-                                                                param_.ls_id_.id(),
-                                                                param_.tablet_id_.id(),
-                                                                op_id,
-                                                                param_.tablet_id_.is_ls_inner_tablet(),
-                                                                opt))) {
+    } else if(OB_FAIL(ObAtomicTabletMetaFile::generate_file_obj_opt(ObAtomicFileType::TABLET_META,
+                                                                    param_.ls_id_.id(),
+                                                                    param_.tablet_id_.id(),
+                                                                    op_id,
+                                                                    param_.tablet_id_.is_ls_inner_tablet(),
+                                                                    opt))) {
       LOG_WARN("failed to get atomic_tablet_meta opt", K(ret), K(op_id), K(param_));
     } else if (OB_FAIL(OB_STORAGE_OBJECT_MGR.ss_get_object_id(opt, block_id))) {
       LOG_WARN("Failed to set macro_block_id", K(ret), K(opt), K(block_id));
@@ -1156,30 +1144,6 @@ int ObTabletPersister::persist_aggregated_meta(
     LOG_WARN("fail to async write", K(ret), K(write_info));
   } else if (OB_FAIL(handle.get_write_ctx(write_ctx))) {
     LOG_WARN("fail to batch get address", K(ret), K(handle));
-  }
-
-#ifdef OB_BUILD_SHARED_STORAGE
-  /// NOTE: only when _object_storage_condition_put_mode is set to 'if-match'
-  if (OB_OBJECT_STORAGE_OVERWRITE_CONTENT_MISMATCH == ret || OB_FILE_ALREADY_EXIST == ret) {
-    handle.reset();
-    MacroBlockId object_id;
-    if (OB_FAIL(OB_STORAGE_OBJECT_MGR.ss_get_object_id(curr_opt, object_id))) {
-      LOG_WARN("fail to check set object_id", K(ret), K(curr_opt), K(object_id));
-    } else if (OB_FAIL(OB_STORAGE_OBJECT_MGR.delete_object(object_id, param_.ls_epoch_))) {
-      LOG_WARN("failed to delete tablet meta", K(ret), K(curr_opt), K(object_id));
-    } else {
-      FLOG_INFO("delete tablet meta success, retry async write", K(ret), K(curr_opt), K(object_id), K(common::lbt()));
-      if (OB_FAIL(meta_service->get_shared_object_raw_reader_writer().async_write(write_info, curr_opt, handle))) {
-        LOG_WARN("fail to async write after delete conflict tablet meta", K(ret), K(write_info));
-      } else if (OB_FAIL(handle.get_write_ctx(write_ctx))) {
-        LOG_WARN("fail to batch get address after delete conflict tablet meta", K(ret), K(handle));
-      }
-    }
-  }
-#endif
-
-  if (OB_FAIL(ret)) {
-    // do nothing
   } else if (FALSE_IT(cur_macro_seq_++)) {
   } else if (FALSE_IT(new_tablet->set_tablet_addr(write_ctx.addr_))) {
   } else if (OB_FAIL(write_ctx.addr_.get_block_addr(macro_id, offset, size))) {
@@ -1977,6 +1941,7 @@ int ObTabletPersister::fetch_and_persist_sstable(
       sstable_meta_size += addrs.at(i).size();
     }
     total_tablet_meta_size += upper_align(sstable_meta_size, DIO_READ_ALIGN_SIZE);
+    total_tablet_meta_size += sstable_persist_ctx.total_tablet_meta_size_;
   }
 
   return ret;

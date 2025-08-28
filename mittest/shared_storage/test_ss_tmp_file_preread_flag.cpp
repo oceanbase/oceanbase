@@ -18,6 +18,7 @@
 #include "storage/shared_storage/ob_ss_reader_writer.h"
 #include "mittest/shared_storage/clean_residual_data.h"
 #include "storage/shared_storage/ob_ss_object_access_util.h"
+#include "storage/shared_storage/mem_macro_cache/ob_ss_mem_macro_cache.h"
 #include "mittest/shared_storage/test_ss_macro_cache_mgr_util.h"
 #undef private
 #undef protected
@@ -142,8 +143,10 @@ TEST_F(TestSSTmpFilePrereadFlag, preread)
   // 3. wait preread
   usleep(5 * 1000L * 1000L); // sleep 5s
 
-  // 4. check if segment has been preread to local cache
-  ASSERT_EQ(OB_SUCCESS, file_manager->is_exist_local_file(macro_id, 0/*ls_epoch_id*/, is_exist));
+  // 4. check if segment has been preread to local mem_macro_cache
+  ObSSMemMacroCache *mem_macro_cache = MTL(ObSSMemMacroCache *);
+  ASSERT_NE(nullptr, mem_macro_cache);
+  ASSERT_EQ(OB_SUCCESS, mem_macro_cache->check_exist(macro_id, is_exist));
   ASSERT_TRUE(is_exist);
 }
 

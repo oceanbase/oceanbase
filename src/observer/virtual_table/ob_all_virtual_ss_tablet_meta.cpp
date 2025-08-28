@@ -343,6 +343,7 @@ int ObAllVirtualSSTabletMeta::generate_virtual_rows_(ObArray<VirtualTabletMetaRo
       ObSSTabletIterator *tablet_iter = nullptr;
       param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_PREFIX,
                                   ObSSMetaReadResultType::READ_WHOLE_ROW,
+                                  false, /*try read local*/
                                   ObSSLogMetaType::SSLOG_TABLET_META,
                                   ls_id_,
                                   tablet_id_,

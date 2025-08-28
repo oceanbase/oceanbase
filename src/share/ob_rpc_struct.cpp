@@ -11746,6 +11746,7 @@ OB_SERIALIZE_MEMBER(ObEnableSSMicroCacheArg, tenant_id_, is_enabled_);
 OB_SERIALIZE_MEMBER(ObGetSSMicroCacheAllInfoArg, tenant_id_);
 OB_SERIALIZE_MEMBER(ObGetSSMicroCacheAllInfoResult, micro_cache_stat_, super_blk_, arc_info_);
 OB_SERIALIZE_MEMBER(ObClearSSMicroCacheArg, tenant_id_);
+OB_SERIALIZE_MEMBER(ObFlushSSLocalCacheArg, tenant_id_, flush_type_);
 OB_SERIALIZE_MEMBER(ObDelSSLocalTmpFileArg, tenant_id_, macro_id_);
 OB_SERIALIZE_MEMBER(ObDelSSLocalMajorArg, tenant_id_);
 OB_SERIALIZE_MEMBER(ObCalibrateSSDiskSpaceArg, tenant_id_);

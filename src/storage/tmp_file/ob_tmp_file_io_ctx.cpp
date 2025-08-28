@@ -31,7 +31,7 @@ ObTmpFileIOBaseCtx::ObTmpFileIOBaseCtx():
                     done_size_(-1),
                     todo_size_(-1),
                     io_flag_(),
-                    io_timeout_ms_(DEFAULT_IO_WAIT_TIME_MS)
+                    io_timeout_ms_(GCONF._data_storage_io_timeout / 1000L)
 {
 }
 
@@ -79,7 +79,7 @@ void ObTmpFileIOBaseCtx::reset()
   is_inited_ = false;
   fd_ = ObTmpFileGlobal::INVALID_TMP_FILE_FD;
   io_flag_.reset();
-  io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
+  io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
 }
 
 bool ObTmpFileIOBaseCtx::is_valid() const
@@ -235,7 +235,7 @@ void ObTmpFileIOReadCtx::reset()
   fd_ = ObTmpFileGlobal::INVALID_TMP_FILE_FD;
   disable_page_cache_ = false;
   io_flag_.reset();
-  io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
+  io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
   /********for virtual table statistics begin********/
   is_unaligned_read_ = false;
   total_truncated_page_read_cnt_ = 0;

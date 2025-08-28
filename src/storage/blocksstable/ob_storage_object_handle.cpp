@@ -17,6 +17,7 @@
 #include "share/ob_io_device_helper.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/ob_ss_object_access_util.h"
+#include "storage/blocksstable/ob_ss_obj_util.h"
 #endif
 
 namespace oceanbase
@@ -328,11 +329,10 @@ int ObStorageObjectHandle::ss_async_read(const ObStorageObjectReadInfo &read_inf
 int ObStorageObjectHandle::ss_async_write(const ObStorageObjectWriteInfo &write_info)
 {
   int ret = OB_SUCCESS;
-  ObStorageObjectType object_type = macro_id_.storage_object_type();
   if (OB_UNLIKELY(!write_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(write_info));
-  } else if (ObStorageObjectType::TMP_FILE == object_type) {
+  } else if (SSObjUtil::is_tmp_file(macro_id_)) {
     if (OB_FAIL(ObSSObjectAccessUtil::async_append_file(write_info, *this))) {
       LOG_WARN("fail to async append file", KR(ret), K(write_info), KPC(this));
     }

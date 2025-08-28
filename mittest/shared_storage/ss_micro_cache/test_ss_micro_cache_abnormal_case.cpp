@@ -84,6 +84,8 @@ TEST_F(TestSSMicroCacheAbnormalCase, test_mem_blk_update_meta_fail)
   ObSSMicroMetaManager &micro_meta_mgr = micro_cache->micro_meta_mgr_;
   ObSSPhysicalBlockManager &phy_blk_mgr = micro_cache->phy_blk_mgr_;
   ObSSPersistMicroDataTask &persist_data_task = micro_cache->task_runner_.persist_data_task_;
+  persist_data_task.cur_interval_us_ = 3600 * 1000 * 1000L;
+  ob_usleep(1000 * 1000);
 
   const int64_t blk_idx = 2;
   ObSSPhyBlockHandle phy_blk_handle;

@@ -186,6 +186,7 @@ TG_DEF(ReplicaPrewarmHdlr, RepPrewarmHdlr, QUEUE_THREAD, 1, storage::ObReplicaPr
 TG_DEF(MicCacheLTimer, MicCacheLTimer, TIMER)
 TG_DEF(MicCacheMTimer, MicCacheMTimer, TIMER)
 TG_DEF(MicCacheHTimer, MicCacheHTimer, TIMER)
+TG_DEF(MemMacroCacheTimer, MemMacroCacheTimer, TIMER)
 TG_DEF(SSTmpFileAFlush, TmpFileAFlush, TIMER)
 TG_DEF(SSTmpFileARemove, TmpFileARemove, TIMER)
 TG_DEF(SSTmpFileShrinkWBP, TmpFileShrink, TIMER)
@@ -201,6 +202,7 @@ TG_DEF(ObPrivateBlockGCThread, PrivGCThread, QUEUE_THREAD,
        storage::ObPrivateBlockGCThread::MINI_MODE_THREAD_NUM),
        storage::ObPrivateBlockGCThread::MAX_BLOCK_GC_TASK_NUM)
 TG_DEF(SSWriterWorker, SSWSrv, THREAD_POOL, 1)
+TG_DEF(SS_SSTableGCTimer, SS_TableGCTimer, TIMER)
 #endif
 
 TG_DEF(ExtDiskCacheServerTimer, ExtDiskCacheServerTimer, TIMER)

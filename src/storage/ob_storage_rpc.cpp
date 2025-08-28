@@ -21,6 +21,7 @@
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/prewarm/ob_replica_prewarm_struct.h"
 #include "storage/high_availability/ob_ss_transfer_backfill_utils.h"
+#include "storage/shared_storage/ob_ss_local_cache_service.h"
 #endif
 #include "lib/thread/thread.h"
 #include "lib/worker.h"
@@ -4799,6 +4800,133 @@ int ObFetchReplicaPrewarmMicroBlockP::process()
   return ret;
 }
 
+int ObHAGetLocalCacheInfoP::process()
+{
+  int ret = OB_SUCCESS;
+  if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_1_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("get ha local cache info is not supported", KR(ret));
+  } else if (OB_UNLIKELY(!arg_.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K_(arg));
+  } else {
+    MTL_SWITCH(arg_.tenant_id_) {
+      ObSSLocalCacheService *local_cache_service = nullptr;
+      if (OB_ISNULL(local_cache_service = MTL(ObSSLocalCacheService*))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("local cache service should not be nullptr", KR(ret));
+      } else if (OB_FAIL(local_cache_service->get_ls_cache_info(arg_.ls_id_, result_.local_cache_ls_info_))) {
+        LOG_WARN("fail to get ls cache info", KR(ret), K_(arg));
+      }
+      LOG_INFO("get ls cache info", KR(ret), K_(arg), K_(result));
+    }
+  }
+  return ret;
+}
+
+int ObHAGetCacheJobInfoP::process()
+{
+  int ret = OB_SUCCESS;
+  if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_1_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("get ha cache job info is not supported", KR(ret));
+  } else if (OB_UNLIKELY(!arg_.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid args", K(ret), K_(arg));
+  } else {
+    MTL_SWITCH(arg_.tenant_id_) {
+      ObSSLocalCacheService *local_cache_service = nullptr;
+      if (OB_ISNULL(local_cache_service = MTL(ObSSLocalCacheService*))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("local cache service should not be nullptr", KR(ret));
+      } else if (OB_FAIL(local_cache_service->get_job_info(arg_.ls_id_, arg_.task_count_,
+                                                           result_.cache_job_infos_))) {
+        LOG_WARN("fail to get job info", KR(ret), K_(arg));
+      }
+      LOG_INFO("get job info", KR(ret), K_(arg), K_(result));
+    }
+  }
+  return ret;
+}
+
+ObFetchLocalCacheBlockP::ObFetchLocalCacheBlockP(ObInOutBandwidthThrottle *bandwidth_throttle)
+  : ObStorageStreamRpcP(bandwidth_throttle)
+{
+}
+
+int ObFetchLocalCacheBlockP::process()
+{
+  int ret = OB_SUCCESS;
+  if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_1_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("fetch local cache block is not supported", KR(ret));
+  } else if (OB_UNLIKELY(!arg_.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K_(arg));
+  } else {
+    MTL_SWITCH(arg_.tenant_id_) {
+      ObHAFetchLocalCacheBlockHeader header;
+      char *buf = nullptr;
+      blocksstable::ObBufferReader data;
+      int64_t data_size = 0; // including micro/macro meta and data
+      last_send_time_ = this->get_receive_timestamp();
+      const int64_t start_us = ObTimeUtility::current_time_us();
+      const int64_t first_receive_ts = this->get_receive_timestamp();
+      LOG_INFO("start to fetch local cache block", K_(arg));
+      // The reason that apply 4M buffer：
+      // buffer struct：meta_array + data
+      // meta: index info + other cache info
+      // other cache info: uint32(crc) + bool(in t1/t2), less than index info
+      // index info and data, come from a cache block, <= 2M
+      // other cache info array, also <= 2M
+      // so meta_array + data <= 4M
+      if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(OB_HA_FETCH_LOCAL_CACHE_BLOCK_RPC_BUF_SIZE)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc migrate data buffer", KR(ret));
+      } else if (OB_UNLIKELY(!result_.set_data(buf, OB_HA_FETCH_LOCAL_CACHE_BLOCK_RPC_BUF_SIZE))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to set data to result", KR(ret));
+      } else if (OB_ISNULL(bandwidth_throttle_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("bandwidth_throttle must not null", KR(ret), KP_(bandwidth_throttle));
+      } else {
+        SMART_VAR(ObCopyCachedBlockDataProducer, producer) {
+          if (OB_FAIL(producer.init(arg_.local_cache_keys_))) {
+            LOG_WARN("fail to init cached block data producer", KR(ret), K_(arg));
+          } else {
+            bool is_iter_end = false;
+            while (OB_SUCC(ret) && !is_iter_end) {
+              header.reset();
+              if (OB_FAIL(producer.get_next_cached_block_data(header, data))) {
+                if (OB_ITER_END == ret) {
+                  ret = OB_SUCCESS; // ignore ret
+                  is_iter_end = true;
+                } else {
+                  LOG_WARN("fail to get next cached block data", KR(ret));
+                }
+              } else if (0 == header.body_size_) {
+                // do nothing. maybe micro cache is reorganized or gc, or macro cache is evicted or gc
+              } else if (OB_FAIL(fill_data(header))) {
+                LOG_WARN("fail to fill data", KR(ret), K(header), K(data));
+              } else if (OB_FAIL(fill_buffer(data))) {
+                LOG_WARN("fail to fill buffer", KR(ret), K(header), K(data));
+              } else {
+                data_size += header.body_size_;
+                LOG_TRACE("succ to fill cached block data", K(header), K(data));
+              }
+            }
+          }
+        }
+      }
+
+      LOG_INFO("finish to fetch local cache block", KR(ret), K(data_size), "cost_ts",
+               ObTimeUtility::current_time_us() - start_us, "in_rpc_queue_time",
+               start_us - first_receive_ts);
+    }
+  }
+  return ret;
+}
+
 int ObNotifySSWriterDoBackfillP::process()
 {
   int ret = OB_SUCCESS;
@@ -4836,6 +4964,173 @@ int ObNotifySSWriterDoBackfillP::notify_sswriter_do_backfill_()
         result_ = OB_SUCCESS;
         LOG_TRACE("[SS_TRANSFER_BACKFILL] notify sswriter do backfill success", KR(ret), K(arg_));
       }
+    }
+  }
+  return ret;
+}
+// ==================== ObGetLocalCacheKeyP ====================
+
+ERRSIM_POINT_DEF(EN_GET_LOCAL_CACHE_KEY_RECONNECT);
+int ObGetLocalCacheKeyP::process()
+{
+  int ret = OB_SUCCESS;
+  if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_1_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("get local cache key is not supported", KR(ret));
+  } else if (!arg_.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid args", KR(ret), K(arg_));
+  } else {
+    const int64_t start_us = ObTimeUtil::current_time_us();
+    MTL_SWITCH(arg_.tenant_id_) {
+      if (arg_.job_info_.job_type_ == ObHACacheJobType::MICRO_CACHE_JOB_TYPE) {
+        if (OB_FAIL(process_micro_cache_job_())) {
+          LOG_WARN("failed to process micro cache job", KR(ret), K(arg_));
+        }
+      } else if (arg_.job_info_.job_type_ == ObHACacheJobType::MACRO_CACHE_JOB_TYPE) {
+        if (OB_FAIL(process_macro_cache_job_())) {
+          LOG_WARN("failed to process macro cache job", KR(ret), K(arg_));
+        }
+      } else {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("job type is not supported", KR(ret), K(arg_));
+      }
+    }
+    LOG_INFO("finish get local cache key", KR(ret), "cost_us", ObTimeUtil::current_time_us() - start_us,
+             K_(arg), "header", result_.header_);
+  }
+  return ret;
+}
+
+int ObGetLocalCacheKeyP::process_micro_cache_job_()
+{
+  int ret = OB_SUCCESS;
+  ObCopyLocalMetaProducer producer;
+  ObCopyMicroPrewarmMetaSet metas;
+  ObCopyLocalCacheKeyRpcHeader header;
+  int32_t object_count = 0;
+  result_.local_cache_keys_.job_type_ = ObHACacheJobType::MICRO_CACHE_JOB_TYPE;
+  int64_t serialize_size_sum = result_.local_cache_keys_.get_serialize_size();
+  ObCopyLocalCacheKeyRpcHeader::ConnectStatus connect_status = ObCopyLocalCacheKeyRpcHeader::ConnectStatus::MAX_STATUS;
+  LOG_INFO("start to fetch micro block header", K(arg_));
+
+  if (OB_FAIL(producer.init(arg_.job_info_, arg_.ls_id_))) {
+    LOG_WARN("failed to init micro block key producer", KR(ret), K(arg_));
+  } else {
+    int64_t iter_count = 0;
+    int64_t cur_idx = 0;
+    while (OB_SUCC(ret) && iter_count < MICRO_MAX_ITER_COUNT) {
+      iter_count++;
+      metas.reset();
+      cur_idx = producer.get_cur_idx();
+      if (OB_FAIL(producer.get_next_micro_metas(metas))) {
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+          cur_idx -= 1;
+          connect_status = ObCopyLocalCacheKeyRpcHeader::ConnectStatus::ENDCONNECT;
+          break;
+        } else {
+          STORAGE_LOG(WARN, "failed to get next micro block key set", KR(ret));
+        }
+      } else if (!metas.is_valid()) {
+        LOG_INFO("skip this key set", K(arg_), K(metas));
+      }
+#ifdef ERRSIM
+      else if (EN_GET_LOCAL_CACHE_KEY_RECONNECT) {
+        FLOG_INFO("ERRSIM EN_GET_LOCAL_CACHE_KEY_RECONNECT", K(arg_));
+        cur_idx -= 1;
+        connect_status = ObCopyLocalCacheKeyRpcHeader::ConnectStatus::RECONNECT;
+        break;
+      }
+#endif
+      else {
+        const int64_t serialize_size = metas.get_serialize_size();
+        if (serialize_size_sum + KEY_SET_RESERVE_SIZE + serialize_size > MAX_KEY_SET_SIZE) {
+          cur_idx -= 1;
+          connect_status = ObCopyLocalCacheKeyRpcHeader::ConnectStatus::RECONNECT;
+          break;
+        } else if (OB_FAIL(result_.local_cache_keys_.micro_meta_set_array_.push_back(metas))) {
+          STORAGE_LOG(WARN, "fail to push back micro meta", KR(ret), K(metas));
+        } else {
+          serialize_size_sum += serialize_size;
+          object_count += static_cast<int32_t>(metas.micro_prewarm_metas_.count());
+        }
+      }
+    }
+    if (OB_SUCC(ret) && iter_count == MICRO_MAX_ITER_COUNT && connect_status == ObCopyLocalCacheKeyRpcHeader::ConnectStatus::MAX_STATUS ) {
+      connect_status = ObCopyLocalCacheKeyRpcHeader::ConnectStatus::RECONNECT;
+    }
+    if (OB_SUCC(ret)) {
+      header.connect_status_ = connect_status;
+      header.object_count_ = object_count;
+      header.end_idx_ = cur_idx;
+      result_.header_ = header;
+    }
+  }
+  return ret;
+}
+
+int ObGetLocalCacheKeyP::process_macro_cache_job_()
+{
+  int ret = OB_SUCCESS;
+  ObCopyLocalMetaProducer producer;
+  common::ObSArray<ObSSMacroPrewarmMeta> macro_metas;
+  ObCopyLocalCacheKeyRpcHeader header;
+  int32_t object_count = 0;
+  ObCopyLocalCacheKeyRpcHeader::ConnectStatus connect_status =
+      ObCopyLocalCacheKeyRpcHeader::ConnectStatus::RECONNECT;
+  result_.local_cache_keys_.job_type_ = ObHACacheJobType::MACRO_CACHE_JOB_TYPE;
+  int64_t serialize_size_sum = result_.local_cache_keys_.get_serialize_size();
+  LOG_INFO("start to get local macro cache key", K(arg_));
+
+  if (OB_FAIL(producer.init(arg_.job_info_, arg_.ls_id_))) {
+    LOG_WARN("failed to init macro producer", KR(ret), K(arg_));
+  } else {
+    int64_t cur_idx = 0;
+    while (OB_SUCC(ret)) {
+      cur_idx = producer.get_cur_idx();
+      if (OB_FAIL(producer.get_next_macro_metas(macro_metas))) {
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+          cur_idx -= 1;
+          connect_status =
+              ObCopyLocalCacheKeyRpcHeader::ConnectStatus::ENDCONNECT;
+          break;
+        } else {
+          STORAGE_LOG(WARN, "failed to get next macro metas", KR(ret));
+        }
+      } else if (macro_metas.count() == 0) {
+        LOG_INFO("skip empty macro metas", K(arg_), K(macro_metas));
+      }
+#ifdef ERRSIM
+      else if (EN_GET_LOCAL_CACHE_KEY_RECONNECT) {
+        FLOG_INFO("ERRSIM EN_GET_LOCAL_CACHE_KEY_RECONNECT", K(arg_));
+        cur_idx -= 1;
+        connect_status = ObCopyLocalCacheKeyRpcHeader::ConnectStatus::RECONNECT;
+        break;
+      }
+#endif
+      else if (serialize_size_sum + KEY_SET_RESERVE_SIZE + macro_metas.get_serialize_size() > MAX_KEY_SET_SIZE) {
+        cur_idx -= 1;
+        connect_status = ObCopyLocalCacheKeyRpcHeader::ConnectStatus::RECONNECT;
+        break;
+      } else {
+        for (int64_t i = 0; i < macro_metas.count() && OB_SUCC(ret); i++) {
+          if (OB_FAIL(result_.local_cache_keys_.macro_meta_array_.push_back(macro_metas[i]))) {
+            STORAGE_LOG(WARN, "fail to push back macro meta", KR(ret), K(macro_metas[i]));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          serialize_size_sum += macro_metas.get_serialize_size();
+          object_count += static_cast<int32_t>(macro_metas.count());
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      header.connect_status_ = connect_status;
+      header.object_count_ = object_count;
+      header.end_idx_ = cur_idx;
+      result_.header_ = header;
     }
   }
   return ret;
@@ -5574,6 +5869,123 @@ int ObStorageRpc::get_micro_block_key_set(
         .group_id(share::OBCG_STORAGE)
         .fetch_micro_block_keys(arg, res))) {
       LOG_WARN("fail to fetch micro block keys", K(ret), K(tenant_id), K(ls_id), K(src_info));
+    }
+  }
+  return ret;
+}
+
+
+int ObStorageRpc::get_local_cache_ls_info(
+    const uint64_t tenant_id,
+    const ObLSID &ls_id,
+    const ObStorageHASrcInfo &src_info,
+    ObSSLocalCacheLSInfo &ls_cache_info)
+{
+  int ret = OB_SUCCESS;
+  ObGetHALocalCacheLSInfoArg arg;
+  ObGetHALocalCacheLSInfoRes res;
+  ls_cache_info.reset();
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "storage rpc is not inited", KR(ret));
+  } else if (OB_UNLIKELY((OB_INVALID_TENANT_ID == tenant_id) || !ls_id.is_valid() || !src_info.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument!", KR(ret), K(tenant_id), K(ls_id), K(src_info));
+  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_1_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("get local cache ls info is not supported", KR(ret));
+  } else {
+    arg.tenant_id_ = tenant_id;
+    arg.ls_id_ = ls_id;
+    const int64_t rpc_timeout = ObStorageHAUtils::get_rpc_timeout();
+    if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_)
+                            .timeout(rpc_timeout)
+                            .dst_cluster_id(src_info.cluster_id_)
+                            .by(tenant_id)
+                            .group_id(OBCG_STORAGE)
+                            .get_ha_local_cache_info(arg, res))) {
+      LOG_WARN("fail to get ha local cache info", KR(ret), K(tenant_id), K(ls_id), K(src_info));
+    } else {
+      ls_cache_info = res.local_cache_ls_info_;
+    }
+  }
+  return ret;
+}
+
+int ObStorageRpc::get_ls_migration_cache_job_info(
+    const uint64_t tenant_id,
+    const ObLSID &ls_id,
+    const ObStorageHASrcInfo &src_info,
+    const ObHALocalCacheTaskCount &task_count,
+    ObGetHACacheJobInfoRes &res)
+{
+  int ret = OB_SUCCESS;
+  res.reset();
+  ObGetHACacheJobInfoArg arg;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "storage rpc is not inited", KR(ret));
+  } else if (OB_UNLIKELY((OB_INVALID_TENANT_ID == tenant_id) || !ls_id.is_valid() || !src_info.is_valid() ||
+             ((task_count.micro_cache_task_count_ <= 0) && (task_count.macro_cache_task_count_ <= 0)))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id), K(src_info), K(task_count));
+  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_1_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("get ls migration cache job info is not supported", KR(ret));
+  } else {
+    arg.tenant_id_ = tenant_id;
+    arg.ls_id_ = ls_id;
+    arg.task_count_ = task_count;
+    const int64_t rpc_timeout = ObStorageHAUtils::get_rpc_timeout();
+    if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_)
+                            .timeout(rpc_timeout)
+                            .dst_cluster_id(src_info.cluster_id_)
+                            .by(tenant_id)
+                            .group_id(OBCG_STORAGE)
+                            .get_ha_cache_job_info(arg, res))) {
+      LOG_WARN("fail to get migration cache job info", KR(ret), K(tenant_id), K(ls_id), K(src_info));
+    }
+  }
+  return ret;
+}
+
+int ObStorageRpc::get_local_cache_key(
+    const uint64_t tenant_id,
+    const share::ObLSID &ls_id,
+    const ObStorageHASrcInfo &src_info,
+    const ObHACacheJobInfo &job_info,
+    ObGetLocalCacheKeyRes &res)
+{
+  int ret = OB_SUCCESS;
+  res.reset();
+  ObGetLocalCacheKeyArg arg;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "storage rpc is not inited", KR(ret));
+  } else if (OB_INVALID_ID == tenant_id || !ls_id.is_valid() ||
+             !src_info.is_valid() || !job_info.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id), K(src_info),
+             K(job_info));
+  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_1_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("get local cache key is not supported", KR(ret));
+  } else {
+    const int64_t rpc_timeout = ObStorageHAUtils::get_rpc_timeout();
+    arg.tenant_id_ = tenant_id;
+    arg.ls_id_ = ls_id;
+    arg.job_info_ = job_info;
+    if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_)
+                    .dst_cluster_id(src_info.cluster_id_)
+                    .timeout(rpc_timeout)
+                    .by(tenant_id)
+                    .group_id(share::OBCG_STORAGE)
+                    .get_local_cache_key(arg, res))) {
+      LOG_WARN("fail to fetch local cache key", KR(ret), K(tenant_id), K(ls_id),
+               K(src_info));
     }
   }
   return ret;

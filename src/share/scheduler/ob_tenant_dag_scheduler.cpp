@@ -1636,6 +1636,7 @@ const char *ObDagSchedulerInfo::ObValueTypeStr[VALUE_TYPE_MAX] =
     "DAG_COUNT",
     "DAG_NET_COUNT",
     "RUNNING_TASK_CNT",
+    "ADAPTIVE_LIMIT",
 };
 
 const char* ObDagSchedulerInfo::get_value_type_str(ObValueType type)
@@ -2947,6 +2948,7 @@ void ObDagPrioScheduler::get_all_dag_scheduler_info(
     ObMutexGuard guard(prio_lock_);
     ADD_DAG_SCHEDULER_INFO(ObDagSchedulerInfo::UP_LIMIT, OB_DAG_PRIOS[priority_].dag_prio_str_, limits_);
     ADD_DAG_SCHEDULER_INFO(ObDagSchedulerInfo::RUNNING_TASK_CNT, OB_DAG_PRIOS[priority_].dag_prio_str_, running_task_cnts_);
+    ADD_DAG_SCHEDULER_INFO(ObDagSchedulerInfo::ADAPTIVE_LIMIT, OB_DAG_PRIOS[priority_].dag_prio_str_, adaptive_task_limit_);
   }
 }
 
@@ -3450,6 +3452,12 @@ int64_t ObDagPrioScheduler::get_adaptive_limit()
   return adaptive_task_limit_;
 }
 
+void ObDagPrioScheduler::set_adaptive_limit(const int64_t limit)
+{
+  ObMutexGuard guard(prio_lock_);
+  adaptive_task_limit_ = limit;
+}
+
 int64_t ObDagPrioScheduler::get_running_task_cnt()
 {
   ObMutexGuard guard(prio_lock_);
@@ -3513,9 +3521,15 @@ bool ObDagPrioScheduler::check_need_load_shedding_(const bool for_schedule)
 {
   bool need_shedding = false;
   compaction::ObBasicMergeScheduler *scheduler = nullptr;
-
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
   if (OB_ISNULL(scheduler = ObBasicMergeScheduler::get_merge_scheduler())) {
     // may be during the start phase
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (GCTX.is_shared_storage_mode()
+             && tenant_config.is_valid()
+             && tenant_config->_ob_enable_background_thread_auto_adapt) {
+    need_shedding = false;
+#endif
   } else if (scheduler->enable_adaptive_merge_schedule()) {
     ObTenantTabletStatMgr *stat_mgr = MTL(ObTenantTabletStatMgr *);
     int64_t load_shedding_factor = 1;
@@ -4122,7 +4136,7 @@ void ObTenantDagScheduler::wait()
   TG_WAIT(tg_id_);
 }
 
-void ObTenantDagScheduler::reload_config()
+void ObTenantDagScheduler::inner_reload_config()
 {
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
   if (tenant_config.is_valid()) {
@@ -4146,6 +4160,18 @@ void ObTenantDagScheduler::reload_config()
     set_thread_score(ObDagPrio::DAG_PRIO_ATTACH_SHARED_SSTABLE, tenant_config->attach_shared_sstable_thread_score);
 #endif
     set_compaction_dag_limit(tenant_config->compaction_dag_cnt_limit);
+  }
+}
+
+void ObTenantDagScheduler::reload_config()
+{
+#ifdef OB_BUILD_SHARED_STORAGE
+  if (GCTX.is_shared_storage_mode()) {
+    ss_reload_config();
+  } else
+#endif
+  {
+    inner_reload_config();
   }
 }
 
@@ -4518,7 +4544,7 @@ int ObTenantDagScheduler::get_all_dag_scheduler_info(
 {
   int ret = OB_SUCCESS;
   int64_t idx = 0;
-  int64_t total_cnt = 3 + 3 * ObDagPrio::DAG_PRIO_MAX + ObDagType::DAG_TYPE_MAX + ObDagNetType::DAG_NET_TYPE_MAX;
+  int64_t total_cnt = 3 + 4 * ObDagPrio::DAG_PRIO_MAX + ObDagType::DAG_TYPE_MAX + ObDagNetType::DAG_NET_TYPE_MAX;
   void *buf = nullptr;
   ObDagSchedulerInfo *info_list = nullptr;
   if (OB_ISNULL(buf = allocator.alloc(sizeof(ObDagSchedulerInfo) * total_cnt))) {
@@ -4799,6 +4825,12 @@ void ObTenantDagScheduler::run1()
   lib::set_thread_name("DagScheduler");
   while (!has_set_stop()) {
     diagnose_for_suggestion();
+    // must before dump_dag_status, because it will use the statistics result of dump_dag_status.
+#ifdef OB_BUILD_SHARED_STORAGE
+    if (GCTX.is_shared_storage_mode()) {
+      adapt_ss_work_thread();
+    }
+#endif
     dump_dag_status();
     loop_dag_net();
     {
@@ -5229,6 +5261,21 @@ int ObTenantDagScheduler::get_adaptive_limit(const int64_t prio, int64_t &limit)
     COMMON_LOG(WARN, "invalid argument", K(ret), K(prio));
   } else if (FALSE_IT(limit = prio_sche_[prio].get_adaptive_limit())) {
     // TODO get max thread concurrency of current prio type
+  }
+  return ret;
+}
+
+int ObTenantDagScheduler::set_adaptive_limit(const int64_t prio, const int64_t limit)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    COMMON_LOG(WARN, "ObTenantDagScheduler is not inited", K(ret));
+  } else if (OB_UNLIKELY(prio < 0 || prio >= ObDagPrio::DAG_PRIO_MAX || limit < 0 || limit > INT32_MAX)) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid argument", K(ret), K(prio), K(limit));
+  } else {
+    prio_sche_[prio].set_adaptive_limit(limit);
   }
   return ret;
 }

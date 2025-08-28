@@ -264,13 +264,13 @@ static void insert_sslog(
     const sslog::ObSSLogMetaType sslog_type,
     const int64_t op_id,
     const ObAtomicMetaInfo::State state,
-    const ObSSMinorGCInfo &gc_info)
+    const ObSSTableGCInfo &gc_info)
 {
   int64_t affected_rows = 0;
   ObSSMetaReadParam param;
   share::SCN transfer_scn;
   transfer_scn.set_min();
-  param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY, ObSSMetaReadResultType::READ_WHOLE_ROW, sslog_type, RunCtx.ls_id_, RunCtx.tablet_id_, transfer_scn);
+  param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY, ObSSMetaReadResultType::READ_WHOLE_ROW, false, sslog_type, RunCtx.ls_id_, RunCtx.tablet_id_, transfer_scn);
 
   ObAtomicExtraInfo extra_info;
   extra_info.meta_info_.op_id_ = op_id;
@@ -360,7 +360,7 @@ static void update_sslog(
   ObSSMetaReadParam param;
   share::SCN transfer_scn;
   transfer_scn.set_min();
-  param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY, ObSSMetaReadResultType::READ_WHOLE_ROW, sslog_type, RunCtx.ls_id_, RunCtx.tablet_id_, transfer_scn);
+  param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY, ObSSMetaReadResultType::READ_WHOLE_ROW, false, sslog_type, RunCtx.ls_id_, RunCtx.tablet_id_, transfer_scn);
 
   ObAtomicMetaKey meta_key;
   ASSERT_EQ(OB_SUCCESS, ObAtomicFile::get_meta_key(param, meta_key));
@@ -369,7 +369,7 @@ static void update_sslog(
   share::SCN row_scn_ret;
   ObString value;
   ObSSLogIteratorGuard iter(true, true);
-  param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY, ObSSMetaReadResultType::READ_WHOLE_ROW, sslog_type, RunCtx.ls_id_, RunCtx.tablet_id_, transfer_scn);
+  param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY, ObSSMetaReadResultType::READ_WHOLE_ROW, false, sslog_type, RunCtx.ls_id_, RunCtx.tablet_id_, transfer_scn);
   ASSERT_EQ(OB_SUCCESS, ObAtomicFile::read_meta_row(param,
                                                     share::SCN::invalid_scn(),
                                                     iter));
@@ -550,7 +550,7 @@ TEST_F(ObSharedStorageTest, test_timeout_block_gc)
   ObSSMetaReadParam param;
   share::SCN transfer_scn;
   transfer_scn.set_min();
-  param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY, ObSSMetaReadResultType::READ_WHOLE_ROW, sslog::ObSSLogMetaType::SSLOG_MINI_SSTABLE, RunCtx.ls_id_, RunCtx.tablet_id_, transfer_scn);
+  param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY, ObSSMetaReadResultType::READ_WHOLE_ROW, false, sslog::ObSSLogMetaType::SSLOG_MINI_SSTABLE, RunCtx.ls_id_, RunCtx.tablet_id_, transfer_scn);
 
   EXE_SQL("alter system set _ss_schedule_upload_interval = '1s';");
   EXE_SQL("alter system set inc_sstable_upload_thread_score = 20;");
@@ -587,50 +587,50 @@ TEST_F(ObSharedStorageTest, test_timeout_block_gc)
   MacroBlockId block_id_105_2;
   MacroBlockId block_id_105_3;
 
-  ObSSMinorGCInfo gc_info_100;
+  ObSSTableGCInfo gc_info_100;
   gc_info_100.parallel_cnt_ = 3;
   gc_info_100.seq_step_ = 1000;
-  gc_info_100.start_seq_ = (int64_t)100 << 32;
+  gc_info_100.data_seq_bits_ = 32;
   gen_block_id(100, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 0, block_id_100_1);
   gen_block_id(100, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 1000, block_id_100_2);
   gen_block_id(100, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 2000, block_id_100_3);
 
-  ObSSMinorGCInfo gc_info_101;
+  ObSSTableGCInfo gc_info_101;
   gc_info_101.parallel_cnt_ = 3;
   gc_info_101.seq_step_ = 1000;
-  gc_info_101.start_seq_ = (int64_t)101 << 32;
+  gc_info_101.data_seq_bits_ = 32;
   gen_block_id(101, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 0, not_exist_block_id_101_1);
   gen_block_id(101, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 1000, not_exist_block_id_101_2);
   gen_block_id(101, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 2000, not_exist_block_id_101_3);
 
-  ObSSMinorGCInfo gc_info_102;
+  ObSSTableGCInfo gc_info_102;
   gc_info_102.parallel_cnt_ = 3;
   gc_info_102.seq_step_ = 1000;
-  gc_info_102.start_seq_ = (int64_t)102 << 32;
+  gc_info_102.data_seq_bits_ = 32;
   gen_block_id(102, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 0, block_id_102_1);
   gen_block_id(102, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 1000, block_id_102_2);
   gen_block_id(102, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 2000, block_id_102_3);
 
-  ObSSMinorGCInfo gc_info_103;
+  ObSSTableGCInfo gc_info_103;
   gc_info_103.parallel_cnt_ = 3;
   gc_info_103.seq_step_ = 1000;
-  gc_info_103.start_seq_ = (int64_t)103 << 32;
+  gc_info_103.data_seq_bits_ = 32;
   gen_block_id(103, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 0, block_id_103_1);
   gen_block_id(103, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 1000, block_id_103_2);
   gen_block_id(103, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 2000, block_id_103_3);
 
-  ObSSMinorGCInfo gc_info_104;
+  ObSSTableGCInfo gc_info_104;
   gc_info_104.parallel_cnt_ = 3;
   gc_info_104.seq_step_ = 1000;
-  gc_info_104.start_seq_ = (int64_t)104 << 32;
+  gc_info_104.data_seq_bits_ = 32;
   gen_block_id(104, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 0, block_id_104_1);
   gen_block_id(104, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 1000, block_id_104_2);
   gen_block_id(104, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 2000, block_id_104_3);
 
-  ObSSMinorGCInfo gc_info_105;
+  ObSSTableGCInfo gc_info_105;
   gc_info_105.parallel_cnt_ = 3;
   gc_info_105.seq_step_ = 1000;
-  gc_info_105.start_seq_ = (int64_t)105 << 32;
+  gc_info_104.data_seq_bits_ = 32;
   gen_block_id(105, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 0, block_id_105_1);
   gen_block_id(105, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 1000, block_id_105_2);
   gen_block_id(105, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 2000, block_id_105_3);
@@ -674,17 +674,16 @@ TEST_F(ObSharedStorageTest, test_timeout_block_gc)
   update_info_102.acquire_scn_.set_min();
   update_info_102.update_reason_ = ObMetaUpdateReason::TABLET_UPLOAD_DATA_MINI_SSTABLE;
   update_info_102.sstable_op_id_ = 102;
-  update_sslog<ObSSMinorGCInfo>(sslog::ObSSLogMetaType::SSLOG_TABLET_META, 100, ObAtomicMetaInfo::State::INIT, NULL, &update_info_102);
-  update_sslog<ObSSMinorGCInfo>(sslog::ObSSLogMetaType::SSLOG_TABLET_META, 101, ObAtomicMetaInfo::State::INIT, NULL, &update_info_102);
-  update_sslog<ObSSMinorGCInfo>(sslog::ObSSLogMetaType::SSLOG_TABLET_META, 101, ObAtomicMetaInfo::State::COMMITTED, NULL, &update_info_102);
+  update_sslog<ObSSTableGCInfo>(sslog::ObSSLogMetaType::SSLOG_TABLET_META, 100, ObAtomicMetaInfo::State::INIT, NULL, &update_info_102);
+  update_sslog<ObSSTableGCInfo>(sslog::ObSSLogMetaType::SSLOG_TABLET_META, 101, ObAtomicMetaInfo::State::INIT, NULL, &update_info_102);
+  update_sslog<ObSSTableGCInfo>(sslog::ObSSLogMetaType::SSLOG_TABLET_META, 101, ObAtomicMetaInfo::State::COMMITTED, NULL, &update_info_102);
 
 
   ObSSMetaUpdateMetaInfo update_info_104;
   update_info_104.update_reason_ = ObMetaUpdateReason::TABLET_UPLOAD_DATA_MINI_SSTABLE;
   update_info_104.sstable_op_id_ = 104;
   update_info_104.acquire_scn_.set_min();
-  update_sslog<ObSSMinorGCInfo>(sslog::ObSSLogMetaType::SSLOG_TABLET_META, 102, ObAtomicMetaInfo::State::INIT, NULL, &update_info_104);
-
+  update_sslog<ObSSTableGCInfo>(sslog::ObSSLogMetaType::SSLOG_TABLET_META, 102, ObAtomicMetaInfo::State::INIT, NULL, &update_info_104);
 
   // error gc
   LastSuccSCNs last_succ_scns;
@@ -735,7 +734,6 @@ TEST_F(ObSharedStorageTest, test_timeout_block_gc)
   ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.ss_is_exist_object(block_id_105_3, 0, is_exist));
   ASSERT_TRUE(is_exist);
 
-
   update_sslog(sslog::ObSSLogMetaType::SSLOG_MINI_SSTABLE, 105, ObAtomicMetaInfo::State::COMMITTED, &gc_info_105);
 
   MTL(ObSSMetaService*)->get_max_committed_meta_scn(gc_end);
@@ -772,7 +770,7 @@ TEST_F(ObSharedStorageTest, test_abort_block_gc)
   ObSSMetaReadParam param;
   share::SCN transfer_scn;
   transfer_scn.set_min();
-  param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY, ObSSMetaReadResultType::READ_WHOLE_ROW, sslog::ObSSLogMetaType::SSLOG_MINI_SSTABLE, RunCtx.ls_id_, RunCtx.tablet_id_, transfer_scn);
+  param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY, ObSSMetaReadResultType::READ_WHOLE_ROW, false, sslog::ObSSLogMetaType::SSLOG_MINI_SSTABLE, RunCtx.ls_id_, RunCtx.tablet_id_, transfer_scn);
 
   EXE_SQL("alter system set _ss_schedule_upload_interval = '1s';");
   EXE_SQL("alter system set inc_sstable_upload_thread_score = 20;");
@@ -805,42 +803,42 @@ TEST_F(ObSharedStorageTest, test_abort_block_gc)
   MacroBlockId block_id_104_2;
   MacroBlockId block_id_104_3;
 
-  ObSSMinorGCInfo gc_info_100;
+  ObSSTableGCInfo gc_info_100;
   gc_info_100.parallel_cnt_ = 3;
   gc_info_100.seq_step_ = 1000;
-  gc_info_100.start_seq_ = (int64_t)100 << 32;
+  gc_info_100.data_seq_bits_ = 32;
   gen_block_id(100, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 0, block_id_100_1);
   gen_block_id(100, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 1000, block_id_100_2);
   gen_block_id(100, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 2000, block_id_100_3);
 
-  ObSSMinorGCInfo gc_info_101;
+  ObSSTableGCInfo gc_info_101;
   gc_info_101.parallel_cnt_ = 3;
   gc_info_101.seq_step_ = 1000;
-  gc_info_101.start_seq_ = (int64_t)101 << 32;
+  gc_info_101.data_seq_bits_ = 32;
   gen_block_id(101, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 0, not_exist_block_id_101_1);
   gen_block_id(101, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 1000, not_exist_block_id_101_2);
   gen_block_id(101, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 2000, not_exist_block_id_101_3);
 
-  ObSSMinorGCInfo gc_info_102;
+  ObSSTableGCInfo gc_info_102;
   gc_info_102.parallel_cnt_ = 3;
   gc_info_102.seq_step_ = 1000;
-  gc_info_102.start_seq_ = (int64_t)102 << 32;
+  gc_info_102.data_seq_bits_ = 32;
   gen_block_id(102, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 0, block_id_102_1);
   gen_block_id(102, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 1000, block_id_102_2);
   gen_block_id(102, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 2000, block_id_102_3);
 
-  ObSSMinorGCInfo gc_info_103;
+  ObSSTableGCInfo gc_info_103;
   gc_info_103.parallel_cnt_ = 3;
   gc_info_103.seq_step_ = 1000;
-  gc_info_103.start_seq_ = (int64_t)103 << 32;
+  gc_info_103.data_seq_bits_ = 32;
   gen_block_id(103, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 0, block_id_103_1);
   gen_block_id(103, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 1000, block_id_103_2);
   gen_block_id(103, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 2000, block_id_103_3);
 
-  ObSSMinorGCInfo gc_info_104;
+  ObSSTableGCInfo gc_info_104;
   gc_info_104.parallel_cnt_ = 3;
   gc_info_104.seq_step_ = 1000;
-  gc_info_104.start_seq_ = (int64_t)104 << 32;
+  gc_info_104.data_seq_bits_ = 32;
   gen_block_id(104, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 0, block_id_104_1);
   gen_block_id(104, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 1000, block_id_104_2);
   gen_block_id(104, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 2000, block_id_104_3);
@@ -888,14 +886,14 @@ TEST_F(ObSharedStorageTest, test_abort_block_gc)
   write_block(meta_block_id6);
 
   // tablet_meta sslog write
-  update_sslog<ObSSMinorGCInfo>(sslog::ObSSLogMetaType::SSLOG_TABLET_META, 100, ObAtomicMetaInfo::State::INIT);
-  update_sslog<ObSSMinorGCInfo>(sslog::ObSSLogMetaType::SSLOG_TABLET_META, 100, ObAtomicMetaInfo::State::COMMITTED);
-  update_sslog<ObSSMinorGCInfo>(sslog::ObSSLogMetaType::SSLOG_TABLET_META, 101, ObAtomicMetaInfo::State::INIT);
-  update_sslog<ObSSMinorGCInfo>(sslog::ObSSLogMetaType::SSLOG_TABLET_META, 101, ObAtomicMetaInfo::State::ABORTED);
-  update_sslog<ObSSMinorGCInfo>(sslog::ObSSLogMetaType::SSLOG_TABLET_META, 102, ObAtomicMetaInfo::State::INIT);
-  update_sslog<ObSSMinorGCInfo>(sslog::ObSSLogMetaType::SSLOG_TABLET_META, 102, ObAtomicMetaInfo::State::COMMITTED);
-  update_sslog<ObSSMinorGCInfo>(sslog::ObSSLogMetaType::SSLOG_TABLET_META, 103, ObAtomicMetaInfo::State::INIT);
-  update_sslog<ObSSMinorGCInfo>(sslog::ObSSLogMetaType::SSLOG_TABLET_META, 104, ObAtomicMetaInfo::State::INIT);
+  update_sslog<ObSSTableGCInfo>(sslog::ObSSLogMetaType::SSLOG_TABLET_META, 100, ObAtomicMetaInfo::State::INIT);
+  update_sslog<ObSSTableGCInfo>(sslog::ObSSLogMetaType::SSLOG_TABLET_META, 100, ObAtomicMetaInfo::State::COMMITTED);
+  update_sslog<ObSSTableGCInfo>(sslog::ObSSLogMetaType::SSLOG_TABLET_META, 101, ObAtomicMetaInfo::State::INIT);
+  update_sslog<ObSSTableGCInfo>(sslog::ObSSLogMetaType::SSLOG_TABLET_META, 101, ObAtomicMetaInfo::State::ABORTED);
+  update_sslog<ObSSTableGCInfo>(sslog::ObSSLogMetaType::SSLOG_TABLET_META, 102, ObAtomicMetaInfo::State::INIT);
+  update_sslog<ObSSTableGCInfo>(sslog::ObSSLogMetaType::SSLOG_TABLET_META, 102, ObAtomicMetaInfo::State::COMMITTED);
+  update_sslog<ObSSTableGCInfo>(sslog::ObSSLogMetaType::SSLOG_TABLET_META, 103, ObAtomicMetaInfo::State::INIT);
+  update_sslog<ObSSTableGCInfo>(sslog::ObSSLogMetaType::SSLOG_TABLET_META, 104, ObAtomicMetaInfo::State::INIT);
 
   // error gc
   LastSuccSCNs last_succ_scns;
@@ -948,7 +946,7 @@ TEST_F(ObSharedStorageTest, test_abort_block_gc)
   ASSERT_TRUE(is_exist);
 
   // check new tablet meta block gc
-  update_sslog<ObSSMinorGCInfo>(sslog::ObSSLogMetaType::SSLOG_TABLET_META, 104, ObAtomicMetaInfo::State::ABORTED);
+  update_sslog<ObSSTableGCInfo>(sslog::ObSSLogMetaType::SSLOG_TABLET_META, 104, ObAtomicMetaInfo::State::ABORTED);
 
   MTL(ObSSMetaService*)->get_max_committed_meta_scn(snapshot);
   LOG_INFO("start to do abort_tablet_meta_block gc");
@@ -979,7 +977,7 @@ TEST_F(ObSharedStorageTest, test_tablet_gc)
   ObSSMetaReadParam param;
   share::SCN transfer_scn;
   transfer_scn.set_min();
-  param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY, ObSSMetaReadResultType::READ_WHOLE_ROW, sslog::ObSSLogMetaType::SSLOG_MINI_SSTABLE, RunCtx.ls_id_, RunCtx.tablet_id_, transfer_scn);
+  param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY, ObSSMetaReadResultType::READ_WHOLE_ROW, false, sslog::ObSSLogMetaType::SSLOG_MINI_SSTABLE, RunCtx.ls_id_, RunCtx.tablet_id_, transfer_scn);
 
   EXE_SQL("alter system set _ss_schedule_upload_interval = '1s';");
   EXE_SQL("alter system set inc_sstable_upload_thread_score = 20;");
@@ -1056,10 +1054,10 @@ TEST_F(ObSharedStorageTest, test_tablet_gc)
   MacroBlockId mini_block_id2;
   MacroBlockId mini_block_id3;
 
-  ObSSMinorGCInfo mini_gc_info;
+  ObSSTableGCInfo mini_gc_info;
   mini_gc_info.parallel_cnt_ = 3;
   mini_gc_info.seq_step_ = 1000;
-  mini_gc_info.start_seq_ = (int64_t)100 << 32;
+  mini_gc_info.data_seq_bits_ = 32;
   gen_block_id(100, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 0, mini_block_id1);
   gen_block_id(100, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 1000, mini_block_id2);
   gen_block_id(100, ObStorageObjectType::SHARED_MINI_DATA_MACRO, 2000, mini_block_id3);
@@ -1079,7 +1077,7 @@ TEST_F(ObSharedStorageTest, test_tablet_gc)
   write_block(meta_block_id1);
 
   // tablet_meta sslog write
-  update_sslog<ObSSMinorGCInfo>(sslog::ObSSLogMetaType::SSLOG_TABLET_META, 100, ObAtomicMetaInfo::State::INIT);
+  update_sslog<ObSSTableGCInfo>(sslog::ObSSLogMetaType::SSLOG_TABLET_META, 100, ObAtomicMetaInfo::State::INIT);
 
 
   EXE_SQL("drop table test_table;");
@@ -1180,7 +1178,7 @@ TEST_F(ObSharedStorageTest, test_tablet_gc)
 //   update_sslog(sslog::ObSSLogMetaType::SSLOG_MAJOR_SSTABLE, 100, ObAtomicMetaInfo::State::INIT, &major_gc_info);
 //
 //   // tablet_meta sslog write
-//   update_sslog<ObSSMinorGCInfo>(sslog::ObSSLogMetaType::SSLOG_TABLET_META, 100, ObAtomicMetaInfo::State::INIT);
+//   update_sslog<ObSSTableGCInfo>(sslog::ObSSLogMetaType::SSLOG_TABLET_META, 100, ObAtomicMetaInfo::State::INIT);
 //
 //   // tablet_meta sslog write
 //   ObSSMetaUpdateMetaInfo update_info_1000;
@@ -1188,8 +1186,8 @@ TEST_F(ObSharedStorageTest, test_tablet_gc)
 //   update_info_1000.update_reason_ = ObMetaUpdateReason::TABLET_COMPACT_ADD_DATA_MAJOR_SSTABLE;
 //   // snapshot_version
 //   update_info_1000.sstable_op_id_ = 1000;
-//   update_sslog<ObSSMinorGCInfo>(sslog::ObSSLogMetaType::SSLOG_TABLET_META, 101, ObAtomicMetaInfo::State::INIT, NULL, &update_info_1000);
-//   update_sslog<ObSSMinorGCInfo>(sslog::ObSSLogMetaType::SSLOG_TABLET_META, 101, ObAtomicMetaInfo::State::COMMITTED, NULL, &update_info_1000);
+//   update_sslog<ObSSTableGCInfo>(sslog::ObSSLogMetaType::SSLOG_TABLET_META, 101, ObAtomicMetaInfo::State::INIT, NULL, &update_info_1000);
+//   update_sslog<ObSSTableGCInfo>(sslog::ObSSLogMetaType::SSLOG_TABLET_META, 101, ObAtomicMetaInfo::State::COMMITTED, NULL, &update_info_1000);
 //
 //   share::SCN snapshot;
 //   MTL(ObSSMetaService*)->get_max_committed_meta_scn(snapshot);

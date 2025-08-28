@@ -110,7 +110,7 @@ TEST_F(TestSSMacroCacheStat, test_tablet_stat)
   ASSERT_EQ(1, macro_cache_mgr->tablet_stat_map_.size());
   const ObSSMacroCacheTabletStat *tablet_stat = macro_cache_mgr->tablet_stat_map_.get(tablet_id);
   ASSERT_NE(nullptr, tablet_stat);
-  ASSERT_EQ(WRITE_IO_SIZE, tablet_stat->cached_size_);
+  ASSERT_EQ(WRITE_IO_SIZE, tablet_stat->get_total_cached_size());
   ASSERT_EQ(0, tablet_stat->cache_hit_cnt_);
   ASSERT_EQ(0, tablet_stat->cache_hit_bytes_);
   ASSERT_EQ(0, tablet_stat->cache_miss_cnt_);
@@ -125,7 +125,7 @@ TEST_F(TestSSMacroCacheStat, test_tablet_stat)
   ASSERT_FALSE(is_hit_cache);
   fd_handle.reset();
 
-  ASSERT_EQ(WRITE_IO_SIZE, tablet_stat->cached_size_);
+  ASSERT_EQ(WRITE_IO_SIZE, tablet_stat->get_total_cached_size());
   ASSERT_EQ(0, tablet_stat->cache_hit_cnt_);
   ASSERT_EQ(0, tablet_stat->cache_hit_bytes_);
   ASSERT_EQ(1, tablet_stat->cache_miss_cnt_);
@@ -155,7 +155,7 @@ TEST_F(TestSSMacroCacheStat, test_tablet_stat)
   ASSERT_TRUE(is_hit_cache);
   fd_handle.reset();
 
-  ASSERT_EQ(WRITE_IO_SIZE, tablet_stat->cached_size_);
+  ASSERT_EQ(WRITE_IO_SIZE, tablet_stat->get_total_cached_size());
   ASSERT_EQ(1, tablet_stat->cache_hit_cnt_);
   ASSERT_EQ(access_size * 2, tablet_stat->cache_hit_bytes_);
   ASSERT_EQ(1, tablet_stat->cache_miss_cnt_);
@@ -223,13 +223,13 @@ TEST_F(TestSSMacroCacheStat, test_tablet_stat_after_evict)
   macro_cache_mgr->tablet_stat_task_.runTimerTask();
   const ObSSMacroCacheTabletStat *tablet_stat = macro_cache_mgr->tablet_stat_map_.get(tablet_id);
   ASSERT_NE(nullptr, tablet_stat);
-  ASSERT_EQ(WRITE_IO_SIZE, tablet_stat->cached_size_);
+  ASSERT_EQ(WRITE_IO_SIZE, tablet_stat->get_total_cached_size());
   ASSERT_EQ(OB_SUCCESS, macro_cache_mgr->force_evict_by_macro_id(macro_id));
   ASSERT_EQ(nullptr, macro_cache_mgr->meta_map_.get(macro_id));
   macro_cache_mgr->tablet_stat_task_.runTimerTask();
   ASSERT_EQ(1, macro_cache_mgr->tablet_stat_map_.size());
   tablet_stat = macro_cache_mgr->tablet_stat_map_.get(tablet_id);
-  ASSERT_EQ(0, tablet_stat->cached_size_);
+  ASSERT_EQ(0, tablet_stat->get_total_cached_size());
 }
 
 } // namespace storage

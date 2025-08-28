@@ -103,6 +103,7 @@
 #include "storage/shared_storage/ob_file_manager.h"
 #include "storage/shared_storage/prewarm/ob_ss_local_cache_prewarm_service.h"
 #include "storage/shared_storage/macro_cache/ob_ss_macro_cache_mgr.h"
+#include "storage/shared_storage/mem_macro_cache/ob_ss_mem_macro_cache.h"
 #include "storage/shared_storage/ob_ss_micro_cache.h"
 #include "storage/shared_storage/ob_ss_local_cache_service.h"
 #include "close_modules/shared_storage/storage/incremental/ob_sswriter_service.h"
@@ -554,6 +555,7 @@ int ObMultiTenant::init(ObAddr myaddr,
       MTL_BIND2(mtl_new_default, ObTenantDiskSpaceManager::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObTenantFileManager::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObSSMacroCacheMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+      MTL_BIND2(mtl_new_default, ObSSMemMacroCache::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObSSLocalCachePrewarmService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObSSMicroCache::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObSSLocalCacheService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);

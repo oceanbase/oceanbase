@@ -7463,10 +7463,30 @@ int ObTablet::get_updating_tablet_pointer_param(
   return ret;
 }
 
+int ObTablet::get_updating_tablet_pointer_param_for_meta_version(ObUpdateTabletPointerParam &param) const
+{
+  int ret = OB_SUCCESS;
+  ObTabletPointer *tablet_ptr = nullptr;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("this tablet hasn't been initialized", K(ret), KPC(this));
+  } else if (OB_FAIL(get_updating_tablet_pointer_param(param, /*need_tablet_attr*/true))) {
+    LOG_WARN("failed to get updating tablet pointer param", K(ret), KPC(this));
+  } else if (OB_ISNULL(tablet_ptr = pointer_hdl_.get_tablet_pointer())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error, tablet pointer is nullptr", K(pointer_hdl_));
+  } else {
+    /// set @c next_meta_version as new last_match_tablet_meta_version
+    param.resident_info_.attr_.last_match_tablet_meta_version_ = tablet_ptr->get_next_meta_version() - 1;
+    param.set_update_last_match_meta_version();
+  }
+  return ret;
+}
+
 int ObTablet::calc_tablet_attr(ObTabletAttr &attr) const
 {
   int ret = OB_SUCCESS;
-  ObTabletBasePointer *tablet_ptr = nullptr;
+  ObTabletPointer *tablet_ptr = nullptr;
   attr.reset();
   attr.iter_attr_.has_transfer_table_ = tablet_meta_.has_transfer_table();
   attr.iter_attr_.is_empty_shell_ = table_store_addr_.addr_.is_none();
@@ -7490,7 +7510,7 @@ int ObTablet::calc_tablet_attr(ObTabletAttr &attr) const
   ObTabletMemberWrapper<ObTabletTableStore> wrapper;
   const ObTabletTableStore *table_store = nullptr;
   ObTableStoreIterator table_iter;
-  if (OB_ISNULL(tablet_ptr = pointer_hdl_.get_resource_ptr())) {
+  if (OB_ISNULL(tablet_ptr = pointer_hdl_.get_tablet_pointer())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet_pointer_hdl is in_valid", K(ret), K(pointer_hdl_));
   } else if (attr.is_empty_shell()) {
@@ -7524,6 +7544,8 @@ int ObTablet::calc_tablet_attr(ObTabletAttr &attr) const
       OB_MAX(tablet_meta_.clog_checkpoint_scn_, OB_MAX(tablet_meta_.mds_checkpoint_scn_,
                                                        tablet_meta_.ddl_checkpoint_scn_));
     attr.iter_attr_.valid_ = true;
+    const int64_t current_version = static_cast<int64_t>(tablet_addr_.block_id().meta_version_id());
+    attr.last_match_tablet_meta_version_ = max(tablet_ptr->get_last_match_meta_version(), current_version);
   } else {
     attr.reset();
   }
@@ -9525,7 +9547,6 @@ int ObTablet::check_tx_data_can_explain_user_data(const share::SCN &tx_data_tabl
   }
   return ret;
 }
-
 
 } // namespace storage
 } // namespace oceanbase

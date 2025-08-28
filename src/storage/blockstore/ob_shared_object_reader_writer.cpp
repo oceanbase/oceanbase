@@ -638,6 +638,7 @@ int ObSharedObjectLinkIter::read_next_block(ObSharedObjectReadHandle &shared_obj
   read_info.addr_ = cur_;
   read_info.ls_epoch_ = 0;/* ls_epoch for share storage */
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
+  read_info.io_timeout_ms_ = std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
   if (OB_FAIL(ObSharedObjectReaderWriter::async_read(read_info, shared_obj_handle))) {
     LOG_WARN("Fail to read block", K(ret), K(read_info));
   } else if (OB_FAIL(shared_obj_handle.wait())) {

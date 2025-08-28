@@ -3430,6 +3430,8 @@ int ObSchemaPrinter::print_hash_sub_partition_elements(ObSubPartition **sub_part
         } else if (OB_FAIL(print_tablespace_definition_for_table(
                    sub_partition->get_tenant_id(), sub_partition->get_tablespace_id(), buf, buf_len, pos))) {
           SHARE_SCHEMA_LOG(WARN, "print tablespace definition failed", K(ret));
+        } else if (OB_FAIL(!strict_compat_ && ObStorageCacheUtil::print_storage_cache_policy_element(sub_partition, buf, buf_len, pos))) {
+          SHARE_SCHEMA_LOG(WARN, "failed to print storage cache policy element", K(ret));
         } else if (sub_part_num - 1 != i && OB_FAIL(databuff_printf(buf, buf_len, pos, ",\n"))) {
           SHARE_SCHEMA_LOG(WARN, "print enter failed", K(ret));
         } else if (sub_part_num - 1 == i && OB_FAIL(databuff_printf(buf, buf_len, pos, ")"))) {
@@ -3502,6 +3504,8 @@ int ObSchemaPrinter::print_list_sub_partition_elements(
         } else if (OB_FAIL(print_tablespace_definition_for_table(
                    sub_partition->get_tenant_id(), sub_partition->get_tablespace_id(), buf, buf_len, pos))) {
           SHARE_SCHEMA_LOG(WARN, "print tablespace definition failed", K(ret));
+        } else if (OB_FAIL(!strict_compat_ && ObStorageCacheUtil::print_storage_cache_policy_element(sub_partition, buf, buf_len, pos))) {
+          SHARE_SCHEMA_LOG(WARN, "failed to print storage cache policy element", K(ret));
         } else if (sub_part_num - 1 != i && OB_FAIL(databuff_printf(buf, buf_len, pos, ",\n"))) {
           SHARE_SCHEMA_LOG(WARN, "print enter failed", K(ret));
         } else if (sub_part_num - 1 == i && OB_FAIL(databuff_printf(buf, buf_len, pos, ")"))) {
@@ -3552,6 +3556,8 @@ int ObSchemaPrinter::print_range_sub_partition_elements(
         } else if (OB_FAIL(print_tablespace_definition_for_table(
                    sub_partition->get_tenant_id(), sub_partition->get_tablespace_id(), buf, buf_len, pos))) {
           SHARE_SCHEMA_LOG(WARN, "print tablespace definition failed", K(ret));
+        } else if (OB_FAIL(!strict_compat_ && ObStorageCacheUtil::print_storage_cache_policy_element(sub_partition, buf, buf_len, pos))) {
+          SHARE_SCHEMA_LOG(WARN, "failed to print storage cache policy element", K(ret));
         } else if (sub_part_num - 1 != i && OB_FAIL(databuff_printf(buf, buf_len, pos, ",\n"))) {
           SHARE_SCHEMA_LOG(WARN, "print enter failed", K(ret));
         } else if (sub_part_num - 1 == i && OB_FAIL(databuff_printf(buf, buf_len, pos, ")"))) {
@@ -3701,6 +3707,8 @@ int ObSchemaPrinter::print_list_partition_elements(const ObPartitionSchema *&sch
           } else if (OB_FAIL(print_tablespace_definition_for_table(
                      partition->get_tenant_id(), partition->get_tablespace_id(), buf, buf_len, pos))) {
             SHARE_SCHEMA_LOG(WARN, "print tablespace definition failed", K(ret));
+          } else if (OB_FAIL(!strict_compat_ && ObStorageCacheUtil::print_storage_cache_policy_element(partition, buf, buf_len, pos))) {
+              SHARE_SCHEMA_LOG(WARN, "failed to print storage cache policy element", K(ret));
           } else if (print_sub_part_element
                      && OB_NOT_NULL(partition->get_subpart_array())
                      && OB_FAIL(print_individual_sub_partition_elements(schema, partition, buf,
@@ -3790,6 +3798,8 @@ int ObSchemaPrinter::print_range_partition_elements(const ObPartitionSchema *&sc
             if (OB_FAIL(print_tablespace_definition_for_table(
                 partition->get_tenant_id(), partition->get_tablespace_id(), buf, buf_len, pos))) {
               SHARE_SCHEMA_LOG(WARN, "print tablespace id failed", K(ret), K(part_name));
+            } else if (OB_FAIL(!strict_compat_ && ObStorageCacheUtil::print_storage_cache_policy_element(partition, buf, buf_len, pos))) {
+              SHARE_SCHEMA_LOG(WARN, "failed to print storage cache policy element", K(ret));
             } else if (print_sub_part_element
                        && OB_NOT_NULL(partition->get_subpart_array())
                        && OB_FAIL(print_individual_sub_partition_elements(schema, partition, buf,
@@ -5896,6 +5906,8 @@ int ObSchemaPrinter::print_hash_partition_elements(const ObPartitionSchema *&sch
           } else if (OB_FAIL(print_tablespace_definition_for_table(
                      partition->get_tenant_id(), partition->get_tablespace_id(), buf, buf_len, pos))) {
             SHARE_SCHEMA_LOG(WARN, "print tablespace id failed", K(ret), K(part_name));
+          } else if (OB_FAIL(!strict_compat_ && ObStorageCacheUtil::print_storage_cache_policy_element(partition, buf, buf_len, pos))) {
+            SHARE_SCHEMA_LOG(WARN, "failed to print storage cache policy element", K(ret));
           } else if (print_sub_part_element
                      && OB_NOT_NULL(partition->get_subpart_array())
                      && OB_FAIL(print_individual_sub_partition_elements(schema, partition, buf,

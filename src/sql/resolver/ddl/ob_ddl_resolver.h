@@ -1091,6 +1091,10 @@ protected:
   int resolve_storage_cache_attribute(const ParseNode *node, ObResolverParams &params);
   int resolve_storage_cache_time_attribute(const ParseNode *node, ObResolverParams &params, ObStorageCachePolicy &cache_policy);
   int get_storage_cache_tbl_schema(const ObTableSchema *&tbl_schema);
+  int resolve_partition_storage_cache_policy(const ParseNode &node, ObBasePartition &partition);
+  int resolve_partition_storage_cache_policy_element(const ObString &storage_cache_policy_str, ObStorageCachePolicyType &storage_cache_policy_type);
+  int resolve_storage_cache_policy_in_part_list(const ParseNode *node, const int64_t tenant_id, const bool is_template_subpartition, ObBasePartition &partition);
+
   void reset();
 
   // for alter table: there may be some index_arg.

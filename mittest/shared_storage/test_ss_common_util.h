@@ -35,6 +35,23 @@ using namespace oceanbase::blocksstable;
 static const int64_t DEFAULT_BLOCK_SIZE = 2 * 1024 * 1024; // 2MB
 static const int64_t DIFF_CKPT_TIME_US = 400 * 1000L;
 
+struct TestSSCommonCheckTimeGuard
+{
+public:
+  TestSSCommonCheckTimeGuard(const char *info_str)
+    : start_time_us_(ObTimeUtility::current_time_us()), info_str_(info_str) {}
+  ~TestSSCommonCheckTimeGuard()
+  {
+    int ret = OB_SUCCESS;
+    const int64_t cost_us = ObTimeUtility::current_time_us() - start_time_us_;
+    LOG_INFO("TimeGuard: check time", K_(info_str), K(cost_us));
+  }
+
+public:
+  int64_t start_time_us_;
+  ObString info_str_;
+};
+
 class TestSSCommonUtil
 {
 public:
@@ -71,10 +88,12 @@ public:
       ObArray<MicroBlockInfo> &micro_block_arr, const int64_t start_macro_id = 1, const bool random_micro_size = true,
       const int32_t min_micro_size = 16 * 1024, const int32_t max_micro_size = 16 * 1024);
   static int add_micro_blocks(const int64_t macro_block_cnt, const int64_t block_size,
-      ObArray<MicroBlockInfo> &micro_block_arr, const int64_t start_macro_id = 1, const bool random_micro_size = true,
+      ObArray<MicroBlockInfo> &p_micro_block_arr, ObArray<MicroBlockInfo> &up_micro_block_arr,
+      const int64_t start_macro_id = 1, const bool random_micro_size = true,
       const int32_t min_micro_size = 16 * 1024, const int32_t max_micro_size = 16 * 1024);
   static int get_micro_block(const MicroBlockInfo &micro_info, char *read_buf);
   static int init_io_info(ObIOInfo &io_info, const ObSSMicroBlockCacheKey &micro_key, const int32_t size, char *read_buf);
+  static int init_io_info(ObIOInfo &io_info, const MacroBlockId &macro_id, const int32_t offset, const int32_t size, char *read_buf);
   static int clear_micro_cache(ObSSMicroMetaManager *micro_meta_mgr, ObSSPhysicalBlockManager *phy_blk_mgr,
                                ObSSMicroRangeManager *micro_range_mgr, int64_t &micro_data_blk_cnt,
                                int64_t &range_micro_sum);
@@ -304,7 +323,8 @@ int TestSSCommonUtil::prepare_micro_blocks(
 int TestSSCommonUtil::add_micro_blocks(
     const int64_t macro_block_cnt,
     const int64_t block_size,
-    ObArray<MicroBlockInfo> &micro_block_arr,
+    ObArray<MicroBlockInfo> &p_micro_block_arr,
+    ObArray<MicroBlockInfo> &up_micro_block_arr,
     const int64_t start_macro_id,
     const bool random_micro_size,
     const int32_t min_micro_size,
@@ -325,8 +345,6 @@ int TestSSCommonUtil::add_micro_blocks(
     ObSSPhyBlockCommonHeader common_header;
     ObSSMicroDataBlockHeader data_blk_header;
     const int64_t payload_offset = common_header.get_serialize_size() + data_blk_header.get_serialize_size();
-    ObSSMicroBlockIndex empty_micro_idx;
-    const int32_t empty_idx_ser_size = empty_micro_idx.get_serialize_size();
 
     ObMemAttr attr(MTL_ID(), "TestBuf");
     char *buf = nullptr;
@@ -335,46 +353,58 @@ int TestSSCommonUtil::add_micro_blocks(
       LOG_WARN("fail to allocate memory", KR(ret), K(max_micro_size));
     } else {
       MEMSET(buf, 'a', max_micro_size);
-      int64_t offset = payload_offset;
-      for (int64_t i = start_macro_id; OB_SUCC(ret) && (i < start_macro_id + macro_block_cnt + 1); ++i) {
-        int64_t remain_blk_size = block_size - payload_offset;
-        MacroBlockId macro_id = gen_macro_block_id(i);
-        bool finish_cur_blk = false;
+      int64_t round = 0;
+      int64_t written_mem_blk_cnt = 0;
+      ObArray<MicroBlockInfo> tmp_micro_block_arr;
+      do {
+        int64_t offset = payload_offset;
+        MacroBlockId macro_id = gen_macro_block_id(start_macro_id + round);
         do {
-          int32_t cur_micro_size = random_micro_size ? ObRandom::rand(min_micro_size, MIN(remain_blk_size, max_micro_size)) : micro_size;
+          ObSSMemBlock *cur_mem_blk = micro_cache->mem_blk_mgr_.fg_mem_blk_;
+          int32_t cur_micro_size = random_micro_size ? ObRandom::rand(min_micro_size, max_micro_size) : micro_size;
           ObSSMicroBlockCacheKey micro_key = gen_phy_micro_key(macro_id, offset, cur_micro_size);
           const uint64_t effective_tablet_id = micro_key.get_macro_tablet_id().id();
-          ObSSMicroBlockIndex micro_idx(micro_key, cur_micro_size);
-          int32_t ser_size = micro_idx.get_serialize_size();
-          int32_t delta_size = cur_micro_size + ser_size;
-          if (remain_blk_size >= delta_size) {
-            if (OB_FAIL(micro_cache->add_micro_block_cache(micro_key, buf, cur_micro_size, effective_tablet_id,
-                ObSSMicroCacheAccessType::COMMON_IO_TYPE))) {
-              LOG_WARN("fail to add micro_block cache", KR(ret), K(i), K(micro_key));
-            } else {
-              MicroBlockInfo micro_info(macro_id, offset, cur_micro_size);
-              if (OB_FAIL(micro_block_arr.push_back(micro_info))) {
-                LOG_WARN("fail to push back", KR(ret), K(micro_info));
-              } else {
-                offset += cur_micro_size;
-                remain_blk_size -= delta_size;
-                if (remain_blk_size <= min_micro_size) {
-                  finish_cur_blk = true;
+          if (OB_FAIL(micro_cache->add_micro_block_cache(micro_key, buf, cur_micro_size, effective_tablet_id,
+              ObSSMicroCacheAccessType::COMMON_IO_TYPE))) {
+            LOG_WARN("fail to add micro_block cache", KR(ret), K(round), K(written_mem_blk_cnt), K(micro_key));
+          } else {
+            if ((micro_cache->mem_blk_mgr_.fg_mem_blk_ != cur_mem_blk) && (nullptr != cur_mem_blk)) {
+              ++written_mem_blk_cnt;
+              for (int64_t i = 0; OB_SUCC(ret) && (i < tmp_micro_block_arr.count()); ++i) {
+                if (OB_FAIL(p_micro_block_arr.push_back(tmp_micro_block_arr.at(i)))) {
+                  LOG_WARN("fail to push back", KR(ret), K(i), K(tmp_micro_block_arr.at(i)));
+                }
+              }
+
+              if (OB_SUCC(ret)) {
+                tmp_micro_block_arr.reset();
+                if (OB_FAIL(wait_for_persist_task())) {
+                  LOG_WARN("fail to wait for persist task", KR(ret), K(round), K(written_mem_blk_cnt));
                 }
               }
             }
-          } else {
-            finish_cur_blk = true;
-          }
-        } while (OB_SUCC(ret) && !finish_cur_blk);
 
-        if (FAILEDx(wait_for_persist_task())) {
-          LOG_WARN("fail to wait for persist task", KR(ret));
+            if (OB_SUCC(ret)) {
+              MicroBlockInfo micro_info(macro_id, offset, cur_micro_size);
+              if (OB_FAIL(tmp_micro_block_arr.push_back(micro_info))) {
+                LOG_WARN("fail to push back", KR(ret), K(micro_info));
+              } else {
+                offset += cur_micro_size;
+              }
+            }
+          }
+        } while (OB_SUCC(ret) && (offset < block_size));
+        ++round;
+      } while (OB_SUCC(ret) && (written_mem_blk_cnt < macro_block_cnt));
+
+      for (int64_t i = 0; OB_SUCC(ret) && (i < tmp_micro_block_arr.count()); ++i) {
+        if (OB_FAIL(up_micro_block_arr.push_back(tmp_micro_block_arr.at(i)))) {
+          LOG_WARN("fail to push back", KR(ret), K(i), K(tmp_micro_block_arr.at(i)));
         }
       }
     }
   }
-  LOG_INFO("finish add micro_blocks", KR(ret), K(micro_block_arr.count()));
+  LOG_INFO("finish add micro_blocks", KR(ret), K(p_micro_block_arr.count()), K(up_micro_block_arr.count()));
   return ret;
 }
 
@@ -397,6 +427,30 @@ int TestSSCommonUtil::init_io_info(
     io_info.buf_ = read_buf;
     io_info.user_data_buf_ = read_buf;
     io_info.effective_tablet_id_ = micro_key.get_macro_tablet_id().id();
+  }
+  return ret;
+}
+
+int TestSSCommonUtil::init_io_info(
+    ObIOInfo &io_info,
+    const MacroBlockId &macro_id,
+    const int32_t offset,
+    const int32_t size,
+    char *read_buf)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!macro_id.is_valid()) || OB_ISNULL(read_buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(macro_id), K(read_buf));
+  } else {
+    io_info.tenant_id_ = MTL_ID();
+    io_info.offset_ = offset;
+    io_info.size_ = size;
+    io_info.flag_.set_wait_event(1);
+    io_info.timeout_us_ = 5 * 1000 * 1000;
+    io_info.buf_ = read_buf;
+    io_info.user_data_buf_ = read_buf;
+    io_info.effective_tablet_id_ = macro_id.second_id();
   }
   return ret;
 }

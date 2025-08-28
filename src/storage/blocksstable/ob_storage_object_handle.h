@@ -26,6 +26,7 @@ namespace storage
   class ObSSPreReadTask;
   class ObSSMicroCacheHandler;
   class ObSSMicroCache;
+  class ObSSMemMacroCache;
   class ObTenantFileManager;
   class ObServerFileManager;
   class ObSSBaseReader;
@@ -54,6 +55,7 @@ class ObStorageObjectHandle final
   friend class storage::ObSSPreReadTask;
   friend class storage::ObSSMicroCacheHandler;
   friend class storage::ObSSMicroCache;
+  friend class storage::ObSSMemMacroCache;
   friend class storage::ObTenantFileManager;
   friend class storage::ObServerFileManager;
   friend class storage::ObSSBaseReader;

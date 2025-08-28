@@ -62,6 +62,7 @@
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "close_modules/shared_storage/storage/shared_storage/ob_ss_micro_cache.h"
 #include "close_modules/shared_storage/storage/shared_storage/ob_ss_micro_cache_io_helper.h"
+#include "close_modules/shared_storage/storage/shared_storage/ob_ss_local_cache_service.h"
 #include "close_modules/shared_storage/storage/incremental/ob_shared_meta_service.h"
 #include "storage/ddl/ob_ss_ddl_util.h"
 #include "close_modules/shared_storage/storage/shared_storage/ob_file_manager.h"
@@ -4289,6 +4290,40 @@ int ObRpcClearSSMicroCacheP::process()
       } else {
         micro_cache->clear_micro_cache();
         LOG_INFO("success clear ss_micro_cache");
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRpcFlushSSLocalCacheP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!arg_.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K_(arg));
+  } else {
+    MTL_SWITCH(arg_.tenant_id_)
+    {
+      ObSSLocalCacheService *local_cache = nullptr;
+      if (OB_ISNULL(local_cache = MTL(ObSSLocalCacheService *))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("local_cache is nullptr", KR(ret));
+      } else if (arg_.flush_type_ == obrpc::ObFlushSSLocalCacheType::FLUSH_ALL_TYPE) {
+        local_cache->clear_ss_all_cache();
+        LOG_INFO("success clear ss_local_cache");
+      } else if (arg_.flush_type_ == obrpc::ObFlushSSLocalCacheType::FLUSH_LOCAL_MACRO_TYPE) {
+        local_cache->clear_ss_macro_cache();
+        LOG_INFO("success clear ss_macro_cache");
+      } else if (arg_.flush_type_ == obrpc::ObFlushSSLocalCacheType::FLUSH_LOCAL_MICRO_TYPE) {
+        local_cache->clear_ss_micro_cache();
+        LOG_INFO("success clear ss_micro_cache");
+      } else if (arg_.flush_type_ == obrpc::ObFlushSSLocalCacheType::FLUSH_MEM_MACRO_TYPE) {
+        local_cache->clear_ss_mem_macro_cache();
+        LOG_INFO("success clear ss_mem_macro_cache");
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid flush_type", K(ret), K_(arg_.flush_type));
       }
     }
   }

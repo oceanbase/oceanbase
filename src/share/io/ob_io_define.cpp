@@ -507,7 +507,7 @@ ObSNIOInfo::ObSNIOInfo()
     fd_(),
     offset_(0),
     size_(0),
-    timeout_us_(DEFAULT_IO_WAIT_TIME_US),
+    timeout_us_(GCONF._data_storage_io_timeout),
     flag_(),
     callback_(nullptr),
     buf_(nullptr),
@@ -533,7 +533,7 @@ void ObSNIOInfo::reset()
   fd_.reset();
   offset_ = 0;
   size_ = 0;
-  timeout_us_ = DEFAULT_IO_WAIT_TIME_US;
+  timeout_us_ = GCONF._data_storage_io_timeout;
   flag_.reset();
   callback_ = nullptr;
   buf_ = nullptr;
@@ -712,7 +712,7 @@ ObIOResult::ObIOResult()
     complete_size_(0),
     offset_(0),
     size_(0),
-    timeout_us_(DEFAULT_IO_WAIT_TIME_US),
+    timeout_us_(GCONF._data_storage_io_timeout),
     aligned_size_(DIO_ALIGN_SIZE),
     tenant_io_mgr_(),
     buf_(nullptr),
@@ -810,7 +810,7 @@ void ObIOResult::reset()
   size_ = 0;
   result_ref_cnt_ = 0;
   out_ref_cnt_ = 0;
-  timeout_us_ = DEFAULT_IO_WAIT_TIME_US;
+  timeout_us_ = GCONF._data_storage_io_timeout;
   buf_ = nullptr;
   user_data_buf_ = nullptr;
   io_callback_ = nullptr;
@@ -833,7 +833,7 @@ void ObIOResult::destroy()
   size_ = 0;
   result_ref_cnt_ = 0;
   out_ref_cnt_ = 0;
-  timeout_us_ = DEFAULT_IO_WAIT_TIME_US;
+  timeout_us_ = GCONF._data_storage_io_timeout;
   buf_ = nullptr;
   user_data_buf_ = nullptr;
   io_callback_ = nullptr;

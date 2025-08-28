@@ -99,7 +99,6 @@ public:
       BlockCollectOP &collect_check_block_op)
   { return OB_SUCCESS; }
 
-
   blocksstable::MacroBlockId (*macro_block_ids_)[3];
   ObArray<blocksstable::MacroBlockId> gc_blocks_;
 };
@@ -150,7 +149,7 @@ class TestPrivateBlockGCHandler : public ::testing::Test,
 {
 public:
   TestPrivateBlockGCHandler()
-  : storage::ObPrivateBlockGCHandler(share::ObLSID(1), 1, ObTabletID(1), 1, 1, 10, 20)
+  : storage::ObPrivateBlockGCHandler(share::ObLSID(1), 1, ObTabletID(1), 1, -1, 1, 10, 20, 0)
   {
     for (int i = 0; i < 30; i++) {
       macro_block_ids_[i].id_mode_ = 2; // ID_MODE_SHARE
@@ -178,11 +177,21 @@ public:
     return OB_SUCCESS;
   }
   int list_tablet_meta_version(
+      ObIArray<int64_t> &tablet_versions,
+      const bool,
+      int64_t &)
+  {
+    tablet_versions.push_back(1);
+    return OB_SUCCESS;
+  }
+
+  int list_tablet_meta_version(
       ObIArray<int64_t> &tablet_versions)
   {
     tablet_versions.push_back(1);
     return OB_SUCCESS;
   }
+
   int get_block_ids_from_dir(
     ObIArray<blocksstable::MacroBlockId> &block_ids)
   {
@@ -204,6 +213,10 @@ public:
   }
   virtual int delete_macro_cache_(const ObIArray<blocksstable::MacroBlockId> &block_ids) override
   {
+    return OB_SUCCESS;
+  }
+
+  int update_tablet_last_gc_version_(const int64_t) {
     return OB_SUCCESS;
   }
 

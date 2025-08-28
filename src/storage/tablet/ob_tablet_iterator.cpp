@@ -63,7 +63,6 @@ int ObLSTabletIterator::get_next_tablet(ObTabletHandle &handle)
             && OB_TABLET_NOT_EXIST != ret) {
           LOG_WARN("fail to get tablet", K(ret), K(idx_), K(tablet_id), K_(mode));
         } else {
-          handle.set_wash_priority(WashTabletPriority::WTP_LOW);
           ++idx_;
         }
       }
@@ -281,7 +280,6 @@ int ObLSTabletFastIter::get_next_tablet(ObTabletHandle &handle)
             ++idx_;
           }
         } else {
-          handle.set_wash_priority(WashTabletPriority::WTP_LOW);
           ++idx_;
         }
       }

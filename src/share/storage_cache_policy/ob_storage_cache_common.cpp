@@ -100,6 +100,18 @@ int get_storage_cache_policy_type_from_part_str(const common::ObString &storage_
   return ret;
 }
 
+bool is_valid_part_storage_cache_policy(const ObStorageCachePolicyType &part_policy)
+{
+  return !(storage::ObStorageCachePolicyType::MAX_POLICY == part_policy ||
+          storage::ObStorageCachePolicyType::TIME_POLICY == part_policy);
+}
+
+bool is_hot_or_auto_policy(const ObStorageCachePolicyType &part_policy)
+{
+  return storage::ObStorageCachePolicyType::HOT_POLICY == part_policy ||
+         storage::ObStorageCachePolicyType::AUTO_POLICY == part_policy;
+}
+
 //*************************ObStorageCacheGlobalPolicy*************************/
 
 int ObStorageCacheGlobalPolicy::safely_get_str(const PolicyType &type, const char *&buf)

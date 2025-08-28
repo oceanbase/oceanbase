@@ -573,6 +573,16 @@ int ObAddPartInfoHelper::add_part_dml_column(const uint64_t exec_tenant_id,
     } else if (OB_FAIL(add_part_list_val_column(table, part, dml))) {
       LOG_WARN("add list val failed", K(ret), K(table), K(part));
     }
+    if (OB_SUCC(ret)) {
+      uint64_t data_version = 0;
+      if (OB_FAIL(GET_MIN_DATA_VERSION(exec_tenant_id, data_version))) {
+        LOG_WARN("failed to get data version", K(ret));
+      } else if (data_version >= DATA_VERSION_4_4_1_0) {
+        if (OB_FAIL(add_part_storage_cache_policy_column(part, dml))) {
+          LOG_WARN("add part storage cache policy failed", K(ret), K(table), K(part));
+        }
+      }
+    }
   }
   return ret;
 }
@@ -618,6 +628,16 @@ int ObAddPartInfoHelper::add_subpart_dml_column(const uint64_t exec_tenant_id,
       LOG_WARN("add part high bound failed", K(ret), KPC(table), K(subpart_id));
     } else if (OB_FAIL(add_subpart_list_val_column(table, subpart, dml))) {
       LOG_WARN("add list value failed", K(ret), K(table), K(subpart_id));
+    }
+    if (OB_SUCC(ret)) {
+      uint64_t data_version = 0;
+      if (OB_FAIL(GET_MIN_DATA_VERSION(exec_tenant_id, data_version))) {
+        LOG_WARN("failed to get data version", K(ret));
+      } else if (data_version >= DATA_VERSION_4_4_1_0) {
+        if (OB_FAIL(add_part_storage_cache_policy_column(subpart, dml))) {
+          LOG_WARN("add sub part storage cache policy failed", K(ret), K(table), K(subpart));
+        }
+      }
     }
   }
   return ret;

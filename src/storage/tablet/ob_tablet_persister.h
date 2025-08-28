@@ -192,7 +192,8 @@ public:
       const share::ObLSID ls_id,
       const int64_t ls_epoch,
       const ObTabletID tablet_id,
-      const int64_t tablet_transfer_seq)
+      const int64_t tablet_transfer_seq,
+      const int64_t meta_version)
     : data_version_(data_version),
       ls_id_(ls_id),
       ls_epoch_(ls_epoch),
@@ -205,7 +206,8 @@ public:
       #ifdef OB_BUILD_SHARED_STORAGE
       , op_handle_(nullptr),
       file_(nullptr),
-      reorganization_scn_(0)
+      reorganization_scn_(0),
+      meta_version_(meta_version)
       #endif
     {}
 
@@ -231,7 +233,8 @@ public:
     #ifdef OB_BUILD_SHARED_STORAGE
     , op_handle_(nullptr),
     file_(nullptr),
-    reorganization_scn_(0)
+    reorganization_scn_(0),
+    meta_version_(0)
     #endif
   {}
   #ifdef OB_BUILD_SHARED_STORAGE
@@ -261,7 +264,8 @@ public:
     file_(file),
     update_reason_(update_reason),
     sstable_op_id_(sstable_op_id),
-    reorganization_scn_(reorganization_scn)
+    reorganization_scn_(reorganization_scn),
+    meta_version_(0)
   {}
   #endif
 
@@ -285,7 +289,7 @@ public:
   TO_STRING_KV(K_(data_version), K_(ls_id), K_(ls_epoch), K_(tablet_id), K_(tablet_transfer_seq),
    K_(snapshot_version), K_(start_macro_seq), KP_(ddl_redo_callback), KP_(ddl_finish_callback)
    #ifdef OB_BUILD_SHARED_STORAGE
-   , KPC_(op_handle), KPC_(file), K_(update_reason), K_(sstable_op_id), K_(reorganization_scn)
+   , KPC_(op_handle), KPC_(file), K_(update_reason), K_(sstable_op_id), K_(reorganization_scn), K_(meta_version)
    #endif
    );
 
@@ -304,6 +308,7 @@ public:
   ObMetaUpdateReason update_reason_;
   int64_t sstable_op_id_;
   int64_t reorganization_scn_;
+  int64_t meta_version_;
   #endif
   DISALLOW_COPY_AND_ASSIGN(ObTabletPersisterParam);
 };

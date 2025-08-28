@@ -140,6 +140,17 @@ public:
   common::ObFixedLengthString<common::OB_MAX_TENANT_NAME_LENGTH + 1> tenant_name_;
 };
 
+class ObFlushSSLocalCacheStmt : public ObSystemCmdStmt
+{
+public:
+ObFlushSSLocalCacheStmt() : ObSystemCmdStmt(stmt::T_FLUSH_SS_LOCAL_CACHE) {}
+  virtual ~ObFlushSSLocalCacheStmt() {}
+
+  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(tenant_name), K_(cache_name));
+  common::ObFixedLengthString<common::OB_MAX_TENANT_NAME_LENGTH + 1> tenant_name_;
+  common::ObFixedLengthString<common::OB_MAX_TENANT_NAME_LENGTH + 1> cache_name_;
+};
+
 class ObFlushDagWarningsStmt : public ObSystemCmdStmt
 {
 public:

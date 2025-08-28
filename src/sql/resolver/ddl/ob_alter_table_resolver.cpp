@@ -2592,74 +2592,93 @@ int ObAlterTableResolver::resolve_add_subpartition(const ParseNode &node,
     alter_stmt->set_use_def_sub_part(false);
     // 先设置好sub part option, 解析二级分区的定义时依赖
     alter_table_schema.get_sub_part_option() = orig_table_schema.get_sub_part_option();
-    // resolve partition name
-    ObString partition_name(static_cast<int32_t>(part_name_node->str_len_),
-                            part_name_node->str_value_);
-    int64_t part_id = OB_INVALID_ID;
-    for (int64_t i = 0; OB_SUCC(ret) && i < orig_table_schema.get_partition_num(); ++i) {
-      ObPartition *ori_partition = orig_table_schema.get_part_array()[i];
-      if (OB_ISNULL(ori_partition)) {
+    if (GCTX.is_shared_storage_mode() && is_mysql_mode()) {
+      uint64_t compat_version = 0;
+      if (OB_ISNULL(session_info_)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret), K(i));
-      } else if (ori_partition->get_part_name() == partition_name) {
-        part_id = ori_partition->get_part_id();
-        break;
+        LOG_WARN("session info is null", KR(ret));
+      } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), compat_version))) {
+        LOG_WARN("get tenant data version failed", KR(ret));
+      } else if (compat_version < DATA_VERSION_4_4_1_0) {
+        // do nothing
+      } else if (orig_table_schema.sub_part_template_def_valid()) {
+        // If the subpartition template is valid, set the subpartition template to alter_table_schema
+        // Because later it is needed to decide whether to use storage_cache_policy based on whether it is a template partition
+        alter_table_schema.set_sub_part_template_def_valid();
+        alter_table_schema.set_part_level(orig_table_schema.get_part_level());
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_INVALID_ID == part_id) {
-      ret = OB_UNKNOWN_PARTITION;
-      LOG_USER_ERROR(OB_UNKNOWN_PARTITION, partition_name.length(), partition_name.ptr(),
-                                           orig_table_schema.get_table_name_str().length(),
-                                           orig_table_schema.get_table_name_str().ptr());
-    } else if (OB_FAIL(dummy_part.set_part_name(partition_name))) {
-      LOG_WARN("failed to set subpart name", K(ret), K(partition_name));
-    } else if (OB_FAIL(alter_table_schema.add_partition(dummy_part))) {
-      LOG_WARN("failed to add partition", K(ret));
-    } else if (OB_ISNULL(cur_partition = alter_table_schema.get_part_array()[0])) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret));
-    // resolve subpartition define
-    } else if (OB_FAIL(resolve_part_func(params_, subpart_func_node,
-                                         subpart_type, orig_table_schema,
-                                         alter_stmt->get_subpart_fun_exprs(), dummy_part_keys))) {
-      LOG_WARN("resolve part func failed", K(ret));
-    } else if (subpart_option.is_range_part()) {
-      if (T_LIST_SUBPARTITION_LIST == part_elements_node->type_) {
-        ret = OB_ERR_SUBPARTITION_NOT_EXPECT_VALUES_IN;
-        LOG_WARN("VALUES (<value list>) cannot be used for Range subpartitioned tables", K(ret));
-      } else if (OB_FAIL(resolve_subpartition_elements(alter_stmt,
-                                                       part_elements_node,
-                                                       alter_table_schema,
-                                                       cur_partition,
-                                                       false))) {
-        LOG_WARN("failed to resolve subpartition elements", K(ret));
+    } else {
+      // resolve partition name
+      ObString partition_name(static_cast<int32_t>(part_name_node->str_len_),
+                              part_name_node->str_value_);
+      int64_t part_id = OB_INVALID_ID;
+      for (int64_t i = 0; OB_SUCC(ret) && i < orig_table_schema.get_partition_num(); ++i) {
+        ObPartition *ori_partition = orig_table_schema.get_part_array()[i];
+        if (OB_ISNULL(ori_partition)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret), K(i));
+        } else if (ori_partition->get_part_name() == partition_name) {
+          part_id = ori_partition->get_part_id();
+          break;
+        }
       }
-    } else if (subpart_option.is_list_part()) {
-      if (T_RANGE_SUBPARTITION_LIST == part_elements_node->type_) {
-        ret = OB_ERR_SUBPARTITION_EXPECT_VALUES_IN;
-        LOG_WARN("VALUES (<value list>) clause expected", K(ret));
-      } else if (OB_FAIL(resolve_subpartition_elements(alter_stmt,
-                                                       part_elements_node,
-                                                       alter_table_schema,
-                                                       cur_partition,
-                                                       false))) {
-        LOG_WARN("failed to resolve subpartition elements", K(ret));
+      if (OB_FAIL(ret)) {
+      } else if (OB_INVALID_ID == part_id) {
+        ret = OB_UNKNOWN_PARTITION;
+        LOG_USER_ERROR(OB_UNKNOWN_PARTITION, partition_name.length(), partition_name.ptr(),
+                                            orig_table_schema.get_table_name_str().length(),
+                                            orig_table_schema.get_table_name_str().ptr());
+      } else if (OB_FAIL(dummy_part.set_part_name(partition_name))) {
+        LOG_WARN("failed to set subpart name", K(ret), K(partition_name));
+      } else if (OB_FAIL(alter_table_schema.add_partition(dummy_part))) {
+        LOG_WARN("failed to add partition", K(ret));
+      } else if (OB_ISNULL(cur_partition = alter_table_schema.get_part_array()[0])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      // resolve subpartition define
+      } else if (OB_FAIL(resolve_part_func(params_, subpart_func_node,
+                                          subpart_type, orig_table_schema,
+                                          alter_stmt->get_subpart_fun_exprs(), dummy_part_keys))) {
+        LOG_WARN("resolve part func failed", K(ret));
+      } else if (subpart_option.is_range_part()) {
+        if (T_LIST_SUBPARTITION_LIST == part_elements_node->type_) {
+          ret = OB_ERR_SUBPARTITION_NOT_EXPECT_VALUES_IN;
+          LOG_WARN("VALUES (<value list>) cannot be used for Range subpartitioned tables", K(ret));
+        } else if (OB_FAIL(resolve_subpartition_elements(alter_stmt,
+                                                        part_elements_node,
+                                                        alter_table_schema,
+                                                        cur_partition,
+                                                        false))) {
+          LOG_WARN("failed to resolve subpartition elements", K(ret));
+        }
+      } else if (subpart_option.is_list_part()) {
+        if (T_RANGE_SUBPARTITION_LIST == part_elements_node->type_) {
+          ret = OB_ERR_SUBPARTITION_EXPECT_VALUES_IN;
+          LOG_WARN("VALUES (<value list>) clause expected", K(ret));
+        } else if (OB_FAIL(resolve_subpartition_elements(alter_stmt,
+                                                        part_elements_node,
+                                                        alter_table_schema,
+                                                        cur_partition,
+                                                        false))) {
+          LOG_WARN("failed to resolve subpartition elements", K(ret));
+        }
       }
-    }
 
-    if (OB_SUCC(ret)) {
-      LOG_DEBUG("succ to resolve subpartition elements", KPC(alter_stmt),
-          K(alter_stmt->get_subpart_fun_exprs()),
-          K(alter_stmt->get_individual_subpart_values_exprs()));
+      if (OB_SUCC(ret)) {
+        LOG_DEBUG("succ to resolve subpartition elements", KPC(alter_stmt),
+            K(alter_stmt->get_subpart_fun_exprs()),
+            K(alter_stmt->get_individual_subpart_values_exprs()));
 
-      alter_table_schema.set_part_level(orig_table_schema.get_part_level());
-      alter_table_schema.get_part_option() = orig_table_schema.get_part_option();
-      alter_table_schema.get_part_option().set_part_num(alter_table_schema.get_partition_num());
-      cur_partition->set_sub_part_num(cur_partition->get_subpartition_num());
-      // check subpart_name duplicate
-      if (OB_FAIL(check_and_set_individual_subpartition_names(alter_stmt, alter_table_schema))) {
-        LOG_WARN("failed to check and set individual subpartition names", K(ret));
+        alter_table_schema.set_part_level(orig_table_schema.get_part_level());
+        alter_table_schema.get_part_option() = orig_table_schema.get_part_option();
+        alter_table_schema.get_part_option().set_part_num(alter_table_schema.get_partition_num());
+        cur_partition->set_sub_part_num(cur_partition->get_subpartition_num());
+        // check subpart_name duplicate
+        if (OB_FAIL(check_and_set_individual_subpartition_names(alter_stmt, alter_table_schema))) {
+          LOG_WARN("failed to check and set individual subpartition names", K(ret));
+        }
       }
     }
   }

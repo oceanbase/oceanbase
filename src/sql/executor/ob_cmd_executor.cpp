@@ -625,6 +625,10 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         DEFINE_EXECUTE_CMD(ObFlushSSMicroCacheStmt, ObFlushSSMicroCacheExecutor);
         break;
       }
+      case stmt::T_FLUSH_SS_LOCAL_CACHE: {
+        DEFINE_EXECUTE_CMD(ObFlushSSLocalCacheStmt, ObFlushSSLocalCacheExecutor);
+        break;
+      }
 #endif
       case stmt::T_FLUSH_DAG_WARNINGS: {
         DEFINE_EXECUTE_CMD(ObFlushDagWarningsStmt, ObFlushDagWarningsExecutor);

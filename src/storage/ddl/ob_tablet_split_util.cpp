@@ -1359,7 +1359,7 @@ void ObSSDataSplitHelper::reset()
     if (split_sstable_list_handle_[i]->is_valid()
         && i < add_minor_op_handle_.count() && add_minor_op_handle_[i]->is_valid()
         && !add_minor_op_handle_[i]->get_atomic_op()->is_committed()) {
-      if (OB_FAIL(split_sstable_list_handle_[i]->get_atomic_file()->abort_op(*add_minor_op_handle_[i]))) {
+      if (OB_FAIL(split_sstable_list_handle_[i]->get_atomic_file()->abort_op_parallel(*add_minor_op_handle_[i]))) {
         LOG_ERROR("abort failed", K(ret));
       }
     } else {
@@ -1394,14 +1394,11 @@ int ObSSDataSplitHelper::get_op_id(
 int ObSSDataSplitHelper::prepare_minor_gc_info_list(
     const int64_t parallel_cnt_of_each_sstable,
     const int64_t sstables_cnt_of_each_tablet,
-    const ObAtomicOpHandle<ObAtomicSSTableListAddOp> &op_handle,
-    ObSSMinorGCInfo &minor_gc_info)
+    ObSSTableGCInfo &minor_gc_info)
 {
   int ret = OB_SUCCESS;
-  const int64_t op_id = op_handle.get_atomic_op()->get_op_id();
   const int64_t gc_reply_parallel_cnt = parallel_cnt_of_each_sstable/*parallel child task*/ + 1/*IndexTree*/;
-  const int64_t start_macro_seq = op_id << SPLIT_MINOR_MACRO_DATA_SEQ_BITS;
-  minor_gc_info.start_seq_ = start_macro_seq;
+  minor_gc_info.data_seq_bits_ = SPLIT_MINOR_MACRO_DATA_SEQ_BITS;
   minor_gc_info.seq_step_ = compaction::MACRO_STEP_SIZE;
   minor_gc_info.parallel_cnt_ = gc_reply_parallel_cnt * sstables_cnt_of_each_tablet;
   return ret;
@@ -1442,20 +1439,20 @@ int ObSSDataSplitHelper::start_add_op(
       }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < dest_tablets_count; i++) {
-      ObSSMinorGCInfo ss_minor_gc_info;
+      ObSSTableGCInfo ss_minor_gc_info;
       const ObTabletID &dest_tablet_id = dest_tablets_id.at(i);
       ObAtomicFileHandle<ObAtomicSSTableListFile> &file_handle = *split_sstable_list_handle_[i];
       ObAtomicOpHandle<ObAtomicSSTableListAddOp> &op_handle = *add_minor_op_handle_[i];
       if (OB_FAIL(MTL(ObAtomicFileMgr*)->get_tablet_file_handle(
                   ls_id, dest_tablet_id, file_type, split_scn, file_handle))) {
         LOG_WARN("get tablet file handle failed", K(ret));
-      } else if (OB_FAIL(file_handle.get_atomic_file()->create_op(op_handle))) {
-        LOG_WARN("create op handle failed", K(ret));
       } else if (OB_FAIL(prepare_minor_gc_info_list(parallel_cnt_of_each_sstable,
-        sstables_cnt_of_each_tablet, op_handle, ss_minor_gc_info))) {
+        sstables_cnt_of_each_tablet, ss_minor_gc_info))) {
         LOG_WARN("prepare minor task info list failed", K(ret));
-      } else if (OB_FAIL(op_handle.get_atomic_op()->update_gc_info(ss_minor_gc_info))) {
-        LOG_WARN("write task state fail", K(ret));
+      } else if (OB_FAIL(file_handle.get_atomic_file()->create_op_parallel(op_handle,
+                                                                           true/*check sswriter*/,
+                                                                           ss_minor_gc_info))) {
+        LOG_WARN("create op handle failed", K(ret));
       }
     }
   }
@@ -1630,11 +1627,11 @@ int ObSSDataSplitHelper::finish_add_op(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(dest_tablet_index));
   } else if (need_finish) {
-    if (OB_FAIL(split_sstable_list_handle_[dest_tablet_index]->get_atomic_file()->finish_op(*add_minor_op_handle_[dest_tablet_index]))) {
+    if (OB_FAIL(split_sstable_list_handle_[dest_tablet_index]->get_atomic_file()->finish_op_parallel(*add_minor_op_handle_[dest_tablet_index]))) {
       LOG_WARN("abort failed", K(ret));
     }
   } else {
-    if (OB_FAIL(split_sstable_list_handle_[dest_tablet_index]->get_atomic_file()->abort_op(*add_minor_op_handle_[dest_tablet_index]))) {
+    if (OB_FAIL(split_sstable_list_handle_[dest_tablet_index]->get_atomic_file()->abort_op_parallel(*add_minor_op_handle_[dest_tablet_index]))) {
       LOG_WARN("abort failed", K(ret));
     }
   }

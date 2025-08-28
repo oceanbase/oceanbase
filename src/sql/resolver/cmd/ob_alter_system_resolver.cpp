@@ -1221,6 +1221,82 @@ int ObFlushSSMicroCacheResolver::resolve(const ParseNode &parse_tree)
   return ret;
 }
 
+int ObFlushSSLocalCacheResolver::resolve(const ParseNode &parse_tree)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(T_FLUSH_SS_LOCAL_CACHE != parse_tree.type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("type is not T_FLUSH_SS_LOCAL_CACHE", "type", get_type_name(parse_tree.type_));
+  } else {
+    ObFlushSSLocalCacheStmt *stmt = create_stmt<ObFlushSSLocalCacheStmt>();
+    if (NULL == stmt) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("create ObFlushSSLocalCacheStmt failed");
+    } else {
+      stmt_ = stmt;
+      if (OB_UNLIKELY(NULL == parse_tree.children_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("children should not be null");
+      } else {
+        ParseNode *node = parse_tree.children_[0];
+        if (NULL == node) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("should exist tenant name", K(ret));
+        } else {
+          if (OB_UNLIKELY(NULL == node->children_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("children should not be null");
+          } else {
+            node = node->children_[0];
+            if (OB_UNLIKELY(NULL == node)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("node should not be null");
+            } else {
+              if (node->str_len_ <= 0) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("empty tenant name");
+              } else {
+                ObString tenant_name(node->str_len_, node->str_value_);
+                if (OB_FAIL(stmt->tenant_name_.assign(tenant_name))) {
+                  LOG_WARN("assign tenant name failed", K(tenant_name), K(ret));
+                }
+              }
+            }
+          }
+        }
+        if (OB_SUCC(ret)) {
+          node = parse_tree.children_[1];
+          if (NULL == node) {
+            stmt->cache_name_.reset();
+          } else {
+            if (OB_UNLIKELY(NULL == node->children_)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("children should not be null");
+            } else {
+              node = node->children_[0];
+              if (OB_UNLIKELY(NULL == node)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("node should not be null");
+              } else {
+                if (node->str_len_ <= 0) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("empty cache name");
+                } else {
+                  ObString cache_name(node->str_len_, node->str_value_);
+                  if (OB_FAIL(stmt->cache_name_.assign(cache_name))) {
+                    LOG_WARN("assign cache name failed", K(cache_name), K(ret));
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObFlushIlogCacheResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;

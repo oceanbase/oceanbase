@@ -671,6 +671,7 @@ TEST_F(ObTestSSLogMetaService, test_update_tablet_table_store)
   ObSSMetaReadParam read_param;
   read_param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY,
                                     ObSSMetaReadResultType::READ_WHOLE_ROW,
+                                    true, /*try read local*/
                                     ObSSLogMetaType::SSLOG_TABLET_META,
                                     ls_id_,
                                     tablet_id,
@@ -893,6 +894,7 @@ TEST_F(ObTestSSLogMetaService, test_tablet_meta_snapshot_read)
   ObSSMetaReadParam read_param;
   read_param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY,
                                     ObSSMetaReadResultType::READ_WHOLE_ROW,
+                                    true, /*try read local*/
                                     ObSSLogMetaType::SSLOG_TABLET_META,
                                     ls_id,
                                     cur_tablet_id,
@@ -970,6 +972,7 @@ TEST_F(ObTestSSLogMetaService, test_ls_ids_snapshot_read)
   ObSSMetaReadParam read_param;
   read_param.set_ls_level_param(ObSSMetaReadParamType::TENANT_PREFIX,
                                 ObSSMetaReadResultType::READ_ONLY_KEY,
+                                true,
                                 ObSSLogMetaType::SSLOG_LS_META,
                                 ls_id_);
   EXPECT_EQ(true, read_param.is_valid());
@@ -1005,6 +1008,7 @@ TEST_F(ObTestSSLogMetaService, test_tablet_ids_snapshot_read)
   ObSSMetaReadParam read_param;
   read_param.set_ls_level_param(ObSSMetaReadParamType::LS_PREFIX,
                                 ObSSMetaReadResultType::READ_ONLY_KEY,
+                                true,
                                 ObSSLogMetaType::SSLOG_TABLET_META,
                                 ls_id_);
   EXPECT_EQ(true, read_param.is_valid());
@@ -1042,6 +1046,7 @@ TEST_F(ObTestSSLogMetaService, test_get_tablet_iter)
   ObSSMetaReadParam read_param;
   read_param.set_ls_level_param(ObSSMetaReadParamType::LS_PREFIX,
                                 ObSSMetaReadResultType::READ_WHOLE_ROW,
+                                true,
                                 ObSSLogMetaType::SSLOG_TABLET_META,
                                 ls_id_);
   EXPECT_EQ(true, read_param.is_valid());
@@ -1078,6 +1083,7 @@ TEST_F(ObTestSSLogMetaService, test_raw_meta_row)
   ObSSMetaReadParam read_param;
   read_param.set_ls_level_param(ObSSMetaReadParamType::LS_PREFIX,
                                 ObSSMetaReadResultType::READ_WHOLE_ROW,
+                                true, /*read_local*/
                                 ObSSLogMetaType::SSLOG_TABLET_META,
                                 ls_id_);
   EXPECT_EQ(true, read_param.is_valid());
@@ -1114,6 +1120,7 @@ TEST_F(ObTestSSLogMetaService, test_raw_meta_row)
   // tablet raw row range read.
   read_param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY,
                                     ObSSMetaReadResultType::READ_WHOLE_ROW,
+                                    true, /*read_local*/
                                     ObSSLogMetaType::SSLOG_TABLET_META,
                                     sslog_meta_key.tablet_meta_key_.ls_id_,
                                     sslog_meta_key.tablet_meta_key_.tablet_id_,
@@ -1135,6 +1142,7 @@ TEST_F(ObTestSSLogMetaService, test_raw_meta_row)
   // 4. get the ls meta row
   read_param.set_ls_level_param(ObSSMetaReadParamType::LS_KEY,
                                 ObSSMetaReadResultType::READ_WHOLE_ROW,
+                                true, /*read_local*/
                                 ObSSLogMetaType::SSLOG_LS_META,
                                 ls_id_);
   EXPECT_EQ(true, read_param.is_valid());

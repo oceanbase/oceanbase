@@ -1099,6 +1099,9 @@ DEF_BOOL(_enable_ss_replica_prewarm, OB_TENANT_PARAMETER, "True",
 DEF_INT(_ss_micro_cache_memory_percentage, OB_TENANT_PARAMETER, "20", "[1,50]",
         "the percentage of tenant memory size used by microblock_cache in shared_stoarge mode, Range: [1, 50]",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_ss_mem_macro_cache_memory_limit_percentage, OB_TENANT_PARAMETER, "5", "[0,50]",
+        "the maximum percentage of tenant memory size used by mem_macro_cache in shared_stoarge mode, Range: [0, 50]",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 //background limit config
 DEF_TIME(_data_storage_io_timeout, OB_CLUSTER_PARAMETER, "10s", "[1s,600s]",
         "io timeout for data storage, Range [1s,600s]. "
@@ -1228,6 +1231,11 @@ DEF_INT(_compaction_prewarm_percentage, OB_TENANT_PARAMETER, "0", "[0,100]",
         "Range: [0, 100] in integer"
         "0 means not use this method, value > 0 means the corresponding percentage of data will be prewarmed",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_ob_enable_background_thread_auto_adapt, OB_TENANT_PARAMETER, "True",
+         "specifies whether the tenant's background thread auto adapt is enabled"
+         "Value: True:turned on;  False: turned off",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_INT(sys_bkgd_migration_retry_num, OB_CLUSTER_PARAMETER, "3", "[3,100]",
         "retry num limit during migration. Range: [3, 100] in integer",
@@ -2485,6 +2493,11 @@ DEF_INT(_ss_micro_cache_arc_limit_percent, OB_TENANT_PARAMETER, "70", "[10, 90]"
         "Range: [10, 90]",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_TIME(_ss_disk_space_calibration_time_interval, OB_TENANT_PARAMETER, "1h", "[1s,)",
+         "The execution interval of disk space calibration task in shared storage mode,"
+         "Range: [1s, )",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 // obkv feature switch
 DEF_BOOL(_enable_kv_feature, OB_CLUSTER_PARAMETER, "True",
          "Enable or disable OBKV feature.",
@@ -2777,11 +2790,15 @@ DEF_TIME(_ss_advance_checkpoint_interval, OB_TENANT_PARAMETER, "10m", "[1m,12h]"
          "The execution interval for the ss advance checkpoint task"
          "Range: [1m, 12h]",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_TIME(_ss_clog_retention_period, OB_TENANT_PARAMETER, "1d", "[1h,7d]",
-         "Minimum retention period for CLOG data in the log service. Default: 1 day. Range: [1h, 7d]",
+DEF_TIME(_ss_clog_retention_period, OB_TENANT_PARAMETER, "10m", "[1m,7d]",
+         "Minimum retention period for CLOG data in the log service. Default: 10 minutes. Range: [1m, 7d]",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_palf_kv, OB_CLUSTER_PARAMETER, "True", "specifies the observer enable palf kv",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::READONLY));
+DEF_TIME(_ss_sslog_weak_read_threshold, OB_TENANT_PARAMETER, "5s", "[0s,2h]",
+         "If the difference time between the local max decided scn and gts is less than this configuration item value,"
+         "the read operation inside the sslog atomic operation can be weak. Range: [0s, 2h]",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_BOOL(_enable_async_load_sys_package, OB_CLUSTER_PARAMETER, "False",
          "Controls the ability to enable/disable async load sys package",
@@ -2972,9 +2989,13 @@ DEF_CAP(_external_table_mem_cache_page_size, OB_TENANT_PARAMETER, "512KB", "[0,)
        "page size of the external table memory cache. Range: [0,+∞)",
        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_TIME(_session_temp_table_clean_interval, OB_TENANT_PARAMETER, "10m", "[0s,)",
-        "schedule interval for session temporary table clean task. "
-        "Range: [0s, +∞). Default: 10m",
-        ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+         "schedule interval for session temporary table clean task. "
+         "Range: [0s, +∞). Default: 10m",
+         ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(_ss_storage_stat_report_interval, OB_TENANT_PARAMETER, "10m", "[30s,24d]",
+         "Control the reporting period of __all_tenant_ss_storage_stat"
+         "Range: [10s, 24d]",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_BOOL(_enable_grouping_sets_expansion, OB_TENANT_PARAMETER, "True", "enable grouping sets expansion plan",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

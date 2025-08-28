@@ -18,6 +18,7 @@
 #include "share/io/ob_io_define.h"
 #include "storage/blocksstable/ob_macro_block_id.h"
 #include "storage/blocksstable/ob_logic_macro_id.h"
+#include "share/config/ob_server_config.h"
 #include "sql/engine/basic/ob_lake_table_reader_profile.h"
 
 namespace oceanbase
@@ -45,7 +46,7 @@ struct ObStorageObjectWriteInfo final
 {
 public:
   ObStorageObjectWriteInfo()
-    : buffer_(NULL), offset_(0), size_(0), io_timeout_ms_(DEFAULT_IO_WAIT_TIME_MS), io_desc_(),
+    : buffer_(NULL), offset_(0), size_(0), io_timeout_ms_(GCONF._data_storage_io_timeout / 1000L), io_desc_(),
       io_callback_(NULL), device_handle_(NULL), has_backup_device_handle_(false),
       mtl_tenant_id_(OB_INVALID_TENANT_ID), local_cache_write_info_()
   {}
@@ -139,7 +140,7 @@ struct ObStorageObjectReadInfo final
 {
 public:
   ObStorageObjectReadInfo()
-    : macro_block_id_(), offset_(), size_(), io_timeout_ms_(DEFAULT_IO_WAIT_TIME_MS), io_desc_(),
+    : macro_block_id_(), offset_(), size_(), io_timeout_ms_(GCONF._data_storage_io_timeout / 1000L), io_desc_(),
       io_callback_(NULL), buf_(NULL), mtl_tenant_id_(OB_INVALID_TENANT_ID), local_cache_read_info_(),
       path_(), access_info_(nullptr), io_metrics_(nullptr)
   {}

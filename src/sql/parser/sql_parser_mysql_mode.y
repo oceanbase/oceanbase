@@ -360,7 +360,7 @@ END_P SET_VAR DELIMITER
         SUBCLASS_ORIGIN SUBDATE SUBJECT SUBPARTITION SUBPARTITIONS SUBSTR SUBSTRING SUCCESSFUL SUM
         SUPER SUSPEND SWAPS SWITCH SWITCHES SWITCHOVER SYSTEM SYSTEM_USER SYSDATE SESSION_ALIAS
         SIZE SKEWONLY SEQUENCE SLOG STATEMENT_ID SKIP_HEADER PARSE_HEADER IGNORE_LAST_EMPTY_COLUMN
-        SKIP_BLANK_LINES STATEMENT SUM_OPNSIZE SS_MICRO_CACHE SPARSEVECTOR SHARED SEQUENCE_NAME SOCKET_TIMEOUT
+        SKIP_BLANK_LINES STATEMENT SUM_OPNSIZE SS_MICRO_CACHE SPARSEVECTOR SHARED SEQUENCE_NAME SS_LOCAL_CACHE SOCKET_TIMEOUT
 
 
         TABLE_CHECKSUM TABLE_MODE TABLE_ID TABLE_NAME TABLEGROUPS TABLES TABLESPACE TABLET TABLET_ID TABLET_MAX_SIZE TASK_ID
@@ -550,7 +550,7 @@ END_P SET_VAR DELIMITER
 %type <node> switchover_tenant_stmt switchover_clause opt_verify
 %type <node> recover_tenant_stmt recover_point_clause
 %type <node> external_file_format_list external_file_format external_properties_list external_properties external_table_partition_option opt_pattern opt_as_alias pattern_expr format_expr url_expr url_table_function_expr location_expr
-%type <node> storage_cache_policy_attribute_list storage_cache_time_policy_attribute_list storage_cache_time_policy_attribute retention_time_unit
+%type <node> storage_cache_policy_attribute_list storage_cache_time_policy_attribute_list storage_cache_time_policy_attribute retention_time_unit opt_storage_cache_policy
 %type <node> opt_path_info opt_access_info opt_storage_use_for opt_attribute opt_scope_type
 %type <node> dynamic_sampling_hint add_external_table_partition_actions add_external_table_partition_action
 %type <node> external_table_partitions external_table_partition
@@ -8930,10 +8930,10 @@ hash_partition_element
 ;
 
 hash_partition_element:
-PARTITION relation_factor opt_part_id opt_engine_option opt_subpartition_list
+PARTITION relation_factor opt_part_id opt_engine_option opt_storage_cache_policy opt_subpartition_list
 {
   UNUSED($4);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_PARTITION_HASH_ELEMENT, 5, $2, NULL, $3, NULL, $5);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PARTITION_HASH_ELEMENT, 6, $2, NULL, $3, NULL, $6, $5);
 }
 ;
 
@@ -8955,10 +8955,10 @@ range_partition_element
 }
 ;
 range_partition_element:
-PARTITION relation_factor VALUES LESS THAN range_partition_expr opt_part_id opt_engine_option opt_subpartition_list
+PARTITION relation_factor VALUES LESS THAN range_partition_expr opt_part_id opt_engine_option opt_storage_cache_policy opt_subpartition_list
 {
   UNUSED($8);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_PARTITION_RANGE_ELEMENT, 5, $2, $6, $7, NULL, $9);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PARTITION_RANGE_ELEMENT, 6, $2, $6, $7, NULL, $10, $9);
 }
 ;
 
@@ -8981,10 +8981,10 @@ list_partition_element
 ;
 
 list_partition_element:
-PARTITION relation_factor VALUES IN list_partition_expr opt_part_id opt_engine_option opt_subpartition_list
+PARTITION relation_factor VALUES IN list_partition_expr opt_part_id opt_engine_option opt_storage_cache_policy opt_subpartition_list
 {
   UNUSED($7);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_PARTITION_LIST_ELEMENT, 5, $2, $5, $6, NULL, $8);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PARTITION_LIST_ELEMENT, 6, $2, $5, $6, NULL, $9, $8);
 }
 ;
 
@@ -9023,12 +9023,19 @@ hash_subpartition_element
 }
 
 hash_subpartition_element:
-SUBPARTITION relation_factor opt_engine_option
+SUBPARTITION relation_factor opt_engine_option opt_storage_cache_policy
 {
   UNUSED($3);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_PARTITION_HASH_ELEMENT, 5, $2, NULL, NULL, NULL, NULL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PARTITION_HASH_ELEMENT, 6, $2, NULL, NULL, NULL, NULL, $4);
 }
 ;
+
+opt_storage_cache_policy:
+STORAGE_CACHE_POLICY COMP_EQ STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_STORAGE_CACHE_POLICY_IN_PART_LIST, 1, $3);
+}
+| /* empty */{$$=NULL;};
 
 opt_engine_option:
 ENGINE_ COMP_EQ INNODB
@@ -9057,10 +9064,10 @@ range_subpartition_element
 ;
 
 range_subpartition_element:
-SUBPARTITION relation_factor VALUES LESS THAN range_partition_expr opt_engine_option
+SUBPARTITION relation_factor VALUES LESS THAN range_partition_expr opt_engine_option opt_storage_cache_policy
 {
   UNUSED($7);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_PARTITION_RANGE_ELEMENT, 5, $2, $6, NULL, NULL, NULL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PARTITION_RANGE_ELEMENT, 6, $2, $6, NULL, NULL, NULL, $8);
 }
 ;
 
@@ -9083,10 +9090,10 @@ list_subpartition_element
 ;
 
 list_subpartition_element:
-SUBPARTITION relation_factor VALUES IN list_partition_expr opt_engine_option
+SUBPARTITION relation_factor VALUES IN list_partition_expr opt_engine_option opt_storage_cache_policy
 {
   UNUSED($6);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_PARTITION_LIST_ELEMENT, 5, $2, $5, NULL, NULL, NULL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PARTITION_LIST_ELEMENT, 6, $2, $5, NULL, NULL, NULL, $7);
 }
 ;
 
@@ -20380,6 +20387,12 @@ alter_with_opt_hint SYSTEM FLUSH SS_MICRO_CACHE opt_tenant_name
   malloc_non_terminal_node($$, result->malloc_pool_, T_FLUSH_SS_MICRO_CACHE, 1, $5);
 }
 |
+alter_with_opt_hint SYSTEM FLUSH SS_LOCAL_CACHE opt_tenant_name opt_cache_name
+{
+  (void)($1);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FLUSH_SS_LOCAL_CACHE, 2, $5, $6);
+}
+|
 alter_with_opt_hint SYSTEM FLUSH DAG WARNINGS
 {
   (void)($1);
@@ -26851,6 +26864,7 @@ ACCESS_INFO
 |       SQL_TSI_WEEK
 |       SQL_TSI_YEAR
 |       SRID
+|       SS_LOCAL_CACHE
 |       SS_MICRO_CACHE
 |       _ST_ASMVT
 |       STACKED

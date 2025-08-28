@@ -52,6 +52,7 @@ DEF_SIMPLE_EXECUTOR(ObFlushIlogCache);
 DEF_SIMPLE_EXECUTOR(ObFlushDagWarnings);
 
 DEF_SIMPLE_EXECUTOR(ObFlushSSMicroCache);
+DEF_SIMPLE_EXECUTOR(ObFlushSSLocalCache);
 
 DEF_SIMPLE_EXECUTOR(ObSwitchReplicaRole);
 

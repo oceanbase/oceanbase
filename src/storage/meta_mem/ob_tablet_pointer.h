@@ -40,7 +40,6 @@ typedef ObMetaObjGuard<ObTabletDDLKvMgr> ObDDLKvMgrHandle;
 class ObTabletBasePointer
 {
 public:
-  ObTabletBasePointer();
   virtual ~ObTabletBasePointer() = default;
   OB_INLINE const ObMetaDiskAddr &get_addr() const { return phy_addr_; }
   bool is_in_memory() const;
@@ -53,6 +52,8 @@ public:
   virtual void set_tablet_status_written() = 0;
   virtual share::SCN get_notify_ss_change_version() const = 0;
   virtual share::SCN get_ss_change_version() const = 0;
+  virtual share::SCN get_ss_minor_version() const = 0;
+  virtual void set_ss_minor_version(const share::SCN &ss_minor_version) = 0;
   virtual ObLS *get_ls() const = 0;
   virtual int get_mds_table(
       const ObTabletID &tablet_id,
@@ -62,6 +63,7 @@ public:
   VIRTUAL_TO_STRING_KV(K_(phy_addr), K_(obj));
 
 protected:
+  ObTabletBasePointer();
   virtual void reset_obj() = 0;
   virtual void reset() = 0;
 
@@ -90,7 +92,10 @@ public:
   virtual bool is_tablet_status_written() const override { LOG_NOT_MY_DUTY_VOID; return false; }
   virtual share::SCN get_ss_change_version() const override { LOG_NOT_MY_DUTY_VOID; return share::SCN::invalid_scn(); }
   virtual share::SCN get_notify_ss_change_version() const override { LOG_NOT_MY_DUTY_VOID; return share::SCN::invalid_scn(); }
+  virtual share::SCN get_ss_minor_version() const override { LOG_NOT_MY_DUTY_VOID; return share::SCN::invalid_scn(); }
+  virtual void set_ss_minor_version(const share::SCN &ss_minor_version) override { LOG_NOT_MY_DUTY_VOID; }
   virtual ObLS *get_ls() const override { ONLY_LOG("NOT MY DUTY"); return nullptr; }
+
 private:
   virtual void reset_obj() override;
   virtual void reset() override;
@@ -101,6 +106,9 @@ class ObTabletPointer final : public ObTabletBasePointer
   friend class ObTablet;
   friend class ObTenantMetaMemMgr;
   friend class ObTabletPointerMap;
+public:
+  static const int64_t META_VERSION_ABORT_INTERNVAL = 500;
+
 public: // self_function
   ObTabletPointer();
   ObTabletPointer(const ObLSHandle &ls_handle,
@@ -126,10 +134,16 @@ public:
   virtual bool is_tablet_status_written() const override;
   virtual share::SCN get_ss_change_version() const override { return attr_.ss_change_version_.atomic_load(); }
   virtual share::SCN get_notify_ss_change_version() const override { return attr_.notify_ss_change_version_.atomic_load(); }
+  virtual share::SCN get_ss_minor_version() const override { return attr_.ss_minor_version_.atomic_load(); }
+  virtual void set_ss_minor_version(const share::SCN &ss_minor_version) override { attr_.ss_minor_version_.atomic_store(ss_minor_version); }
   virtual int get_mds_table(
       const ObTabletID &tablet_id,
       mds::MdsTableHandle &handle,
       bool not_exist_create = false) override;
+  int64_t get_next_meta_version() const { return next_meta_version_; }
+  int64_t get_last_match_meta_version() const { return attr_.last_match_tablet_meta_version_; }
+  /// NOTE: hold T3M::bucket_lock_
+  int64_t get_last_gc_version() const { return last_gc_version_; }
   int advance_notify_ss_change_version(
       const ObTabletID &tablet_id,
       const share::SCN &scn);
@@ -140,7 +154,8 @@ public:
 
   // do not KPC memtable_mgr, may dead lock
   VIRTUAL_TO_STRING_KV(K_(phy_addr), K_(obj), K_(ls_handle), K_(ddl_kv_mgr_handle), K_(attr),
-      K_(protected_memtable_mgr_handle), K_(ddl_info), KP_(old_version_chain), K_(flying));
+      K_(protected_memtable_mgr_handle), K_(ddl_info), KP_(old_version_chain), K_(flying),
+      K_(next_meta_version), K_(last_gc_version));
 private:
   int get_in_memory_obj(ObTabletHandle &guard);
   int get_attr_for_obj(ObTablet *t);
@@ -170,7 +185,6 @@ private:
   int remove_ddl_kv_mgr(const ObDDLKvMgrHandle &ddl_kv_mgr_handle);
   int set_tablet_attr(const ObTabletAttr &attr);
   bool is_attr_valid() const { return attr_.is_valid(); }
-
 private:
   void set_obj_pool(ObITenantMetaObjPool &obj_pool);
   bool is_old_version_chain_empty() const { return OB_ISNULL(old_version_chain_); }
@@ -194,6 +208,10 @@ private:
   // do not rely on thess interface
   ObTablet* get_old_version_chain_() const { return old_version_chain_; }
   ObTabletDDLInfo* get_ddl_info_() { return &ddl_info_; }
+  int try_alloc_meta_version(int64_t &version);
+  int init_next_meta_version();
+  /// NOTE: hold T3M::bucket_lock_
+  void update_last_gc_version(const int64_t new_gc_version);
 
 private:
   ObLSHandle ls_handle_; // 24B
@@ -205,8 +223,10 @@ private:
   mds::ObMdsTableHandler mds_table_handler_;// 48B
   ObTablet *old_version_chain_; // 8B
   // the RW operations of tablet_attr are protected by lock guard of tablet_map_
-  ObTabletAttr attr_; // 104B
-  DISALLOW_COPY_AND_ASSIGN(ObTabletPointer); // 416B
+  ObTabletAttr attr_; // 120B
+  int64_t next_meta_version_; // 8B(for SS private tablet)
+  int64_t last_gc_version_; // 8B(for SS private block gc)
+  DISALLOW_COPY_AND_ASSIGN(ObTabletPointer); // 432B
 };
 
 

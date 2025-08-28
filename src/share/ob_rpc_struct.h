@@ -155,6 +155,17 @@ enum ObDefaultRoleFlag
   OB_DEFAULT_ROLE_DEFAULT = 5,
   OB_DEFAULT_ROLE_MAX,
 };
+#ifdef OB_BUILD_SHARED_STORAGE
+enum class ObFlushSSLocalCacheType
+{
+  INVALID_TYPE = 0,
+  FLUSH_ALL_TYPE = 1,
+  FLUSH_LOCAL_MACRO_TYPE = 2,
+  FLUSH_MEM_MACRO_TYPE = 3,
+  FLUSH_LOCAL_MICRO_TYPE = 4,
+  MAX_TYPE,
+};
+#endif
 struct Bool
 {
   OB_UNIS_VERSION(1);
@@ -11844,6 +11855,27 @@ public:
 
 public:
   uint64_t tenant_id_;
+};
+
+struct ObFlushSSLocalCacheArg final
+{
+  OB_UNIS_VERSION(1);
+
+public:
+  ObFlushSSLocalCacheArg()
+    : tenant_id_(OB_INVALID_TENANT_ID), flush_type_(ObFlushSSLocalCacheType::INVALID_TYPE)
+  {}
+  ~ObFlushSSLocalCacheArg() {}
+  bool is_valid() const
+  {
+    return is_valid_tenant_id(tenant_id_) && (ObFlushSSLocalCacheType::INVALID_TYPE != flush_type_)
+           && (ObFlushSSLocalCacheType::MAX_TYPE != flush_type_);
+  }
+  TO_STRING_KV(K_(tenant_id), K_(flush_type));
+
+public:
+  uint64_t tenant_id_;
+  ObFlushSSLocalCacheType flush_type_;
 };
 
 struct ObDelSSLocalTmpFileArg final

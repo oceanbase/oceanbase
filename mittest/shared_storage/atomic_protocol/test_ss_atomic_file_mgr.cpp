@@ -132,15 +132,15 @@ TEST_F(TestAtomicFileMgr, test_get_sstable_list_handle)
     ObAtomicFile *file_ptr1 = file_handle1.get_atomic_file();
 
     ObAtomicOpHandle<ObAtomicSSTableListAddOp> op_handle;
-    ASSERT_EQ(OB_SUCCESS, file_ptr1->create_op(op_handle));
+    ASSERT_EQ(OB_SUCCESS, file_ptr1->create_op(op_handle, true, ObString()));
 
     ObAtomicOpHandle<ObAtomicSSTableListAddOp> op_handle2;
-    ASSERT_EQ(OB_OP_NOT_ALLOW, file_handle2.get_atomic_file()->create_op(op_handle2));
+    ASSERT_EQ(OB_OP_NOT_ALLOW, file_handle2.get_atomic_file()->create_op(op_handle2, true, ObString()));
     ASSERT_EQ(OB_SUCCESS, file_ptr1->abort_op(op_handle));
-    ASSERT_EQ(OB_SUCCESS, file_handle2.get_atomic_file()->create_op(op_handle2));
+    ASSERT_EQ(OB_SUCCESS, file_handle2.get_atomic_file()->create_op(op_handle2, true, ObString()));
     ASSERT_EQ(OB_SUCCESS, file_ptr1->abort_op(op_handle2));
     file_handle1.get_atomic_file()->set_deleting();
-    ASSERT_EQ(OB_OP_NOT_ALLOW, file_handle2.get_atomic_file()->create_op(op_handle2));
+    ASSERT_EQ(OB_OP_NOT_ALLOW, file_handle2.get_atomic_file()->create_op(op_handle2, true, ObString()));
     // can not use this file to do op because it's deleting
     file_handle1.get_atomic_file()->state_.reset();
     file_handle1.reset();

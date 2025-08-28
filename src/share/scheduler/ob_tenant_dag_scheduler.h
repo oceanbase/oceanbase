@@ -780,6 +780,7 @@ public:
     DAG_COUNT,
     DAG_NET_COUNT,
     RUNNING_TASK_CNT,
+    ADAPTIVE_LIMIT,
     VALUE_TYPE_MAX,
   };
   static const char *ObValueTypeStr[VALUE_TYPE_MAX];
@@ -1072,6 +1073,7 @@ public:
   int check_dag_exist(const ObIDag &dag, bool &exist, bool &is_emergency);
   int64_t get_limit();
   int64_t get_adaptive_limit();
+  void set_adaptive_limit(const int64_t limit);
   int64_t get_running_task_cnt();
   int set_thread_score(const int64_t score, int64_t &old_val, int64_t &new_val);
   bool try_switch(ObTenantDagWorker &worker);
@@ -1258,6 +1260,7 @@ public:
   int64_t get_running_task_cnt(const ObDagPrio::ObDagPrioEnum priority);
   int get_limit(const int64_t prio, int64_t &limit);
   int get_adaptive_limit(const int64_t prio, int64_t &limit);
+  int set_adaptive_limit(const int64_t prio, const int64_t limit);
   int check_dag_exist(const ObIDag *dag, bool &exist, bool &is_emergency);
   // force_cancel: whether to cancel running dag
   int cancel_dag(const ObIDag *dag, const bool force_cancel = false);
@@ -1352,7 +1355,10 @@ private:
       int64_t &idx);
   common::ObIAllocator &get_allocator(const bool is_ha);
   int init_allocator(const uint64_t tenant_id, const lib::ObLabel &label, lib::MemoryContext &mem_context);
-
+  void inner_reload_config();
+#ifdef OB_BUILD_SHARED_STORAGE
+  #include "share/scheduler/ob_tenant_ss_dag_scheduler.h"
+#endif
 private:
   bool is_inited_;
   bool fast_schedule_dag_net_;

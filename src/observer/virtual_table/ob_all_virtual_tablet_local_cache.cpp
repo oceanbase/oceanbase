@@ -182,7 +182,7 @@ int ObAllVirtualTabletLocalCache::process_curr_tenant(common::ObNewRow *&row)
         break;
       }
       case CACHED_DATA_SIZE: {
-        cells[i].set_int(tablet_micro_cache_info.get_valid_size() + tablet_macro_cache_stat.cached_size_);
+        cells[i].set_int(tablet_micro_cache_info.get_valid_size() + tablet_macro_cache_stat.get_total_cached_size());
         break;
       }
       // TODO (baonian.wcx): Increase the value of the micro cache

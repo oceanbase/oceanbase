@@ -35,7 +35,10 @@ public:
       ObTabletPointerMap *map);
   ObTabletPointerHandle(
     ObResourceValueStore<ObSSTabletDummyPointer> *ptr,
-    ObIAllocator *alloc):base_pointer_(ptr), base_pointer_alloc_(alloc)
+    ObIAllocator *alloc)
+    : map_(nullptr),
+      base_pointer_(ptr),
+      base_pointer_alloc_(alloc)
     {
       base_pointer_->inc_ref_cnt();
     }

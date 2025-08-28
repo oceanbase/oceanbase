@@ -308,8 +308,7 @@ private:
   int prepare_minor_gc_info_list(
       const int64_t parallel_cnt_of_each_sstable,
       const int64_t sstables_cnt_of_each_tablet,
-      const ObAtomicOpHandle<ObAtomicSSTableListAddOp> &op_handle,
-      ObSSMinorGCInfo &minor_gc_info);
+      ObSSTableGCInfo &minor_gc_info);
   int start_add_op(
       const ObLSID &ls_id,
       const share::SCN &split_scn,

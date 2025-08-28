@@ -314,7 +314,7 @@ void ObAdminDumpsstExecutor::dump_macro_block(const ObDumpMacroBlockContext &mac
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
   read_info.offset_ = 0;
   read_info.size_ = OB_DEFAULT_MACRO_BLOCK_SIZE;
-  read_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
+  read_info.io_timeout_ms_ = std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
 
   STORAGE_LOG(INFO, "begin dump macro block", K(macro_block_context));
   if (OB_UNLIKELY(!macro_block_context.is_valid())) {

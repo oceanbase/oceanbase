@@ -18,6 +18,7 @@
 #include "storage/blocksstable/ob_super_block_buffer_holder.h"
 #include "storage/slog_ckpt/ob_linked_macro_block_struct.h"
 #include "storage/ob_super_block_struct.h"
+#include "storage/blocksstable/ob_storage_object_type.h"
 
 
 namespace oceanbase
@@ -180,12 +181,21 @@ public:
     ss_macro_cache_ckpt_opt_.seq_id_ = seq_id;
   }
 
-  #ifdef OB_BUILD_CLOSE_MODULES
-  #define REGISTER_OPT_FUNC
-    #include "storage/incremental/atomic_protocol/compile_utility/ob_atomic_file_register_helper.h"
-  #undef REGISTER_OPT_FUNC
-  #endif
-
+  void set_ss_tablet_meta_opt(
+      const ObStorageObjectType object_type,
+      const uint64_t ls_id,
+      const uint64_t tablet_id,
+      const uint64_t op_id,
+      const bool is_inner_tablet,
+      const int64_t reorganization_scn)
+  {
+    object_type_ = object_type;
+    ss_tablet_meta_opt_.tablet_id_ = tablet_id;
+    ss_tablet_meta_opt_.op_id_ = op_id;
+    ss_tablet_meta_opt_.ls_id_ = ls_id;
+    ss_tablet_meta_opt_.is_inner_tablet_ = is_inner_tablet;
+    ss_tablet_meta_opt_.reorganization_scn_ = reorganization_scn;
+  }
 
   int64_t to_string(char *buf, const int64_t buf_len) const;
 
@@ -281,11 +291,14 @@ private:
     uint64_t version_id_;
     uint64_t seq_id_;
   };
-  #ifdef OB_BUILD_CLOSE_MODULES
-  #define REGISTER_OPT_STRUCT
-    #include "storage/incremental/atomic_protocol/compile_utility/ob_atomic_file_register_helper.h"
-  #undef REGISTER_OPT_STRUCT
-  #endif
+  struct SSTabletMetaObjectOpt
+  {
+    uint64_t tablet_id_;
+    uint64_t op_id_;
+    uint64_t ls_id_;
+    bool is_inner_tablet_;
+    int64_t reorganization_scn_;
+  };
 
 public:
   ObStorageObjectType object_type_;
@@ -305,19 +318,7 @@ public:
     SSTenantSlogCkptObjectOpt ss_slog_ckpt_obj_opt_;
     SSExternalTableFileObjectOpt ss_external_table_file_opt_;
     SSMacroCacheCkptObjectOpt ss_macro_cache_ckpt_opt_;
-    #ifdef OB_BUILD_CLOSE_MODULES
-    #define NEED_REGISTER_ATOMIC_FILE
-    #define REGISTER_ATOMIC_FILE(TYPE_NAME, ...) \
-      SS##TYPE_NAME##ObjectOpt ss_##TYPE_NAME##_opt_; \
-      SS##TYPE_NAME##TaskObjectOpt ss_##TYPE_NAME##_task_opt_; \
-      SS##TYPE_NAME##CurrentObjectOpt ss_##TYPE_NAME##_current_opt_; \
-      SS##TYPE_NAME##OldestObjectOpt ss_##TYPE_NAME##_oldest_opt_; \
-      SS##TYPE_NAME##OpIdObjectOpt ss_##TYPE_NAME##_op_id_opt_;
-      #include "storage/incremental/atomic_protocol/compile_utility/ob_atomic_file_register.h"
-
-    #undef NEED_REGISTER_ATOMIC_FILE
-    #undef REGISTER_ATOMIC_FILE
-    #endif
+    SSTabletMetaObjectOpt ss_tablet_meta_opt_;
   };
 
 };

@@ -704,6 +704,94 @@ int ObFlushSSMicroCacheExecutor::execute(ObExecContext &ctx, ObFlushSSMicroCache
   return ret;
 }
 
+int ObFlushSSLocalCacheExecutor::execute(ObExecContext &ctx, ObFlushSSLocalCacheStmt &stmt)
+{
+  UNUSED(stmt);
+  int ret = OB_SUCCESS;
+#ifdef OB_BUILD_SHARED_STORAGE
+  ObTaskExecutorCtx *task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx);
+  obrpc::ObCommonRpcProxy *common_rpc = nullptr;
+  share::schema::ObSchemaGetterGuard schema_guard;
+  uint64_t tenant_id = OB_INVALID_ID;
+  if (OB_ISNULL(task_exec_ctx)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("get task executor context failed");
+  } else if (OB_ISNULL(common_rpc = task_exec_ctx->get_common_rpc())) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("get common rpc proxy failed", K(task_exec_ctx));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(
+                 ctx.get_my_session()->get_effective_tenant_id(), schema_guard))) {
+    LOG_WARN("get_schema_guard failed", K(ret));
+  } else if (OB_FAIL(schema_guard.get_tenant_id(ObString::make_string(stmt.tenant_name_.ptr()), tenant_id)) ||
+             OB_INVALID_ID == tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant not found", K(ret), K_(stmt.tenant_name));
+  } else {
+    ObArray<ObAddr> server_list;
+    ObArray<ObUnit> tenant_units;
+    ObUnitTableOperator unit_op;
+    if (OB_FAIL(unit_op.init(*GCTX.sql_proxy_))) {
+      LOG_WARN("failed to init unit op", KR(ret));
+    } else if (OB_FAIL(unit_op.get_units_by_tenant(tenant_id, tenant_units))) {
+      LOG_WARN("failed to get tenant units", KR(ret), K(tenant_id));
+    } else if (OB_UNLIKELY(0 == tenant_units.count())) {
+      ret = OB_TENANT_NOT_EXIST;
+      LOG_WARN("tenant not exist", KR(ret), K(tenant_id));
+    } else {
+      FOREACH_X(unit, tenant_units, OB_SUCC(ret)) {
+        bool is_alive = false;
+        if (OB_FAIL(SVR_TRACER.check_server_alive(unit->server_, is_alive))) {
+          LOG_WARN("check_server_alive failed", KR(ret), K(unit->server_));
+        } else if (is_alive) {
+          if (has_exist_in_array(server_list, unit->server_)) {
+            // server exist
+          } else if (OB_FAIL(server_list.push_back(unit->server_))) {
+            LOG_WARN("push_back failed", KR(ret), K(unit->server_));
+          }
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      const int64_t rpc_timeout = 10000000; // 10s
+      obrpc::ObFlushSSLocalCacheArg arg;
+      arg.tenant_id_ = tenant_id;
+      const ObFixedLengthString<common::OB_MAX_TENANT_NAME_LENGTH + 1> micro_cache("micro_cache");
+      const ObFixedLengthString<common::OB_MAX_TENANT_NAME_LENGTH + 1> macro_cache("macro_cache");
+      const ObFixedLengthString<common::OB_MAX_TENANT_NAME_LENGTH + 1> mem_macro_cache("mem_macro_cache");
+      if (stmt.cache_name_.is_empty()) {
+        arg.flush_type_ = obrpc::ObFlushSSLocalCacheType::FLUSH_ALL_TYPE;
+      } else if (stmt.cache_name_ == macro_cache) {
+        arg.flush_type_ = obrpc::ObFlushSSLocalCacheType::FLUSH_LOCAL_MACRO_TYPE;
+      } else if (stmt.cache_name_ == micro_cache) {
+        arg.flush_type_ = obrpc::ObFlushSSLocalCacheType::FLUSH_LOCAL_MICRO_TYPE;
+      } else if (stmt.cache_name_ == mem_macro_cache)  {
+        arg.flush_type_ = obrpc::ObFlushSSLocalCacheType::FLUSH_MEM_MACRO_TYPE;
+      } else {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid cache name", K(ret), K_(stmt.cache_name));
+      }
+
+      obrpc::ObSrvRpcProxy *srv_rpc_proxy = nullptr;
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(srv_rpc_proxy = GCTX.srv_rpc_proxy_)) {
+        ret = OB_ERR_SYS;
+        LOG_WARN("srv rpc proxy is null", KR(ret), KP(srv_rpc_proxy));
+      } else {
+        FOREACH_X(server_addr, server_list, OB_SUCC(ret)) {
+          if (OB_FAIL(srv_rpc_proxy->to(*server_addr).timeout(rpc_timeout).flush_ss_local_cache(arg))) {
+            LOG_WARN("fail to send flush_ss_local_cache rpc", KR(ret), K(arg));
+          } else {
+            LOG_INFO("succ to send flush_ss_local_cache rpc", K(arg));
+          }
+        }
+      }
+    }
+  }
+#endif
+  return ret;
+}
+
 int ObFlushIlogCacheExecutor::execute(ObExecContext &ctx, ObFlushIlogCacheStmt &stmt)
 {
   UNUSEDx(ctx, stmt);

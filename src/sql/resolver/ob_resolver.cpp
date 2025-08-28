@@ -450,7 +450,11 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(FlushSSMicroCache);
         break;
       }
-       case T_TRIGGER_STORAGE_CACHE: {
+      case T_FLUSH_SS_LOCAL_CACHE: {
+        REGISTER_STMT_RESOLVER(FlushSSLocalCache);
+        break;
+      }
+      case T_TRIGGER_STORAGE_CACHE: {
         REGISTER_STMT_RESOLVER(TriggerStorageCache);
         break;
       }

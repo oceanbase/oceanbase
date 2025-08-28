@@ -148,10 +148,8 @@ int ObServerStorageMetaService::get_server_slogger(ObStorageLogger *&slogger) co
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (!is_shared_storage_) {
-    slogger = server_slogger_;
   } else {
-    slogger = nullptr;
+    slogger = server_slogger_;
   }
   return ret;
 }

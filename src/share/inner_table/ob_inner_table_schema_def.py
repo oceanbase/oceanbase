@@ -8343,7 +8343,28 @@ def_table_schema(**gen_history_table_def(555, all_external_resource))
 # 566: __all_backup_validate_task_history
 # 567: __all_backup_validate_ls_task
 # 568: __all_backup_validate_ls_task_history
-# 569: __all_tenant_ss_storage_stat
+
+def_table_schema(
+    owner = 'zk250686',
+    table_name    = '__all_tenant_ss_storage_stat',
+    table_id       = '569',
+    table_type = 'SYSTEM_TABLE',
+    gm_columns = [],
+    rowkey_columns = [
+        ('tenant_id', 'int'),
+        ('storage_type', 'varchar:32'),
+        ('endpoint', 'varchar:128'),
+        ('path', 'varchar:128'),
+    ],
+    normal_columns = [
+        ('value', 'bigint'),
+        ('update_time', 'timestamp'),
+    ],
+    is_cluster_private = True,
+    in_tenant_space = True,
+    meta_record_in_sys = False,
+)
+
 # 570: __all_ai_model
 # 571: __all_ai_model_history
 # 572: __all_ai_model_endpoint
@@ -17041,7 +17062,12 @@ def_table_schema(
 # 12566: __all_virtual_backup_validate_task_history
 # 12567: __all_virtual_backup_validate_ls_task
 # 12568: __all_virtual_backup_validate_ls_task_history
-# 12569: __all_virtual_tenant_ss_storage_stat
+
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12569',
+  table_name = '__all_virtual_tenant_ss_storage_stat',
+  keywords = all_def_keywords['__all_tenant_ss_storage_stat'],
+  in_tenant_space = True))
 
 def_table_schema(
   owner             = 'xutengting.xtt',
@@ -17669,7 +17695,8 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15523', all_def_keyword
 # 15528: __all_virtual_backup_validate_job_history
 # 15529: __all_virtual_backup_validate_task
 # 15530: __all_virtual_backup_validate_task_history
-# 15531: __all_virtual_tenant_ss_storage_stat
+
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15531', all_def_keywords['__all_virtual_tenant_ss_storage_stat'])))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15532', all_def_keywords['__all_virtual_hms_client_pool_stat']))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15533', all_def_keywords['__all_virtual_dba_source_v1']))
 # 15534: __all_virtual_ss_diagnose_info
@@ -41513,7 +41540,7 @@ def_table_schema(
         WHEN asu.file_type IN ('tenant local data',
                               'tenant tmp data')
                           THEN 'Local Data'
-        WHEN asu.file_type IN ('tenant shared_major data')
+        WHEN asu.file_type IN ('tenant shared data')
                           THEN 'Shared Data'
         WHEN asu.file_type IN ('tenant clog data')
                           THEN 'Clog Data'
@@ -41527,7 +41554,7 @@ def_table_schema(
         and alls.svr_port = asu.svr_port
     LEFT JOIN oceanbase.__all_zone_storage azs
       ON azs.zone = alls.zone
-    where asu.file_type in ('tenant shared_major data',
+    where asu.file_type in ('tenant shared data',
                             'tenant local data',
                             'tenant clog data',
                             'tenant tmp data')
@@ -43644,8 +43671,49 @@ WHERE
 # 21682: V$OB_HNSW_INDEX_INFO
 # 21683: GV$OB_IVF_INDEX_INFO
 # 21684: V$OB_IVF_INDEX_INFO
-# 21685: CDB_OB_SS_SPACE_USAGE
-# 21686: DBA_OB_SS_SPACE_USAGE
+
+def_table_schema(
+  owner = 'zk250686',
+  table_name      = 'CDB_OB_SS_SPACE_USAGE',
+  table_id        = '21685',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+    SELECT
+    sss.tenant_id as TENANT_ID,
+    atnt.tenant_name as TENANT_NAME,
+    sss.endpoint as ENDPOINT,
+    sss.path as PATH,
+    sss.storage_type as STORAGE_TYPE,
+    sss.value as VALUE
+    FROM oceanbase.__all_virtual_tenant_ss_storage_stat sss
+    INNER JOIN oceanbase.__all_tenant atnt
+      ON atnt.tenant_id = sss.tenant_id
+    where sss.tenant_id % 2 = 0
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'zk250686',
+  table_name      = 'DBA_OB_SS_SPACE_USAGE',
+  table_id        = '21686',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+    ENDPOINT,
+    PATH,
+    STORAGE_TYPE,
+    VALUE
+    FROM oceanbase.__all_virtual_tenant_ss_storage_stat
+    WHERE tenant_id=EFFECTIVE_TENANT_ID()
+""".replace("\n", " ")
+)
 
 def_table_schema(
   owner = 'xutengting.xtt',
@@ -66073,7 +66141,29 @@ def_table_schema(
 # 25312: DBA_OB_BACKUP_VALIDATE_JOB_HISTORY
 # 25313: DBA_OB_BACKUP_VALIDATE_TASKS
 # 25314: DBA_OB_BACKUP_VALIDATE_TASK_HISTORY
-# 25315: DBA_OB_SS_SPACE_USAGE
+
+def_table_schema(
+  owner = 'zk250686',
+  table_name      = 'DBA_OB_SS_SPACE_USAGE',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25315',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+    SELECT
+    ENDPOINT,
+    PATH,
+    STORAGE_TYPE,
+    VALUE
+    FROM sys.all_virtual_tenant_ss_storage_stat
+    WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+""".replace("\n", " ")
+)
 
 def_table_schema(
     owner           = 'wangbai.wx',

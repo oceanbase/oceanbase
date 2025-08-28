@@ -70,6 +70,8 @@ public:
       const ObTabletMapKey &key,
       const share::SCN &change_version);
 
+  int alloc_tablet_meta_version(const ObTabletMapKey &key, int64_t &tablet_meta_version);
+
 private:
   static int read_from_disk(
       const bool is_full_load,

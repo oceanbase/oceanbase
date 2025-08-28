@@ -958,6 +958,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"srid", SRID},
   {"ssl", SSL},
   {"skip", SKIP},
+  {"ss_local_cache", SS_LOCAL_CACHE},
   {"ss_micro_cache", SS_MICRO_CACHE},
   {"stacked", STACKED},
   {"standby", STANDBY},

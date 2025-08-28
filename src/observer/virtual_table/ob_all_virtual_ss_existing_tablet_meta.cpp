@@ -371,6 +371,7 @@ int ObAllVirtualSSExistingTabletMeta::generate_virtual_rows_(ObArray<VirtualTabl
       ObMetaVersionRange range(start_scn, end_scn, false);
       param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY,
                                   ObSSMetaReadResultType::READ_WHOLE_ROW,
+                                  false, /*try read local*/
                                   ObSSLogMetaType::SSLOG_TABLET_META,
                                   ls_id_,
                                   tablet_id_,

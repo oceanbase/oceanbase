@@ -41,6 +41,7 @@
 #include "storage/incremental/ob_shared_meta_rpc_common.h"
 #include "storage/incremental/sslog/ob_sslog_uid_rpc.h"
 #include "storage/incremental/garbage_collector/ob_ss_garbage_collector_rpc.h"
+#include "storage/incremental/ob_ss_checkpoint_rpc.h"
 #endif
 
 using namespace oceanbase;
@@ -174,6 +175,7 @@ void oceanbase::observer::init_srv_xlator_for_transaction(ObSrvRpcXlator *xlator
   RPC_PROCESSOR(ObSharedRpcP, gctx_);
   RPC_PROCESSOR(ObSSLogUIDP);
   RPC_PROCESSOR(ObSSPreciseGCP);
+  RPC_PROCESSOR(ObSSCkptRpcP);
 #endif
 }
 

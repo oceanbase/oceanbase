@@ -199,7 +199,7 @@ public:
       const int64_t free_time,
       const GCTabletType &gc_type,
       const int64_t tablet_transfer_seq,
-      const int64_t last_gc_version = -1);
+      const int64_t last_gc_version);
   virtual ~ObDeleteTabletLog() {}
   virtual bool is_valid() const override;
 

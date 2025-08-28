@@ -120,7 +120,8 @@ TEST_F(TestWriteTabletSlog, basic)
   const ObTabletMapKey key(ls_id, tablet_id);
   ObTabletHandle new_tablet_hdl;
   const uint64_t data_version = DATA_CURRENT_VERSION;
-  const ObTabletPersisterParam param(data_version, ls_id, ls->get_ls_epoch(), tablet_id, 0 /*transfer_seq*/);
+  const int64_t tablet_meta_version = 0;
+  const ObTabletPersisterParam param(data_version, ls_id, ls->get_ls_epoch(), tablet_id, 0 /*transfer_seq*/, tablet_meta_version);
   ASSERT_EQ(OB_SUCCESS, ObTabletPersister::persist_and_transform_tablet(param, *tablet, new_tablet_hdl));
 
   // write create tablet slog

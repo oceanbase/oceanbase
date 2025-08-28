@@ -12522,6 +12522,9 @@ int ObDDLResolver::resolve_hash_partition_elements(ObPartitionedStmt *stmt,
       } else if (OB_NOT_NULL(element_node->children_[PART_ID_NODE])) {
         // PART_ID is deprecated in 4.0, we just ignore and show warnings here.
         LOG_USER_WARN_ONCE(OB_NOT_SUPPORTED, "specify part_id");
+      } else if (OB_FAIL(resolve_storage_cache_policy_in_part_list(element_node, table_schema.get_tenant_id(),
+          false/*is_template_subpartition*/, partition))) {
+        LOG_WARN("failed to resolve storage cache policy in partition list", KR(ret), K(table_schema), K(partition));
       }
       //add hash partition elements to table schema
       if (OB_SUCC(ret)) {
@@ -12594,6 +12597,14 @@ int ObDDLResolver::resolve_hash_subpartition_elements(ObPartitionedStmt *stmt,
         // PART_ID is deprecated in 4.0, we just ignore and show warnings here.
         LOG_USER_WARN_ONCE(OB_NOT_SUPPORTED, "specify part_id");
       }
+      if (OB_SUCC(ret)) {
+        const bool is_template_subpartition = is_template || table_schema.has_sub_part_template_def();
+        if (OB_FAIL(resolve_storage_cache_policy_in_part_list(element_node, table_schema.get_tenant_id(),
+            is_template_subpartition, subpartition))) {
+          LOG_WARN("failed to resolve storage cache policy in subpartition list", K(ret), K(table_schema),
+              K(subpartition), K(is_template_subpartition));
+        }
+      }
       // add hash subpartition elements to table schema or partition
       if (OB_SUCC(ret)) {
         subpartition.set_sub_part_idx(i);
@@ -12665,6 +12676,9 @@ int ObDDLResolver::resolve_range_partition_elements(ObPartitionedStmt *stmt,
       } else if (OB_NOT_NULL(element_node->children_[PART_ID_NODE])) {
         // PART_ID is deprecated in 4.0, we just ignore and show warnings here.
         LOG_USER_WARN_ONCE(OB_NOT_SUPPORTED, "specify part_id");
+      } else if (OB_FAIL(resolve_storage_cache_policy_in_part_list(element_node, table_schema.get_tenant_id(),
+          false/*is_template_subpartition*/, partition))) {
+        LOG_WARN("failed to resolve storage cache policy in partition list", KR(ret), K(table_schema), K(partition));
       }
 
       //add range partition elements to table schema
@@ -12750,6 +12764,14 @@ int ObDDLResolver::resolve_range_subpartition_elements(ObPartitionedStmt *stmt,
         // PART_ID is deprecated in 4.0, we just ignore and show warnings here.
         LOG_USER_WARN_ONCE(OB_NOT_SUPPORTED, "specify part_id");
       }
+      if (OB_SUCC(ret)) {
+        const bool is_template_subpartition = is_template || table_schema.has_sub_part_template_def();
+        if (OB_FAIL(resolve_storage_cache_policy_in_part_list(element_node, table_schema.get_tenant_id(),
+            is_template_subpartition, subpartition))) {
+          LOG_WARN("failed to resolve storage cache policy in subpartition list", K(ret), K(table_schema),
+              K(subpartition), K(is_template_subpartition));
+        }
+      }
 
       //add range partition elements to table schema
       if (OB_SUCC(ret)) {
@@ -12822,6 +12844,9 @@ int ObDDLResolver::resolve_list_partition_elements(ObPartitionedStmt *stmt,
       } else if (OB_NOT_NULL(element_node->children_[PART_ID_NODE])) {
         // PART_ID is deprecated in 4.0, we just ignore and show warnings here.
         LOG_USER_WARN_ONCE(OB_NOT_SUPPORTED, "specify part_id");
+      } else if (OB_FAIL(resolve_storage_cache_policy_in_part_list(element_node, table_schema.get_tenant_id(),
+          false/*is_template_subpartition*/, partition))) {
+        LOG_WARN("failed to resolve storage cache policy in partition list", K(ret), K(table_schema), K(partition));
       }
 
       //add list partition elements to table schema
@@ -12903,7 +12928,14 @@ int ObDDLResolver::resolve_list_subpartition_elements(ObPartitionedStmt *stmt,
         // PART_ID is deprecated in 4.0, we just ignore and show warnings here.
         LOG_USER_WARN_ONCE(OB_NOT_SUPPORTED, "specify part_id");
       }
-
+      if (OB_SUCC(ret)) {
+        const bool is_template_subpartition = is_template || table_schema.has_sub_part_template_def();
+        if (OB_FAIL(resolve_storage_cache_policy_in_part_list(element_node, table_schema.get_tenant_id(),
+            is_template_subpartition, subpartition))) {
+          LOG_WARN("failed to resolve storage cache policy in subpartition list", K(ret), K(table_schema),
+              K(subpartition), K(is_template_subpartition));
+        }
+      }
       //add list partition elements to table schema
       if (OB_SUCC(ret)) {
         subpartition.set_tablespace_id(tablespace_id);

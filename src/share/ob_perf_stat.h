@@ -74,6 +74,24 @@ constexpr static int64_t DEFAULT_TIMEGUARD_US = 100_ms;
 #define PERF_TIMEGUARD_WITH_MOD_INIT(mod) TIMEGUARD_INIT(mod, DEFAULT_TIMEGUARD_US)
 #endif
 
+class ObTaskPerfStat
+{
+public:
+  ObTaskPerfStat() :
+     total_cnt_(0),
+     last_executed_cnt_(0),
+     last_ave_execute_time_(0),
+     expected_thread_cnt_(0),
+     total_estimate_execute_time_(0) {}
+  ~ObTaskPerfStat() {}
+public:
+  int64_t total_cnt_;
+  int64_t last_executed_cnt_;
+  int64_t last_ave_execute_time_;
+  int64_t expected_thread_cnt_;
+  int64_t total_estimate_execute_time_;
+};
+
 }// namespace common
 }// namespace oceanbase
 #endif // OCEANBASE_STORAGE_OB_SHARED_META_SERVICE_

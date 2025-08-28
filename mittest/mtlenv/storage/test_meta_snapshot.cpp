@@ -90,8 +90,9 @@ int TestMetaSnapshot::persist_tablet(ObTabletHandle &new_tablet_handle)
     LOG_WARN("fail to switch shared meta block", K(ret));
   } else {
     const uint64_t data_version = DATA_CURRENT_VERSION;
-    ObTabletPersisterParam persister_param(data_version, ls_id, ls_handle.get_ls()->get_ls_epoch(), tablet_id, tablet_handle.get_obj()->get_transfer_seq());
-    if (OB_FAIL(ObTabletPersister::persist_and_transform_tablet(persister_param, *(tablet_handle.get_obj()), new_tablet_handle))) {
+    const int64_t tablet_meta_version = 0;
+    ObTabletPersisterParam persister_param(data_version, ls_id, ls_handle.get_ls()->get_ls_epoch(), tablet_id, tablet_handle.get_obj()->get_transfer_seq(), tablet_meta_version);
+    if (FAILEDx(ObTabletPersister::persist_and_transform_tablet(persister_param, *(tablet_handle.get_obj()), new_tablet_handle))) {
       LOG_WARN("fail to persist and transform tablet", K(ret), K(tablet_handle));
     } else if (OB_FAIL(new_tablet_handle.get_obj()->get_updating_tablet_pointer_param(param))) {
       LOG_WARN("fail to get updating tablet pointer parameters", K(ret));

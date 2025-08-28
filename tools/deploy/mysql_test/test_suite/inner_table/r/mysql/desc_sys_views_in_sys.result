@@ -15560,6 +15560,40 @@ end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_VECTOR_MEMORY limit 1);
 cnt
 1
+desc oceanbase.CDB_OB_SS_SPACE_USAGE;
+Field	Type	Null	Key	Default	Extra
+TENANT_ID	bigint(20)	NO		NULL	
+TENANT_NAME	varchar(128)	NO		NULL	
+ENDPOINT	varchar(128)	NO		NULL	
+PATH	varchar(128)	NO		NULL	
+STORAGE_TYPE	varchar(32)	NO		NULL	
+VALUE	bigint(20)	NO		NULL	
+set @query_type = (select 
+case 
+when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|CDB_OB_SS_SPACE_USAGE|%') then 2
+when ('|CDB_OB_SERVER_SPACE_USAGE|' like '%|CDB_OB_SS_SPACE_USAGE|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|CDB_OB_SS_SPACE_USAGE|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_OB_SS_SPACE_USAGE limit 1);
+cnt
+1
+desc oceanbase.DBA_OB_SS_SPACE_USAGE;
+Field	Type	Null	Key	Default	Extra
+ENDPOINT	varchar(128)	NO		NULL	
+PATH	varchar(128)	NO		NULL	
+STORAGE_TYPE	varchar(32)	NO		NULL	
+VALUE	bigint(20)	NO		NULL	
+set @query_type = (select 
+case 
+when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|DBA_OB_SS_SPACE_USAGE|%') then 2
+when ('|CDB_OB_SERVER_SPACE_USAGE|' like '%|DBA_OB_SS_SPACE_USAGE|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_SS_SPACE_USAGE|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_SS_SPACE_USAGE limit 1);
+cnt
+1
 desc oceanbase.GV$OB_HMS_CLIENT_POOL_STAT;
 Field	Type	Null	Key	Default	Extra
 SVR_IP	varchar(46)	NO		NULL	

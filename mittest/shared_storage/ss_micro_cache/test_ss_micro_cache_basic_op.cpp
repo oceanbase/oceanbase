@@ -213,7 +213,7 @@ TEST_F(TestSSMicroMetaBasicOp, get_micro_handle_func)
   ret = ((OB_EAGAIN == ret) ? func3.ret_ : ret);
   ASSERT_EQ(OB_ENTRY_NOT_EXIST, ret);
 
-  // 4. micro_block is persisted
+  // 4. micro_block(data) is persisted
   micro_meta_->reuse_version_ = reuse_version;
   micro_meta_->data_loc_ = data_loc;
   ASSERT_EQ(OB_SUCCESS, mock_micro_block_persisted(micro_meta_));
@@ -274,6 +274,7 @@ TEST_F(TestSSMicroMetaBasicOp, get_micro_handle_func)
   ObSSMicroBlockMetaInfo tmp_micro_meta_info;
   micro_meta_->get_micro_meta_info(tmp_micro_meta_info);
   ASSERT_EQ(true, micro_meta_info == tmp_micro_meta_info);
+  ASSERT_EQ(false, micro_meta_->is_meta_serialized());
 
   // 7. set update_arc=false, it won't transfer seg.
   update_arc = false;
@@ -295,6 +296,34 @@ TEST_F(TestSSMicroMetaBasicOp, get_micro_handle_func)
   ASSERT_EQ(true, micro_meta_->is_in_l1_);
   ASSERT_EQ(false, micro_meta_->is_in_ghost_);
   ASSERT_EQ(true, micro_meta_->is_data_persisted_);
+
+  // 8. micro_block meta is persisted into disk
+  ASSERT_EQ(false, micro_meta_->is_meta_serialized_);
+  ASSERT_EQ(false, micro_meta_->is_meta_persisted_);
+  ASSERT_EQ(false, micro_meta_->is_meta_dirty_);
+  micro_meta_->set_meta_persisted(true);
+  mem_handle.reset();
+  phy_handle.reset();
+  micro_handle.reset();
+  access_info.reset();
+  SSMicroMapGetMicroHandleFunc func8(micro_handle, mem_handle, phy_handle, update_arc, access_info);
+  ret = micro_map.operate(&micro_key, func8);
+  ret = ((OB_EAGAIN == ret) ? func8.ret_ : ret);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(true, micro_meta_->is_in_l1_);
+  ASSERT_EQ(false, micro_meta_->is_meta_dirty_); // cuz nothing changed
+
+  mem_handle.reset();
+  phy_handle.reset();
+  micro_handle.reset();
+  access_info.reset();
+  update_arc = true;
+  SSMicroMapGetMicroHandleFunc func9(micro_handle, mem_handle, phy_handle, update_arc, access_info);
+  ret = micro_map.operate(&micro_key, func9);
+  ret = ((OB_EAGAIN == ret) ? func9.ret_ : ret);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(false, micro_meta_->is_in_l1_);
+  ASSERT_EQ(true, micro_meta_->is_meta_dirty_); // cuz is_in_l1 is changed
 }
 
 TEST_F(TestSSMicroMetaBasicOp, update_micro_heat_func)
@@ -308,7 +337,7 @@ TEST_F(TestSSMicroMetaBasicOp, update_micro_heat_func)
   tmp_micro_meta_handle.reset();
   uint64_t cur_access_time = micro_meta_->access_time();
 
-  const bool transfer_seg = true;
+  bool transfer_seg = true;
   const bool update_access_time = true;
   int64_t time_delta_s = 100;
   // 1. if hit T1, transfer seg and update heat
@@ -322,14 +351,30 @@ TEST_F(TestSSMicroMetaBasicOp, update_micro_heat_func)
   cur_access_time = micro_meta_->access_time();
 
   // 2. if hit ghost, don't transfer seg, just update heat
+  micro_meta_->is_in_l1_ = true;
   micro_meta_->is_in_ghost_ = true;
   time_delta_s = 200;
+  transfer_seg = false;
   SSMicroMapUpdateMicroHeatFunc func2(transfer_seg, update_access_time, time_delta_s);
   ret = micro_map.operate(&micro_key, func2);
   ret = ((OB_EAGAIN == ret) ? func2.ret_ : ret);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(ObSSMicroArcOpType::SS_INVALID_TYPE, func2.arc_op_type_);
   ASSERT_GT(micro_meta_->access_time(), cur_access_time);
+  ASSERT_EQ(true, micro_meta_->is_in_l1_);
+
+  // 3. persist micro_meta, and hit T1
+  micro_meta_->is_in_l1_ = true;
+  micro_meta_->is_in_ghost_ = false;
+  micro_meta_->is_meta_persisted_ = true;
+  ASSERT_EQ(false, micro_meta_->is_meta_dirty_);
+  transfer_seg = true;
+  SSMicroMapUpdateMicroHeatFunc func3(transfer_seg, update_access_time, time_delta_s);
+  ret = micro_map.operate(&micro_key, func3);
+  ret = ((OB_EAGAIN == ret) ? func3.ret_ : ret);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(false, micro_meta_->is_in_l1_);
+  ASSERT_EQ(true, micro_meta_->is_meta_dirty_);
 }
 
 TEST_F(TestSSMicroMetaBasicOp, deleted_unpersisted_micro_func)

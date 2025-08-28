@@ -80,9 +80,8 @@ using namespace oceanbase::storage;
 
 const char *get_per_file_test_name()
 {
-    return "test_storage_cache_policy_prewarmer_";
+  return "test_storage_cache_policy_prewarmer_";
 }
-
 namespace oceanbase
 {
 namespace unittest
@@ -307,13 +306,11 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, basic)
     ASSERT_TRUE(first_stat.micro_block_fail_cnt_ == 0);
     // ASSERT_TRUE(first_stat.macro_block_hit_cnt_ == 0);
     ASSERT_TRUE(first_stat.micro_block_hit_cnt_ == 0);
-    ASSERT_TRUE(first_stat.macro_block_add_cnt_ == first_stat.macro_data_block_num_);
     ASSERT_TRUE(first_stat.micro_block_add_cnt_ == first_stat.micro_block_num_);
     succeed = first_stat.macro_block_fail_cnt_ == 0
         && first_stat.micro_block_fail_cnt_ == 0
         // && first_stat.macro_block_hit_cnt_ == 0
         && first_stat.micro_block_hit_cnt_ == 0
-        && first_stat.macro_block_add_cnt_ == first_stat.macro_data_block_num_
         && first_stat.micro_block_add_cnt_ == first_stat.micro_block_num_;
   }
   ASSERT_TRUE(succeed);

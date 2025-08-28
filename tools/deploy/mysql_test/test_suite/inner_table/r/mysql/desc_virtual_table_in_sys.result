@@ -11756,6 +11756,18 @@ select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all
 IF(count(*) >= 0, 1, 0)
 1
 select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_ss_gc_detect_info limit 1;
+desc oceanbase.__all_virtual_tenant_ss_storage_stat;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+storage_type	varchar(32)	NO	PRI	NULL	
+endpoint	varchar(128)	NO	PRI	NULL	
+path	varchar(128)	NO	PRI	NULL	
+value	bigint(20)	NO		NULL	
+update_time	timestamp(6)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_tenant_ss_storage_stat;
+IF(count(*) >= 0, 1, 0)
+1
+select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_tenant_ss_storage_stat limit 1;
 desc oceanbase.__all_virtual_hms_client_pool_stat;
 Field	Type	Null	Key	Default	Extra
 svr_ip	varchar(46)	NO	PRI	NULL	

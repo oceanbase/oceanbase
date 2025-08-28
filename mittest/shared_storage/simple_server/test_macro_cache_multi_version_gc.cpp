@@ -24,6 +24,7 @@
 #include "mittest/shared_storage/test_ss_macro_cache_mgr_util.h"
 #include "storage/shared_storage/prewarm/ob_storage_cache_policy_prewarmer.h"
 #include "storage/shared_storage/storage_cache_policy/ob_storage_cache_tablet_scheduler.h"
+#include "storage/shared_storage/prewarm/ob_ss_base_prewarmer.h"
 #include "unittest/storage/sslog/test_mock_palf_kv.h"
 #include "close_modules/shared_storage/storage/incremental/sslog/ob_i_sslog_proxy.h"
 #include "close_modules/shared_storage/storage/incremental/sslog/ob_sslog_kv_proxy.h"
@@ -173,9 +174,8 @@ public:
   void get_gc_blocks(common::ObIArray<blocksstable::MacroBlockId> &block_ids_v1,
                      common::ObIArray<blocksstable::MacroBlockId> &block_ids_v2,
                      common::ObIArray<blocksstable::MacroBlockId> &gc_block_ids);
-  void check_macro_cache(const common::ObIArray<blocksstable::MacroBlockId> &block_ids,
-                         const bool expect_exist);
-  int check_micro_cache(const MacroBlockId &macro_id, const bool expect_exist);
+  int check_micro_cache(const MacroBlockId &macro_id, const char *macro_buf, const int64_t macro_size, const bool expect_exist);
+  int check_local_cache(const MacroBlockId &macro_id, const bool expect_exist);
   void wait_macro_cache_gc(const common::ObIArray<blocksstable::MacroBlockId> &block_ids);
   void wait_minor_finish();
   void wait_ss_minor_compaction_finish();
@@ -192,14 +192,20 @@ void ObMacroCacheMultiVersionGCTest::get_tablet_version(int64_t &tablet_version)
   bool is_old_version_empty = false;
   int64_t current_tablet_version = -1;
   int64_t current_tablet_trans_seq = -1;
+  int64_t last_gc_version = -1;
+  uintptr_t tablet_fingerprint = 0;
   do {
     ASSERT_EQ(OB_SUCCESS, MTL(ObTenantMetaMemMgr*)->get_current_version_for_tablet(run_ctx_.ls_id_,
-              run_ctx_.tablet_id_, current_tablet_version, current_tablet_trans_seq, is_old_version_empty));
+              run_ctx_.tablet_id_, current_tablet_version, last_gc_version, current_tablet_trans_seq,
+              tablet_fingerprint, is_old_version_empty));
     ASSERT_NE(-1, current_tablet_version);
+    ASSERT_GE(last_gc_version, -1);
+    ASSERT_LT(last_gc_version, current_tablet_version);
     if (!is_old_version_empty) continue;
 
     ObPrivateBlockGCHandler handler(run_ctx_.ls_id_, run_ctx_.ls_epoch_, run_ctx_.tablet_id_,
-                                    current_tablet_version, current_tablet_trans_seq);
+                                    current_tablet_version, last_gc_version,
+                                    current_tablet_trans_seq, tablet_fingerprint);
     LOG_INFO("wait old tablet version delete", K(current_tablet_version), K(is_old_version_empty),
              K(run_ctx_.ls_id_), K(run_ctx_.ls_epoch_), K(handler));
     ASSERT_EQ(OB_SUCCESS, handler.list_tablet_meta_version(tablet_versions));
@@ -214,13 +220,19 @@ void ObMacroCacheMultiVersionGCTest::get_shared_blocks_for_tablet(
   bool is_old_version_empty = false;
   int64_t current_tablet_version = -1;
   int64_t current_tablet_trans_seq = -1;
+  int64_t last_gc_version = -1;
+  uintptr_t tablet_fingerprint = 0;
   ASSERT_EQ(OB_SUCCESS, MTL(ObTenantMetaMemMgr*)->get_current_version_for_tablet(run_ctx_.ls_id_,
-            run_ctx_.tablet_id_, current_tablet_version, current_tablet_trans_seq, is_old_version_empty));
+            run_ctx_.tablet_id_, current_tablet_version, last_gc_version, current_tablet_trans_seq,
+            tablet_fingerprint, is_old_version_empty));
   ASSERT_NE(-1, current_tablet_version);
   ASSERT_TRUE(is_old_version_empty);
+  ASSERT_GE(last_gc_version, -1);
+  ASSERT_LT(last_gc_version, current_tablet_version);
 
   ObPrivateBlockGCHandler handler(run_ctx_.ls_id_, run_ctx_.ls_epoch_, run_ctx_.tablet_id_,
-                                  current_tablet_version, current_tablet_trans_seq);
+                                  current_tablet_version, last_gc_version, current_tablet_trans_seq,
+                                  tablet_fingerprint);
   ASSERT_EQ(OB_SUCCESS, handler.get_blocks_for_tablet(current_tablet_version, true/*is_shared*/, block_ids));
   LOG_INFO("get shared blocks for tablet", K(block_ids));
 }
@@ -249,37 +261,64 @@ void ObMacroCacheMultiVersionGCTest::get_gc_blocks(
   LOG_INFO("get gc blocks", K(block_ids_v1), K(block_ids_v2), K(gc_block_ids));
 }
 
-int ObMacroCacheMultiVersionGCTest::check_micro_cache(
+int ObMacroCacheMultiVersionGCTest::check_local_cache(
     const MacroBlockId &macro_id, const bool expect_exist)
 {
   int ret = OB_SUCCESS;
-  ObSSMicroCache *micro_cache = nullptr;
   ObStorageCachePolicyPrewarmer macro_reader(1/*parallelism*/);
   if (OB_FAIL(macro_reader.async_read_from_object_storage(macro_id))) {
     LOG_WARN("fail to read meta macro", KR(ret), K(macro_id), K(expect_exist));
   } else if (OB_FAIL(macro_reader.batch_read_wait())) {
     LOG_WARN("fail to wait read", KR(ret), K(macro_id), K(expect_exist));
-  } else if (OB_ISNULL(micro_cache = MTL(ObSSMicroCache *))) {
+  } else {
+    ObSSMacroCacheMgr *macro_cache_mgr = MTL(ObSSMacroCacheMgr *);
+    PrewarmLocalCacheType ss_prewarm_local_cache_type = PrewarmLocalCacheType::SS_PREWARM_MAX_TYPE;
+    macro_reader.check_prewarm_cache_type(macro_reader.read_handles_[0].get_macro_id(), macro_reader.read_handles_[0].get_buffer(),
+        macro_reader.read_handles_[0].get_data_size(), ss_prewarm_local_cache_type);
+    if(OB_ISNULL(macro_cache_mgr)) {
+      LOG_INFO("skip shared object meta magic header macro",
+          K(macro_id), K(macro_reader.read_handles_[0]));
+    } else if (ObSSPrewarmLocalCacheType::is_skipped(ss_prewarm_local_cache_type)) {
+      LOG_INFO("skip shared object meta magic header macro",
+          K(macro_id), K(macro_reader.read_handles_[0]));
+    } else if (ObSSPrewarmLocalCacheType::is_micro_cache(ss_prewarm_local_cache_type)) {
+      if (OB_FAIL(check_micro_cache(macro_id, macro_reader.read_handles_[0].get_buffer(), macro_reader.read_handles_[0].get_data_size(), expect_exist))) {
+        LOG_WARN("fail to check micro cache", KR(ret), K(macro_id));
+      }
+    } else if (ObSSPrewarmLocalCacheType::is_macro_cache(ss_prewarm_local_cache_type)) {
+      bool is_hit = false;
+      ObSSFdCacheHandle fd_handle;
+      if(OB_FAIL(macro_cache_mgr->get(macro_id, run_ctx_.tablet_id_, 0/*hit size*/, is_hit, fd_handle))) {
+        LOG_WARN("fail to get macro cache", KR(ret), K(macro_id));
+      } else {
+        LOG_INFO("check macro cache", K(macro_id), K(is_hit), K(expect_exist));
+        if (expect_exist != is_hit) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("expect_exist is not equal to is_hit", KR(ret), K(macro_id), K(expect_exist), K(is_hit));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObMacroCacheMultiVersionGCTest::check_micro_cache(
+    const MacroBlockId &macro_id, const char *macro_buf, const int64_t macro_size, const bool expect_exist)
+{
+  int ret = OB_SUCCESS;
+  ObSSMicroCache *micro_cache = nullptr;
+  if (OB_ISNULL(micro_cache = MTL(ObSSMicroCache *))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ObSSMicroCache is NULL", KR(ret));
   } else {
     ObMicroBlockBareIterator micro_iter;
-    ObIndexBlockBareIterator idx_micro_iter;
     int64_t micro_offset = 0;
     ObMicroBlockData micro_data;
     ObSSMicroBlockCacheKey micro_key;
-
-    const bool should_skip = is_shared_object_meta_macro(macro_id,
-        macro_reader.read_handles_[0].get_buffer(),
-        macro_reader.read_handles_[0].get_data_size());
-    if (should_skip) {
-      LOG_INFO("skip shared object meta magic header macro",
-          K(macro_id), K(macro_reader.read_handles_[0]));
-    } else if (OB_FAIL(open_micro_iterator(macro_id,
-        macro_reader.read_handles_[0].get_buffer(),
-        macro_reader.read_handles_[0].get_data_size(),
-        micro_iter, idx_micro_iter))) {
-      LOG_WARN("fail to open iterator", KR(ret), K(macro_id), K(macro_reader.read_handles_[0]));
+    ObSSBasePrewarmer macro_reader;
+    PrewarmLocalCacheType ss_prewarm_local_cache_type = PrewarmLocalCacheType::SS_PREWARM_MAX_TYPE;
+    if (OB_FAIL(macro_reader.open_micro_iterator(macro_id, macro_buf, macro_size, micro_iter))) {
+      LOG_WARN("fail to open iterator", KR(ret), K(macro_id), K(macro_size));
     } else {
       while (OB_SUCC(ret)) {
         micro_offset = 0;
@@ -319,25 +358,6 @@ int ObMacroCacheMultiVersionGCTest::check_micro_cache(
   return ret;
 }
 
-void ObMacroCacheMultiVersionGCTest::check_macro_cache(
-    const common::ObIArray<blocksstable::MacroBlockId> &block_ids,
-    const bool expect_exist)
-{
-  ObSSMacroCacheMgr *macro_cache_mgr = MTL(ObSSMacroCacheMgr *);
-  ASSERT_NE(nullptr, macro_cache_mgr);
-  for (int64_t i = 0; (i < block_ids.count()); ++i) {
-    bool is_hit = false;
-    const MacroBlockId &macro_id = block_ids.at(i);
-    if (macro_id.is_data()) {
-      ObSSFdCacheHandle fd_handle;
-      ASSERT_EQ(OB_SUCCESS, macro_cache_mgr->get(block_ids.at(i), run_ctx_.tablet_id_, 0/*hit size*/, is_hit, fd_handle));
-      LOG_INFO("check macro cache", K(block_ids.at(i)), K(is_hit), K(i), K(expect_exist));
-      ASSERT_EQ(expect_exist, is_hit);
-    } else {
-      OK(check_micro_cache(macro_id, expect_exist));
-    }
-  }
-}
 
 void ObMacroCacheMultiVersionGCTest::wait_macro_cache_gc(
     const common::ObIArray<blocksstable::MacroBlockId> &block_ids)
@@ -471,6 +491,11 @@ TEST_F(ObMacroCacheMultiVersionGCTest, multi_version_gc_and_tablet_gc)
   share::ObTenantSwitchGuard tguard;
   OK(tguard.switch_to(run_ctx_.tenant_id_));
 
+  ObTenantFileManager *file_manager = MTL(ObTenantFileManager *);
+  ASSERT_NE(nullptr, file_manager);
+  ObPrereadCacheManager &preread_cache_mgr = file_manager->preread_cache_mgr_;
+  ObSSPreReadTask &preread_task = preread_cache_mgr.preread_task_;
+  preread_task.is_inited_ = false;
   ObArray<blocksstable::MacroBlockId> block_ids_v1;
   ObArray<blocksstable::MacroBlockId> block_ids_v2;
   ObArray<blocksstable::MacroBlockId> gc_block_ids;
@@ -484,7 +509,7 @@ TEST_F(ObMacroCacheMultiVersionGCTest, multi_version_gc_and_tablet_gc)
   OK(sys_exe_sql("alter system set _ss_major_compaction_prewarm_level = 0 tenant tt1;"));
   OK(exe_sql("create table test_table (a int)"));
   set_ls_and_tablet_id_for_run_ctx();
-
+  storage::ObSSBasePrewarmer::OB_SS_PREWARM_CACHE_THRESHOLD = 0;
   // trigger minor compaction by minor freeze 3 times. it prewarms minor sstable into local
   // macro cache, and update tablet table store.
   OK(exe_sql("insert into test_table values (1);"));
@@ -504,8 +529,11 @@ TEST_F(ObMacroCacheMultiVersionGCTest, multi_version_gc_and_tablet_gc)
 
   wait_ss_minor_compaction_finish();
   get_shared_blocks_for_tablet(block_ids_v1);
-  check_macro_cache(block_ids_v1, true/*expect_exist*/);
-
+  for (int64_t i = 0; (i < block_ids_v1.count()); ++i) {
+    if (block_ids_v1.at(i).is_shared_data_or_meta()) {
+      check_local_cache(block_ids_v1.at(i), true/*expect_exist*/);
+    }
+  }
 
   // delete existing values and insert new values, and trigger minor compaction by minor freeze 2 times.
   // it prewarms new minor sstable into local macro cache, and update tablet table store.

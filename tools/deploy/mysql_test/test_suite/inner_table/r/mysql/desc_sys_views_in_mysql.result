@@ -11115,6 +11115,22 @@ end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_VECTOR_MEMORY limit 1);
 cnt
 1
+desc oceanbase.DBA_OB_SS_SPACE_USAGE;
+Field	Type	Null	Key	Default	Extra
+ENDPOINT	varchar(128)	NO		NULL	
+PATH	varchar(128)	NO		NULL	
+STORAGE_TYPE	varchar(32)	NO		NULL	
+VALUE	bigint(20)	NO		NULL	
+set @query_type = (select 
+case 
+when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_SS_SPACE_USAGE|%') then 2
+when ('' like '%|DBA_OB_SS_SPACE_USAGE|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_SS_SPACE_USAGE|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_SS_SPACE_USAGE limit 1);
+cnt
+1
 desc oceanbase.GV$OB_HMS_CLIENT_POOL_STAT;
 Field	Type	Null	Key	Default	Extra
 SVR_IP	varchar(46)	NO		NULL	

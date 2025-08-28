@@ -406,6 +406,7 @@
 # 554: __all_external_resource
 # 555: __all_external_resource_history
 # 555: __all_external_resource  # BASE_TABLE_NAME
+# 569: __all_tenant_ss_storage_stat
 # 570: __all_ai_model
 # 571: __all_ai_model_history
 # 571: __all_ai_model  # BASE_TABLE_NAME
@@ -1302,6 +1303,8 @@
 # 12551: __all_virtual_logservice_cluster_info
 # 12552: __all_virtual_ss_gc_status
 # 12553: __all_virtual_ss_gc_detect_info
+# 12569: __all_virtual_tenant_ss_storage_stat
+# 12569: __all_tenant_ss_storage_stat  # BASE_TABLE_NAME
 # 12570: __all_virtual_hms_client_pool_stat
 # 12571: __all_virtual_dba_source_v1
 # 12572: __all_virtual_ai_model
@@ -2036,6 +2039,9 @@
 # 15522: __all_virtual_ss_existing_tablet_meta  # BASE_TABLE_NAME
 # 15523: ALL_VIRTUAL_SS_EXISTING_SSTABLE_MGR
 # 15523: __all_virtual_ss_existing_sstable_mgr  # BASE_TABLE_NAME
+# 15531: ALL_VIRTUAL_TENANT_SS_STORAGE_STAT
+# 15531: __all_tenant_ss_storage_stat  # BASE_TABLE_NAME
+# 15531: __all_virtual_tenant_ss_storage_stat  # BASE_TABLE_NAME1
 # 15532: ALL_VIRTUAL_HMS_CLIENT_POOL_STAT
 # 15532: __all_virtual_hms_client_pool_stat  # BASE_TABLE_NAME
 # 15533: ALL_VIRTUAL_DBA_SOURCE_V1
@@ -2595,6 +2601,8 @@
 # 21660: V$OB_SS_SSTABLES
 # 21661: GV$OB_VECTOR_MEMORY
 # 21662: V$OB_VECTOR_MEMORY
+# 21685: CDB_OB_SS_SPACE_USAGE
+# 21686: DBA_OB_SS_SPACE_USAGE
 # 21687: GV$OB_HMS_CLIENT_POOL_STAT
 # 21688: V$OB_HMS_CLIENT_POOL_STAT
 # 21689: DBA_OB_AI_MODELS
@@ -2893,6 +2901,7 @@
 # 25308: DBA_MVIEW_RUNNING_JOBS
 # 25309: DBA_MVIEW_DEPS
 # 25310: DBA_OB_DYNAMIC_PARTITION_TABLES
+# 25315: DBA_OB_SS_SPACE_USAGE
 # 25316: DBA_SOURCE_V1
 # 25317: ALL_SOURCE_V1
 # 25318: USER_SOURCE_V1

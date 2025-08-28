@@ -13,8 +13,10 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_object_manager.h"
+#include "ob_storage_object_type.h"
 #include "storage/meta_store/ob_tenant_storage_meta_service.h"
 #include "share/ob_perf_stat.h"
+#include "storage/blocksstable/ob_ss_obj_util.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/ob_file_manager.h"
 #include "storage/shared_storage/macro_cache/ob_ss_macro_cache_mgr.h"
@@ -43,154 +45,8 @@ int64_t ObStorageObjectOpt::to_string(char *buf, const int64_t buf_len) const
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
-  switch (object_type_) {
-  case ObStorageObjectType::PRIVATE_DATA_MACRO:
-  case ObStorageObjectType::PRIVATE_META_MACRO: {
-    if(OB_FAIL(databuff_printf(buf, buf_len, pos, "object_type:%s (tablet_id=%lu, transfer_seq=%lu)",
-               get_storage_objet_type_str(object_type_), private_opt_.tablet_id_, private_opt_.tablet_trasfer_seq_))) {
-      LOG_WARN("failed to print data into buf", K(ret), K(buf_len), K(pos), K(get_storage_objet_type_str(object_type_)),
-                                                K(private_opt_.tablet_id_), K(private_opt_.tablet_trasfer_seq_));
-    }
-    break;
-  }
-  case ObStorageObjectType::SHARED_MINI_DATA_MACRO:
-  case ObStorageObjectType::SHARED_MINI_META_MACRO:
-  case ObStorageObjectType::SHARED_MINOR_DATA_MACRO:
-  case ObStorageObjectType::SHARED_MINOR_META_MACRO:
-  case ObStorageObjectType::SHARED_MDS_MINI_DATA_MACRO:
-  case ObStorageObjectType::SHARED_MDS_MINI_META_MACRO:
-  case ObStorageObjectType::SHARED_MDS_MINOR_DATA_MACRO:
-  case ObStorageObjectType::SHARED_MDS_MINOR_META_MACRO: {
-    if(OB_FAIL(databuff_printf(buf, buf_len, pos,
-              "object_type=%s (tablet_id=%lu,op_id=%lu,data_seq=%lu,reorganization_scn=%lu)",
-              get_storage_objet_type_str(object_type_),
-              ss_share_opt_.tablet_id_, (ss_share_opt_.data_seq_ >> 32),
-              (ss_share_opt_.data_seq_ & 0xFFFFFFFF), ss_share_opt_.reorganization_scn_))) {
-      LOG_WARN("failed to print data into buf", K(ret), K(buf_len), K(pos), K(get_storage_objet_type_str(object_type_)),
-               K(ss_share_opt_.tablet_id_), K(ss_share_opt_.data_seq_), K(ss_share_opt_.column_group_id_), K(ss_share_opt_.reorganization_scn_));
-    }
-    break;
-  }
-  case ObStorageObjectType::SHARED_MAJOR_DATA_MACRO:
-  case ObStorageObjectType::SHARED_MAJOR_META_MACRO: {
-    if(OB_FAIL(databuff_printf(buf, buf_len, pos,
-               "object_type=%s (tablet_id=%lu,data_seq=%lu,cg_id=%lu)",
-               get_storage_objet_type_str(object_type_),
-               ss_share_opt_.tablet_id_, ss_share_opt_.data_seq_,
-               ss_share_opt_.column_group_id_))) {
-      LOG_WARN("failed to print data into buf", K(ret), K(buf_len), K(pos), K(get_storage_objet_type_str(object_type_)),
-                                                K(ss_share_opt_.tablet_id_), K(ss_share_opt_.data_seq_), K(ss_share_opt_.column_group_id_));
-    }
-    break;
-  }
-  case ObStorageObjectType::TMP_FILE: {
-    if(OB_FAIL(databuff_printf(buf, buf_len, pos, "object_type=%s", get_storage_objet_type_str(object_type_)))) {
-      LOG_WARN("failed to print data into buf", K(ret), K(buf_len), K(pos), K(get_storage_objet_type_str(object_type_)));
-    }
-    break;
-  }
-  case ObStorageObjectType::SERVER_META: {
-    if(OB_FAIL(databuff_printf(buf, buf_len, pos, "object_type=%s", get_storage_objet_type_str(object_type_)))) {
-      LOG_WARN("failed to print data into buf", K(ret), K(buf_len), K(pos), K(get_storage_objet_type_str(object_type_)));
-    }
-    break;
-  }
-  case ObStorageObjectType::TENANT_ROOT_KEY: {
-    if(OB_FAIL(databuff_printf(buf, buf_len, pos, "object_type=%s", get_storage_objet_type_str(object_type_)))) {
-      LOG_WARN("failed to print data into buf", K(ret), K(buf_len), K(pos), K(get_storage_objet_type_str(object_type_)));
-    }
-    break;
-  }
-  case ObStorageObjectType::TENANT_DISK_SPACE_META: {
-    if(OB_FAIL(databuff_printf(buf, buf_len, pos, "object_type=%s (tenant_id=%lu,tenant_epoch_id=%lu)",
-               get_storage_objet_type_str(object_type_),
-               ss_tenant_level_opt_.tenant_id_, ss_tenant_level_opt_.tenant_epoch_id_))) {
-      LOG_WARN("failed to print data into buf", K(ret), K(buf_len), K(pos), K(get_storage_objet_type_str(object_type_)),
-                                                K(ss_tenant_level_opt_.tenant_id_), K(ss_tenant_level_opt_.tenant_epoch_id_));
-    }
-    break;
-  }
-  case ObStorageObjectType::PRIVATE_TABLET_META: {
-    if(OB_FAIL(databuff_printf(buf, buf_len, pos, "object_type=%s (ls_id=%lu,tablet_id=%lu,version=%lu,transfer_seq=%lu)",
-               get_storage_objet_type_str(object_type_),
-               ss_private_tablet_opt_.ls_id_, ss_private_tablet_opt_.tablet_id_,
-               ss_private_tablet_opt_.version_, ss_private_tablet_opt_.tablet_transfer_seq_))) {
-      LOG_WARN("failed to print data into buf", K(ret), K(buf_len), K(pos), K(get_storage_objet_type_str(object_type_)),
-                                                K(ss_private_tablet_opt_.ls_id_), K(ss_private_tablet_opt_.tablet_id_),
-                                                K(ss_private_tablet_opt_.version_), K(ss_private_tablet_opt_.tablet_transfer_seq_));
-    }
-    break;
-  }
-  case ObStorageObjectType::IS_SHARED_TENANT_DELETED: {
-    if(OB_FAIL(databuff_printf(buf, buf_len, pos,
-               "object_type=%s (tenant_id=%lu)", get_storage_objet_type_str(object_type_),
-               ss_shared_tenant_id_opt_.tenant_id_))) {
-      LOG_WARN("failed to print data into buf", K(ret), K(buf_len), K(pos), K(get_storage_objet_type_str(object_type_)),
-                                                K(ss_shared_tenant_id_opt_.tenant_id_));
-    }
-    break;
-  }
-  case ObStorageObjectType::SHARED_TABLET_SUB_META: {
-    if(OB_FAIL(databuff_printf(buf, buf_len, pos, "object_type=%s (tablet_id=%lu, ls_id=%lu, op_id=%u, data_seq=%u, is_inner_tablet=%d, reorganization_scn=%lu)",
-                               get_storage_objet_type_str(object_type_), ss_tablet_sub_meta_opt_.tablet_id_,
-                               ss_tablet_sub_meta_opt_.ls_id_, ss_tablet_sub_meta_opt_.op_id_,
-                               ss_tablet_sub_meta_opt_.data_seq_ , ss_tablet_sub_meta_opt_.is_inner_tablet_,
-                               ss_tablet_sub_meta_opt_.reorganization_scn_))) {
-      LOG_WARN("failed to print data into buf", K(ret), K(buf_len), K(pos), K(get_storage_objet_type_str(object_type_)),
-               K(ss_tablet_sub_meta_opt_.tablet_id_),
-               K(ss_tablet_sub_meta_opt_.ls_id_),
-               K(ss_tablet_sub_meta_opt_.is_inner_tablet_),
-               K(ss_tablet_sub_meta_opt_.op_id_),
-               K(ss_tablet_sub_meta_opt_.data_seq_),
-               K(ss_tablet_sub_meta_opt_.reorganization_scn_));
-    }
-    break;
-  }
-  case ObStorageObjectType::EXTERNAL_TABLE_FILE: {
-    if (OB_FAIL(databuff_printf(buf, buf_len, pos,
-        "object_type=%s (server_seq_id=%lu, offset_idx=%ld)",
-        get_storage_objet_type_str(object_type_),
-        ss_external_table_file_opt_.server_seq_id_,
-        ss_external_table_file_opt_.offset_idx_))) {
-      LOG_WARN("failed to print data into buf", KR(ret), K(buf_len), K(pos),
-          K(get_storage_objet_type_str(object_type_)),
-          K(ss_external_table_file_opt_.server_seq_id_),
-          K(ss_external_table_file_opt_.offset_idx_));
-    }
-    break;
-  }
-  case ObStorageObjectType::MACRO_CACHE_CKPT_META: {
-    if (OB_FAIL(databuff_printf(buf, buf_len, pos,
-        "object_type=%s (version_id_=%lu)",
-        get_storage_objet_type_str(object_type_),
-        ss_macro_cache_ckpt_opt_.version_id_))) {
-      LOG_WARN("failed to print data into buf", KR(ret), K(buf_len), K(pos),
-          K(get_storage_objet_type_str(object_type_)), K(ss_macro_cache_ckpt_opt_.version_id_));
-    }
-    break;
-  }
-  case ObStorageObjectType::MACRO_CACHE_CKPT_DATA: {
-    if (OB_FAIL(databuff_printf(buf, buf_len, pos,
-        "object_type=%s (version_id_=%lu, seq_id=%lu)",
-        get_storage_objet_type_str(object_type_),
-        ss_macro_cache_ckpt_opt_.version_id_,
-        ss_macro_cache_ckpt_opt_.seq_id_))) {
-      LOG_WARN("failed to print data into buf", KR(ret), K(buf_len), K(pos),
-          K(get_storage_objet_type_str(object_type_)),
-          K(ss_macro_cache_ckpt_opt_.version_id_), K(ss_macro_cache_ckpt_opt_.seq_id_));
-    }
-    break;
-  }
-  #ifdef OB_BUILD_CLOSE_MODULES
-  #define REGISTER_OPT_TO_STRING
-    #include "storage/incremental/atomic_protocol/compile_utility/ob_atomic_file_register_helper.h"
-  #undef REGISTER_OPT_TO_STRING
-  #endif
-  default:
-    if(OB_FAIL(databuff_printf(buf, buf_len, pos, "object_type=%s", "unknow object type"))) {
-      LOG_WARN("failed to print data into buf", K(ret), K(buf_len), K(pos), K(get_storage_objet_type_str(object_type_)));
-    }
-    break;
+  if (OB_FAIL(SSObjUtil::opt_to_string(object_type_, buf, buf_len, pos, *this))) {
+    LOG_WARN("failed to print data into buf", K(ret), K(buf_len), K(pos), "storage object type", STI(object_type_));
   }
   return pos;
 }
@@ -314,10 +170,9 @@ int ObObjectManager::alloc_object(const ObStorageObjectOpt &opt, ObStorageObject
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (!is_shared_storage_) {
-    if (ObStorageObjectType::PRIVATE_DATA_MACRO != opt.object_type_
-        && ObStorageObjectType::PRIVATE_META_MACRO != opt.object_type_
-        && ObStorageObjectType::PRIVATE_CKPT_FILE != opt.object_type_
-        && ObStorageObjectType::EXTERNAL_TABLE_FILE != opt.object_type_) {
+    if (!(SSObjUtil::is_private(opt.object_type_) &&
+        (SSObjUtil::is_macro(opt.object_type_) || SSObjUtil::is_tenant_meta(opt.object_type_)) &&
+        ObStorageObjectType::EXTERNAL_TABLE_FILE != opt.object_type_)) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("only support private marco for shared-nothing", K(ret), K(opt.object_type_), K(opt));
     } else if (CLICK_FAIL(OB_SERVER_BLOCK_MGR.alloc_object(object_handle))) {
@@ -536,7 +391,7 @@ int ObObjectManager::get_object_size(
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (!is_shared_storage_) {
-    if (OB_UNLIKELY(ObStorageObjectType::PRIVATE_DATA_MACRO != object_id.storage_object_type()
+    if (OB_UNLIKELY(!(SSObjUtil::is_private(object_id) && SSObjUtil::is_macro_data(object_id))
         && ObMacroBlockIdMode::ID_MODE_LOCAL != static_cast<ObMacroBlockIdMode>(object_id.id_mode()))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected object id", K(ret), K(object_id));
@@ -660,128 +515,9 @@ int ObObjectManager::delete_object(const MacroBlockId &object_id, const int64_t 
 int ObObjectManager::ss_get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id)
 {
   int ret = OB_SUCCESS;
-  const int64_t default_incarnation_id = 0;
-  const int64_t default_cg_id = 0;
-  const int64_t obj_type = static_cast<int64_t>(opt.object_type_);
   object_id.reset();
-
-  switch (opt.object_type_) {
-    case ObStorageObjectType::PRIVATE_DATA_MACRO:
-    case ObStorageObjectType::PRIVATE_META_MACRO: {
-      uint64_t seq = 0;
-      set_ss_object_first_id_(obj_type, default_incarnation_id, default_cg_id, object_id);
-      object_id.set_second_id(opt.private_opt_.tablet_id_);
-      object_id.set_third_id(GCONF.observer_id);
-      if (OB_FAIL(TENANT_SEQ_GENERATOR.get_private_object_seq(seq))) {
-        LOG_WARN("fail to get private object seq", K(ret), K(opt));
-      } else {
-        object_id.set_tenant_seq(seq);
-        object_id.set_macro_transfer_seq(opt.private_opt_.tablet_trasfer_seq_);
-      }
-      break;
-    }
-    case ObStorageObjectType::SHARED_MINI_DATA_MACRO:
-    case ObStorageObjectType::SHARED_MINI_META_MACRO:
-    case ObStorageObjectType::SHARED_MINOR_DATA_MACRO:
-    case ObStorageObjectType::SHARED_MINOR_META_MACRO:
-    case ObStorageObjectType::SHARED_MDS_MINI_DATA_MACRO:
-    case ObStorageObjectType::SHARED_MDS_MINI_META_MACRO:
-    case ObStorageObjectType::SHARED_MDS_MINOR_DATA_MACRO:
-    case ObStorageObjectType::SHARED_MDS_MINOR_META_MACRO:
-    case ObStorageObjectType::SHARED_MAJOR_DATA_MACRO:
-    case ObStorageObjectType::SHARED_MAJOR_META_MACRO: {
-      set_ss_object_first_id_(obj_type, default_incarnation_id, opt.ss_share_opt_.column_group_id_, object_id);
-      object_id.set_second_id(opt.ss_share_opt_.tablet_id_);
-      object_id.set_third_id(opt.ss_share_opt_.data_seq_);
-      object_id.set_ss_fourth_id(opt.ss_share_opt_.is_ls_inner_tablet_,
-          opt.ss_share_opt_.ls_id_, opt.ss_share_opt_.reorganization_scn_);
-      break;
-    }
-    case ObStorageObjectType::TMP_FILE: {
-      uint64_t file_id = 0;
-      set_ss_object_first_id_(obj_type, default_incarnation_id, default_cg_id, object_id);
-      if (OB_FAIL(TENANT_SEQ_GENERATOR.get_tmp_file_seq(file_id))) {
-        LOG_WARN("fail to get private tmp file seq", K(ret), K(opt));
-      } else {
-        object_id.set_second_id(file_id);
-      }
-      break;
-    }
-    case ObStorageObjectType::TENANT_ROOT_KEY:
-    case ObStorageObjectType::SERVER_META: {
-      set_ss_object_first_id_(obj_type, default_incarnation_id, default_cg_id, object_id);
-      break;
-    }
-    case ObStorageObjectType::TENANT_DISK_SPACE_META: {
-      set_ss_object_first_id_(obj_type, default_incarnation_id, default_cg_id, object_id);
-      object_id.set_second_id(opt.ss_tenant_level_opt_.tenant_id_);
-      object_id.set_third_id(opt.ss_tenant_level_opt_.tenant_epoch_id_);
-      break;
-    }
-    case ObStorageObjectType::PRIVATE_SLOG_FILE:
-    case ObStorageObjectType::PRIVATE_CKPT_FILE: {
-      set_ss_object_first_id_(obj_type, default_incarnation_id, default_cg_id, object_id);
-      object_id.set_second_id(opt.ss_slog_ckpt_obj_opt_.tenant_id_);
-      object_id.set_third_id(opt.ss_slog_ckpt_obj_opt_.tenant_epoch_id_);
-      object_id.set_fourth_id(opt.ss_slog_ckpt_obj_opt_.file_id_);
-      break;
-    }
-    case ObStorageObjectType::PRIVATE_TABLET_META: {
-      set_ss_object_first_id_(obj_type, default_incarnation_id, default_cg_id, object_id);
-      object_id.set_second_id(opt.ss_private_tablet_opt_.ls_id_);
-      object_id.set_third_id(opt.ss_private_tablet_opt_.tablet_id_);
-      object_id.set_meta_version_id(opt.ss_private_tablet_opt_.version_);
-      object_id.set_meta_transfer_seq(opt.ss_private_tablet_opt_.tablet_transfer_seq_);
-      break;
-    }
-    case ObStorageObjectType::IS_SHARED_TENANT_DELETED: {
-      set_ss_object_first_id_(obj_type, default_incarnation_id, default_cg_id, object_id);
-      object_id.set_second_id(opt.ss_shared_tenant_id_opt_.tenant_id_);
-      break;
-    }
-    case ObStorageObjectType::MAJOR_PREWARM_DATA:
-    case ObStorageObjectType::MAJOR_PREWARM_DATA_INDEX:
-    case ObStorageObjectType::MAJOR_PREWARM_META:
-    case ObStorageObjectType::MAJOR_PREWARM_META_INDEX: {
-      set_ss_object_first_id_(obj_type, default_incarnation_id, default_cg_id, object_id);
-      object_id.set_second_id(opt.ss_major_prewarm_opt_.tablet_id_);
-      object_id.set_third_id(opt.ss_major_prewarm_opt_.compaction_scn_);
-      object_id.set_fourth_id(opt.ss_major_prewarm_opt_.reorganization_scn_);
-      break;
-    }
-    case ObStorageObjectType::SHARED_TABLET_SUB_META: {
-      set_ss_object_first_id_(obj_type, default_incarnation_id, default_cg_id, object_id);
-      object_id.set_second_id(opt.ss_tablet_sub_meta_opt_.tablet_id_);
-      object_id.set_third_id((uint64_t(opt.ss_tablet_sub_meta_opt_.op_id_) << 32) | (opt.ss_tablet_sub_meta_opt_.data_seq_ & 0xFFFFFFFF));
-      object_id.set_ss_fourth_id(opt.ss_tablet_sub_meta_opt_.is_inner_tablet_,
-          opt.ss_tablet_sub_meta_opt_.ls_id_, opt.ss_tablet_sub_meta_opt_.reorganization_scn_);
-      break;
-    }
-    case ObStorageObjectType::EXTERNAL_TABLE_FILE: {
-      set_ss_object_first_id_(obj_type, default_incarnation_id, default_cg_id, object_id);
-      object_id.set_second_id(opt.ss_external_table_file_opt_.server_seq_id_);
-      object_id.set_third_id(opt.ss_external_table_file_opt_.offset_idx_);
-      break;
-    }
-    case ObStorageObjectType::MACRO_CACHE_CKPT_DATA:
-    case ObStorageObjectType::MACRO_CACHE_CKPT_META: {
-      set_ss_object_first_id_(obj_type, default_incarnation_id, default_cg_id, object_id);
-      object_id.set_second_id(opt.ss_macro_cache_ckpt_opt_.version_id_);
-      if (ObStorageObjectType::MACRO_CACHE_CKPT_DATA == opt.object_type_) {
-        object_id.set_third_id(opt.ss_macro_cache_ckpt_opt_.seq_id_);
-      }
-      break;
-    }
-    #ifdef OB_BUILD_CLOSE_MODULES
-    #define REGISTER_OPT_GET_OBJECT_ID
-      #include "storage/incremental/atomic_protocol/compile_utility/ob_atomic_file_register_helper.h"
-    #undef REGISTER_OPT_GET_OBJECT_ID
-    #endif
-    default: {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("unexpected share storage object type", K(ret), K(opt));
-      break;
-    }
+  if (OB_FAIL(SSObjUtil::get_object_id(opt, object_id))) {
+    LOG_WARN("failed to get object id", K(ret), K(opt), K(opt.object_type_));
   }
   return ret;
 }
