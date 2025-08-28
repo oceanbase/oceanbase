@@ -4224,7 +4224,12 @@ int ObVectorIndexSliceStore::serialize_vector_index(
         LOG_INFO("HgraphIndex finish vsag serialize for tablet", K(tablet_id_), K(ctx_.get_vals().count()), K(type));
       }
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(adp->renew_single_snap_index())) {
+        omt::ObTenantConfigGuard tenant_config(TENANT_CONF(adp->get_tenant_id()));
+        if (!tenant_config.is_valid()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("fail get tenant_config", KR(ret), K(adp->get_tenant_id()));
+        } else if (OB_FAIL(adp->renew_single_snap_index(type == VIAT_HNSW_BQ
+            || (tenant_config->vector_index_memory_saving_mode && (type == VIAT_HNSW || type == VIAT_HNSW_SQ || type == VIAT_HGRAPH))))) {
           LOG_WARN("fail to renew single snap index", K(ret));
         }
       }
