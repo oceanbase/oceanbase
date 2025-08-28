@@ -223,6 +223,7 @@ ob_enable_batched_multi_statement
 ob_enable_java_env
 ob_enable_java_udf
 ob_enable_python_udf
+ob_enable_utl_http
 ob_encoding_granularity
 ob_event_history_recycle_interval
 ob_java_connector_path

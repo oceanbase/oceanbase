@@ -154,6 +154,7 @@
 #ifdef OB_BUILD_ORACLE_PL
 #include "sql/resolver/ddl/ob_create_udt_resolver.h"
 #include "sql/resolver/ddl/ob_drop_udt_resolver.h"
+#include "sql/resolver/ddl/ob_alter_udt_resolver.h"
 #include "sql/resolver/ddl/ob_audit_resolver.h"
 #include "sql/resolver/ddl/ob_create_wrapped_resolver.h"
 #endif
@@ -969,6 +970,10 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       }
       case T_SP_DROP_TYPE: {
         REGISTER_STMT_RESOLVER(DropUDT);
+        break;
+      }
+      case T_TYPE_ALTER: {
+        REGISTER_STMT_RESOLVER(AlterUDT);
         break;
       }
 #endif

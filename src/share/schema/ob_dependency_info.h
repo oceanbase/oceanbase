@@ -132,7 +132,8 @@ public:
                                              uint64_t dep_obj_id,
                                              int64_t schema_version,
                                              share::schema::ObObjectType dep_obj_type);
-
+  static int remove_duplicated_dep_infos(ObIArray<ObDependencyInfo> &deps,
+                                        ObIArray<ObDependencyInfo> &source_deps);
   static int collect_dep_info(ObIArray<ObDependencyInfo> &deps,
                               ObObjectType dep_obj_type,
                               int64_t ref_obj_id,

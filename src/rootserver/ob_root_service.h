@@ -652,6 +652,8 @@ public:
   int create_udt_with_res(const obrpc::ObCreateUDTArg &arg,
                               obrpc::ObRoutineDDLRes &res);
   int drop_udt(const obrpc::ObDropUDTArg &arg);
+  int alter_udt_with_res(const obrpc::ObAlterUDTArg &arg,
+                         obrpc::ObRoutineDDLRes &res);
   //----End of functions for managing routines----
 
   //----Functions for managing dblinks----

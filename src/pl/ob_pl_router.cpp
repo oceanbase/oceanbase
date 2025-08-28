@@ -210,6 +210,7 @@ int ObPLRouter::simple_resolve(ObPLFunctionAST &func_ast)
   }
   //Parser
   ObStmtNodeTree *parse_tree = NULL;
+  bool is_wrap = false;
   if (OB_SUCC(ret)) {
     ObString body = routine_info_.get_routine_body(); //获取body字符串
     ObPLParser parser(inner_allocator_, session_info_.get_charsets4parser(), session_info_.get_sql_mode());
@@ -218,7 +219,7 @@ int ObPLRouter::simple_resolve(ObPLFunctionAST &func_ast)
     if (OB_FAIL(ObSQLUtils::convert_sql_text_from_schema_for_resolve(
                   inner_allocator_, session_info_.get_dtc_params(), body))) {
       LOG_WARN("fail to get routine body", K(ret));
-    } else if (OB_FAIL(parser.parse_routine_body(body, parse_tree, session_info_.is_for_trigger_package()))) {
+    } else if (OB_FAIL(parser.parse_routine_body(body, parse_tree, session_info_.is_for_trigger_package(), is_wrap))) {
       LOG_WARN("parse routine body failed", K(ret), K(body));
     }
   }

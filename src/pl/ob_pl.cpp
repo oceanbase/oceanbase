@@ -29,6 +29,7 @@
 #include "close_modules/oracle_pl/pl/debug/ob_pl_debugger.h"
 #include "pl/ob_pl_profiler.h"
 #include "pl/ob_pl_call_stack_trace.h"
+#include "pl/ob_pl_code_coverage.h"
 #endif
 #include "pl/pl_cache/ob_pl_cache_mgr.h"
 #include "sql/engine/dml/ob_trigger_handler.h"
@@ -913,7 +914,7 @@ int ObPLContext::implicit_end_trans(
 {
   int ret = OB_SUCCESS;
   DISABLE_SQL_MEMLEAK_GUARD;
-  can_async = can_async && (nullptr == session_info.get_pl_profiler());
+  can_async = can_async && (nullptr == session_info.get_pl_profiler()) && (nullptr == session_info.get_pl_code_coverage());
   bool is_async = false;
   if (session_info.is_in_transaction()) {
     is_async = !is_rollback && ctx.is_end_trans_async() && can_async;
@@ -2183,6 +2184,7 @@ bool ObPL::forbid_anony_parameter(ObSQLSessionInfo &session, bool is_ps_mode, bo
 {
   bool ret = forbid || session.is_pl_debug_on()
                     || session.get_pl_profiler() != nullptr
+                    || session.get_pl_code_coverage() != nullptr
                     || lib::is_mysql_mode();
   if (!is_ps_mode) {
     ret |= !session.get_local_ob_enable_parameter_anonymous_block();
@@ -2812,8 +2814,13 @@ int ObPL::get_pl_function(ObExecContext &ctx,
     pc_ctx.key_.namespace_ = ObLibCacheNameSpace::NS_ANON;
     pc_ctx.key_.db_id_ = database_id;
     pc_ctx.key_.sessid_ = ctx.get_my_session()->is_pl_debug_on() ? ctx.get_my_session()->get_server_sid() : 0;
-    pc_ctx.key_.mode_ = ctx.get_my_session()->get_pl_profiler() != nullptr
-                          ? ObPLObjectKey::ObjectMode::PROFILE : ObPLObjectKey::ObjectMode::NORMAL;
+    pc_ctx.key_.mode_ = static_cast<uint64_t>(ObPLObjectKey::ObjectMode::NORMAL);
+    if (ctx.get_my_session()->get_pl_profiler() != nullptr) {
+      pc_ctx.key_.mode_ = pc_ctx.key_.mode_ | static_cast<uint64_t>(ObPLObjectKey::ObjectMode::PROFILE);
+    }
+    if (ctx.get_my_session()->get_pl_code_coverage() != nullptr) {
+      pc_ctx.key_.mode_ = pc_ctx.key_.mode_ | static_cast<uint64_t>(ObPLObjectKey::ObjectMode::CODE_COVERAGE);
+    }
 
     // use sql as key
     if (OB_SUCC(ret) && OB_ISNULL(routine)) {
@@ -2893,6 +2900,9 @@ int ObPL::get_pl_function(ObExecContext &ctx,
 {
   int ret = OB_SUCCESS;
   ObPLFunction* routine = NULL;
+#ifdef OB_BUILD_ORACLE_PL
+  ObPLCodeCoverage *code_coverage = nullptr;
+#endif
   DISABLE_SQL_MEMLEAK_GUARD;
   OZ (ObPLContext::valid_execute_context(ctx));
   if (OB_SUCC(ret) && !subprogram_path.empty()) {
@@ -2932,7 +2942,11 @@ int ObPL::get_pl_function(ObExecContext &ctx,
 #endif
     CK (OB_NOT_NULL(local_routine));
   } else if (OB_NOT_NULL(routine = static_cast<ObPLFunction*>(cacheobj_guard.get_cache_obj()))) {
-    // do nothing ...
+#ifdef OB_BUILD_ORACLE_PL
+    if (OB_NOT_NULL(code_coverage = ctx.get_my_session()->get_pl_code_coverage())) {
+      OZ (code_coverage->add_vaild_rows_info_recursive(*routine));
+    }
+#endif
   } else { // standalone routine
     static const ObString PLSQL = ObString("PL/SQL");
 
@@ -2948,8 +2962,14 @@ int ObPL::get_pl_function(ObExecContext &ctx,
     pc_ctx.key_.db_id_ = database_id;
     pc_ctx.key_.key_id_ = routine_id;
     pc_ctx.key_.sessid_ = ctx.get_my_session()->is_pl_debug_on() ? ctx.get_my_session()->get_server_sid() : 0;
-    pc_ctx.key_.mode_ =  ctx.get_my_session()->get_pl_profiler() != nullptr
-                           ? ObPLObjectKey::ObjectMode::PROFILE : ObPLObjectKey::ObjectMode::NORMAL;
+    pc_ctx.key_.mode_ = static_cast<uint64_t>(ObPLObjectKey::ObjectMode::NORMAL);
+    if (ctx.get_my_session()->get_pl_profiler() != nullptr) {
+      pc_ctx.key_.mode_ = pc_ctx.key_.mode_ | static_cast<uint64_t>(ObPLObjectKey::ObjectMode::PROFILE);
+    }
+    if (ctx.get_my_session()->get_pl_code_coverage() != nullptr) {
+      pc_ctx.key_.mode_ = pc_ctx.key_.mode_ | static_cast<uint64_t>(ObPLObjectKey::ObjectMode::CODE_COVERAGE);
+    }
+
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(ObPLCacheMgr::get_pl_cache(ctx.get_my_session()->get_plan_cache(), cacheobj_guard, pc_ctx))) {
       LOG_INFO("get pl function from plan cache failed",
@@ -3012,6 +3032,11 @@ int ObPL::get_pl_function(ObExecContext &ctx,
         }
       }
     }
+#ifdef OB_BUILD_ORACLE_PL
+    if (OB_NOT_NULL(code_coverage = ctx.get_my_session()->get_pl_code_coverage())) {
+      OZ (code_coverage->add_vaild_rows_info_recursive(*routine));
+    }
+#endif
   }
   return ret;
 }
@@ -3619,6 +3644,24 @@ int ObPLExecState::final(int ret)
       get_allocator()->free(profiler_time_stack_);
     }
     profiler_time_stack_ = nullptr;
+  }
+  if (!coverage_info_.empty()) {
+    ObPLCodeCoverage *code_coverage = nullptr;
+    if (OB_NOT_NULL(ctx_.exec_ctx_) && OB_NOT_NULL(ctx_.exec_ctx_->get_my_session())
+        && OB_NOT_NULL(code_coverage = ctx_.exec_ctx_->get_my_session()->get_pl_code_coverage())) {
+      int ret = OB_SUCCESS;
+      hash::ObHashSet<std::pair<uint64_t, uint64_t>>::const_iterator iter;
+      for (iter = coverage_info_.begin(); OB_SUCC(ret) && iter != coverage_info_.end(); ++iter) {
+        if (OB_FAIL(code_coverage->set_coverage_info(func_.get_profiler_unit_info().first, iter->first.first, iter->first.second))) {
+          LOG_WARN("[DBMS_PLSQL_CODE_COVERAGE] failed to set coverage info", K(ret), K(lbt()));
+        }
+      }
+      if (is_top_call() && !is_called_from_sql_) {
+        if (OB_FAIL(code_coverage->flush_data())) {
+          LOG_WARN("[DBMS_PLSQL_CODE_COVERAGE] failed to flush pl code coverage data", K(ret), K(lbt()));
+        }
+      }
+    }
   }
 #endif // OB_BUILD_ORACLE_PL
 
@@ -4414,6 +4457,15 @@ int ObPLExecState::init(const ParamStore *params, bool is_anonymous)
       OZ (ObPLContext::notify(ctx_.exec_ctx_->get_my_session()));
     }
   }
+#ifdef OB_BUILD_ORACLE_PL
+  ObPLCodeCoverage *code_coverage = nullptr;
+  if (OB_NOT_NULL(ctx_.exec_ctx_) && OB_NOT_NULL(ctx_.exec_ctx_->get_my_session())
+      && OB_NOT_NULL(code_coverage = ctx_.exec_ctx_->get_my_session()->get_pl_code_coverage())) {
+    if(!coverage_info_.created()) {
+      OZ (coverage_info_.create(32, SET_IGNORE_MEM_VERSION(ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(OB_PL_CODE_COVERAGE)))));
+    }
+  }
+#endif // OB_BUILD_ORACLE_PL
   return ret;
 }
 
@@ -5126,7 +5178,11 @@ ObPLCompileUnit::ObPLCompileUnit(sql::ObLibCacheNameSpace ns,
       has_incomplete_rt_dep_error_(false),
       exec_env_(),
       profiler_unit_info_(std::make_pair(OB_INVALID_ID, INVALID_PROC_TYPE)),
-      stack_size_(OB_INVALID_SIZE)
+#ifdef OB_BUILD_ORACLE_PL
+      vaild_rows_info_(),
+#endif
+      stack_size_(OB_INVALID_SIZE),
+      is_wrap_(false)
 {
 #ifndef USE_MCJIT
   int ret = OB_SUCCESS;
@@ -5135,7 +5191,15 @@ ObPLCompileUnit::ObPLCompileUnit(sql::ObLibCacheNameSpace ns,
   }
 #endif // USE_MCJIT
 }
-
+#ifdef OB_BUILD_ORACLE_PL
+int ObPLCompileUnit::add_vaild_rows_info(ObIArray<CoverageData> & vaild_row_info_array) {
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < vaild_row_info_array.count(); ++i) {
+    OZ (vaild_rows_info_.push_back(CoverageData(vaild_row_info_array.at(i).line_, vaild_row_info_array.at(i).column_,  vaild_row_info_array.at(i).is_coverage_, vaild_row_info_array.at(i).is_not_feasible_)));
+  }
+  return ret;
+}
+#endif
 ObPLFunction::~ObPLFunction()
 {
   int ret = OB_SUCCESS;

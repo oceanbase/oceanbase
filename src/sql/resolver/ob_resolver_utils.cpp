@@ -2550,7 +2550,10 @@ stmt::StmtType ObResolverUtils::get_stmt_type_by_item_type(const ObItemType item
       case T_SP_DROP_TYPE: {
         type = stmt::T_DROP_TYPE;
       }
-      break;
+        break;
+      case T_TYPE_ALTER:
+        type = stmt::T_ALTER_TYPE;
+        break;
       // stored procedure
       case T_SP_CREATE:
       case T_SF_CREATE:

@@ -1652,6 +1652,7 @@ bool ObSQLUtils::cause_implicit_commit(ParseResult &result)
         || T_SP_CREATE_TYPE == type
         || T_SP_DROP_TYPE == type
         || T_SP_CREATE_TYPE_BODY == type
+        || T_TYPE_ALTER == type
         || T_PACKAGE_CREATE == type
         || T_PACKAGE_CREATE_BODY == type
         || T_PACKAGE_ALTER == type

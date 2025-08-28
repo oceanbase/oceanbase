@@ -371,6 +371,8 @@ public:
   void reset();
   int64_t get_convert_size() const;
   int add_type_attr(const ObUDTTypeAttr& attr);
+  int drop_type_attr(int64_t idx);
+
   int64_t get_attrs_count() const { return type_attrs_.count(); }
   bool is_collection() const { return UDT_TYPE_COLLECTION == typecode_; }
   bool is_varray() const {
@@ -479,6 +481,8 @@ public:
   {
     return UDT_FLAG_NONEDITIONABLE == (properties_ & UDT_FLAG_NONEDITIONABLE);
   }
+
+  int deep_copy_object_type_info(const ObUDTTypeInfo &other);
 
   int add_object_type_info(const ObUDTObjectType &udt_object);
   OB_INLINE const common::ObIArray<ObUDTObjectType*>& get_object_type_infos() const 

@@ -68,6 +68,8 @@
 #include "pl/sys_package/ob_dbms_profiler.h"
 #include "pl/sys_package/ob_utl_tcp.h"
 #include "pl/sys_package/ob_utl_smtp.h"
+#include "pl/sys_package/ob_utl_http.h"
+#include "pl/sys_package/ob_dbms_plsql_code_coverage.h"
 #endif
 #include "pl/sys_package/ob_dbms_xplan.h"
 #include "pl/sys_package/ob_pl_dbms_resource_manager.h"
@@ -591,6 +593,21 @@
   INTERFACE_DEF(INTERFACE_UTL_FILE_FIS_OPEN, "UTL_FILE_FIS_OPEN", (ObPLUtlFile::fis_open))
   //end of utl_file
 
+  //start of utl_http
+  INTERFACE_DEF(INTERFACE_UTL_HTTP_BEGIN_REQUEST, "UTL_HTTP_BEGIN_REQUEST", (ObPLUtlHttp::begin_request))
+  INTERFACE_DEF(INTERFACE_UTL_HTTP_END_REQUEST, "UTL_HTTP_END_REQUEST", (ObPLUtlHttp::end_request))
+  INTERFACE_DEF(INTERFACE_UTL_HTTP_GET_RESPONSE, "UTL_HTTP_GET_RESPONSE", (ObPLUtlHttp::get_response))
+  INTERFACE_DEF(INTERFACE_UTL_HTTP_END_RESPONSE, "UTL_HTTP_END_RESPONSE", (ObPLUtlHttp::end_response))
+  INTERFACE_DEF(INTERFACE_UTL_HTTP_READ_LINE, "UTL_HTTP_READ_LINE", (ObPLUtlHttp::read_line))
+  INTERFACE_DEF(INTERFACE_UTL_HTTP_READ_RAW, "UTL_HTTP_READ_RAW", (ObPLUtlHttp::read_raw))
+  INTERFACE_DEF(INTERFACE_UTL_HTTP_READ_TEXT, "UTL_HTTP_READ_TEXT", (ObPLUtlHttp::read_text))
+  INTERFACE_DEF(INTERFACE_UTL_HTTP_WRITE_LINE, "UTL_HTTP_WRITE_LINE", (ObPLUtlHttp::write_line))
+  INTERFACE_DEF(INTERFACE_UTL_HTTP_WRITE_RAW, "UTL_HTTP_WRITE_RAW", (ObPLUtlHttp::write_raw))
+  INTERFACE_DEF(INTERFACE_UTL_HTTP_WRITE_TEXT, "UTL_HTTP_WRITE_TEXT", (ObPLUtlHttp::write_text))
+  INTERFACE_DEF(INTERFACE_UTL_HTTP_SET_TRANSFER_TIMEOUT, "UTL_HTTP_SET_TRANSFER_TIMEOUT", (ObPLUtlHttp::set_transfer_timeout))
+  INTERFACE_DEF(INTERFACE_UTL_HTTP_GET_TRANSFER_TIMEOUT, "UTL_HTTP_GET_TRANSFER_TIMEOUT", (ObPLUtlHttp::get_transfer_timeout))
+  //end of utl_http
+
   //start of utl_tcp
   INTERFACE_DEF(INTERFACE_UTL_TCP_OPEN_CONNECTION, "UTL_TCP_OPEN_CONNECTION", (ObPLUtlTcp::open_connection))
   INTERFACE_DEF(INTERFACE_UTL_TCP_CLOSE_CONNECTION, "UTL_TCP_CLOSE_CONNECTION", (ObPLUtlTcp::close_connection))
@@ -846,6 +863,13 @@
   INTERFACE_DEF(INTERFACE_DBMS_PROFILER_INIT_OBJECTS, "DBMS_PROFILER_INIT_OBJECTS", (ObDBMSProfiler::init_objects))
   INTERFACE_DEF(INTERFACE_DBMS_PROFILER_DROP_OBJECTS, "DBMS_PROFILER_DROP_OBJECTS", (ObDBMSProfiler::drop_objects))
   // end of dbms_profiler
+#endif // OB_BUILD_ORACLE_PL
+
+#ifdef OB_BUILD_ORACLE_PL
+  // start of dbms_plsql_code_coverage
+  INTERFACE_DEF(INTERFACE_DBMS_PLSQL_CODE_COVERAGE_START, "DBMS_PLSQL_CODE_COVERAGE_START_CODE_COVERAGE", (ObDBMSPlsqlCodeCoverage::start_plsql_code_coverage))
+  INTERFACE_DEF(INTERFACE_DBMS_PLSQL_CODE_COVERAGE_STOP, "DBMS_PLSQL_CODE_COVERAGE_STOP_CODE_COVERAGE", (ObDBMSPlsqlCodeCoverage::stop_plsql_code_coverage))
+  // end of dbms_pl_sqlcode_coverage
 #endif // OB_BUILD_ORACLE_PL
 
     // start of dbms_vector_mysql

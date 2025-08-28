@@ -7386,6 +7386,15 @@ int ObRootService::drop_udt(const ObDropUDTArg &arg)
   return ret;
 }
 
+int ObRootService::alter_udt_with_res(const obrpc::ObAlterUDTArg &arg,
+                                      obrpc::ObRoutineDDLRes &res)
+{
+  int ret = OB_SUCCESS;
+  OV (inited_, OB_NOT_INIT);
+  OZ (ObPLDDLService::alter_udt(arg, &res, ddl_service_));
+  return ret;
+}
+
 //----Functions for managing dblinks----
 
 int ObRootService::create_dblink(const obrpc::ObCreateDbLinkArg &arg)

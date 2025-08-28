@@ -72,6 +72,23 @@ public:
                common::ObMySQLTransaction &trans,
                share::schema::ObSchemaGetterGuard &schema_guard,
                const common::ObString *ddl_stmt_str/*=NULL*/);
+
+  int alter_udt_compile(share::schema::ObUDTTypeInfo &udt_info,
+                        const share::schema::ObUDTTypeInfo *old_udt_info,
+                        int16_t compile_unit,
+                        common::ObMySQLTransaction &trans,
+                        share::schema::ObErrorInfo &error_info,
+                        common::ObIArray<share::schema::ObDependencyInfo> &dep_infos,
+                        const common::ObString *ddl_stmt_str/*=NULL*/);
+
+  int alter_udt_alter(share::schema::ObUDTTypeInfo &udt_info,
+                      const share::schema::ObUDTTypeInfo *old_udt_info,
+                      common::ObMySQLTransaction &trans,
+                      share::schema::ObErrorInfo &error_info,
+                      common::ObIArray<share::schema::ObRoutineInfo> &public_routine_infos,
+                      share::schema::ObSchemaGetterGuard &schema_guard,
+                      common::ObIArray<share::schema::ObDependencyInfo> &dep_infos,
+                      const common::ObString *ddl_stmt_str/*=NULL*/);
   //----End of functions for managing udt----
 
   //----Functions for managing package----

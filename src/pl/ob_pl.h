@@ -37,6 +37,7 @@
 #include "pl/pl_cache/ob_pl_cache_object.h"
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/ob_pl_call_stack_trace.h"
+#include "pl/ob_pl_code_coverage.h"
 #endif
 #include "pl/ob_pl_allocator.h"
 
@@ -71,7 +72,9 @@ class ObPLAllocator1;
 class ObPLProfilerTimeStack;
 
 class ObPLExecuteArg;
-
+#ifdef OB_BUILD_ORACLE_PL
+struct CoverageData;
+#endif
 enum ObPLObjectType
 {
   INVALID_OBJECT_TYPE = -1,
@@ -278,7 +281,12 @@ public:
 
   OB_INLINE int32_t get_stack_size() const { return stack_size_; }
   OB_INLINE void set_stack_size(int64_t stack_size) { stack_size_ = stack_size; }
-
+  OB_INLINE bool get_is_wrap() const { return is_wrap_; }
+  OB_INLINE void set_is_wrap(bool is_wrap) { is_wrap_ = is_wrap; }
+#ifdef OB_BUILD_ORACLE_PL
+  OB_INLINE const common::ObArray<CoverageData>& get_vaild_rows_info() const { return vaild_rows_info_; }
+  int add_vaild_rows_info(ObIArray<CoverageData> &vaild_row_info_array);
+#endif
   TO_STRING_KV(K_(routine_table),
                K_(can_cached),
                K_(tenant_schema_version),
@@ -301,9 +309,11 @@ protected:
   sql::ObExecEnv exec_env_;
 
   std::pair<uint64_t, ObProcType> profiler_unit_info_;
-
+#ifdef OB_BUILD_ORACLE_PL
+  common::ObArray<CoverageData> vaild_rows_info_;
+#endif
   int32_t stack_size_;
-
+  bool is_wrap_;
   DISALLOW_COPY_AND_ASSIGN(ObPLCompileUnit);
 };
 
@@ -782,7 +792,8 @@ public:
     pure_sub_plsql_exec_time_(0),
     profiler_time_stack_(nullptr),
     need_free_(),
-    param_converted_()
+    param_converted_(),
+    coverage_info_()
   { }
   virtual ~ObPLExecState();
 
@@ -855,6 +866,7 @@ public:
   inline void set_profiler_time_stack(ObPLProfilerTimeStack *time_stack) { profiler_time_stack_ = time_stack;}
 
   inline ObPLProfilerTimeStack *get_profiler_time_stack() { return profiler_time_stack_; }
+  inline hash::ObHashSet<std::pair<uint64_t, uint64_t>>& get_coverage_info() { return coverage_info_; }
 
   bool need_free_arg(int64_t i)
   {
@@ -898,6 +910,7 @@ private:
   ObPLProfilerTimeStack *profiler_time_stack_;
   common::ObSEArray<bool,8> need_free_;
   common::ObSEArray<bool,8> param_converted_;
+  hash::ObHashSet<std::pair<uint64_t, uint64_t>> coverage_info_;
 };
 
 class ObPLCallStackTrace;

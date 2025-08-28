@@ -83,7 +83,7 @@ public:
   int compile(const uint64_t id, ObPLFunction &func); //Procedure/Function接口
 
   int analyze_package(const ObString &source, const ObPLBlockNS *parent_ns,
-                      ObPLPackageAST &package_ast, bool is_for_trigger);
+                      ObPLPackageAST &package_ast, bool is_for_trigger, bool &is_wrap);
   int generate_package(const ObString &exec_env, ObPLPackageAST &package_ast, ObPLPackage &package, bool &is_from_disk);
   int compile_package(const share::schema::ObPackageInfo &package_info, const ObPLBlockNS *parent_ns,
                       ObPLPackageAST &package_ast, ObPLPackage &package); //package

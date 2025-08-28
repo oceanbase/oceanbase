@@ -190,6 +190,14 @@ ObExecContext::~ObExecContext()
       LOG_WARN("[DBMS_PROFILER] failed to flush pl profiler data", K(ret), K(lbt()));
     }
   }
+  if (OB_NOT_NULL(my_session_)
+        && OB_NOT_NULL(my_session_->get_pl_code_coverage())
+        && OB_ISNULL(my_session_->get_pl_context())) {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(my_session_->get_pl_code_coverage()->flush_data())) {
+      LOG_WARN("[DBMS_PLSQL_CODE_COVERAGE] failed to flush pl code coverage data", K(ret), K(lbt()));
+    }
+  }
 #endif // OB_BUILD_ORACLE_PL
   if (OB_NOT_NULL(group_pwj_map_)) {
     group_pwj_map_->destroy();

@@ -8206,6 +8206,44 @@ public:
   bool exist_valid_udt_;
 };
 
+struct ObAlterUDTArg : public ObCreateUDTArg
+{
+  OB_UNIS_VERSION(1);
+  public:
+  enum TypeAlterOptions
+  {
+    TYPE_ALTER_COMPILE = 0,
+    TYPE_ALTER_ATTRRIBUTE_DEFINITION = 1
+  };
+  enum TypeAlterCompileUnit {
+    TYPE_UNIT_SPEC = 0,
+    TYPE_UNIT_BODY = 1,
+    TYPE_UNIT_BOTH = 2 //both SPEC and BODY
+  };
+  ObAlterUDTArg()
+    : type_code_(),
+      alter_option_(-1),
+      compile_unit_(-1),
+      cascade_(false) {}
+  virtual ~ObAlterUDTArg() {}
+  int assign(const ObAlterUDTArg &other);
+  TO_STRING_KV(K_(udt_info),
+               K_(db_name),
+               K_(is_or_replace),
+               K_(error_info),
+               K_(public_routine_infos),
+               K_(dependency_infos),
+               K_(is_force),
+               K_(exist_valid_udt),
+               K_(type_code),
+               K_(alter_option),
+               K_(cascade));
+  ObUDTTypeCode type_code_;
+  int16_t alter_option_;
+  int16_t compile_unit_;
+  bool cascade_;
+};
+
 struct ObDropUDTArg : public ObDDLArg
 {
   OB_UNIS_VERSION(1);

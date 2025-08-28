@@ -36,6 +36,7 @@ namespace sql
 class ObExecContext;
 class ObCreateUDTStmt;
 class ObDropUDTStmt;
+class ObAlterUDTStmt;
 
 class ObCreateUDTExecutor
 {
@@ -49,6 +50,16 @@ private:
 
 //参考alter system定义
 DEF_SIMPLE_EXECUTOR(ObDropUDT);
+
+class ObAlterUDTExecutor
+{
+public:
+  ObAlterUDTExecutor() {}
+  virtual ~ObAlterUDTExecutor() {}
+  int execute(ObExecContext &ctx, ObAlterUDTStmt &stmt);
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObAlterUDTExecutor);
+};
 
 }//namespace sql
 }//namespace oceanbase

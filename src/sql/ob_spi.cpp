@@ -31,6 +31,7 @@
 #include "pl/ob_pl_profiler.h"
 #include "pl/ob_pl_call_stack_trace.h"
 #include "pl/sys_package/ob_json_pl_utils.h"
+#include "pl/ob_pl_code_coverage.h"
 #endif
 
 namespace oceanbase
@@ -9806,7 +9807,7 @@ int ObSPIService::spi_opaque_assign_null(int64_t opaque_ptr)
   return ret;
 }
 
-int ObSPIService::spi_pl_profiler_before_record(pl::ObPLExecCtx *ctx, int64_t line, int64_t level)
+int ObSPIService::spi_pl_profiler_before_record(pl::ObPLExecCtx *ctx, int64_t line, int64_t level, int64_t column)
 {
   int ret = OB_SUCCESS;
 
@@ -9815,7 +9816,7 @@ int ObSPIService::spi_pl_profiler_before_record(pl::ObPLExecCtx *ctx, int64_t li
   ObSQLSessionInfo *session = nullptr;
   ObPLExecState *curr_state = nullptr;
   ObPLProfiler *profiler = nullptr;
-
+  ObPLCodeCoverage *code_coverage = nullptr;
   CK (OB_NOT_NULL(ctx));
   CK (OB_NOT_NULL(ctx->exec_ctx_));
   CK (OB_NOT_NULL(session = ctx->exec_ctx_->get_my_session()));
@@ -9825,7 +9826,7 @@ int ObSPIService::spi_pl_profiler_before_record(pl::ObPLExecCtx *ctx, int64_t li
 
   CK (OB_LIKELY(line > 0));
   CK (OB_LIKELY(level >= 0));
-
+  CK (OB_LIKELY(column >= 0));
   if (OB_SUCC(ret) && OB_NOT_NULL(profiler = session->get_pl_profiler())) {
     ObPLProfilerTimeStack *time_stack = nullptr;
 
@@ -9865,7 +9866,11 @@ int ObSPIService::spi_pl_profiler_before_record(pl::ObPLExecCtx *ctx, int64_t li
                K(ret), KPC(profiler), K(line), K(level));
     }
   }
-
+  if (OB_SUCC(ret) && OB_NOT_NULL(code_coverage = session->get_pl_code_coverage())
+     && curr_state->get_function().get_tenant_id()!= OB_SYS_TENANT_ID
+     && curr_state->get_function().get_proc_type() != STANDALONE_ANONYMOUS) {
+    curr_state->get_coverage_info().set_refactored(std::make_pair(line, column));
+  }
 #endif // OB_BUILD_ORACLE_PL
 
   return ret;

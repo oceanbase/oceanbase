@@ -6877,6 +6877,26 @@ OB_SERIALIZE_MEMBER((ObDropUDTArg, ObDDLArg),
                     force_or_validate_,
                     exist_valid_udt_);
 
+int ObAlterUDTArg::assign(const ObAlterUDTArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObCreateUDTArg::assign(other))) {
+    LOG_WARN("failed to assign", K(ret));
+  } else {
+    type_code_ = other.type_code_;
+    alter_option_ = other.alter_option_;
+    compile_unit_ = other.compile_unit_;
+    cascade_ = other.cascade_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER((ObAlterUDTArg, ObCreateUDTArg),
+                    type_code_,
+                    alter_option_,
+                    compile_unit_,
+                    cascade_);
+
 OB_SERIALIZE_MEMBER(ObCancelTaskArg, task_id_);
 
 int ObReportSingleReplicaArg::assign(const ObReportSingleReplicaArg &other)

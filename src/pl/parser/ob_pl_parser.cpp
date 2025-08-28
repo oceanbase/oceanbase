@@ -260,6 +260,7 @@ int ObPLParser::parse_procedure(const ObString &stmt_block,
 int ObPLParser::parse_routine_body(const ObString &routine_body,
                                    ObStmtNodeTree *&routine_stmt,
                                    bool is_for_trigger,
+                                   bool &is_wrap,
                                    bool need_unwrap)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_pl_parse);
@@ -313,10 +314,11 @@ int ObPLParser::parse_routine_body(const ObString &routine_body,
         ObArenaAllocator arena_allocator("PLWrap", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
         if (OB_FAIL(decode_cipher_text(arena_allocator, routine_stmt, plain_text))) {
           LOG_WARN("failed to decode wrapped cipher text", K(ret));
-        } else if (OB_FAIL(parse_routine_body(plain_text, routine_stmt, is_for_trigger, false))) {
+        } else if (OB_FAIL(parse_routine_body(plain_text, routine_stmt, is_for_trigger, is_wrap, false))) {
           LOG_WARN("failed to parse unwrapped procedure or function", K(ret));
         }
       }
+      is_wrap = true;
 #endif
     }
   }
@@ -328,6 +330,7 @@ int ObPLParser::parse_package(const ObString &package,
                               const ObDataTypeCastParams &dtc_params,
                               share::schema::ObSchemaGetterGuard *schema_guard,
                               bool is_for_trigger,
+                              bool & is_wrap,
                               const ObTriggerInfo *trg_info,
                               bool need_unwrap)
 {
@@ -369,11 +372,13 @@ int ObPLParser::parse_package(const ObString &package,
                                        dtc_params,
                                        schema_guard,
                                        is_for_trigger,
+                                       is_wrap,
                                        trg_info,
                                        false))) {
         LOG_WARN("failed to parse unwrapped type or package", K(ret));
       }
     }
+    is_wrap = true;
 #endif
   } else if (is_for_trigger && OB_NOT_NULL(trg_info) && lib::is_oracle_mode()) {
     OZ (reconstruct_trigger_package(package_stmt, trg_info, dtc_params, schema_guard));

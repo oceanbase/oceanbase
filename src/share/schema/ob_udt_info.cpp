@@ -265,6 +265,25 @@ ObUDTTypeInfo& ObUDTTypeInfo::operator=(const ObUDTTypeInfo &src_schema)
   return *this;
 }
 
+int ObUDTTypeInfo::deep_copy_object_type_info(const ObUDTTypeInfo &other)
+{
+  int ret = OB_SUCCESS;
+  object_type_infos_.reset();
+  if (OB_FAIL(object_type_infos_.reserve(other.object_type_infos_.count()))) {
+    LOG_WARN("failed to reserve memory for object type infos", K(ret), K(other));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < other.object_type_infos_.count(); ++i) {
+      if (OB_ISNULL(other.object_type_infos_.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("object type info is null", K(ret));
+      } else if (OB_FAIL(add_object_type_info(*(other.object_type_infos_.at(i))))) {
+        LOG_WARN("failed to add object type info", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObUDTTypeInfo::assign(const ObUDTTypeInfo &other)
 {
   int ret = OB_SUCCESS;
@@ -356,6 +375,19 @@ int ObUDTTypeInfo::add_type_attr(const ObUDTTypeAttr& type_attr)
     } else {
       attributes_++;
     }
+  }
+  return ret;
+}
+
+int ObUDTTypeInfo::drop_type_attr(int64_t idx)
+{
+  int ret = OB_SUCCESS;
+  CK (type_attrs_.count() > 0);
+  CK (idx < type_attrs_.count());
+  OZ (type_attrs_.remove(idx));
+  OX (attributes_--);
+  for (int64_t i = idx; OB_SUCC(ret) && i < type_attrs_.count(); ++i) { //set attribute position after idx
+    OX (type_attrs_.at(i)->set_attribute(i + 1));
   }
   return ret;
 }

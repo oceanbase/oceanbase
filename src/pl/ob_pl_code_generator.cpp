@@ -18,7 +18,7 @@
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/code_generator/ob_expr_generator_impl.h"
 #include "parser/parse_stmt_item_type.h"
-
+#include "sql/engine/dml/ob_trigger_handler.h"
 namespace oceanbase
 {
 using namespace common;
@@ -4752,6 +4752,7 @@ int ObPLCodeGenerator::init_spi_service()
     OZ (arg_types.push_back(pl_exec_context_pointer_type));  // 函数第一个参数必须是基础环境信息隐藏参数
     OZ (arg_types.push_back(int64_type));                    // line
     OZ (arg_types.push_back(int64_type));                    // level
+    OZ (arg_types.push_back(int64_type));                    // column
     OZ (ObLLVMFunctionType::get(int32_type, arg_types, ft));
     OZ (helper_.create_function(ObString("spi_pl_profiler_before_record"), ft, spi_service_.spi_pl_profiler_before_record_));
   }
@@ -8533,6 +8534,25 @@ int ObPLCodeGenerator::set_profiler_unit_info_recursive(const ObPLCompileUnit &u
   return ret;
 }
 
+int ObPLCodeGenerator::reset_code_coverage_mode(const ObPLFunction &pl_func)
+{
+  int ret = OB_SUCCESS;
+
+ if (TriggerHandle::is_trigger_body_routine(pl_func.get_package_id(), pl_func.get_routine_id(), pl_func.get_proc_type())) {
+   if (pl_func.get_routine_id() == 1) {
+     code_coverage_mode_ = false;
+   } else if (PL_BLOCK == ast_.get_body()->get_type() && 1 == ast_.get_body()->get_child_size() &&
+    PL_BLOCK == ast_.get_body()->get_stmts().at(0)->get_type() && 1 == ast_.get_body()->get_stmts().at(0)->get_child_size() &&
+    PL_NULL == static_cast<ObPLStmtBlock *>(ast_.get_body()->get_stmts().at(0))->get_stmts().at(0)->get_type()) {
+    code_coverage_mode_ =false;
+   }
+ }
+ if(pl_func.get_is_wrap()) {
+   code_coverage_mode_ =false;
+ }
+  return ret;
+}
+
 int ObPLCodeGenerator::generate_obj_access_expr()
 {
   int ret = OB_SUCCESS;
@@ -9138,8 +9158,13 @@ int ObPLCodeGenerator::generate(ObPLFunction &pl_func)
 {
   int ret = OB_SUCCESS;
   ObPLFunctionAST &ast = static_cast<ObPLFunctionAST&>(ast_);
+
+  code_coverage_mode_ = code_coverage_mode_ && (pl_func.get_tenant_id() != OB_SYS_TENANT_ID)
+                        && (pl_func.get_proc_type() != STANDALONE_ANONYMOUS);
+  OZ (reset_code_coverage_mode(pl_func));
   if (debug_mode_
       || profile_mode_
+      || code_coverage_mode_
       || !ast.get_is_all_sql_stmt()
       || !ast_.get_obj_access_exprs().empty()) {
     OZ (generate_normal(pl_func));
@@ -9264,11 +9289,11 @@ int ObPLCodeGenerator::generate_normal(ObPLFunction &pl_func)
       LOG_WARN("failed to prepare subprogram", K(ret));
     } else if (OB_FAIL(SMART_CALL(set_profiler_unit_info_recursive(pl_func)))) {
       LOG_WARN("failed to set profiler unit id recursively", K(ret), K(pl_func.get_routine_table()));
-    } else if (OB_FAIL(generate_spi_pl_profiler_before_record(*get_ast().get_body()))) {
+    } else if (!ObTriggerInfo::is_trigger_package_id(pl_func.get_package_id()) && OB_FAIL(generate_spi_pl_profiler_before_record(*get_ast().get_body()))) {
       LOG_WARN("failed to generate spi profiler before record call", K(ret), K(*get_ast().get_body()));
     } else if (OB_FAIL(SMART_CALL(visitor.generate(*get_ast().get_body())))) {
       LOG_WARN("failed to generate a pl body", K(ret));
-    } else if (OB_FAIL(generate_spi_pl_profiler_after_record(*get_ast().get_body()))) {
+    } else if (!ObTriggerInfo::is_trigger_package_id(pl_func.get_package_id()) && OB_FAIL(generate_spi_pl_profiler_after_record(*get_ast().get_body()))) {
       LOG_WARN("failed to generate spi profiler after record call", K(ret), K(*get_ast().get_body()));
     } else if (OB_FAIL(generate_dispatch_dest())) {
       LOG_WARN("failed to generate continue handler dispatch dest", K(ret));
@@ -9412,6 +9437,9 @@ int ObPLCodeGenerator::generate_normal(ObPLFunction &pl_func)
       pl_func.set_has_parallel_affect_factor(get_ast().has_parallel_affect_factor());
       pl_func.set_has_incomplete_rt_dep_error(get_ast().has_incomplete_rt_dep_error());
       pl_func.set_stack_size(stack_size);
+#ifdef OB_BUILD_ORACLE_PL
+      OZ (pl_func.add_vaild_rows_info(vaild_row_info_array_));
+#endif
     }
   }
   if (debug_mode_) {
@@ -10495,14 +10523,14 @@ int ObPLCodeGenerator::generate_spi_pl_profiler_before_record(const ObPLStmt &s)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_NOT_NULL(get_current().get_v()) && profile_mode_) {
+  if (OB_NOT_NULL(get_current().get_v()) && (profile_mode_ || code_coverage_mode_)) {
     ObSEArray<ObLLVMValue, 4> args;
     ObLLVMValue ret_err;
     ObLLVMValue value;
 
     int64_t line = s.get_line() + 1;
     int64_t level = s.get_level();
-
+    int64_t column = s.get_col();
     if (OB_FAIL(args.push_back(get_vars().at(CTX_IDX)))) {
       LOG_WARN("failed to push back CTX_IDX", K(ret));
     } else if (OB_FAIL(get_helper().get_int64(line, value))) {
@@ -10513,6 +10541,10 @@ int ObPLCodeGenerator::generate_spi_pl_profiler_before_record(const ObPLStmt &s)
       LOG_WARN("failed to get stmt level value", K(ret), K(level));
     } else if (OB_FAIL(args.push_back(value))) {
       LOG_WARN("failed to push back stmt level", K(ret), K(level));
+    } else if (OB_FAIL(get_helper().get_int64(column, value))) {
+      LOG_WARN("failed to get vadil rows info number value", K(ret), K(level));
+    } else if (OB_FAIL(args.push_back(value))) {
+      LOG_WARN("failed to push back block", K(ret), K(level));
     } else if (OB_FAIL(get_helper().create_call(ObString("spi_pl_profiler_before_record"),
                                                 get_spi_service().spi_pl_profiler_before_record_,
                                                 args,
@@ -10524,7 +10556,13 @@ int ObPLCodeGenerator::generate_spi_pl_profiler_before_record(const ObPLStmt &s)
       LOG_WARN("failed to check spi_pl_profiler_before_record success", K(ret), K(line), K(level));
     }
   }
-
+#ifdef OB_BUILD_ORACLE_PL
+  if (OB_SUCC(ret) && OB_NOT_NULL(get_current().get_v()) && code_coverage_mode_) {
+    if (OB_FAIL(vaild_row_info_array_.push_back(CoverageData(s.get_line() + 1, s.get_col(), false, false)))) {
+      LOG_WARN("failed to push back vaild row info", K(ret), K(s.get_line() + 1), K(s.get_col()));
+    }
+  }
+#endif
   return ret;
 }
 

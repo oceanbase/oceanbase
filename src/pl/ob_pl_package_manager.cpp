@@ -741,7 +741,7 @@ int ObPLPackageManager::get_package_expr(const ObPLResolveCtx &resolve_ctx,
   int ret = OB_SUCCESS;
   const ObPackageInfo *package_spec_info = NULL;
   const ObPackageInfo *package_body_info = NULL;
-
+  bool is_wrap = false;
   CK (package_id != OB_INVALID_ID);
   CK (expr_idx != OB_INVALID_ID);
   OZ (get_package_schema_info(
@@ -791,7 +791,7 @@ if (OB_SUCC(ret)) {                                                             
     ObPLCompilerEnvGuard guard(                                                               \
       *package_info, resolve_ctx.session_info_, resolve_ctx.schema_guard_, package_ast, ret); \
     OZ (compiler.analyze_package(source, parent_ns,                                           \
-                                 package_ast, package_info->is_for_trigger()));               \
+                                 package_ast, package_info->is_for_trigger(), is_wrap));               \
   }                                                                                           \
   if (OB_SUCC(ret) && package_id == package_info->get_package_id()) {                         \
     OV (expr_idx >= 0 && package_ast.get_exprs().count() > expr_idx,                          \
@@ -940,6 +940,8 @@ int ObPLPackageManager::get_package_routine(const ObPLResolveCtx &ctx,
   routine = NULL;
   bool is_overflow = false;
   ObPLPakcageUdfKey find_routine_key;
+  ObSQLSessionInfo *session = nullptr;
+  ObPLCodeCoverage *code_coverage = nullptr;
   if (OB_FAIL(check_stack_overflow(is_overflow))) {
     LOG_WARN("failed to check stack overflow", K(ret));
   } else if (is_overflow) {
@@ -957,7 +959,7 @@ int ObPLPackageManager::get_package_routine(const ObPLResolveCtx &ctx,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("routine is null", K(ret), K(find_routine_key));
   }
-
+  CK (OB_NOT_NULL(session = exec_ctx.get_my_session()));
   if (OB_SUCC(ret) && OB_ISNULL(routine)) {
     ObPLPackage *package_spec = NULL;
     ObPLPackage *package_body = NULL;
@@ -970,6 +972,18 @@ int ObPLPackageManager::get_package_routine(const ObPLResolveCtx &ctx,
                      package_spec->get_name().length(), package_spec->get_name().ptr());
     }
     OZ (package_body->get_routine(routine_idx, routine));
+#ifdef OB_BUILD_ORACLE_PL
+    if (OB_SUCC(ret) && OB_NOT_NULL(code_coverage = session->get_pl_code_coverage())) {
+      OZ(code_coverage->add_vaild_rows_info_recursive(*package_body));
+      // ObPLFunction * tmp_routine = NULL;
+      // for(int i = 0; i < package_body->get_routine_table().count(); i++) {
+      //   OZ (package_body->get_routine(i, tmp_routine));
+      //   if (tmp_routine != NULL) {
+      //     OZ(code_coverage->add_vaild_rows_info_recursive(*tmp_routine));
+      //   }
+      // }
+    }
+#endif
     if (OB_SUCC(ret) && OB_ISNULL(routine)) {
       ret = OB_ERR_SP_DOES_NOT_EXIST;
       LOG_WARN("can not found package routine in package body", K(ret), K(routine_idx), K(routine));
@@ -977,7 +991,7 @@ int ObPLPackageManager::get_package_routine(const ObPLResolveCtx &ctx,
       ObPLPackageState *dummy_state = NULL;
       OZ (ctx.package_guard_.put_package_udf(find_routine_key, routine));
       if (OB_SUCC(ret) && OB_NOT_NULL(package_body->get_init_routine())) {
-        // call一个pacakge 函数的时候，去执行package的init 函数
+        // call一个package 函数的时候，去执行package的init 函数
         OZ (get_package_state(ctx, exec_ctx, package_id, dummy_state));
       }
     }
@@ -1136,11 +1150,17 @@ int ObPLPackageManager::update_special_package_status(const ObPLResolveCtx &reso
 
   if (OB_FAIL(ret)) {
     // do nothing
-  } else if (get_tenant_id_by_object_id(package_id) == OB_SYS_TENANT_ID &&
-               package_spec->get_name().compare_equal("DBMS_PROFILER")) {
+  } else if (get_tenant_id_by_object_id(package_id) == OB_SYS_TENANT_ID) {
+    if (0 == package_spec->get_name().compare("DBMS_PROFILER")) {
 #ifdef OB_BUILD_ORACLE_PL
     OZ (ObDBMSProfiler::notify_package_variable_change(resolve_ctx.session_info_, var, old_val, new_val));
 #endif // OB_BUILD_ORACLE_PL
+    }
+    if (0 == package_spec->get_name().compare("DBMS_PLSQL_CODE_COVERAGE")) {
+#ifdef OB_BUILD_ORACLE_PL
+      OZ (ObDBMSPlsqlCodeCoverage::notify_package_variable_change(resolve_ctx.session_info_, var, old_val, new_val));
+#endif // OB_BUILD_ORACLE_PL
+    }
   }
 
   return ret;
@@ -1264,10 +1284,11 @@ int ObPLPackageManager::load_package_body(const ObPLResolveCtx &resolve_ctx,
     OZ (ObSQLUtils::convert_sql_text_from_schema_for_resolve(
           tmp_alloc, resolve_ctx.session_info_.get_dtc_params(), source));
     {
+      bool is_wrap = false;
       ObPLCompilerEnvGuard guard(
         package_spec_info, resolve_ctx.session_info_, resolve_ctx.schema_guard_, package_spec_ast, ret);
       OZ (compiler.analyze_package(source, null_parent_ns,
-                                   package_spec_ast, package_spec_info.is_for_trigger()));
+                                   package_spec_ast, package_spec_info.is_for_trigger(), is_wrap));
     }
 
     OZ (package_body_ast.init(db_schema->get_database_name_str(),
@@ -1772,8 +1793,13 @@ int ObPLPackageManager::add_package_to_plan_cache(const ObPLResolveCtx &resolve_
       pc_ctx.key_.sessid_ =
         (get_tenant_id_by_object_id(package_id) != OB_SYS_TENANT_ID && resolve_ctx.session_info_.is_pl_debug_on())
           ? resolve_ctx.session_info_.get_server_sid() : 0;
-      pc_ctx.key_.mode_ = resolve_ctx.session_info_.get_pl_profiler() != nullptr
-                          ? ObPLObjectKey::ObjectMode::PROFILE : ObPLObjectKey::ObjectMode::NORMAL;
+      pc_ctx.key_.mode_ = static_cast<uint64_t>(ObPLObjectKey::ObjectMode::NORMAL);
+      if (resolve_ctx.session_info_.get_pl_profiler() != nullptr) {
+        pc_ctx.key_.mode_ = pc_ctx.key_.mode_ | static_cast<uint64_t>(ObPLObjectKey::ObjectMode::PROFILE);
+      }
+      if (resolve_ctx.session_info_.get_pl_code_coverage() != nullptr) {
+        pc_ctx.key_.mode_ = pc_ctx.key_.mode_ | static_cast<uint64_t>(ObPLObjectKey::ObjectMode::CODE_COVERAGE);
+      }
       ObString sql;
       if (OB_FAIL(ObPLCacheCtx::assemble_format_routine_name (sql, package))) {
         LOG_WARN("Failed to asseble format routine name!", K(ret));
@@ -1834,8 +1860,13 @@ int ObPLPackageManager::get_package_from_plan_cache(const ObPLResolveCtx &resolv
       pc_ctx.key_.sessid_ =
         (get_tenant_id_by_object_id(package_id) != OB_SYS_TENANT_ID && resolve_ctx.session_info_.is_pl_debug_on())
           ? resolve_ctx.session_info_.get_server_sid() : 0;
-      pc_ctx.key_.mode_ = resolve_ctx.session_info_.get_pl_profiler() != nullptr
-                          ? ObPLObjectKey::ObjectMode::PROFILE : ObPLObjectKey::ObjectMode::NORMAL;
+      pc_ctx.key_.mode_ = static_cast<uint64_t>(ObPLObjectKey::ObjectMode::NORMAL);
+      if (resolve_ctx.session_info_.get_pl_profiler() != nullptr) {
+        pc_ctx.key_.mode_ = pc_ctx.key_.mode_ | static_cast<uint64_t>(ObPLObjectKey::ObjectMode::PROFILE);
+      }
+      if (resolve_ctx.session_info_.get_pl_code_coverage() != nullptr) {
+        pc_ctx.key_.mode_ = pc_ctx.key_.mode_ | static_cast<uint64_t>(ObPLObjectKey::ObjectMode::CODE_COVERAGE);
+      }
 
       // get package from plan cache
       ObCacheObjGuard* cacheobj_guard = NULL;
@@ -1922,7 +1953,8 @@ int ObPLPackageManager::notify_package_variable_deserialize(ObBasicSessionInfo *
 
     if (OB_SUCC(ret)
           && OB_NOT_NULL(package_info)
-          && package_info->get_package_name().compare_equal("DBMS_PROFILER")) {
+          && (0 == package_info->get_package_name().compare("DBMS_PROFILER") ||
+                         0 == package_info->get_package_name().compare("DBMS_PLSQL_CODE_COVERAGE"))) {
       ObObj value_obj;
       bool has_run_status_var = false;
       hash::ObHashMap<int64_t, ObPackageVarEncodeInfo> value_map;
@@ -1932,19 +1964,37 @@ int ObPLPackageManager::notify_package_variable_deserialize(ObBasicSessionInfo *
         OZ (ObPLPackageState::decode_pkg_var_value(value.value_, state_version, value_map));
         for (hash::ObHashMap<int64_t, ObPackageVarEncodeInfo>::iterator it = value_map.begin();
               OB_SUCC(ret) && !has_run_status_var && it != value_map.end(); ++it) {
-          if (ObDBMSProfiler::RUN_STATUS_IDX == it->second.var_idx_) {
+          if (0 == package_info->get_package_name().compare("DBMS_PROFILER")
+              && ObDBMSProfiler::RUN_STATUS_IDX == it->second.var_idx_) {
+            has_run_status_var = true;
+            value_obj = it->second.encode_value_;
+          }
+          if (0 == package_info->get_package_name().compare("DBMS_PLSQL_CODE_COVERAGE")
+              && ObDBMSPlsqlCodeCoverage::RUN_STATUS_IDX == it->second.var_idx_) {
             has_run_status_var = true;
             value_obj = it->second.encode_value_;
           }
         }
-      } else if (ObDBMSProfiler::RUN_STATUS_IDX == pkg_var_info.var_idx_) {
+      } else if (0 == package_info->get_package_name().compare("DBMS_PROFILER")
+                 && ObDBMSProfiler::RUN_STATUS_IDX == pkg_var_info.var_idx_) {
+        has_run_status_var = true;
+        value_obj = value.value_;
+      } else if (0 == package_info->get_package_name().compare("DBMS_PLSQL_CODE_COVERAGE")
+                 && ObDBMSPlsqlCodeCoverage::RUN_STATUS_IDX == pkg_var_info.var_idx_) {
         has_run_status_var = true;
         value_obj = value.value_;
       }
       if (has_run_status_var) {
-        OZ (ObDBMSProfiler::set_profiler_by_user_var_deserialize(*static_cast<ObSQLSessionInfo*>(session),
-                                                                  pkg_var_info,
-                                                                  value_obj), pkg_var_info, value_obj);
+        if (0 == package_info->get_package_name().compare("DBMS_PROFILER")) {
+          OZ (ObDBMSProfiler::set_profiler_by_user_var_deserialize(*static_cast<ObSQLSessionInfo*>(session),
+                                                                   pkg_var_info,
+                                                                   value_obj), pkg_var_info, value_obj);
+        }
+        if (0 == package_info->get_package_name().compare("DBMS_PLSQL_CODE_COVERAGE")) {
+          OZ (ObDBMSPlsqlCodeCoverage::set_code_coverage_by_user_var_deserialize(*static_cast<ObSQLSessionInfo*>(session),
+                                                                                 pkg_var_info,
+                                                                                 value_obj), pkg_var_info, value_obj);
+        }
       }
       if (value_map.created()) {
         int tmp_ret = value_map.destroy();

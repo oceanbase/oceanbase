@@ -102,6 +102,7 @@
   RPC_S(PRD create_udt, obrpc::OB_CREATE_UDT, (ObCreateUDTArg));
   RPC_S(PRD create_udt_with_res, obrpc::OB_CREATE_UDT_WITH_RES, (ObCreateUDTArg), ObRoutineDDLRes);
   RPC_S(PRD drop_udt, obrpc::OB_DROP_UDT, (ObDropUDTArg));
+  RPC_S(PRD alter_udt_with_res, obrpc::OB_ALTER_UDT_WITH_RES, (ObAlterUDTArg), ObRoutineDDLRes);
 
   //----Definitions for managing dblinks----
   RPC_S(PRD create_dblink, obrpc::OB_CREATE_DBLINK, (ObCreateDbLinkArg));

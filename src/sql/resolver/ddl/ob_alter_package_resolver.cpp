@@ -105,7 +105,7 @@ int ObAlterPackageResolver::analyze_package(ObPLCompiler &compiler,
   int ret = OB_SUCCESS;
   ObString source;
   ObString package_name;
-
+  bool is_wrap = false;
   CK (OB_NOT_NULL(package_info));
   CK (package_info->is_package() || package_info->is_package_body());
   OX (package_name = package_info->get_package_name());
@@ -115,7 +115,7 @@ int ObAlterPackageResolver::analyze_package(ObPLCompiler &compiler,
 
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(compiler.analyze_package(source, parent_ns, package_ast,
-                                              false /* is_for_trigger */))) {
+                                              false, /* is_for_trigger */ is_wrap))) {
 #ifdef OB_BUILD_ORACLE_PL
     if (package_info->is_package()) {
       int tmp_ret = ObPLPackageType::update_package_type_info(*package_info, package_ast, true);

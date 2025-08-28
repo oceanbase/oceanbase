@@ -2999,3 +2999,7 @@ DEF_STR(ob_python_home, OB_CLUSTER_PARAMETER, "",
 DEF_BOOL(ob_enable_python_udf, OB_TENANT_PARAMETER, "False",
    "Enable or disable python udf.",
    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(ob_enable_utl_http, OB_CLUSTER_PARAMETER, "False",
+         "controls whether UTL_HTTP is enabled",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

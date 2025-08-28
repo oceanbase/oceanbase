@@ -4274,6 +4274,51 @@ int ObSchemaPrinter::print_udt_definition(const uint64_t tenant_id,
   return ret;
 }
 
+int ObSchemaPrinter::print_object_spec_definition(const uint64_t tenant_id,
+                                                  ObUDTTypeInfo *udt_info,
+                                                  char* buf,
+                                                  const int64_t& buf_len,
+                                                  int64_t& pos,
+                                                  ObString methods_definition) const
+{
+  int ret = OB_SUCCESS;
+  const ObDatabaseSchema *db_schema = NULL;
+  CK (OB_NOT_NULL(udt_info));
+  OZ (schema_guard_.get_database_schema(tenant_id, udt_info->get_database_id(), db_schema));
+  if (OB_SUCC(ret) && OB_ISNULL(db_schema)) {
+    ret = OB_ERR_BAD_DATABASE;
+    SHARE_SCHEMA_LOG(WARN, "Unknow database", K(ret), K(udt_info->get_database_id()));
+  }
+  OZ (databuff_printf(buf, buf_len, pos,
+                      "CREATE OR REPLACE%s TYPE \"%.*s\".\"%.*s\" ",
+                      udt_info->is_noneditionable() ? " NONEDITIONABLE" : "",
+                      db_schema->get_database_name_str().length(),
+                      db_schema->get_database_name_str().ptr(),
+                      udt_info->get_type_name().length(),
+                      udt_info->get_type_name().ptr()));
+  if (OB_SUCC(ret)) {
+    OZ (databuff_printf(buf, buf_len, pos, " IS OBJECT ( \n"));
+    for (int64_t i = 0; OB_SUCC(ret) && i < udt_info->get_attributes(); ++i) {
+      ObUDTTypeAttr* attr = udt_info->get_attrs().at(i);
+      CK (OB_NOT_NULL(attr));
+      OZ (databuff_printf(buf, buf_len, pos, "  \"%.*s\" ",
+                          attr->get_name().length(), attr->get_name().ptr()));
+      OZ (print_element_type(attr->get_type_attr_id(), attr,
+                             buf, buf_len, pos));
+      if (OB_SUCC(ret)) {
+        if (i != udt_info->get_attributes() - 1) {
+          OZ (databuff_printf(buf, buf_len, pos, ",\n"));
+        } else if (methods_definition.empty()) {
+          OZ (databuff_printf(buf, buf_len, pos, ");\n"));
+        } else {
+          OZ (databuff_printf(buf, buf_len, pos, ",\n%.*s);", methods_definition.length(), methods_definition.ptr()));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObSchemaPrinter::print_udt_body_definition(const uint64_t tenant_id,
                                                const uint64_t udt_id,
                                                char* buf,
@@ -4361,9 +4406,10 @@ int ObSchemaPrinter::print_object_definition(const ObUDTObjectType *object,
   ObStmtNodeTree *object_stmt = NULL;
   const ParseNode *src_node = NULL;
   ObString object_src;
+  bool is_wrap = false;
   CK (!object->get_source().empty());
   OZ (parser.parse_package(object->get_source(), object_stmt, ObDataTypeCastParams(),
-                           NULL, false, NULL, false));
+                           NULL, false, is_wrap, NULL, false));
   CK (OB_NOT_NULL(object_stmt));
   CK (T_STMT_LIST == object_stmt->type_);
   OX (src_node = object_stmt->children_[0]);
@@ -4414,6 +4460,7 @@ int ObSchemaPrinter::print_package_definition(const uint64_t tenant_id,
   pl::ObPLParser parser(allocator, ObCharsets4Parser());
   ObStmtNodeTree *package_stmt = NULL;
   const ObStmtNodeTree *real_package_stmt = NULL;
+  bool is_wrap = false;
   OZ (schema_guard_.get_package_info(tenant_id, package_id, package_info));
   if (OB_SUCC(ret) && OB_ISNULL(package_info)) {
     ret = OB_ERR_PACKAGE_DOSE_NOT_EXIST;
@@ -4438,6 +4485,7 @@ int ObSchemaPrinter::print_package_definition(const uint64_t tenant_id,
                            ObDataTypeCastParams(),
                            NULL,
                            false,
+                           is_wrap,
                            nullptr,
                            false));
   CK (OB_NOT_NULL(package_stmt));
@@ -4865,17 +4913,18 @@ int ObSchemaPrinter::print_routine_definition(
     ObStmtNodeTree *return_type = NULL;
     ObStmtNodeTree *clause_list = NULL;
     bool is_wrapped_routine = false;
+    bool is_wrap = false;
     CK (!routine_body.empty());
 #ifdef OB_BUILD_ORACLE_PL
-    OZ (parser.parse_routine_body(routine_body, wrapped_parse_tree, false, false));
+    OZ (parser.parse_routine_body(routine_body, wrapped_parse_tree, false, is_wrap, false));
     OX (is_wrapped_routine = pl::ObPLParser::is_wrapped_parse_tree(*wrapped_parse_tree));
     if (is_wrapped_routine) {
-      OZ (parser.parse_routine_body(routine_body, parse_tree, false));
+      OZ (parser.parse_routine_body(routine_body, parse_tree, false, is_wrap));
     } else {
       OX (parse_tree = wrapped_parse_tree);
     }
 #else
-    OZ (parser.parse_routine_body(routine_body, parse_tree, false));
+    OZ (parser.parse_routine_body(routine_body, parse_tree, false, is_wrap));
 #endif  // OB_BUILD_ORACLE_PL
     CK (OB_NOT_NULL(parse_tree));
     CK (T_STMT_LIST == parse_tree->type_);

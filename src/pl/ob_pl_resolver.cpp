@@ -13809,8 +13809,9 @@ int ObPLResolver::resolve_package_accessible_by(
   ObStmtNodeTree *parse_tree = NULL;
   const ObStmtNodeTree *package_node = NULL;
   const ObStmtNodeTree *clause_node = NULL;
+  bool is_wrap = false;
   CK (lib::is_oracle_mode());
-  OZ (parser.parse_package(source, parse_tree, resolve_ctx_.session_info_.get_dtc_params(), NULL, false));
+  OZ (parser.parse_package(source, parse_tree, resolve_ctx_.session_info_.get_dtc_params(), NULL, false, is_wrap));
   CK (OB_NOT_NULL(parse_tree));
   CK (T_STMT_LIST == parse_tree->type_);
   CK (1 == parse_tree->num_child_);
@@ -13854,8 +13855,9 @@ int ObPLResolver::resolve_routine_accessible_by(
   ObStmtNodeTree *parse_tree = NULL;
   const ObStmtNodeTree *routine_node = NULL;
   const ObStmtNodeTree *clause_node = NULL;
+  bool is_wrap = false;
   CK (lib::is_oracle_mode());
-  OZ (parser.parse_routine_body(source, parse_tree, false), source);
+  OZ (parser.parse_routine_body(source, parse_tree, false, is_wrap), source);
   CK (OB_NOT_NULL(parse_tree->children_));
   CK (1 == parse_tree->num_child_);
   CK (OB_NOT_NULL(parse_tree->children_[0]));
