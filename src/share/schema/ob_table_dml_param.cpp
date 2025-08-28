@@ -49,15 +49,15 @@ ObTableSchemaParam::ObTableSchemaParam(ObIAllocator &allocator)
     multivalue_arr_col_id_(OB_INVALID_ID),
     data_table_rowkey_column_num_(0),
     vec_id_col_id_(OB_INVALID_ID),
-    vec_chunk_col_id_(OB_INVALID_ID),
-    vec_embedded_col_id_(OB_INVALID_ID),
     vec_index_param_(),
     vec_dim_(0),
     vec_vector_col_id_(OB_INVALID_ID),
     mv_mode_(),
     is_delete_insert_(false),
     merge_engine_type_(ObMergeEngineType::OB_MERGE_ENGINE_MAX),
-    inc_pk_doc_id_col_id_(OB_INVALID_ID)
+    inc_pk_doc_id_col_id_(OB_INVALID_ID),
+    vec_chunk_col_id_(OB_INVALID_ID),
+    vec_embedded_col_id_(OB_INVALID_ID)
 {
 }
 
@@ -618,6 +618,8 @@ OB_DEF_SERIALIZE(ObTableSchemaParam)
   OB_UNIS_ENCODE(is_delete_insert_);
   OB_UNIS_ENCODE(merge_engine_type_);
   OB_UNIS_ENCODE(inc_pk_doc_id_col_id_);
+  OB_UNIS_ENCODE(vec_chunk_col_id_);
+  OB_UNIS_ENCODE(vec_embedded_col_id_);
   return ret;
 }
 
@@ -760,6 +762,8 @@ OB_DEF_DESERIALIZE(ObTableSchemaParam)
   OB_UNIS_DECODE(is_delete_insert_);
   OB_UNIS_DECODE(merge_engine_type_);
   OB_UNIS_DECODE(inc_pk_doc_id_col_id_);
+  OB_UNIS_DECODE(vec_chunk_col_id_);
+  OB_UNIS_DECODE(vec_embedded_col_id_);
   return ret;
 }
 
@@ -815,6 +819,8 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchemaParam)
   OB_UNIS_ADD_LEN(is_delete_insert_);
   OB_UNIS_ADD_LEN(merge_engine_type_);
   OB_UNIS_ADD_LEN(inc_pk_doc_id_col_id_);
+  OB_UNIS_ADD_LEN(vec_chunk_col_id_);
+  OB_UNIS_ADD_LEN(vec_embedded_col_id_);
   return len;
 }
 

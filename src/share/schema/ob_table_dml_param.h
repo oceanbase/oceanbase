@@ -159,8 +159,6 @@ private:
   uint64_t multivalue_arr_col_id_;
   int64_t data_table_rowkey_column_num_;
   uint64_t vec_id_col_id_;
-  uint64_t vec_chunk_col_id_;
-  uint64_t vec_embedded_col_id_;
   ObString vec_index_param_;
   int64_t vec_dim_;
   uint64_t vec_vector_col_id_;
@@ -168,6 +166,8 @@ private:
   bool is_delete_insert_;
   ObMergeEngineType merge_engine_type_;
   uint64_t inc_pk_doc_id_col_id_;
+  uint64_t vec_chunk_col_id_;
+  uint64_t vec_embedded_col_id_;
 };
 
 class ObTableDMLParam
