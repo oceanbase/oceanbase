@@ -195,7 +195,8 @@ public:
       const ObTableAccessContext *context,
       const int32_t col_offset,
       blocksstable::ObIMicroBlockReader *reader,
-      const ObPushdownRowIdCtx &pd_row_id_ctx) = 0;
+      const ObPushdownRowIdCtx &pd_row_id_ctx,
+      const bool reserve_memory) = 0;
   virtual int can_use_index_info(const blocksstable::ObMicroIndexInfo &index_info, const int32_t col_index, bool &can_agg) = 0;
   virtual int fill_index_info(const blocksstable::ObMicroIndexInfo &index_info, const bool is_cg) = 0;
   DECLARE_PURE_VIRTUAL_TO_STRING;

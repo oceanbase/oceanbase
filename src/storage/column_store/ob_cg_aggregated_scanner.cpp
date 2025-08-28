@@ -122,7 +122,8 @@ int ObCGAggregatedScanner::get_next_rows(uint64_t &count, const uint64_t capacit
                                        access_ctx_,
                                        0/*col_offset*/,
                                        nullptr/*reader*/,
-                                       pd_row_id_ctx))) {
+                                       pd_row_id_ctx,
+                                       false/*reserve_memory*/))) {
       LOG_WARN("Fail to eval batch rows", K(ret));
     } else {
       ret = OB_ITER_END;
@@ -219,7 +220,7 @@ int ObCGAggregatedScanner::inner_fetch_rows(const int64_t batch_size, uint64_t &
                                                         !access_ctx_->block_row_store_->filter_is_null() || agg_group_vec->has_aggr_with_expr_))) {
         LOG_WARN("fail to get next rows", K(ret));
       } else if (OB_FAIL(agg_group_vec->eval_batch(iter_param_, access_ctx_, 0/*col_offset*/,
-                                                   micro_scanner_->get_reader(), pd_row_id_ctx))) {
+                                                   micro_scanner_->get_reader(), pd_row_id_ctx, false))) {
         LOG_WARN("fail to aggregate batch", K(ret));
       } else {
         count += row_cap;
@@ -243,7 +244,7 @@ int ObCGAggregatedScanner::inner_fetch_rows(const int64_t batch_size, uint64_t &
   } else {
     ObPushdownRowIdCtx pd_row_id_ctx(row_ids_, row_cap);
     if (OB_FAIL(agg_group_->eval_batch(iter_param_, access_ctx_, 0/*col_offset*/,
-                                       micro_scanner_->get_reader(), pd_row_id_ctx))) {
+                                       micro_scanner_->get_reader(), pd_row_id_ctx, false))) {
       LOG_WARN("fail to aggregate batch", K(ret));
     } else {
       count += row_cap;

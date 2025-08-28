@@ -205,7 +205,7 @@ int ObMultipleSkipScanMerge::inner_get_next_row(blocksstable::ObDatumRow &row)
             state_ = UPDATE_SCAN_ROWKEY_RANGE;
             if (access_param_->iter_param_.enable_pd_aggregate()
                 && access_param_->iter_param_.plan_use_new_format()
-                && OB_FAIL(static_cast<ObAggregatedStoreVec *>(block_row_store_)->do_aggregate())) {
+                && OB_FAIL(static_cast<ObAggregatedStoreVec *>(block_row_store_)->do_aggregate(nullptr, false))) {
               STORAGE_LOG(WARN, "fail to aggregate rows", K(ret));
             }
           }

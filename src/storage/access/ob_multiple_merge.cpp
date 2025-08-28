@@ -807,7 +807,7 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
         switch(scan_state_) {
           case ScanState::BATCH: {
             bool can_batch = false;
-            if (nullptr != agg_store_vec && OB_FAIL(agg_store_vec->do_aggregate())) {
+            if (nullptr != agg_store_vec && OB_FAIL(agg_store_vec->do_aggregate(nullptr, false))) {
               LOG_WARN("Fail to aggregate rows", K(ret), KPC(agg_store_vec));
             } else if (OB_FAIL(can_batch_scan(can_batch))) {
               LOG_WARN("fail to check can batch scan", K(ret));
@@ -839,7 +839,7 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
             break;
           }
           case ScanState::DI_BASE: {
-            if (nullptr != agg_store_vec && OB_FAIL(agg_store_vec->do_aggregate())) {
+            if (nullptr != agg_store_vec && OB_FAIL(agg_store_vec->do_aggregate(nullptr, false))) {
               LOG_WARN("Fail to aggregate rows", K(ret), KPC(agg_store_vec));
             } else if (need_init_expr_header && access_param_->iter_param_.use_new_format()) {
               sql::ObEvalCtx &eval_ctx = access_param_->get_op()->get_eval_ctx();
@@ -961,7 +961,7 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
       ObAggStoreBase *agg_store_base = nullptr;
       if (access_param_->iter_param_.plan_use_new_format()) {
         ObAggregatedStoreVec *agg_store_vec = static_cast<ObAggregatedStoreVec *>(batch_row_store);
-        if (OB_FAIL(agg_store_vec->do_aggregate())) {
+        if (OB_FAIL(agg_store_vec->do_aggregate(nullptr, false))) {
           LOG_WARN("fail to aggregate rows", K(ret));
         } else {
           agg_store_base = agg_store_vec;
@@ -1805,7 +1805,7 @@ int ObMultipleMerge::refresh_table_on_demand()
     } else if (nullptr != block_row_store_
                && access_param_->iter_param_.enable_pd_aggregate()
                && access_param_->iter_param_.plan_use_new_format()
-               && OB_FAIL(static_cast<ObAggregatedStoreVec *>(block_row_store_)->do_aggregate())) {
+               && OB_FAIL(static_cast<ObAggregatedStoreVec *>(block_row_store_)->do_aggregate(nullptr, false))) {
       STORAGE_LOG(WARN, "fail to aggregate rows", K(ret));
     } else if (OB_FAIL(save_curr_rowkey())) {
       if (OB_ERR_UNSUPPORTED_TYPE == ret) {
