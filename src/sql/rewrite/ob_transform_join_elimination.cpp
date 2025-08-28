@@ -688,6 +688,9 @@ int ObTransformJoinElimination::check_transform_validity_outer_join(
       OB_ISNULL(joined_table->left_table_) || OB_ISNULL(joined_table->right_table_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt or joined table is null.", K(ret), K(stmt), K(joined_table));
+  } else if (stmt->is_select_stmt() && (static_cast<ObSelectStmt*>(stmt)->has_rollup() ||
+             static_cast<ObSelectStmt*>(stmt)->get_grouping_sets_items_size() != 0)) {
+    OPT_TRACE("has rollup/grouping sets, disable transform");
   } else if (LEFT_OUTER_JOIN != joined_table->joined_type_) {
     is_valid = false;
   } else if (OB_FAIL(check_hint_valid(*stmt, *joined_table->right_table_, is_hint_valid))) {
@@ -1228,6 +1231,9 @@ int ObTransformJoinElimination::left_join_can_be_eliminated(ObDMLStmt *stmt,
     LOG_WARN("failed to check is dml table", K(ret));
   } else if (is_dml_table) {
     // do nothing
+  } else if (stmt->is_select_stmt() && (static_cast<ObSelectStmt*>(stmt)->has_rollup() ||
+             static_cast<ObSelectStmt*>(stmt)->get_grouping_sets_items_size() != 0)) {
+    OPT_TRACE("has rollup/grouping sets, disable transform");
   } else if (OB_FAIL(check_hint_valid(*stmt, *joined_table->right_table_, is_hint_valid))) {
     LOG_WARN("failed to check hint valid", K(ret));
   } else if (!is_hint_valid) {
