@@ -571,10 +571,6 @@ public:
   }
   virtual ~ObTableLocation() { reset(); }
 
-  ObTableLocation(const ObTableLocation &other);
-
-  ObTableLocation &operator=(const ObTableLocation &other);
-
   int assign(const ObTableLocation &other);
 
   void reset();
@@ -1172,6 +1168,8 @@ private:
                                          const uint64_t tenant_id,
                                          const ObTabletID src_tablet_id,
                                          const int64_t idx) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObTableLocation);
 private:
   bool inited_;
   bool is_partitioned_;

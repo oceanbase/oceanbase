@@ -688,26 +688,6 @@ int ObTableLocation::get_location_type(const common::ObAddr &server,
   return ret;
 }
 
-ObTableLocation::ObTableLocation(const ObTableLocation &other) :
-    inner_allocator_(ObModIds::OB_SQL_TABLE_LOCATION),
-    allocator_(inner_allocator_),
-    loc_meta_(inner_allocator_),
-    calc_node_(NULL),
-    gen_col_node_(NULL),
-    subcalc_node_(NULL),
-    sub_gen_col_node_(NULL),
-    part_projector_(allocator_),
-    related_list_(allocator_)
-{
-  *this = other;
-}
-
-ObTableLocation& ObTableLocation::operator=(const ObTableLocation &other)
-{
-  IGNORE_RETURN this->assign(other);
-  return *this;
-}
-
 int ObTableLocation::assign(const ObTableLocation &other)
 {
   int ret = OB_SUCCESS;

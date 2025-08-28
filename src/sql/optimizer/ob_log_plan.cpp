@@ -13225,7 +13225,9 @@ int ObLogPlan::gen_das_table_location_info(ObLogTableScan *table_scan,
       } else {
         das_location.set_has_dynamic_exec_param(true);
         das_location.set_use_das(true);
-        table_partition_info->set_table_location(das_location);
+        if (OB_FAIL(table_partition_info->set_table_location(das_location))) {
+          LOG_WARN("failed to set table location");
+        }
       }
     }
   }
