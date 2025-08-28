@@ -2460,7 +2460,13 @@ int ObDDLService::set_raw_table_options(
           break;
         }
         case ObAlterTableArg::AUTO_INCREMENT: {
-          new_table_schema.set_auto_increment(alter_table_schema.get_auto_increment());
+          uint64_t new_auto_increment = alter_table_schema.get_auto_increment();
+          if (!new_table_schema.is_order_auto_increment_mode()) {
+            // no-order auto increment does not support decrease auto increment value
+            new_auto_increment = MAX(new_table_schema.get_auto_increment(),
+                                     new_auto_increment);
+          }
+          new_table_schema.set_auto_increment(new_auto_increment);
           break;
         }
         case ObAlterTableArg::BLOCK_SIZE: {
